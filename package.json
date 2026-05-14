@@ -1,0 +1,12 @@
+{
+  "name": "clasificaciones-director",
+  "version": "1.0.0",
+  "description": "Dashboard de Clasificaciones Ciclistas",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "open index.html"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
