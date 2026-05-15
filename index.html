@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 :root{--bg:#f4f7fb;--card:#fff;--text:#182230;--muted:#667085;--blue:#1f6feb;--cyan:#6ecff6;--border:#d0d5dd;--good:#067647;--warn:#b54708;--danger:#b42318}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:linear-gradient(135deg,#0b2f6b,#1286c7);color:white;padding:18px 22px}.header-inner{max-width:1280px;margin:0 auto;display:flex;align-items:center;justify-content:center;gap:22px;text-align:left}.brand-logo{height:74px;max-width:260px;object-fit:contain;background:white;border-radius:14px;padding:8px;box-shadow:0 8px 18px rgba(0,0,0,.16)}.header-copy{text-align:left}header h1{margin:0;font-size:30px;line-height:1.12}header p{margin:8px 0 0;color:#e8f6ff}@media(max-width:700px){.header-inner{flex-direction:column;text-align:center;gap:12px}.header-copy{text-align:center}.brand-logo{height:62px;max-width:230px}header h1{font-size:23px}}.container{max-width:1280px;margin:0 auto;padding:22px}.panel,.card{background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:0 10px 24px rgba(16,24,40,.06)}.panel{padding:20px;margin-bottom:18px}.upload{border:2px dashed #8cccf0;border-radius:18px;padding:24px;text-align:center;background:#f0fbff}.upload input{display:none}.btn{display:inline-block;border:0;background:var(--blue);color:white;padding:11px 16px;border-radius:12px;cursor:pointer;font-weight:700;margin:4px;text-decoration:none}.btn.secondary{background:#475467}.btn.light{background:#eaf4ff;color:#175cd3;border:1px solid #b2ddff}.btn.danger{background:var(--danger)}.btn:disabled{opacity:.55;cursor:not-allowed}.help{color:var(--muted);font-size:14px;line-height:1.45}.grid{display:grid;grid-template-columns:1fr 1fr 1fr 1.35fr;gap:14px;margin-bottom:18px}.card{padding:18px;min-width:0}.card .label{font-size:13px;color:var(--muted);font-weight:700;text-transform:uppercase}.card .value{font-size:26px;font-weight:800;margin-top:6px;overflow-wrap:anywhere}.filters{display:grid;grid-template-columns:.78fr 1.7fr 1fr 1fr .9fr;gap:10px;align-items:center}.filters input,.filters select,.meta input{width:100%;padding:11px;border:1px solid var(--border);border-radius:12px;background:#fff}.filters select{font-size:14px}.meta{display:grid;grid-template-columns:minmax(360px,2.5fr) minmax(92px,.62fr) minmax(105px,.62fr) minmax(150px,.95fr);gap:10px;margin-top:12px}.meta input:not(#raceName){text-align:center;font-weight:600}.meta input#raceName{text-align:left}.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:24px 0 10px}h2{font-size:20px;margin:0}.table-wrap{overflow:auto;border-radius:14px;border:1px solid var(--border);background:white;max-height:520px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:10px 11px;border-bottom:1px solid #eaecf0;text-align:left;white-space:nowrap}th{position:sticky;top:0;background:#f9fafb;z-index:1;font-size:12px;text-transform:uppercase;color:#475467}tr:hover{background:#f5fbff}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#3538cd;font-weight:700;font-size:12px}.ok{color:var(--good);font-weight:800}.warn{color:var(--warn);font-weight:800}.result-box{background:#f8fbff;border:1px solid #cce7ff;border-radius:16px;padding:16px;line-height:1.55}.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.18fr);gap:16px}.two .panel{min-width:0}.empty{padding:18px;color:var(--muted);text-align:center}.small{font-size:12px;color:var(--muted)}.visual-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}.visual-grid .panel{margin-bottom:0}.chart-card{min-height:330px}.chart-card canvas{width:100%!important;height:260px!important}.chart-help{font-size:12px;color:var(--muted);margin-top:8px}.progress-wrap{background:#eef2f6;border-radius:999px;height:18px;overflow:hidden;margin:10px 0}.progress-bar{height:100%;background:linear-gradient(90deg,#1f6feb,#12b76a);width:0%;transition:width .4s ease}.visual-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.mini-kpi{background:#f8fbff;border:1px solid #dbeafe;border-radius:14px;padding:12px}.mini-kpi b{font-size:18px}@media(max-width:900px){.visual-grid,.visual-kpis{grid-template-columns:1fr}}footer{text-align:center;color:var(--muted);padding:22px}.hidden{display:none}@media(max-width:900px){.grid,.filters,.meta,.two{grid-template-columns:1fr}.card .value{font-size:22px}header h1{font-size:24px}}
 
@@ -2300,6 +2301,42 @@ let selectedCatChips = new Set(); let onlyMyTeam = false;
 const _SB_URL = 'https://neeamkhbtoqsdxvsaogd.supabase.co';
 const _SB_KEY = 'sb_publishable_R7anMfu6xfwlr7Ew3kMUbg_N1mqNRJb';
 const _sb = (typeof supabase !== 'undefined') ? supabase.createClient(_SB_URL, _SB_KEY) : null;
+
+// ── EmailJS ───────────────────────────────────────────────────
+const _EJS_SERVICE  = 'service_ek1fcgg';
+const _EJS_TEMPLATE = 'template_6l42t3d';
+const _EJS_KEY      = 'AeAuRYRhqCkZFPLbX';
+const _APP_URL      = 'https://clasificaciones-director.netlify.app';
+const _ADMIN_EMAIL  = 'mfppmfpp@gmail.com';
+
+if(typeof emailjs !== 'undefined') emailjs.init(_EJS_KEY);
+
+async function _ejsSendBienvenida(email, nombre, pin){
+  if(typeof emailjs === 'undefined'){
+    console.warn('EmailJS no cargado');
+    return {ok: false, err: 'EmailJS no disponible'};
+  }
+  try {
+    // 1. Email al nuevo usuario con su PIN
+    await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
+      to_email: email,
+      nombre:   nombre || email.split('@')[0],
+      pin:      pin,
+      app_url:  _APP_URL
+    });
+    // 2. Copia de confirmación al administrador
+    await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
+      to_email: _ADMIN_EMAIL,
+      nombre:   `Admin — nuevo acceso para ${nombre || email}`,
+      pin:      `${pin} (usuario: ${email})`,
+      app_url:  _APP_URL
+    });
+    return {ok: true};
+  } catch(e) {
+    console.error('EmailJS error:', e);
+    return {ok: false, err: e.text || e.message || 'Error desconocido'};
+  }
+}
 /* ═══════════════════════════════════════════════════════════════
    RBAC — Control de Acceso por Roles
    Tablas Supabase necesarias: app_users, app_permissions
@@ -2600,9 +2637,15 @@ async function _gAddUser(){
   if(_sb){
     const {error} = await _sb.from('app_users').upsert({email, role, name, pin:newPin, active:true},{onConflict:'email'});
     if(!error){
+      // Enviar emails (bienvenida al usuario + copia al admin)
+      if(msg){ msg.textContent='✉️ Enviando email de bienvenida...'; msg.style.color='#6b7280'; }
+      const ejsResult = await _ejsSendBienvenida(email, name, newPin);
+      const emailStatus = ejsResult.ok
+        ? '✉️ Email de bienvenida enviado al ciclista y copia al administrador.'
+        : `⚠️ Usuario añadido pero el email falló: ${ejsResult.err}`;
       emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
       if(msg){
-        msg.innerHTML=`✅ Usuario añadido. PIN generado: <strong style="font-size:20px;letter-spacing:4px;color:#1a56db">${newPin}</strong> &nbsp;<button onclick="navigator.clipboard.writeText('${newPin}');this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar</button><br><span style="font-size:12px;color:#374151">Envía este PIN al ciclista por WhatsApp junto con la URL de la app.</span>`;
+        msg.innerHTML=`✅ Usuario añadido. PIN generado: <strong style="font-size:20px;letter-spacing:4px;color:#1a56db">${newPin}</strong> &nbsp;<button onclick="navigator.clipboard.writeText('${newPin}');this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar</button><br><span style="font-size:12px;color:${ejsResult.ok?'#059669':'#d97706'}">${emailStatus}</span>`;
         msg.style.color='#059669';
       }
       await _gLoadUsers();
@@ -2632,12 +2675,20 @@ async function _gRegenPin(id, email){
   }
   const u = _localUsers.find(u=>u.id===id); if(u) u.pin=newPin;
   await _gLoadUsers();
-  // Show the new PIN prominently
   const msg = document.getElementById('gAddUserMsg');
   if(msg){
-    msg.innerHTML=`🔄 Nuevo PIN para <strong>${escapeHtml(email)}</strong>: <strong style="font-size:20px;letter-spacing:4px;color:#1a56db">${newPin}</strong> &nbsp;<button onclick="navigator.clipboard.writeText('${newPin}');this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar</button>`;
+    msg.innerHTML=`🔄 Nuevo PIN para <strong>${escapeHtml(email)}</strong>: <strong style="font-size:20px;letter-spacing:4px;color:#1a56db">${newPin}</strong> &nbsp;<button onclick="navigator.clipboard.writeText('${newPin}');this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar</button><br><span style="font-size:12px;color:#6b7280">✉️ Enviando nuevo PIN por email...</span>`;
     msg.style.color='#1a56db';
     msg.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+  // Enviar el nuevo PIN por email
+  const nombre = u ? (u.name||email) : email;
+  const ejsResult = await _ejsSendBienvenida(email, nombre, newPin);
+  if(msg){
+    const statusHtml = ejsResult.ok
+      ? '<span style="font-size:12px;color:#059669">✉️ Nuevo PIN enviado por email al ciclista y copia al administrador.</span>'
+      : `<span style="font-size:12px;color:#d97706">⚠️ PIN regenerado pero el email falló: ${ejsResult.err}</span>`;
+    msg.innerHTML = msg.innerHTML.replace(/<span[^>]*>✉️ Enviando[^<]*<\/span>/, statusHtml);
   }
 }
 
