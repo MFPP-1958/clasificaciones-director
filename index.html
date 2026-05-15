@@ -2723,13 +2723,16 @@ async function _calInit(){
 async function _calLoadData(){
   // Carreras disputadas del historial
   const history = await _ensureHistory();
-  _calPast = history.map(r=>({
-    date: _parseSpanishDate(r.raceDate),
-    dateStr: r.raceDate,
-    name: r.raceName,
-    localidad: r.localidad||'',
-    type: 'past'
-  })).filter(r=>r.date);
+  _calPast = history.map(r=>{
+    const ds = _parseSpanishDate(r.raceDate);
+    return {
+      date: ds ? new Date(ds+'T12:00:00') : null,
+      dateStr: r.raceDate,
+      name: r.raceName,
+      localidad: r.localidad||'',
+      type: 'past'
+    };
+  }).filter(r=>r.date);
 
   // Carreras planificadas de Supabase
   if(_sb){
