@@ -2070,6 +2070,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
               <button id="calBtnMonthly" onclick="_calSetView('monthly')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #1a56db;background:#1a56db;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Mensual</button>
               <button id="calBtnAnnual" onclick="_calSetView('annual')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Anual</button>
               <button onclick="_calToday()" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Hoy</button>
+              <button onclick="_calPrint()" title="Imprimir / Guardar PDF" style="padding:7px 14px;border-radius:9px;border:1.5px solid #6366f1;background:#6366f1;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px">🖨️ Imprimir</button>
             </div>
           </div>
           <!-- Leyenda -->
@@ -2890,6 +2891,148 @@ function _calBuildAnnual(){
 function _calGoMonth(m){
   _calMonth = m;
   _calSetView('monthly');
+}
+
+function _calPrint(){
+  const title    = document.getElementById('calTitle');
+  const body     = document.getElementById('calBody');
+  if(!body || !title) return;
+
+  const titleText = title.textContent || 'Calendario';
+  const isAnnual  = _calView === 'annual';
+  const teamName  = (typeof myTeam !== 'undefined' && myTeam) ? myTeam : 'Equipo';
+
+  // Leyenda HTML (igual a la de la app)
+  const legendHtml = `
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:18px;font-size:12px;font-weight:700;align-items:center">
+      <span><span style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:3px;margin-right:5px;vertical-align:middle"></span>Carrera disputada</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#10b981;border-radius:3px;margin-right:5px;vertical-align:middle"></span>Carrera planificada</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:3px;margin-right:5px;vertical-align:middle"></span>Hoy</span>
+    </div>`;
+
+  const printWin = window.open('', '_blank', 'width=1100,height=800');
+  if(!printWin){ alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes para esta página e inténtalo de nuevo.'); return; }
+
+  printWin.document.write(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>${teamName} · ${titleText}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #fff;
+      color: #111827;
+      padding: 24px 28px;
+    }
+
+    /* ── Cabecera ── */
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid #0b2f6b;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+    .cal-header-left { display: flex; align-items: center; gap: 14px; }
+    .cal-logo {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: #0b2f6b; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 900;
+    }
+    .cal-team  { font-size: 14px; font-weight: 800; color: #0b2f6b; }
+    .cal-title { font-size: 22px; font-weight: 900; color: #0b2f6b; }
+    .cal-date-print { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+
+    /* ── Celdas del grid mensual ── */
+    div[style*="min-height:72px"] {
+      page-break-inside: avoid;
+    }
+
+    /* ── Vista anual: grid responsivo en papel ── */
+    div[style*="minmax(240px"] {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 12px !important;
+    }
+
+    /* ── Pie ── */
+    .cal-footer {
+      margin-top: 22px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 10px;
+      font-size: 10px;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    /* ── Impresión ── */
+    @media print {
+      body { padding: 10mm 12mm; }
+      @page {
+        size: ${isAnnual ? 'A4 portrait' : 'A4 landscape'};
+        margin: 10mm 12mm;
+      }
+      .no-print { display: none !important; }
+      button { display: none !important; }
+      /* forzar colores de fondo al imprimir */
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Botón imprimir (sólo en pantalla) -->
+  <div class="no-print" style="text-align:right;margin-bottom:14px">
+    <button onclick="window.print()" style="background:#6366f1;color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;margin-right:8px">🖨️ Imprimir / Guardar PDF</button>
+    <button onclick="window.close()" style="background:#f3f4f6;color:#374151;border:1px solid #d0d5dd;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer">✕ Cerrar</button>
+  </div>
+
+  <!-- Cabecera -->
+  <div class="cal-header">
+    <div class="cal-header-left">
+      <div class="cal-logo">🏅</div>
+      <div>
+        <div class="cal-team">${escapeHtml(teamName)}</div>
+        <div class="cal-title">${escapeHtml(titleText)}</div>
+        <div class="cal-date-print">Generado el ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leyenda -->
+  ${legendHtml}
+
+  <!-- Contenido del calendario -->
+  <div id="calPrintBody">
+    ${body.innerHTML}
+  </div>
+
+  <div class="cal-footer">
+    ${escapeHtml(teamName)} · Calendario de Temporada · ${escapeHtml(titleText)}
+  </div>
+
+  <script>
+    // Ocultar botones de edición (eliminar carrera planificada) en el impreso
+    document.querySelectorAll('button').forEach(b => {
+      if(b.textContent.trim() === '✕' || b.getAttribute('onclick') && b.getAttribute('onclick').includes('_calDelete')){
+        b.style.display = 'none';
+      }
+    });
+    // Ocultar botón "Añadir carrera planificada"
+    document.querySelectorAll('button').forEach(b => {
+      if(b.textContent.includes('Añadir')) b.style.display = 'none';
+    });
+  <\/script>
+</body>
+</html>`);
+
+  printWin.document.close();
+  // Pequeño delay para que el navegador termine de parsear antes de enfocar
+  setTimeout(() => { try{ printWin.focus(); } catch(e){} }, 300);
 }
 
 function _calDayClick(y,m,d){
