@@ -2428,15 +2428,13 @@ function showView(viewId){
       }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
-      if(viewId==='view-powerranking'){
-        _prSelectedCats = new Set(['CAD-1','CAD-2']);
-        renderPowerRanking();
-      }
       if(viewId==='view-tendencias') renderTendencias();
       if(viewId==='view-seleccion'){ _selFiltersReady=false; _selSelectedCats=new Set(); renderSeleccion(); }
       if(viewId==='view-resumen'){ renderResumen(); }
       if(viewId==='view-gestion'){ _gSetTab('users'); }
     }catch(e){console.warn('No se pudo refrescar la vista',e)}
+    // Power Ranking fuera del try/catch para que nunca quede bloqueado por otros errores
+    if(viewId==='view-powerranking') renderPowerRanking();
     updateRaceHeader(viewId);
   },80);
   const layout=document.querySelector('.spa-layout');
@@ -6662,7 +6660,7 @@ function destroyCharts(){[chartTeam,chartCat,chartScatter,chartTopTeam,chartTop1
 function renderCharts(){
   if(!window.Chart || !riders.length){return}
   destroyCharts();
-  const selectedTeam=$('teamFilter').value;
+  const selectedTeam=$('teamFilter')?.value ?? '';
   const teamRows=Object.entries(riders.reduce((m,r)=>{(m[r.team]=m[r.team]||[]).push(r);return m},{}))
     .map(([team,rs])=>({team,count:rs.length,avg:rs.reduce((s,r)=>s+r.pos,0)/rs.length,best:Math.min(...rs.map(r=>r.pos))}))
     .sort((a,b)=>a.avg-b.avg).slice(0,12);
