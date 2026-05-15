@@ -2937,12 +2937,7 @@ function _calPrint(){
       margin-bottom: 18px;
     }
     .cal-header-left { display: flex; align-items: center; gap: 14px; }
-    .cal-logo {
-      width: 44px; height: 44px; border-radius: 10px;
-      background: #0b2f6b; color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: 900;
-    }
+    .cal-logo { width: 70px; height: 70px; flex-shrink: 0; }
     .cal-team  { font-size: 14px; font-weight: 800; color: #0b2f6b; }
     .cal-title { font-size: 22px; font-weight: 900; color: #0b2f6b; }
     .cal-date-print { font-size: 11px; color: #9ca3af; margin-top: 2px; }
@@ -2994,7 +2989,64 @@ function _calPrint(){
   <!-- Cabecera -->
   <div class="cal-header">
     <div class="cal-header-left">
-      <div class="cal-logo">🏅</div>
+      <div class="cal-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 310" width="70" height="70">
+          <!-- Fondo circular gris con borde negro -->
+          <circle cx="155" cy="155" r="148" fill="#c8c8c8" stroke="#111111" stroke-width="8"/>
+          <!-- Sombra/profundidad de las letras TBG -->
+          <text x="159" y="120" font-family="'Arial Black',Impact,'Franklin Gothic Heavy',sans-serif"
+            font-size="82" font-weight="900" text-anchor="middle" fill="#0e4d73" opacity="0.55">TBG</text>
+          <!-- Letras TBG principales en azul -->
+          <text x="155" y="116" font-family="'Arial Black',Impact,'Franklin Gothic Heavy',sans-serif"
+            font-size="82" font-weight="900" text-anchor="middle" fill="#2B91C8">TBG</text>
+          <!-- Reflejo/iluminación superior -->
+          <text x="153" y="113" font-family="'Arial Black',Impact,'Franklin Gothic Heavy',sans-serif"
+            font-size="82" font-weight="900" text-anchor="middle" fill="#6BBFE0" opacity="0.25">TBG</text>
+
+          <!-- Símbolo infinito ciclismo -->
+          <g transform="translate(155,192)">
+            <!-- Infinito relleno base azul -->
+            <path d="M0,0 C8,-30 56,-34 72,-14 C88,6 80,36 56,40 C32,44 6,24 0,0 C-6,24 -32,44 -56,40 C-80,36 -88,6 -72,-14 C-56,-34 -8,-30 0,0 Z"
+              fill="#2B91C8" stroke="#1a5c8a" stroke-width="1.5"/>
+            <!-- Hueco interior izquierdo -->
+            <path d="M0,0 C-5,18 -27,32 -46,28 C-65,24 -70,8 -60,-6 C-50,-20 -8,-22 0,0 Z"
+              fill="#c8c8c8"/>
+            <!-- Hueco interior derecho -->
+            <path d="M0,0 C5,18 27,32 46,28 C65,24 70,8 60,-6 C50,-20 8,-22 0,0 Z"
+              fill="#c8c8c8"/>
+
+            <!-- Ciclista simplificado sobre el lóbulo izquierdo -->
+            <g stroke="#2B91C8" stroke-linecap="round" fill="none">
+              <!-- Rueda trasera -->
+              <circle cx="-62" cy="18" r="11" stroke-width="3.5"/>
+              <!-- Rueda delantera -->
+              <circle cx="-32" cy="18" r="11" stroke-width="3.5"/>
+              <!-- Cuadro: tubo inferior -->
+              <line x1="-62" y1="18" x2="-32" y2="18" stroke-width="2.5"/>
+              <!-- Cuadro: vaina -->
+              <line x1="-47" y1="-2" x2="-62" y2="18" stroke-width="2.5"/>
+              <!-- Cuadro: tubo diagonal -->
+              <line x1="-47" y1="-2" x2="-32" y2="18" stroke-width="2.5"/>
+              <!-- Horquilla / manillar -->
+              <line x1="-32" y1="18" x2="-28" y2="4" stroke-width="2.5"/>
+              <line x1="-28" y1="4" x2="-20" y2="3" stroke-width="2.5"/>
+              <!-- Tija sillín -->
+              <line x1="-47" y1="-2" x2="-48" y2="-12" stroke-width="2.5"/>
+              <!-- Cuerpo ciclista (en posición aerodinámica) -->
+              <line x1="-48" y1="-12" x2="-30" y2="-18" stroke-width="3" stroke="#2B91C8"/>
+              <!-- Brazos hacia manillar -->
+              <line x1="-30" y1="-18" x2="-20" y2="3" stroke-width="2.5"/>
+            </g>
+            <!-- Cabeza ciclista -->
+            <circle cx="-27" cy="-22" r="7" fill="#2B91C8"/>
+          </g>
+
+          <!-- SECCION DEPORTIVA -->
+          <text x="155" y="270" font-family="Arial,Helvetica,sans-serif"
+            font-size="13" font-weight="700" text-anchor="middle"
+            fill="#1a1a1a" letter-spacing="2.5">SECCION DEPORTIVA</text>
+        </svg>
+      </div>
       <div>
         <div class="cal-team">${escapeHtml(teamName)}</div>
         <div class="cal-title">${escapeHtml(titleText)}</div>
