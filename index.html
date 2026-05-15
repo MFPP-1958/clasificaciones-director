@@ -11409,13 +11409,24 @@ async function renderPowerRanking(){
   if(!grid) return;
   grid.innerHTML = '<div class="pr-loading">⏳ Cargando datos de temporada...</div>';
 
-  const history = await _ensureHistory();
+  let history;
+  try {
+    history = await _ensureHistory();
+  } catch(e) {
+    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Error cargando historial: ${e.message||e}</div>`;
+    return;
+  }
+  if(!history || !history.length){
+    grid.innerHTML = '<div class="pr-empty-msg">No hay datos en el historial.<br><span style="font-size:12px">Carga carreras primero desde "Carga y Resumen".</span></div>';
+    return;
+  }
 
   if(!_prFiltersReady){
     _initPrFilters(history);
     _prFiltersReady = true;
   }
 
+  try {
   const year   = $('prYearFilter')?.value  || '';
   const region = $('prRegionFilter')?.value || '';
   const gender = $('prGenderFilter')?.value  || '';
@@ -11600,6 +11611,9 @@ async function renderPowerRanking(){
       <div class="pr-team-meta">${ccaaBadge}${ts.riders.length} ciclista${ts.riders.length!==1?'s':''} · top3 Σ${ts.rawScore}</div>
     </div>`;
   }).join('');
+  } catch(e) {
+    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Error calculando ranking: ${e.message||e}<br><small style="font-weight:400;color:#6b7280">${e.stack||''}</small></div>`;
+  }
 }
 
 function prGoToTeam(teamName){
