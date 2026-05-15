@@ -2037,6 +2037,14 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
             <select id="resumenYear" onchange="renderResumen()" style="border:1.5px solid #d0d5dd;border-radius:9px;padding:7px 12px;font-size:13px;font-weight:700">
               <option value="">Toda la historia</option>
             </select>
+            <!-- Filtro por ciclista individual -->
+            <div style="position:relative;flex:1;min-width:200px;max-width:300px">
+              <input id="resRiderInput" type="text" placeholder="🔎 Filtrar por ciclista..." autocomplete="off"
+                style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:7px 12px;font-size:13px;box-sizing:border-box"
+                oninput="_resRiderSuggest(this.value)" onfocus="_resRiderSuggest(this.value)" onkeydown="_resRiderKey(event)">
+              <div id="resRiderBox" style="display:none;position:fixed;background:#fff;border:1.5px solid #d0d5dd;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;max-height:220px;overflow-y:auto;min-width:220px"></div>
+            </div>
+            <button onclick="_resRiderClear()" id="resRiderClearBtn" style="display:none;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">✕ Quitar filtro</button>
             <button onclick="_resumenExportPDF()" class="btn" style="background:#1a56db;color:#fff">📄 Exportar PDF</button>
           </div>
           <div id="resumenBody">
@@ -2629,6 +2637,69 @@ function _rbacLogout(){
 // ═══════════════════════════════════════════════════════════════
 // RESUMEN DE TEMPORADA
 // ═══════════════════════════════════════════════════════════════
+// ── Filtro de ciclista en Estadísticas ───────────────────────
+let _resRiderFilter = ''; // nombre exacto seleccionado
+let _resRiderNames  = []; // caché de nombres
+
+function _resRiderSuggest(query){
+  const box = document.getElementById('resRiderBox');
+  const inp = document.getElementById('resRiderInput');
+  if(!box || !inp) return;
+  // Construir lista la primera vez
+  if(_resRiderNames.length === 0 && _cachedHistory && _cachedHistory.length > 0){
+    _resRiderNames = [...new Set(
+      _cachedHistory.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name)).filter(Boolean))
+    )].sort();
+  }
+  const q = (query||'').trim().toLowerCase();
+  const filtered = q ? _resRiderNames.filter(n=>n.toLowerCase().includes(q)) : _resRiderNames;
+  if(filtered.length === 0){ box.style.display='none'; return; }
+  box.innerHTML = filtered.map(n=>`
+    <div onclick="_resRiderPick('${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}');"
+      style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+      onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
+      ${q ? escapeHtml(n).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong style="color:#1a56db">$1</strong>') : escapeHtml(n)}
+    </div>`).join('');
+  const r = inp.getBoundingClientRect();
+  box.style.top   = (r.bottom+4)+'px';
+  box.style.left  = r.left+'px';
+  box.style.width = Math.max(r.width,240)+'px';
+  box.style.display='';
+}
+
+function _resRiderKey(e){
+  const box = document.getElementById('resRiderBox');
+  const items = box ? box.querySelectorAll('div') : [];
+  if(e.key==='Escape'){ box.style.display='none'; }
+  else if(e.key==='Enter' && items.length>0){ items[0].click(); }
+}
+
+function _resRiderPick(name){
+  const inp = document.getElementById('resRiderInput');
+  const box = document.getElementById('resRiderBox');
+  const clearBtn = document.getElementById('resRiderClearBtn');
+  if(inp) inp.value = name;
+  if(box) box.style.display='none';
+  if(clearBtn) clearBtn.style.display='';
+  _resRiderFilter = name;
+  renderResumen();
+}
+
+function _resRiderClear(){
+  const inp = document.getElementById('resRiderInput');
+  const clearBtn = document.getElementById('resRiderClearBtn');
+  if(inp) inp.value='';
+  if(clearBtn) clearBtn.style.display='none';
+  _resRiderFilter = '';
+  renderResumen();
+}
+
+document.addEventListener('click', e=>{
+  const box = document.getElementById('resRiderBox');
+  const inp = document.getElementById('resRiderInput');
+  if(box && inp && !box.contains(e.target) && e.target!==inp) box.style.display='none';
+});
+
 async function renderResumen(){
   const body = document.getElementById('resumenBody');
   const yearSel = document.getElementById('resumenYear');
@@ -2636,8 +2707,19 @@ async function renderResumen(){
   body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">⏳ Calculando estadísticas...</div>';
 
   const history = await _ensureHistory();
+  // Actualizar caché de nombres para el autocomplete
+  if(_resRiderNames.length === 0 && history.length > 0){
+    _resRiderNames = [...new Set(history.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name)).filter(Boolean)))].sort();
+  }
+
   if(!history || history.length === 0){
     body.innerHTML = '<div style="text-align:center;padding:60px;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:10px">No hay carreras en el historial todavía.</p></div>';
+    return;
+  }
+
+  // ── Modo ficha individual de ciclista ──
+  if(_resRiderFilter){
+    _resRenderRiderProfile(body, history, _resRiderFilter);
     return;
   }
 
@@ -3030,6 +3112,111 @@ async function _scoutRender(){
             </td>
           </tr>`;
         }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+// ── Ficha individual de ciclista ─────────────────────────────
+function _resRenderRiderProfile(body, history, riderName){
+  const riderQ = riderName.toLowerCase();
+  // Recoger todas las participaciones del ciclista
+  const participaciones = [];
+  history.forEach(race=>{
+    const match = (race.riders||[]).find(r=>normalizeRiderName(r.name).toLowerCase()===riderQ);
+    if(match) participaciones.push({
+      raceName:   race.raceName,
+      raceDate:   race.raceDate,
+      localidad:  race.localidad||'—',
+      km:         race.km||'—',
+      avg:        race.avg||'—',
+      circuitType:race.circuitType||'—',
+      pos:        match.pos,
+      cat:        match.cat||'—',
+      team:       match.team||'—',
+      time:       match.time||'—',
+      totalRiders:(race.riders||[]).length
+    });
+  });
+
+  if(participaciones.length === 0){
+    body.innerHTML=`<div style="text-align:center;padding:40px;color:#9ca3af"><div style="font-size:36px">😕</div><p style="margin-top:8px">No se encontraron carreras para <strong>${escapeHtml(riderName)}</strong>.</p></div>`;
+    return;
+  }
+
+  // Ordenar por fecha
+  const sorted = [...participaciones].sort((a,b)=>{
+    const da=_parseSpanishDate(a.raceDate)||new Date(0);
+    const db=_parseSpanishDate(b.raceDate)||new Date(0);
+    return da-db;
+  });
+
+  // Stats
+  const positions = sorted.map(r=>r.pos);
+  const avgPos    = (positions.reduce((a,b)=>a+b,0)/positions.length).toFixed(1);
+  const bestPos   = Math.min(...positions);
+  const top1      = positions.filter(p=>p===1).length;
+  const top3      = positions.filter(p=>p<=3).length;
+  const top5      = positions.filter(p=>p<=5).length;
+  const top10     = positions.filter(p=>p<=10).length;
+  const teams     = [...new Set(sorted.map(r=>r.team))].filter(t=>t&&t!=='—').join(', ');
+
+  // Tendencia: comparar primera mitad vs segunda mitad
+  const mid = Math.floor(sorted.length/2);
+  const avgFirst = sorted.slice(0,mid||1).reduce((a,b)=>a+b.pos,0)/(mid||1);
+  const avgLast  = sorted.slice(mid).reduce((a,b)=>a+b.pos,0)/(sorted.length-mid||1);
+  const tendencia = avgLast < avgFirst ? '📈 Mejorando' : avgLast > avgFirst ? '📉 Empeorando' : '➡️ Estable';
+
+  body.innerHTML = `
+  <!-- Cabecera del ciclista -->
+  <div style="background:linear-gradient(135deg,#0b2f6b,#1a56db);color:#fff;border-radius:16px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:22px;font-weight:900">${escapeHtml(riderName)}</div>
+      <div style="opacity:.8;font-size:13px;margin-top:3px">${escapeHtml(teams)} · ${escapeHtml(sorted[0]?.cat||'—')}</div>
+    </div>
+    <div style="font-size:28px">${tendencia}</div>
+  </div>
+
+  <!-- KPIs del ciclista -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px">
+    ${_resKpi('🏁','Carreras',participaciones.length,'en el historial')}
+    ${_resKpi('📊','Promedio',avgPos,'posición media')}
+    ${_resKpi('⭐','Mejor pos.',bestPos+'º','su mejor resultado')}
+    ${_resKpi('🥇','Victorias',top1||'—','1er puesto')}
+    ${_resKpi('🏆','Top 3',top3||'—','podios')}
+    ${_resKpi('🎯','Top 10',top10||'—','resultados')}
+  </div>
+
+  <!-- Historial completo de carreras -->
+  <div style="font-weight:800;font-size:15px;color:#0b2f6b;margin-bottom:12px">📋 Historial completo de carreras</div>
+  <div style="overflow-x:auto;border-radius:12px;border:1px solid #e5e7eb">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f3f4f6">
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151;width:50px">Pos</th>
+        <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Carrera</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Fecha</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Localidad</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Km</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Vel.</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Corredores</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Tiempo</th>
+      </tr></thead>
+      <tbody>
+        ${sorted.map((r,i)=>`
+        <tr style="border-bottom:1px solid #f3f4f6;background:${i%2===0?'#fff':'#fafafa'}">
+          <td style="padding:10px 14px;text-align:center">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;font-weight:900;font-size:13px;
+              background:${r.pos===1?'#fbbf24':r.pos<=3?'#e5e7eb':r.pos<=10?'#dbeafe':'#f3f4f6'};
+              color:${r.pos===1?'#78350f':r.pos<=3?'#374151':r.pos<=10?'#1e40af':'#6b7280'}">${r.pos}</span>
+          </td>
+          <td style="padding:10px 14px;font-weight:600">${escapeHtml(r.raceName||'—')}</td>
+          <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(r.raceDate||'—')}</td>
+          <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(r.localidad)}</td>
+          <td style="padding:10px 14px;text-align:center">${r.km}</td>
+          <td style="padding:10px 14px;text-align:center">${r.avg!=='—'?r.avg+' km/h':r.avg}</td>
+          <td style="padding:10px 14px;text-align:center;color:#6b7280">${r.totalRiders}</td>
+          <td style="padding:10px 14px;text-align:center;font-family:monospace">${r.time}</td>
+        </tr>`).join('')}
       </tbody>
     </table>
   </div>`;
