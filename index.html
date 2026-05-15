@@ -4245,26 +4245,10 @@ function _computeTeamRankingsLocal(ridersList, raceId){
 
 async function _sbLoadHistory(){
   if(!_sb) return [];
-  // Timeout de 12 segundos para evitar que la consulta se quede colgada indefinidamente
-  // (ocurre cuando el proyecto Supabase está en pausa o hay problemas de red)
-  const ac = new AbortController();
-  const timer = setTimeout(()=>ac.abort(), 12000);
-  let data, error;
-  try {
-    ({data, error} = await _sb.from('races')
-      .select('id, name, date, notes, race_results(pos, bib, name, team, cat, time, gap_seconds, total_seconds)')
-      .eq('race_type','clasificacion')
-      .order('date', {ascending: false})
-      .abortSignal(ac.signal));
-  } catch(e) {
-    clearTimeout(timer);
-    if(e.name === 'AbortError'){
-      console.warn('Supabase historial: timeout (>12s). El proyecto puede estar pausado.');
-      throw new Error('Tiempo de espera agotado (>12s). El servidor tardó demasiado. Inténtalo de nuevo en unos segundos.');
-    }
-    throw e;
-  }
-  clearTimeout(timer);
+  const {data, error} = await _sb.from('races')
+    .select('id, name, date, notes, race_results(pos, bib, name, team, cat, time, gap_seconds, total_seconds)')
+    .eq('race_type','clasificacion')
+    .order('date', {ascending: false});
   if(error){ console.warn('Supabase historial error:', error); return []; }
   return (data||[]).map(race=>{
     let extra = {};
@@ -4291,14 +4275,7 @@ async function _sbLoadHistory(){
 }
 
 async function _ensureHistory(){
-  if(_cachedHistory === null){
-    try {
-      _cachedHistory = await _sbLoadHistory();
-    } catch(e) {
-      _cachedHistory = null; // no cachear en caso de error para permitir reintento
-      throw e;
-    }
-  }
+  if(_cachedHistory === null) _cachedHistory = await _sbLoadHistory();
   return _cachedHistory;
 }
 
@@ -11187,7 +11164,7 @@ clearComparativo=function(){
   renderTable(); // Refrescar checkboxes
 }
 
-window.addEventListener('load', initDarkMode);
+// (modo oscuro eliminado — la llamada a initDarkMode rompía el resto del script)
 // ===== FIN BLOQUE UX POLISH JS =====
 
 // ===== POWER RANKING DE TEMPORADA =====
@@ -11430,20 +11407,7 @@ function _prBuildTeamMeta(races){
 async function renderPowerRanking(){
   const grid = $('prGrid');
   if(!grid) return;
-
-  // TEST DIRECTO: Muestra estado paso a paso para diagnosticar
-  const BUILD = '2026-05-15 v8';
-  grid.innerHTML = `<div style="padding:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;font-size:13px">
-    <b>⏳ Cargando Power Ranking...</b> <span style="color:#6b7280;font-size:11px">${BUILD}</span><br>
-    <span id="prDiag">Iniciando...</span>
-  </div>`;
-  const diag = ()=>document.getElementById('prDiag');
-
-  if(!_sb){
-    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Sin conexión a Supabase (cliente no inicializado). Recarga la página.</div>`;
-    return;
-  }
-  if(diag()) diag().textContent = '✅ Cliente Supabase OK. Consultando historial...';
+  grid.innerHTML = '<div class="pr-loading">⏳ Cargando datos de temporada...</div>';
 
   let history;
   try {
@@ -11456,18 +11420,8 @@ async function renderPowerRanking(){
     </div>`;
     return;
   }
-  if(diag()) diag().textContent = `✅ Historial cargado: ${history.length} carrera(s). Procesando...`;
   if(!history || !history.length){
-    // Test directo para distinguir "sin datos" vs "error de permisos"
-    const {count, error:countErr} = await _sb.from('races').select('id', {count:'exact',head:true}).eq('race_type','clasificacion');
-    const countMsg = countErr
-      ? `Error al consultar BD: ${countErr.message}`
-      : `La tabla 'races' tiene ${count ?? 0} carreras con race_type='clasificacion'.`;
-    grid.innerHTML = `<div class="pr-empty-msg">
-      📭 No hay datos de clasificaciones en el historial.<br>
-      <span style="font-size:12px;color:#6b7280">${countMsg}<br>
-      Para ver el Power Ranking, sube resultados de carreras desde <b>"Carga y Resumen"</b>.</span>
-    </div>`;
+    grid.innerHTML = '<div class="pr-empty-msg">No hay datos en el historial.<br><span style="font-size:12px">Carga carreras primero desde "Carga y Resumen".</span></div>';
     return;
   }
 
