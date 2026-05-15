@@ -2023,22 +2023,79 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 
     <div id="view-resumen" class="spa-view">
       <section class="panel">
-        <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-          <h2>🏅 Resumen de Temporada</h2>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="section-title"><h2>🏅 Resumen de Temporada</h2></div>
+
+        <!-- Pestañas -->
+        <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px">
+          <button id="resTabStats" onclick="_resSetTab('stats')" style="padding:12px 20px;border:none;background:none;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid #1a56db;margin-bottom:-2px;color:#1a56db">📊 Estadísticas</button>
+          <button id="resTabScout" onclick="_resSetTab('scout')" style="padding:12px 20px;border:none;background:none;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;color:#6b7280">🔍 Seguimiento</button>
+        </div>
+
+        <!-- PANEL ESTADÍSTICAS -->
+        <div id="resPanelStats">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
             <select id="resumenYear" onchange="renderResumen()" style="border:1.5px solid #d0d5dd;border-radius:9px;padding:7px 12px;font-size:13px;font-weight:700">
               <option value="">Toda la historia</option>
             </select>
             <button onclick="_resumenExportPDF()" class="btn" style="background:#1a56db;color:#fff">📄 Exportar PDF</button>
           </div>
-        </div>
-        <div id="resumenBody" style="margin-top:18px">
-          <div style="text-align:center;color:#9ca3af;padding:60px 20px">
-            <div style="font-size:48px">🏅</div>
-            <p style="font-size:16px;font-weight:700;margin:10px 0 4px;color:#374151">Resumen de Temporada</p>
-            <p style="font-size:13px">Cargando estadísticas...</p>
+          <div id="resumenBody">
+            <div style="text-align:center;color:#9ca3af;padding:60px 20px">
+              <div style="font-size:48px">🏅</div>
+              <p style="font-size:16px;font-weight:700;margin:10px 0 4px;color:#374151">Resumen de Temporada</p>
+              <p style="font-size:13px">Cargando estadísticas...</p>
+            </div>
           </div>
         </div>
+
+        <!-- PANEL SEGUIMIENTO / SCOUTING -->
+        <div id="resPanelScout" style="display:none">
+          <!-- Filtros -->
+          <div style="background:#f8fbff;border:1px solid #e0e7ff;border-radius:14px;padding:18px 20px;margin-bottom:20px">
+            <div style="font-weight:800;font-size:14px;color:#0b2f6b;margin-bottom:14px">🔍 Buscar ciclista o equipo</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+              <div style="flex:2;min-width:180px">
+                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOMBRE DEL CICLISTA</label>
+                <input id="scoutRiderInput" type="text" placeholder="Escribe un nombre..." autocomplete="off"
+                  style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box"
+                  oninput="_scoutSuggest(this.value)">
+                <div id="scoutSuggestBox" style="display:none;position:absolute;background:#fff;border:1px solid #d0d5dd;border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;max-height:200px;overflow-y:auto;min-width:220px"></div>
+              </div>
+              <div style="flex:1;min-width:160px">
+                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">EQUIPO</label>
+                <select id="scoutTeamSel" onchange="_scoutRender()" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+                  <option value="">Todos los equipos</option>
+                </select>
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">CATEGORÍA</label>
+                <select id="scoutCatSel" onchange="_scoutRender()" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+                  <option value="">Todas</option>
+                </select>
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">POSICIÓN MÁXIMA</label>
+                <select id="scoutPosSel" onchange="_scoutRender()" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+                  <option value="">Cualquiera</option>
+                  <option value="1">🥇 Solo victorias</option>
+                  <option value="3">🏆 Top 3</option>
+                  <option value="5">Top 5</option>
+                  <option value="10">Top 10</option>
+                  <option value="20">Top 20</option>
+                </select>
+              </div>
+              <button onclick="_scoutRender()" class="btn" style="background:#1a56db;color:#fff;height:38px">Buscar</button>
+              <button onclick="_scoutReset()" class="btn secondary" style="height:38px">Limpiar</button>
+            </div>
+          </div>
+          <div id="scoutBody">
+            <div style="text-align:center;color:#9ca3af;padding:40px">
+              <div style="font-size:36px">🔍</div>
+              <p style="margin-top:8px;font-size:13px">Aplica filtros para buscar ciclistas de cualquier equipo.</p>
+            </div>
+          </div>
+        </div>
+
       </section>
     </div>
 
@@ -2754,6 +2811,165 @@ async function renderResumen(){
         </tbody>
       </table>
     </div>
+  </div>`;
+}
+
+// ── Tabs del Resumen ──────────────────────────────────────────
+function _resSetTab(tab){
+  const tabs = {stats:'resTabStats', scout:'resTabScout'};
+  const panels = {stats:'resPanelStats', scout:'resPanelScout'};
+  Object.entries(tabs).forEach(([k,id])=>{
+    const btn = document.getElementById(id);
+    if(btn){ btn.style.borderBottomColor = k===tab?'#1a56db':'transparent'; btn.style.color = k===tab?'#1a56db':'#6b7280'; }
+  });
+  Object.entries(panels).forEach(([k,id])=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = k===tab?'':'none';
+  });
+  if(tab==='scout') _scoutInit();
+}
+
+// ── Scouting: inicializar filtros ────────────────────────────
+let _scoutHistory = [];
+async function _scoutInit(){
+  if(_scoutHistory.length === 0) _scoutHistory = await _ensureHistory();
+  // Poblar equipos
+  const teamSel = document.getElementById('scoutTeamSel');
+  if(teamSel && teamSel.options.length <= 1){
+    const teams = [...new Set(_scoutHistory.flatMap(r=>(r.riders||[]).map(x=>getCanonicalTeam(x.team||'')).filter(Boolean)))].sort();
+    teams.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; teamSel.appendChild(o); });
+  }
+  // Poblar categorías
+  const catSel = document.getElementById('scoutCatSel');
+  if(catSel && catSel.options.length <= 1){
+    const cats = [...new Set(_scoutHistory.flatMap(r=>(r.riders||[]).map(x=>x.cat||'').filter(Boolean)))].sort();
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; catSel.appendChild(o); });
+  }
+}
+
+function _scoutSuggest(query){
+  const box = document.getElementById('scoutSuggestBox');
+  if(!box) return;
+  if(!query || query.length < 2){ box.style.display='none'; return; }
+  const q = query.toLowerCase();
+  const names = [...new Set(_scoutHistory.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name))).filter(n=>n.toLowerCase().includes(q)))].slice(0,10);
+  if(names.length === 0){ box.style.display='none'; return; }
+  box.innerHTML = names.map(n=>`<div onclick="_scoutPickRider('${n.replace(/'/g,"\\'")}');this.parentElement.style.display='none'"
+    style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6"
+    onmouseenter="this.style.background='#f0f7ff'" onmouseleave="this.style.background=''">${escapeHtml(n)}</div>`).join('');
+  box.style.display='';
+  // Posicionar bajo el input
+  const inp = document.getElementById('scoutRiderInput');
+  if(inp){ const r=inp.getBoundingClientRect(); box.style.top=(r.bottom+window.scrollY+4)+'px'; box.style.left=r.left+'px'; box.style.width=r.width+'px'; box.style.position='absolute'; }
+}
+
+function _scoutPickRider(name){
+  const inp = document.getElementById('scoutRiderInput');
+  if(inp) inp.value = name;
+  _scoutRender();
+}
+
+function _scoutReset(){
+  const inp = document.getElementById('scoutRiderInput');
+  const teamSel = document.getElementById('scoutTeamSel');
+  const catSel = document.getElementById('scoutCatSel');
+  const posSel = document.getElementById('scoutPosSel');
+  if(inp) inp.value='';
+  if(teamSel) teamSel.value='';
+  if(catSel) catSel.value='';
+  if(posSel) posSel.value='';
+  const body = document.getElementById('scoutBody');
+  if(body) body.innerHTML='<div style="text-align:center;color:#9ca3af;padding:40px"><div style="font-size:36px">🔍</div><p style="margin-top:8px;font-size:13px">Aplica filtros para buscar ciclistas de cualquier equipo.</p></div>';
+}
+
+async function _scoutRender(){
+  const body = document.getElementById('scoutBody');
+  if(!body) return;
+  if(_scoutHistory.length === 0) _scoutHistory = await _ensureHistory();
+
+  const riderQ = (document.getElementById('scoutRiderInput')?.value||'').trim().toLowerCase();
+  const teamQ  = (document.getElementById('scoutTeamSel')?.value||'').toLowerCase();
+  const catQ   = (document.getElementById('scoutCatSel')?.value||'').toLowerCase();
+  const posMax = parseInt(document.getElementById('scoutPosSel')?.value||'0')||0;
+
+  // Construir mapa de ciclistas con sus resultados
+  const riderMap = {};
+  _scoutHistory.forEach(race=>{
+    (race.riders||[]).forEach(r=>{
+      const name = normalizeRiderName(r.name);
+      const team = getCanonicalTeam(r.team||'');
+      const cat  = r.cat||'';
+      // Aplicar filtros
+      if(riderQ && !name.toLowerCase().includes(riderQ)) return;
+      if(teamQ  && team.toLowerCase() !== teamQ) return;
+      if(catQ   && cat.toLowerCase() !== catQ) return;
+      if(posMax && r.pos > posMax) return;
+      if(!riderMap[name]) riderMap[name]={name, team, cat, races:[], best:999, top1:0, top3:0, top5:0, top10:0};
+      riderMap[name].races.push({pos:r.pos, raceName:race.raceName, raceDate:race.raceDate, team});
+      if(r.pos < riderMap[name].best) riderMap[name].best = r.pos;
+      if(r.pos===1) riderMap[name].top1++;
+      if(r.pos<=3)  riderMap[name].top3++;
+      if(r.pos<=5)  riderMap[name].top5++;
+      if(r.pos<=10) riderMap[name].top10++;
+    });
+  });
+
+  const riders = Object.values(riderMap)
+    .map(r=>({ ...r, avg: r.races.reduce((a,b)=>a+b.pos,0)/r.races.length, total: r.races.length }))
+    .sort((a,b)=> posMax ? a.best-b.best : a.avg-b.avg);
+
+  if(riders.length === 0){
+    body.innerHTML='<div style="text-align:center;color:#9ca3af;padding:40px"><div style="font-size:36px">😕</div><p style="margin-top:8px">No se encontraron ciclistas con esos filtros.</p></div>';
+    return;
+  }
+
+  body.innerHTML = `
+  <div style="font-size:13px;color:#6b7280;margin-bottom:12px">${riders.length} ciclista${riders.length!==1?'s':''} encontrado${riders.length!==1?'s':''} · ordenados por ${posMax?'mejor posición':'promedio'}</div>
+  <div style="overflow-x:auto;border-radius:12px;border:1px solid #e5e7eb">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f3f4f6">
+        <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Ciclista</th>
+        <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Equipo</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Cat</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Carreras</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Promedio</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Mejor</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">🥇</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Top3</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Top10</th>
+        <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Evolución</th>
+      </tr></thead>
+      <tbody>
+        ${riders.map((r,i)=>{
+          // Mini gráfico de evolución (últimas 6 carreras)
+          const last6 = [...r.races].sort((a,b)=>{
+            const da=_parseSpanishDate(a.raceDate)||new Date(0);
+            const db=_parseSpanishDate(b.raceDate)||new Date(0);
+            return da-db;
+          }).slice(-6);
+          const maxPos = Math.max(...last6.map(x=>x.pos), 20);
+          const sparkline = last6.map(x=>{
+            const h = Math.max(4, Math.round((1-x.pos/maxPos)*28)+4);
+            const col = x.pos<=3?'#f59e0b':x.pos<=10?'#3b82f6':'#d1d5db';
+            return `<div title="${escapeHtml(x.raceName)}: ${x.pos}º" style="width:8px;height:${h}px;background:${col};border-radius:2px;flex-shrink:0"></div>`;
+          }).join('');
+          return `<tr style="border-bottom:1px solid #f3f4f6;background:${i%2===0?'#fff':'#fafafa'}">
+            <td style="padding:10px 14px;font-weight:700">${escapeHtml(r.name)}</td>
+            <td style="padding:10px 14px;font-size:12px;color:#374151">${escapeHtml(r.team)}</td>
+            <td style="padding:10px 14px;text-align:center"><span style="background:#e0e7ff;color:#3730a3;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">${escapeHtml(r.cat)}</span></td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700">${r.total}</td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700;color:${r.avg<=5?'#b45309':r.avg<=15?'#1d4ed8':'#374151'}">${r.avg.toFixed(1)}</td>
+            <td style="padding:10px 14px;text-align:center"><span style="font-weight:900;font-size:15px;color:${r.best===1?'#b45309':r.best<=3?'#6b7280':'#374151'}">${r.best}º</span></td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700;color:#b45309">${r.top1||'—'}</td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700">${r.top3||'—'}</td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700">${r.top10||'—'}</td>
+            <td style="padding:10px 14px">
+              <div style="display:flex;align-items:flex-end;gap:2px;height:32px">${sparkline||'<span style="color:#9ca3af;font-size:11px">—</span>'}</div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
   </div>`;
 }
 
