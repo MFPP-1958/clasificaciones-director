@@ -4275,7 +4275,10 @@ async function _sbLoadHistory(){
 }
 
 async function _ensureHistory(){
-  if(_cachedHistory === null) _cachedHistory = await _sbLoadHistory();
+  if(_cachedHistory === null){
+    const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout: historial tardó más de 15s. Comprueba conexión con Supabase.')),15000));
+    _cachedHistory = await Promise.race([_sbLoadHistory(), timeout]);
+  }
   return _cachedHistory;
 }
 
