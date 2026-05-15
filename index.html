@@ -2056,10 +2056,12 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
               <div style="flex:2;min-width:180px">
                 <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOMBRE DEL CICLISTA</label>
-                <input id="scoutRiderInput" type="text" placeholder="Escribe un nombre..." autocomplete="off"
+                <input id="scoutRiderInput" type="text" placeholder="Todos los ciclistas..." autocomplete="off"
                   style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box"
-                  oninput="_scoutSuggest(this.value)">
-                <div id="scoutSuggestBox" style="display:none;position:absolute;background:#fff;border:1px solid #d0d5dd;border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;max-height:200px;overflow-y:auto;min-width:220px"></div>
+                  oninput="_scoutSuggest(this.value)"
+                  onfocus="_scoutSuggest(this.value)"
+                  onkeydown="_scoutSuggestKey(event)">
+                <div id="scoutSuggestBox" style="display:none;position:fixed;background:#fff;border:1.5px solid #d0d5dd;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;max-height:240px;overflow-y:auto;min-width:220px"></div>
               </div>
               <div style="flex:1;min-width:160px">
                 <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">EQUIPO</label>
@@ -2847,34 +2849,94 @@ async function _scoutInit(){
   }
 }
 
+let _scoutAllNames = [];
+let _scoutHlIdx = -1;
+
 function _scoutSuggest(query){
   const box = document.getElementById('scoutSuggestBox');
-  if(!box) return;
-  if(!query || query.length < 2){ box.style.display='none'; return; }
-  const q = query.toLowerCase();
-  const names = [...new Set(_scoutHistory.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name))).filter(n=>n.toLowerCase().includes(q)))].slice(0,10);
-  if(names.length === 0){ box.style.display='none'; return; }
-  box.innerHTML = names.map(n=>`<div onclick="_scoutPickRider('${n.replace(/'/g,"\\'")}');this.parentElement.style.display='none'"
-    style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6"
-    onmouseenter="this.style.background='#f0f7ff'" onmouseleave="this.style.background=''">${escapeHtml(n)}</div>`).join('');
-  box.style.display='';
-  // Posicionar bajo el input
   const inp = document.getElementById('scoutRiderInput');
-  if(inp){ const r=inp.getBoundingClientRect(); box.style.top=(r.bottom+window.scrollY+4)+'px'; box.style.left=r.left+'px'; box.style.width=r.width+'px'; box.style.position='absolute'; }
+  if(!box || !inp) return;
+
+  // Construir lista completa la primera vez
+  if(_scoutAllNames.length === 0 && _scoutHistory.length > 0){
+    _scoutAllNames = [...new Set(
+      _scoutHistory.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name)).filter(Boolean))
+    )].sort();
+  }
+
+  const q = (query||'').trim().toLowerCase();
+  const filtered = q
+    ? _scoutAllNames.filter(n=>n.toLowerCase().includes(q))
+    : _scoutAllNames;
+
+  if(filtered.length === 0){ box.style.display='none'; return; }
+
+  _scoutHlIdx = -1;
+  box.innerHTML = filtered.map((n,i)=>`
+    <div class="scout-suggest-item" data-idx="${i}" data-name="${escapeHtml(n)}"
+      onclick="_scoutPickRider('${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}');"
+      style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+      onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
+      ${q ? escapeHtml(n).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong style="color:#1a56db">$1</strong>') : escapeHtml(n)}
+    </div>`).join('');
+
+  // Posicionar bajo el input
+  const r = inp.getBoundingClientRect();
+  box.style.top    = (r.bottom + 4) + 'px';
+  box.style.left   = r.left + 'px';
+  box.style.width  = Math.max(r.width, 240) + 'px';
+  box.style.display = '';
 }
+
+function _scoutSuggestKey(e){
+  const box = document.getElementById('scoutSuggestBox');
+  const items = box ? box.querySelectorAll('.scout-suggest-item') : [];
+  if(!items.length) return;
+  if(e.key === 'ArrowDown'){
+    e.preventDefault();
+    _scoutHlIdx = Math.min(_scoutHlIdx+1, items.length-1);
+    items.forEach((el,i)=>el.style.background = i===_scoutHlIdx?'#eff6ff':'');
+    items[_scoutHlIdx]?.scrollIntoView({block:'nearest'});
+  } else if(e.key === 'ArrowUp'){
+    e.preventDefault();
+    _scoutHlIdx = Math.max(_scoutHlIdx-1, 0);
+    items.forEach((el,i)=>el.style.background = i===_scoutHlIdx?'#eff6ff':'');
+    items[_scoutHlIdx]?.scrollIntoView({block:'nearest'});
+  } else if(e.key === 'Enter' && _scoutHlIdx >= 0){
+    e.preventDefault();
+    const name = items[_scoutHlIdx]?.dataset.name;
+    if(name) _scoutPickRider(name);
+  } else if(e.key === 'Escape'){
+    const box = document.getElementById('scoutSuggestBox');
+    if(box) box.style.display='none';
+  }
+}
+
+// Cerrar dropdown al hacer clic fuera
+document.addEventListener('click', e=>{
+  const box = document.getElementById('scoutSuggestBox');
+  const inp = document.getElementById('scoutRiderInput');
+  if(box && inp && !box.contains(e.target) && e.target !== inp){
+    box.style.display='none';
+  }
+});
 
 function _scoutPickRider(name){
   const inp = document.getElementById('scoutRiderInput');
+  const box = document.getElementById('scoutSuggestBox');
   if(inp) inp.value = name;
+  if(box) box.style.display='none';
   _scoutRender();
 }
 
 function _scoutReset(){
   const inp = document.getElementById('scoutRiderInput');
+  const box = document.getElementById('scoutSuggestBox');
   const teamSel = document.getElementById('scoutTeamSel');
   const catSel = document.getElementById('scoutCatSel');
   const posSel = document.getElementById('scoutPosSel');
   if(inp) inp.value='';
+  if(box) box.style.display='none';
   if(teamSel) teamSel.value='';
   if(catSel) catSel.value='';
   if(posSel) posSel.value='';
