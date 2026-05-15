@@ -271,9 +271,11 @@ body.dark-mode .myteam-rider-card{background:#1c2128!important}
 .side-nav.collapsed .side-title{opacity:0;max-width:0}
 .side-nav.collapsed .nav-label{opacity:0;max-width:0}
 .side-nav.collapsed .nav-btn{padding:10px;justify-content:center;gap:0;position:relative}
-.side-nav.collapsed .nav-toggle{transform:rotate(180deg)}
 .side-nav.collapsed .nav-btn::after{content:attr(data-label);position:fixed;left:72px;background:#0b2f6b;color:#fff;padding:6px 12px;border-radius:9px;font-size:12px;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:9998;box-shadow:0 4px 14px rgba(11,47,107,.28)}
 .side-nav.collapsed .nav-btn:hover::after{opacity:1}
+/* Toggle prominente cuando está colapsado */
+.side-nav.collapsed .nav-toggle{width:48px;height:48px;background:#1a56db;color:#fff;border-color:#1a56db;font-size:22px;transform:none;border-radius:12px;padding:0}
+.side-nav.collapsed .nav-toggle:hover{background:#1e40af}
 .spa-main{min-width:0;width:100%}
 .spa-view{display:none;width:100%}
 .spa-view.active{display:block}
@@ -959,9 +961,6 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
     <div id="rbacErrorMsg" class="rbac-error"></div>
   </div>
 </div>
-<!-- Botón flotante hamburguesa para tablet/móvil -->
-<button id="navFloatBtn" onclick="_toggleNav()" aria-label="Abrir/cerrar menú"
-  style="display:none;position:fixed;top:14px;left:14px;z-index:7500;width:46px;height:46px;border-radius:14px;border:none;background:#1a56db;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(26,86,219,.45);align-items:center;justify-content:center;transition:background .15s">☰</button>
 
 <main class="container">
 <div class="spa-layout">
@@ -2993,25 +2992,20 @@ let _navCollapsed = (()=>{
 })();
 
 function _applyNavState(animate){
-  const nav      = document.getElementById('sideNav');
-  const layout   = document.querySelector('.spa-layout');
-  const btn      = document.getElementById('navToggleBtn');
-  const floatBtn = document.getElementById('navFloatBtn');
+  const nav    = document.getElementById('sideNav');
+  const layout = document.querySelector('.spa-layout');
+  const btn    = document.getElementById('navToggleBtn');
   if(!nav) return;
   if(!animate) nav.style.transition = 'none';
-  const isTablet = window.innerWidth <= _NAV_COLLAPSE_WIDTH;
   if(_navCollapsed){
     nav.classList.add('collapsed');
     if(layout) layout.classList.add('nav-collapsed');
-    if(btn){ btn.textContent='»'; btn.title='Expandir menú'; btn.setAttribute('aria-label','Expandir menú'); }
-    // Mostrar botón flotante en tablet cuando el menú está plegado
-    if(floatBtn){ floatBtn.style.display = isTablet ? 'flex' : 'none'; floatBtn.textContent='☰'; }
+    // Icono ☰ cuando está plegado: más reconocible que »
+    if(btn){ btn.textContent='☰'; btn.title='Expandir menú'; btn.setAttribute('aria-label','Expandir menú'); }
   } else {
     nav.classList.remove('collapsed');
     if(layout) layout.classList.remove('nav-collapsed');
     if(btn){ btn.textContent='«'; btn.title='Contraer menú'; btn.setAttribute('aria-label','Contraer menú'); }
-    // Ocultar botón flotante cuando el menú está desplegado (el toggle interno es visible)
-    if(floatBtn){ floatBtn.style.display = 'none'; }
   }
   if(!animate) setTimeout(()=>{ nav.style.transition=''; }, 50);
 }
@@ -7573,9 +7567,11 @@ function exportFilteredClassificationPDF(){
 .side-nav.collapsed .side-title{opacity:0;max-width:0}
 .side-nav.collapsed .nav-label{opacity:0;max-width:0}
 .side-nav.collapsed .nav-btn{padding:10px;justify-content:center;gap:0;position:relative}
-.side-nav.collapsed .nav-toggle{transform:rotate(180deg)}
 .side-nav.collapsed .nav-btn::after{content:attr(data-label);position:fixed;left:72px;background:#0b2f6b;color:#fff;padding:6px 12px;border-radius:9px;font-size:12px;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:9998;box-shadow:0 4px 14px rgba(11,47,107,.28)}
 .side-nav.collapsed .nav-btn:hover::after{opacity:1}
+/* Toggle prominente cuando está colapsado */
+.side-nav.collapsed .nav-toggle{width:48px;height:48px;background:#1a56db;color:#fff;border-color:#1a56db;font-size:22px;transform:none;border-radius:12px;padding:0}
+.side-nav.collapsed .nav-toggle:hover{background:#1e40af}
 .spa-main{min-width:0;width:100%}
 .spa-view{display:none;width:100%}
 .spa-view.active{display:block}
