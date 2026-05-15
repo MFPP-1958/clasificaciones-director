@@ -2396,6 +2396,15 @@ function showView(viewId){
     document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
     return;
   }
+  // Vistas que requieren una prueba cargada (riders[]).
+  // Si el usuario intenta entrar sin prueba: redirigir a Historial y avisar.
+  const VIEWS_REQUIRE_RACE = ['view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-graficos','view-top10','view-validacion'];
+  if(VIEWS_REQUIRE_RACE.includes(viewId) && (!riders || !riders.length)){
+    if(typeof showToast === 'function'){
+      showToast('Primero carga una prueba desde el Historial', 'warn', 4500);
+    }
+    return showView('view-historial');
+  }
   document.querySelectorAll('.spa-view').forEach(v=>v.classList.toggle('active',v.id===viewId));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
   // Auto-abrir panel de carga solo si no hay datos cargados
