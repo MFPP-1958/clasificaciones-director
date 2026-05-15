@@ -294,6 +294,11 @@ body.dark-mode .myteam-rider-card{background:#1c2128!important}
   .nav-btn{white-space:nowrap;text-align:center}
   .equipos-view .team-ranking-full .team-ranking-list,.graficos-view .visual-grid{grid-template-columns:1fr}
 }
+@media(max-width:1200px){
+  /* En tablet con menú plegado, reservar espacio para el botón flotante */
+  .spa-layout.nav-collapsed{ padding-left:0; }
+  .spa-layout.nav-collapsed .spa-main{ padding-left:6px; }
+}
 
 
 /* Corrección de layout SPA: menú arriba a la izquierda y todo el contenido a la derecha */
@@ -954,6 +959,10 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
     <div id="rbacErrorMsg" class="rbac-error"></div>
   </div>
 </div>
+<!-- Botón flotante hamburguesa para tablet/móvil -->
+<button id="navFloatBtn" onclick="_toggleNav()" aria-label="Abrir/cerrar menú"
+  style="display:none;position:fixed;top:14px;left:14px;z-index:7500;width:46px;height:46px;border-radius:14px;border:none;background:#1a56db;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(26,86,219,.45);align-items:center;justify-content:center;transition:background .15s">☰</button>
+
 <main class="container">
 <div class="spa-layout">
   <aside class="side-nav" id="sideNav" aria-label="Menú de secciones">
@@ -2984,19 +2993,25 @@ let _navCollapsed = (()=>{
 })();
 
 function _applyNavState(animate){
-  const nav    = document.getElementById('sideNav');
-  const layout = document.querySelector('.spa-layout');
-  const btn    = document.getElementById('navToggleBtn');
+  const nav      = document.getElementById('sideNav');
+  const layout   = document.querySelector('.spa-layout');
+  const btn      = document.getElementById('navToggleBtn');
+  const floatBtn = document.getElementById('navFloatBtn');
   if(!nav) return;
   if(!animate) nav.style.transition = 'none';
+  const isTablet = window.innerWidth <= _NAV_COLLAPSE_WIDTH;
   if(_navCollapsed){
     nav.classList.add('collapsed');
     if(layout) layout.classList.add('nav-collapsed');
     if(btn){ btn.textContent='»'; btn.title='Expandir menú'; btn.setAttribute('aria-label','Expandir menú'); }
+    // Mostrar botón flotante en tablet cuando el menú está plegado
+    if(floatBtn){ floatBtn.style.display = isTablet ? 'flex' : 'none'; floatBtn.textContent='☰'; }
   } else {
     nav.classList.remove('collapsed');
     if(layout) layout.classList.remove('nav-collapsed');
     if(btn){ btn.textContent='«'; btn.title='Contraer menú'; btn.setAttribute('aria-label','Contraer menú'); }
+    // Ocultar botón flotante cuando el menú está desplegado (el toggle interno es visible)
+    if(floatBtn){ floatBtn.style.display = 'none'; }
   }
   if(!animate) setTimeout(()=>{ nav.style.transition=''; }, 50);
 }
@@ -7580,6 +7595,11 @@ function exportFilteredClassificationPDF(){
   .side-title{display:none}
   .nav-btn{white-space:nowrap;text-align:center}
   .equipos-view .team-ranking-full .team-ranking-list,.graficos-view .visual-grid{grid-template-columns:1fr}
+}
+@media(max-width:1200px){
+  /* En tablet con menú plegado, reservar espacio para el botón flotante */
+  .spa-layout.nav-collapsed{ padding-left:0; }
+  .spa-layout.nav-collapsed .spa-main{ padding-left:6px; }
 }
 
 
