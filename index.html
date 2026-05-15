@@ -992,6 +992,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
     <button class="nav-btn" data-view="view-tendencias" data-label="Tendencias" onclick="showView('view-tendencias')"><span class="nav-icon">📉</span><span class="nav-label"> Tendencias</span></button>
     <button class="nav-btn" data-view="view-seleccion" data-label="Convocatorias" onclick="showView('view-seleccion')"><span class="nav-icon">🏆</span><span class="nav-label"> Convocatorias</span></button>
     <button class="nav-btn" data-view="view-validacion" data-label="Validación" onclick="showView('view-validacion')"><span class="nav-icon">⚠️</span><span class="nav-label"> Validación</span></button>
+    <button class="nav-btn" data-view="view-resumen" data-label="Resumen Temporada" onclick="showView('view-resumen')"><span class="nav-icon">🏅</span><span class="nav-label"> Resumen Temporada</span></button>
     <button class="nav-btn" id="navBtnGestion" data-view="view-gestion" data-label="Gestión" onclick="_gOpenPanel()" style="display:none"><span class="nav-icon">⚙️</span><span class="nav-label"> Gestión</span></button>
   </aside>
 
@@ -2020,6 +2021,27 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
     </div>
     <!-- ══════════════════════════════  FIN SELECCIÓN VLC  ═══════════ -->
 
+    <div id="view-resumen" class="spa-view">
+      <section class="panel">
+        <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <h2>🏅 Resumen de Temporada</h2>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="resumenYear" onchange="renderResumen()" style="border:1.5px solid #d0d5dd;border-radius:9px;padding:7px 12px;font-size:13px;font-weight:700">
+              <option value="">Toda la historia</option>
+            </select>
+            <button onclick="_resumenExportPDF()" class="btn" style="background:#1a56db;color:#fff">📄 Exportar PDF</button>
+          </div>
+        </div>
+        <div id="resumenBody" style="margin-top:18px">
+          <div style="text-align:center;color:#9ca3af;padding:60px 20px">
+            <div style="font-size:48px">🏅</div>
+            <p style="font-size:16px;font-weight:700;margin:10px 0 4px;color:#374151">Resumen de Temporada</p>
+            <p style="font-size:13px">Cargando estadísticas...</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <div id="view-gestion" class="spa-view">
       <section class="panel" style="display:flex;align-items:center;justify-content:center;min-height:300px">
         <div style="text-align:center;color:#9ca3af">
@@ -2282,6 +2304,7 @@ function showView(viewId){
       }
       if(viewId==='view-tendencias') renderTendencias();
       if(viewId==='view-seleccion'){ _selFiltersReady=false; _selSelectedCats=new Set(); renderSeleccion(); }
+      if(viewId==='view-resumen'){ renderResumen(); }
       if(viewId==='view-gestion'){ _gSetTab('users'); }
     }catch(e){console.warn('No se pudo refrescar la vista',e)}
     updateRaceHeader(viewId);
@@ -2400,6 +2423,7 @@ const ALL_VIEWS = [
   {id:'view-tendencias',  icon:'📉', label:'Tendencias'},
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
   {id:'view-validacion',  icon:'⚠️', label:'Validación'},
+  {id:'view-resumen',     icon:'🏅', label:'Resumen Temporada'},
   {id:'view-gestion',     icon:'⚙️', label:'Gestión'},
 ];
 const ROLES = ['SUPERADMIN','ADMIN','DIRECTOR','CICLISTA','LECTOR'];
@@ -2543,6 +2567,247 @@ function _rbacLogout(){
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// RESUMEN DE TEMPORADA
+// ═══════════════════════════════════════════════════════════════
+async function renderResumen(){
+  const body = document.getElementById('resumenBody');
+  const yearSel = document.getElementById('resumenYear');
+  if(!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">⏳ Calculando estadísticas...</div>';
+
+  const history = await _ensureHistory();
+  if(!history || history.length === 0){
+    body.innerHTML = '<div style="text-align:center;padding:60px;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:10px">No hay carreras en el historial todavía.</p></div>';
+    return;
+  }
+
+  // Poblar selector de años
+  const years = [...new Set(history.map(r=>{
+    const y = (r.raceDate||'').split('/').pop() || (r.raceDate||'').split('-')[0];
+    return y && y.length===4 ? y : null;
+  }).filter(Boolean))].sort((a,b)=>b-a);
+
+  // Guardar valor seleccionado
+  const selYear = yearSel ? yearSel.value : '';
+  if(yearSel && yearSel.options.length <= 1){
+    years.forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent='Temporada '+y; yearSel.appendChild(o); });
+  }
+
+  // Filtrar por año si se seleccionó uno
+  const races = selYear
+    ? history.filter(r=>{ const y=(r.raceDate||'').split('/').pop()||(r.raceDate||'').split('-')[0]; return y===selYear; })
+    : history;
+
+  if(races.length === 0){
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">No hay carreras para el año seleccionado.</div>';
+    return;
+  }
+
+  // ── Calcular estadísticas globales ──
+  const totalRaces = races.length;
+  const totalRiders = new Set(races.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name)))).size;
+  const kms = races.map(r=>parseFloat(r.km)||0).filter(k=>k>0);
+  const totalKm = kms.reduce((a,b)=>a+b,0);
+  const avgs = races.map(r=>parseFloat(r.avg)||0).filter(a=>a>0);
+  const avgSpeed = avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(1) : '—';
+
+  // ── Mi equipo stats ──
+  const teamCanon = myTeam ? getCanonicalTeam(myTeam).toLowerCase() : '';
+  let myRaces=[], myRiders={};
+  races.forEach(race=>{
+    const myInRace = (race.riders||[]).filter(r=> teamCanon && getCanonicalTeam(r.team||'').toLowerCase()===teamCanon);
+    if(myInRace.length > 0){
+      myRaces.push({race, riders: myInRace});
+      myInRace.forEach(r=>{
+        const key = normalizeRiderName(r.name);
+        if(!myRiders[key]) myRiders[key]={name:key, races:0, positions:[], best:999, top3:0, top5:0, top10:0};
+        myRiders[key].races++;
+        myRiders[key].positions.push(r.pos);
+        if(r.pos < myRiders[key].best) myRiders[key].best = r.pos;
+        if(r.pos<=3) myRiders[key].top3++;
+        if(r.pos<=5) myRiders[key].top5++;
+        if(r.pos<=10) myRiders[key].top10++;
+      });
+    }
+  });
+
+  // Promedios por ciclista
+  Object.values(myRiders).forEach(r=>{
+    r.avg = r.positions.length ? (r.positions.reduce((a,b)=>a+b,0)/r.positions.length) : 999;
+  });
+  const myRidersList = Object.values(myRiders).filter(r=>r.races>0).sort((a,b)=>a.avg-b.avg);
+
+  // Mejor ciclista (más regular = menor promedio con ≥2 carreras)
+  const bestRider = myRidersList.find(r=>r.races>=2) || myRidersList[0];
+  // Más mejorado (mayor diferencia entre primera y última posición)
+  const mostImproved = [...myRidersList].filter(r=>r.races>=3).sort((a,b)=>{
+    const diffA = a.positions[0] - a.positions[a.positions.length-1];
+    const diffB = b.positions[0] - b.positions[b.positions.length-1];
+    return diffB - diffA;
+  })[0];
+  // Más participaciones
+  const mostActive = [...myRidersList].sort((a,b)=>b.races-a.races)[0];
+
+  // Mejores resultados del equipo (top positions)
+  const allMyResults = races.flatMap(race=>
+    (race.riders||[])
+      .filter(r=> teamCanon && getCanonicalTeam(r.team||'').toLowerCase()===teamCanon)
+      .map(r=>({...r, raceName:race.raceName, raceDate:race.raceDate}))
+  ).sort((a,b)=>a.pos-b.pos).slice(0,10);
+
+  // Podio stats del equipo
+  const myTop1  = allMyResults.filter(r=>r.pos===1).length;
+  const myTop3  = allMyResults.filter(r=>r.pos<=3).length;
+  const myTop5  = allMyResults.filter(r=>r.pos<=5).length;
+  const myTop10 = allMyResults.filter(r=>r.pos<=10).length;
+
+  // ── Renderizar ──
+  const teamLabel = myTeam || 'Sin equipo configurado';
+  const hasTeam = !!myTeam;
+
+  body.innerHTML = `
+  <!-- KPIs globales -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px">
+    ${_resKpi('🏁','Carreras',totalRaces,'en el historial')}
+    ${_resKpi('👥','Ciclistas',totalRiders,'participantes únicos')}
+    ${_resKpi('📍','Kilómetros',totalKm>0?Math.round(totalKm)+' km':'—','recorridos en total')}
+    ${_resKpi('⚡','Vel. media',avgSpeed>0?avgSpeed+' km/h':'—','de todas las carreras')}
+    ${hasTeam?_resKpi('🚴','Carreras equipo',myRaces.length,'con '+escapeHtml(teamLabel)):''}
+    ${hasTeam?_resKpi('🥇','Victorias',myTop1,'del equipo'):''}
+    ${hasTeam?_resKpi('🏆','Top 3',myTop3,'del equipo'):''}
+    ${hasTeam?_resKpi('🎯','Top 10',myTop10,'del equipo'):''}
+  </div>
+
+  ${hasTeam && myRidersList.length > 0 ? `
+  <!-- Destacados del equipo -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px">
+    ${bestRider ? _resDestacado('⭐','Más regular',bestRider.name,'Promedio: '+bestRider.avg.toFixed(1)+' · '+bestRider.races+' carreras','#fef9c3','#854d0e') : ''}
+    ${mostActive ? _resDestacado('🔥','Más participaciones',mostActive.name,mostActive.races+' carreras disputadas','#f0fdf4','#166534') : ''}
+    ${mostImproved ? _resDestacado('📈','Más mejorado',mostImproved.name,'Mejor pos: '+mostImproved.best+' · '+mostImproved.races+' carreras','#eff6ff','#1e40af') : ''}
+  </div>
+  ` : ''}
+
+  ${hasTeam && allMyResults.length > 0 ? `
+  <!-- Mejores resultados -->
+  <div style="margin-bottom:24px">
+    <div style="font-weight:800;font-size:15px;color:#0b2f6b;margin-bottom:12px">🏅 Mejores resultados del equipo</div>
+    <div style="overflow-x:auto;border-radius:12px;border:1px solid #e5e7eb">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f3f4f6">
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151;width:50px">Pos</th>
+          <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Ciclista</th>
+          <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Carrera</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Fecha</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Cat</th>
+        </tr></thead>
+        <tbody>
+          ${allMyResults.map((r,i)=>`
+          <tr style="border-bottom:1px solid #f3f4f6;background:${i%2===0?'#fff':'#fafafa'}">
+            <td style="padding:10px 14px;text-align:center">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;font-weight:900;font-size:13px;
+                background:${r.pos===1?'#fbbf24':r.pos<=3?'#d1d5db':r.pos<=10?'#dbeafe':'#f3f4f6'};
+                color:${r.pos===1?'#78350f':r.pos<=3?'#374151':r.pos<=10?'#1e40af':'#6b7280'}">${r.pos}</span>
+            </td>
+            <td style="padding:10px 14px;font-weight:600">${escapeHtml(r.name)}</td>
+            <td style="padding:10px 14px;color:#374151">${escapeHtml(r.raceName||'—')}</td>
+            <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(r.raceDate||'—')}</td>
+            <td style="padding:10px 14px;text-align:center"><span style="background:#e0e7ff;color:#3730a3;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">${escapeHtml(r.cat||'—')}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  ` : !hasTeam ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:18px;text-align:center;color:#92400e;font-size:13px">
+    ⚠️ Configura tu equipo en <strong>Mi Equipo</strong> para ver las estadísticas específicas del equipo.
+  </div>` : ''}
+
+  <!-- Lista de carreras de la temporada -->
+  <div>
+    <div style="font-weight:800;font-size:15px;color:#0b2f6b;margin-bottom:12px">📋 Carreras disputadas (${totalRaces})</div>
+    <div style="overflow-x:auto;border-radius:12px;border:1px solid #e5e7eb">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f3f4f6">
+          <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Carrera</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Fecha</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Km</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Vel. media</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Corredores</th>
+          ${hasTeam?'<th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Mejor pos. equipo</th>':''}
+        </tr></thead>
+        <tbody>
+          ${[...races].sort((a,b)=>{
+            const da=_parseSpanishDate(a.raceDate)||new Date(0);
+            const db=_parseSpanishDate(b.raceDate)||new Date(0);
+            return db-da;
+          }).map((race,i)=>{
+            const myBest = teamCanon ? (race.riders||[]).filter(r=>getCanonicalTeam(r.team||'').toLowerCase()===teamCanon).sort((a,b)=>a.pos-b.pos)[0] : null;
+            return `<tr style="border-bottom:1px solid #f3f4f6;background:${i%2===0?'#fff':'#fafafa'}">
+              <td style="padding:10px 14px;font-weight:600">${escapeHtml(race.raceName||'—')}</td>
+              <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(race.raceDate||'—')}</td>
+              <td style="padding:10px 14px;text-align:center">${race.km||'—'}</td>
+              <td style="padding:10px 14px;text-align:center">${race.avg?race.avg+' km/h':'—'}</td>
+              <td style="padding:10px 14px;text-align:center">${(race.riders||[]).length}</td>
+              ${hasTeam?`<td style="padding:10px 14px;text-align:center">${myBest?`<span style="font-weight:800;color:${myBest.pos<=3?'#b45309':myBest.pos<=10?'#1d4ed8':'#374151'}">${myBest.pos}º ${escapeHtml(myBest.name)}</span>`:'<span style="color:#9ca3af">—</span>'}</td>`:''}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function _resKpi(icon, label, value, sub){
+  return `<div style="background:#f8fbff;border:1px solid #e0e7ff;border-radius:14px;padding:16px 18px">
+    <div style="font-size:22px">${icon}</div>
+    <div style="font-size:22px;font-weight:900;color:#0b2f6b;margin:4px 0">${value}</div>
+    <div style="font-size:12px;font-weight:700;color:#374151">${label}</div>
+    <div style="font-size:11px;color:#9ca3af;margin-top:2px">${sub}</div>
+  </div>`;
+}
+
+function _resDestacado(icon, label, name, sub, bg, color){
+  return `<div style="background:${bg};border-radius:14px;padding:16px 18px;border:1px solid rgba(0,0,0,.06)">
+    <div style="font-size:20px">${icon}</div>
+    <div style="font-size:11px;font-weight:800;color:${color};text-transform:uppercase;letter-spacing:.5px;margin:6px 0 2px">${label}</div>
+    <div style="font-size:16px;font-weight:900;color:#111827">${escapeHtml(name)}</div>
+    <div style="font-size:12px;color:#6b7280;margin-top:3px">${sub}</div>
+  </div>`;
+}
+
+function _resumenExportPDF(){
+  const body = document.getElementById('resumenBody');
+  const yearSel = document.getElementById('resumenYear');
+  const yearLabel = yearSel && yearSel.value ? 'Temporada '+yearSel.value : 'Historial completo';
+  if(!body) return;
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Resumen Temporada MFPP</title>
+  <style>
+    @page{size:A4 landscape;margin:15mm}
+    body{font-family:Arial,sans-serif;font-size:12px;color:#111}
+    h1{color:#0b2f6b;font-size:20px;margin-bottom:4px}
+    .sub{color:#6b7280;font-size:12px;margin-bottom:20px}
+    table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
+    th{background:#f3f4f6;padding:7px 10px;text-align:left;font-weight:800;border-bottom:2px solid #e5e7eb}
+    td{padding:7px 10px;border-bottom:1px solid #f3f4f6}
+    tr:nth-child(even){background:#fafafa}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+    .kpi{background:#f8fbff;border:1px solid #e0e7ff;border-radius:8px;padding:10px 12px}
+    .kpi-val{font-size:18px;font-weight:900;color:#0b2f6b}
+    .kpi-lbl{font-size:11px;font-weight:700;color:#374151}
+    footer{margin-top:20px;font-size:10px;color:#9ca3af;text-align:center}
+  </style>
+  </head><body>
+  <h1>🏅 Resumen de Temporada — ${escapeHtml(myTeam||'MFPP')}</h1>
+  <div class="sub">${yearLabel} · Generado el ${new Date().toLocaleDateString('es-ES')}</div>
+  ${body.innerHTML}
+  <footer>Dashboard Director · MFPP Cycling Specialist · ${yearLabel}</footer>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>w.print(), 600);
+}
+
 // Panel de control: abrir / cerrar modal
 // ─────────────────────────────────────────────────────────────────────────
 function _gOpenPanel(){
