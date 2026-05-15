@@ -11430,13 +11430,20 @@ function _prBuildTeamMeta(races){
 async function renderPowerRanking(){
   const grid = $('prGrid');
   if(!grid) return;
-  grid.innerHTML = '<div class="pr-loading">⏳ Cargando datos de temporada...</div>';
 
-  // Diagnóstico rápido de conexión Supabase
+  // TEST DIRECTO: Muestra estado paso a paso para diagnosticar
+  const BUILD = '2026-05-15 v8';
+  grid.innerHTML = `<div style="padding:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;font-size:13px">
+    <b>⏳ Cargando Power Ranking...</b> <span style="color:#6b7280;font-size:11px">${BUILD}</span><br>
+    <span id="prDiag">Iniciando...</span>
+  </div>`;
+  const diag = ()=>document.getElementById('prDiag');
+
   if(!_sb){
-    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Sin conexión a Supabase.<br><small style="font-weight:400">El cliente Supabase no está inicializado. Recarga la página.</small></div>`;
+    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Sin conexión a Supabase (cliente no inicializado). Recarga la página.</div>`;
     return;
   }
+  if(diag()) diag().textContent = '✅ Cliente Supabase OK. Consultando historial...';
 
   let history;
   try {
@@ -11444,11 +11451,12 @@ async function renderPowerRanking(){
   } catch(e) {
     grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">
       ❌ ${e.message||e}<br>
-      <small style="font-weight:400;color:#6b7280;display:block;margin:6px 0">El proyecto Supabase puede estar en pausa (ocurre en planes gratuitos tras inactividad). Espera unos segundos y vuelve a intentarlo.</small>
+      <small style="font-weight:400;color:#6b7280;display:block;margin:6px 0">El proyecto Supabase puede estar en pausa. Espera 30 segundos y pulsa Reintentar.</small>
       <button onclick="_cachedHistory=null;renderPowerRanking()" style="margin-top:10px;padding:8px 18px;background:#1f6feb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700">🔄 Reintentar</button>
     </div>`;
     return;
   }
+  if(diag()) diag().textContent = `✅ Historial cargado: ${history.length} carrera(s). Procesando...`;
   if(!history || !history.length){
     // Test directo para distinguir "sin datos" vs "error de permisos"
     const {count, error:countErr} = await _sb.from('races').select('id', {count:'exact',head:true}).eq('race_type','clasificacion');
