@@ -2086,7 +2086,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
         <!-- Modal añadir carrera planificada -->
         <div id="calModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:center;justify-content:center" onclick="if(event.target===this)_calCloseModal()">
           <div style="background:#fff;border-radius:18px;padding:28px;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-            <div style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:18px">➕ Añadir carrera planificada</div>
+            <div id="calModalTitle" style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:18px">➕ Añadir carrera planificada</div>
             <div style="display:flex;flex-direction:column;gap:12px">
               <div>
                 <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOMBRE DE LA CARRERA *</label>
@@ -2847,7 +2847,7 @@ function _calBuildMonth(y, m){
           ${r.localidad?`<div style="font-size:11px;color:#6b7280">${escapeHtml(r.localidad)}</div>`:''}
         </div>
         <div style="font-size:12px;color:#6b7280;flex-shrink:0">${r.date.getDate()} ${_CAL_MONTHS_ES[r.date.getMonth()]}</div>
-        ${isPlan?`<button onclick="_calDeletePlanned('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700" title="Eliminar">✕</button>`:''}
+        ${isPlan?`<button onclick="_calEditPlanned('${r.id}')" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700;margin-right:4px" title="Editar">✏️</button><button onclick="_calDeletePlanned('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700" title="Eliminar">✕</button>`:''}
       </div>`;
     });
     html += '</div>';
@@ -3099,11 +3099,17 @@ function _calDayClick(y,m,d){
   }
 }
 
+// ID de la carrera que se está editando (null = modo añadir)
+let _calEditingId = null;
+
 function _calOpenModal(dateStr){
+  _calEditingId = null;
   const modal = document.getElementById('calModal');
   const dateInp = document.getElementById('calPlanDate');
   const msg = document.getElementById('calModalMsg');
+  const title = document.getElementById('calModalTitle');
   if(!modal) return;
+  if(title) title.textContent = '➕ Añadir carrera planificada';
   if(dateInp) dateInp.value = dateStr || '';
   document.getElementById('calPlanName').value='';
   document.getElementById('calPlanCat').value='';
@@ -3112,12 +3118,34 @@ function _calOpenModal(dateStr){
   if(msg) msg.textContent='';
   modal.style.display='flex';
   document.body.style.overflow='hidden';
+  setTimeout(()=>{ const n=document.getElementById('calPlanName'); if(n) n.focus(); },100);
+}
+
+function _calEditPlanned(id){
+  const race = _calPlanned.find(r=>r.id===id);
+  if(!race) return;
+  _calEditingId = id;
+  const modal = document.getElementById('calModal');
+  const msg = document.getElementById('calModalMsg');
+  const title = document.getElementById('calModalTitle');
+  if(!modal) return;
+  if(title) title.textContent = '✏️ Editar carrera planificada';
+  document.getElementById('calPlanName').value = race.name || '';
+  document.getElementById('calPlanDate').value = race.dateStr || '';
+  document.getElementById('calPlanCat').value  = race.cat || '';
+  document.getElementById('calPlanLoc').value  = race.localidad || '';
+  document.getElementById('calPlanNotes').value= race.notes || '';
+  if(msg) msg.textContent='';
+  modal.style.display='flex';
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{ const n=document.getElementById('calPlanName'); if(n){ n.focus(); n.select(); } },100);
 }
 
 function _calCloseModal(){
   const modal = document.getElementById('calModal');
   if(modal) modal.style.display='none';
   document.body.style.overflow='';
+  _calEditingId = null;
 }
 
 async function _calSavePlanned(){
@@ -3133,14 +3161,26 @@ async function _calSavePlanned(){
   if(msg){msg.textContent='Guardando...';msg.style.color='#6b7280';}
 
   const notesJson = JSON.stringify({cat, localidad:loc, notes});
-  if(_sb){
-    const {data, error} = await _sb.from('races').insert({name, date, notes:notesJson, race_type:'planificada'}).select().single();
-    if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
-    const dateObj = new Date(date+'T12:00:00');
-    _calPlanned.push({id:data.id, date:dateObj, dateStr:date, name, localidad:loc||'', cat:cat||'', notes:notes||'', type:'planned'});
+
+  if(_calEditingId){
+    // ── MODO EDICIÓN ──
+    const id = _calEditingId;
+    if(_sb && !String(id).startsWith('local-')){
+      const {error} = await _sb.from('races').update({name, date, notes:notesJson}).eq('id',id);
+      if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
+    }
+    // Actualizar en memoria
+    const idx = _calPlanned.findIndex(r=>r.id===id);
+    if(idx>=0) _calPlanned[idx] = {..._calPlanned[idx], name, date:new Date(date+'T12:00:00'), dateStr:date, localidad:loc||'', cat:cat||'', notes:notes||''};
   } else {
-    // Fallback local
-    _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:cat||'', notes:notes||'', type:'planned'});
+    // ── MODO AÑADIR ──
+    if(_sb){
+      const {data, error} = await _sb.from('races').insert({name, date, notes:notesJson, race_type:'planificada'}).select().single();
+      if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
+      _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:cat||'', notes:notes||'', type:'planned'});
+    } else {
+      _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:cat||'', notes:notes||'', type:'planned'});
+    }
   }
   _calCloseModal();
   _calRender();
@@ -3148,7 +3188,7 @@ async function _calSavePlanned(){
 
 async function _calDeletePlanned(id){
   if(!confirm('¿Eliminar esta carrera planificada?')) return;
-  if(_sb && !id.startsWith('local-')){
+  if(_sb && !String(id).startsWith('local-')){
     await _sb.from('races').delete().eq('id',id);
   }
   _calPlanned = _calPlanned.filter(r=>r.id!==id);
