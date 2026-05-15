@@ -4276,8 +4276,12 @@ async function _sbLoadHistory(){
 
 async function _ensureHistory(){
   if(_cachedHistory === null){
-    const timeout = new Promise((_,reject)=>setTimeout(()=>reject(new Error('Timeout: historial tardó más de 15s. Comprueba conexión con Supabase.')),15000));
-    _cachedHistory = await Promise.race([_sbLoadHistory(), timeout]);
+    try {
+      _cachedHistory = await _sbLoadHistory();
+    } catch(e) {
+      _cachedHistory = null; // no cachear en caso de error para permitir reintento
+      throw e;
+    }
   }
   return _cachedHistory;
 }
@@ -11412,15 +11416,30 @@ async function renderPowerRanking(){
   if(!grid) return;
   grid.innerHTML = '<div class="pr-loading">⏳ Cargando datos de temporada...</div>';
 
+  // Diagnóstico rápido de conexión Supabase
+  if(!_sb){
+    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Sin conexión a Supabase.<br><small style="font-weight:400">El cliente Supabase no está inicializado. Recarga la página.</small></div>`;
+    return;
+  }
+
   let history;
   try {
     history = await _ensureHistory();
   } catch(e) {
-    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Error cargando historial: ${e.message||e}</div>`;
+    grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">❌ Error cargando historial: ${e.message||e}<br><small style="font-weight:400;color:#6b7280">Comprueba la conexión a internet y recarga la página.</small></div>`;
     return;
   }
   if(!history || !history.length){
-    grid.innerHTML = '<div class="pr-empty-msg">No hay datos en el historial.<br><span style="font-size:12px">Carga carreras primero desde "Carga y Resumen".</span></div>';
+    // Test directo para distinguir "sin datos" vs "error de permisos"
+    const {count, error:countErr} = await _sb.from('races').select('id', {count:'exact',head:true}).eq('race_type','clasificacion');
+    const countMsg = countErr
+      ? `Error al consultar BD: ${countErr.message}`
+      : `La tabla 'races' tiene ${count ?? 0} carreras con race_type='clasificacion'.`;
+    grid.innerHTML = `<div class="pr-empty-msg">
+      📭 No hay datos de clasificaciones en el historial.<br>
+      <span style="font-size:12px;color:#6b7280">${countMsg}<br>
+      Para ver el Power Ranking, sube resultados de carreras desde <b>"Carga y Resumen"</b>.</span>
+    </div>`;
     return;
   }
 
