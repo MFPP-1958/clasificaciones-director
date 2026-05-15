@@ -2962,17 +2962,67 @@ function _calPrint(){
       text-align: center;
     }
 
-    /* ── Impresión ── */
+    /* ── Impresión: ajustar a UNA sola página A4 horizontal ── */
     @media print {
-      body { padding: 10mm 12mm; }
       @page {
         size: A4 landscape;
-        margin: 10mm 12mm;
+        margin: 6mm 8mm;
       }
-      .no-print { display: none !important; }
-      button { display: none !important; }
-      /* forzar colores de fondo al imprimir */
+      html, body { width: 100%; height: 100%; overflow: hidden; }
+      body { padding: 0 !important; margin: 0 !important; }
+      .no-print, button { display: none !important; }
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+      /* Cabecera más compacta */
+      .cal-header { padding-bottom: 6px !important; margin-bottom: 8px !important; border-bottom-width: 2px !important; }
+      .cal-logo { width: 48px !important; height: 48px !important; }
+      .cal-logo svg { width: 48px !important; height: 48px !important; }
+      .cal-title { font-size: 17px !important; }
+      .cal-team  { font-size: 11px !important; }
+      .cal-date-print { font-size: 9px !important; margin-top: 0 !important; }
+
+      /* Leyenda compacta */
+      #calPrintBody { width: 100%; }
+      body > div[style*="display:flex"][style*="gap:18px"] {
+        margin-bottom: 8px !important;
+        font-size: 10px !important;
+      }
+
+      /* ── Vista MENSUAL ──
+         Celdas del calendario más altas para llenar la página */
+      div[style*="min-height:72px"] {
+        min-height: 90px !important;
+        padding: 5px 7px !important;
+        page-break-inside: avoid;
+      }
+      /* Ocultar la lista de carreras debajo del calendario y el botón añadir */
+      #calPrintBody > div:nth-child(n+3) { display: none !important; }
+
+      /* ── Vista ANUAL ──
+         12 meses en 4 columnas x 3 filas, compacto */
+      div[style*="minmax(240px"] {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        grid-template-rows: repeat(3, 1fr) !important;
+        gap: 5px !important;
+        height: calc(100vh - 80px) !important;
+      }
+      div[style*="minmax(240px"] > div {
+        font-size: 10px !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+      }
+      div[style*="minmax(240px"] > div > div:first-child {
+        padding: 4px 8px !important;
+        font-size: 11px !important;
+      }
+      div[style*="minmax(240px"] > div > div:last-child {
+        padding: 4px 8px !important;
+        font-size: 9px !important;
+      }
+
+      /* Pie pequeño */
+      .cal-footer { margin-top: 6px !important; padding-top: 4px !important; font-size: 8px !important; }
     }
   </style>
 </head>
