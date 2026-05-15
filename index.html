@@ -2428,13 +2428,13 @@ function showView(viewId){
       }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
-      if(viewId==='view-tendencias') renderTendencias();
-      if(viewId==='view-seleccion'){ _selFiltersReady=false; _selSelectedCats=new Set(); renderSeleccion(); }
       if(viewId==='view-resumen'){ renderResumen(); }
       if(viewId==='view-gestion'){ _gSetTab('users'); }
     }catch(e){console.warn('No se pudo refrescar la vista',e)}
-    // Power Ranking fuera del try/catch para que nunca quede bloqueado por otros errores
+    // Estas vistas se renderizan fuera del try/catch para que nunca queden bloqueadas por otros errores
     if(viewId==='view-powerranking') renderPowerRanking();
+    if(viewId==='view-tendencias') renderTendencias();
+    if(viewId==='view-seleccion'){ _selFiltersReady=false; _selSelectedCats=new Set(); renderSeleccion(); }
     updateRaceHeader(viewId);
   },80);
   const layout=document.querySelector('.spa-layout');
