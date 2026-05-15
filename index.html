@@ -649,7 +649,6 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 
 .floating-compare-bar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 24px;border-radius:999px;display:none;align-items:center;gap:16px;box-shadow:0 10px 30px rgba(0,0,0,0.3);z-index:1000;border:1px solid #374151}
 .floating-compare-bar b{color:#60a5fa}
-.dark-toggle{position:absolute;top:10px;right:10px;cursor:pointer;font-size:20px;background:none;border:none;z-index:10}
 .compare-chart-canvas-wrap{margin-top:35px;height:230px!important}
 @media(max-width:800px){.compare-chart-canvas-wrap{height:260px!important}}
 /* ===== FIN DARK MODE & UX POLISH CSS ===== */
@@ -969,7 +968,6 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       <span class="side-title">Menú</span>
       <button class="nav-toggle" id="navToggleBtn" onclick="_toggleNav()" title="Contraer menú" aria-label="Contraer menú">«</button>
     </div>
-    <button class="dark-toggle" onclick="toggleDarkMode()" title="Cambiar tema" style="align-self:flex-start">🌓</button>
     <div class="rbac-user-bar" id="rbacUserBar" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
         <div id="rbacProfileBtn" onclick="_gOpenPanel()" style="cursor:pointer;flex:1;min-width:0" title="Abrir Panel de Control">
@@ -9775,14 +9773,6 @@ function getTrendIcon(data){
 
 
 // ===== BLOQUE UX POLISH JS =====
-function toggleDarkMode(){
-  document.body.classList.toggle('dark-mode');
-  localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-}
-
-function initDarkMode(){
-  if(localStorage.getItem('darkMode')==='true') document.body.classList.add('dark-mode');
-}
 
 function updateFloatingBar(){
   const bar=$('floatingBar');
