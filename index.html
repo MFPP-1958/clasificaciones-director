@@ -4664,7 +4664,7 @@ async function readPDF(file){
   }
   return out;
 }
-async function readExcel(file){const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array'});let out='';wb.SheetNames.forEach(s=>{const rows=XLSX.utils.sheet_to_json(wb.Sheets[s],{header:1,raw:false});out+=rows.map(r=>r.join(' ')).join('\n')+'\n'});return out}
+async function readExcel(file){const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array'});let out='';wb.SheetNames.forEach(s=>{const rows=XLSX.utils.sheet_to_json(wb.Sheets[s],{header:1,raw:false});out+=rows.map(r=>r.map(c=>String(c==null?'':c).replace(/\t/g,' ').replace(/ /g,' ')).join('\t')).join('\n')+'\n'});return out}
 function cleanSpaces(s){return (s||'').replace(/[ \t]+/g,' ').trim()}
 function parseText(text){
   // COMENTARIO: validación robusta tras cargar archivo; no se permite continuar con menos de 3 corredores.
@@ -4672,7 +4672,7 @@ function parseText(text){
   extractMeta(text);
   canonicalTeams=extractCanonicalTeams(text);
   riders=parseRiders(text);
-  const hasTabularHeader=/pos\.?\s*[\t;|, ].*dorsal[\t;|, ].*(nombre|ciclista)/i.test(text);
+  const hasTabularHeader=/(pos\.?|puesto|clasif|\bpl\.?)\s*[\t;|, ].*dorsal[\t;|, ].*(nombre|ciclista)/i.test(text);
   if(hasTabularHeader){const tabular=parseCSVLike(text);if(tabular.length>=3)riders=tabular;}
   riders=riders.map(r=>({...r,team:normalizeTeamName(r.team,canonicalTeams)}));
   const winnerTime=extractWinnerTime(text);
