@@ -264,6 +264,17 @@ body.dark-mode .myteam-rider-card{background:#1c2128!important}
 .nav-btn{display:flex;align-items:center;gap:9px;width:100%;min-height:44px;border:1px solid #d0d5dd;background:#f8fbff;color:#182230;border-radius:13px;padding:10px 12px;text-align:left;font-weight:850;cursor:pointer;font-size:14px;white-space:nowrap;transition:background .15s,border-color .15s,padding .3s,justify-content .3s}
 .nav-btn:hover{background:#eef4ff;border-color:#84caff}
 .nav-btn.active{background:#1f6feb;color:#fff;border-color:#1f6feb}
+/* Secciones agrupadas del menú · Paso 3 rediseño UX */
+.nav-section{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.nav-section-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 4px;font-size:10.5px;font-weight:900;letter-spacing:.8px;color:#64748b;cursor:pointer;user-select:none;border-radius:6px;transition:background .15s}
+.nav-section-header:hover{background:#eef4ff;color:#1f6feb}
+.nav-section-title{flex:1}
+.nav-section-chevron{font-size:11px;color:#94a3b8;transition:transform .2s}
+.nav-section.collapsed .nav-section-chevron{transform:rotate(-90deg)}
+.nav-section-items{display:flex;flex-direction:column;gap:6px;overflow:hidden;transition:max-height .25s ease}
+.nav-section.collapsed .nav-section-items{max-height:0;display:none}
+.side-nav.collapsed .nav-section-header{display:none}
+.side-nav.collapsed .nav-section-items{max-height:none !important;display:flex !important}
 .nav-icon{font-size:18px;flex-shrink:0;line-height:1}
 .nav-label{overflow:hidden;transition:opacity .25s,max-width .3s ease;max-width:200px}
 /* Collapsed */
@@ -979,23 +990,68 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
         <button class="rbac-logout" onclick="_rbacLogout()">Salir</button>
       </div>
     </div>
-    <button class="nav-btn" data-view="view-inicio" data-label="Inicio" onclick="showView('view-inicio')"><span class="nav-icon">🏠</span><span class="nav-label"> Inicio</span></button>
-    <button class="nav-btn" data-view="view-historial" data-label="Historial" onclick="showView('view-historial')"><span class="nav-icon">📁</span><span class="nav-label"> Historial</span></button>
-    <button class="nav-btn active" data-view="view-carga" data-label="Carga y Resumen" onclick="showView('view-carga')"><span class="nav-icon">📤</span><span class="nav-label"> Carga y Resumen</span></button>
-    <button class="nav-btn" data-view="view-tabla" data-label="Tabla y filtros" onclick="showView('view-tabla')"><span class="nav-icon">📋</span><span class="nav-label"> Tabla y filtros</span></button>
-    <button class="nav-btn" data-view="view-analisis" data-label="Análisis individual" onclick="showView('view-analisis')"><span class="nav-icon">👤</span><span class="nav-label"> Análisis individual</span></button>
-    <button class="nav-btn" data-view="view-comparativo" data-label="Comparativo" onclick="showView('view-comparativo')"><span class="nav-icon">⚔️</span><span class="nav-label"> Comparativo</span></button>
-    <button class="nav-btn" data-view="view-equipos" data-label="Equipos" onclick="showView('view-equipos')"><span class="nav-icon">🚴</span><span class="nav-label"> Equipos</span></button>
-    <button class="nav-btn" data-view="view-tactica" data-label="Táctica" onclick="showView('view-tactica')"><span class="nav-icon">🧠</span><span class="nav-label"> Táctica</span></button>
-    <button class="nav-btn" data-view="view-graficos" data-label="Gráficos" onclick="showView('view-graficos')"><span class="nav-icon">📊</span><span class="nav-label"> Gráficos</span></button>
-    <button class="nav-btn" data-view="view-top10" data-label="Top 10" onclick="showView('view-top10')"><span class="nav-icon">🏁</span><span class="nav-label"> Top 10</span></button>
-    <button class="nav-btn" data-view="view-evolucion" data-label="Evolución" onclick="showView('view-evolucion')"><span class="nav-icon">📈</span><span class="nav-label"> Evolución</span></button>
-    <button class="nav-btn" data-view="view-powerranking" data-label="Power Ranking" onclick="showView('view-powerranking')"><span class="nav-icon">🏆</span><span class="nav-label"> Power Ranking</span></button>
-    <button class="nav-btn" data-view="view-tendencias" data-label="Tendencias" onclick="showView('view-tendencias')"><span class="nav-icon">📉</span><span class="nav-label"> Tendencias</span></button>
-    <button class="nav-btn" data-view="view-seleccion" data-label="Convocatorias" onclick="showView('view-seleccion')"><span class="nav-icon">🏆</span><span class="nav-label"> Convocatorias</span></button>
-    <button class="nav-btn" data-view="view-validacion" data-label="Validación" onclick="showView('view-validacion')"><span class="nav-icon">⚠️</span><span class="nav-label"> Validación</span></button>
-    <button class="nav-btn" data-view="view-resumen" data-label="Resumen Temporada" onclick="showView('view-resumen')"><span class="nav-icon">🏅</span><span class="nav-label"> Resumen Temporada</span></button>
-    <button class="nav-btn" id="navBtnGestion" data-view="view-gestion" data-label="Gestión" onclick="_gOpenPanel()" style="display:none"><span class="nav-icon">⚙️</span><span class="nav-label"> Gestión</span></button>
+    <!-- Menú agrupado en secciones · Paso 3 del rediseño UX -->
+    <div class="nav-section" data-section="inicio">
+      <button class="nav-btn" data-view="view-inicio" data-label="Inicio" onclick="showView('view-inicio')"><span class="nav-icon">🏠</span><span class="nav-label"> Inicio</span></button>
+    </div>
+
+    <div class="nav-section" data-section="pruebas">
+      <div class="nav-section-header" onclick="_navToggleSection('pruebas')">
+        <span class="nav-section-title">📁 PRUEBAS</span>
+        <span class="nav-section-chevron">▾</span>
+      </div>
+      <div class="nav-section-items">
+        <button class="nav-btn" data-view="view-historial" data-label="Historial" onclick="showView('view-historial')"><span class="nav-icon">📁</span><span class="nav-label"> Historial</span></button>
+        <button class="nav-btn active" data-view="view-carga" data-label="Carga y Resumen" onclick="showView('view-carga')"><span class="nav-icon">📤</span><span class="nav-label"> Carga y Resumen</span></button>
+      </div>
+    </div>
+
+    <div class="nav-section" data-section="analisis-prueba">
+      <div class="nav-section-header" onclick="_navToggleSection('analisis-prueba')">
+        <span class="nav-section-title">🔍 ANÁLISIS DE PRUEBA</span>
+        <span class="nav-section-chevron">▾</span>
+      </div>
+      <div class="nav-section-items">
+        <button class="nav-btn" data-view="view-tabla" data-label="Tabla y filtros" onclick="showView('view-tabla')"><span class="nav-icon">📋</span><span class="nav-label"> Tabla y filtros</span></button>
+        <button class="nav-btn" data-view="view-analisis" data-label="Análisis individual" onclick="showView('view-analisis')"><span class="nav-icon">👤</span><span class="nav-label"> Análisis individual</span></button>
+        <button class="nav-btn" data-view="view-comparativo" data-label="Comparativo" onclick="showView('view-comparativo')"><span class="nav-icon">⚔️</span><span class="nav-label"> Comparativo</span></button>
+        <button class="nav-btn" data-view="view-equipos" data-label="Equipos" onclick="showView('view-equipos')"><span class="nav-icon">🚴</span><span class="nav-label"> Equipos</span></button>
+        <button class="nav-btn" data-view="view-top10" data-label="Top 10" onclick="showView('view-top10')"><span class="nav-icon">🏁</span><span class="nav-label"> Top 10</span></button>
+        <button class="nav-btn" data-view="view-graficos" data-label="Gráficos" onclick="showView('view-graficos')"><span class="nav-icon">📊</span><span class="nav-label"> Gráficos</span></button>
+      </div>
+    </div>
+
+    <div class="nav-section" data-section="estrategia">
+      <button class="nav-btn" data-view="view-tactica" data-label="Estrategia" onclick="showView('view-tactica')"><span class="nav-icon">🧠</span><span class="nav-label"> Estrategia</span></button>
+    </div>
+
+    <div class="nav-section" data-section="temporada">
+      <div class="nav-section-header" onclick="_navToggleSection('temporada')">
+        <span class="nav-section-title">📈 TEMPORADA</span>
+        <span class="nav-section-chevron">▾</span>
+      </div>
+      <div class="nav-section-items">
+        <button class="nav-btn" data-view="view-evolucion" data-label="Evolución" onclick="showView('view-evolucion')"><span class="nav-icon">📈</span><span class="nav-label"> Evolución</span></button>
+        <button class="nav-btn" data-view="view-powerranking" data-label="Power Ranking" onclick="showView('view-powerranking')"><span class="nav-icon">🏆</span><span class="nav-label"> Power Ranking</span></button>
+        <button class="nav-btn" data-view="view-tendencias" data-label="Tendencias" onclick="showView('view-tendencias')"><span class="nav-icon">📉</span><span class="nav-label"> Tendencias</span></button>
+        <button class="nav-btn" data-view="view-seleccion" data-label="Convocatorias" onclick="showView('view-seleccion')"><span class="nav-icon">🏆</span><span class="nav-label"> Convocatorias</span></button>
+      </div>
+    </div>
+
+    <div class="nav-section" data-section="resumen">
+      <button class="nav-btn" data-view="view-resumen" data-label="Resumen Temporada" onclick="showView('view-resumen')"><span class="nav-icon">🏅</span><span class="nav-label"> Resumen Temporada</span></button>
+    </div>
+
+    <div class="nav-section" data-section="gestion">
+      <div class="nav-section-header" onclick="_navToggleSection('gestion')">
+        <span class="nav-section-title">⚙️ GESTIÓN</span>
+        <span class="nav-section-chevron">▾</span>
+      </div>
+      <div class="nav-section-items">
+        <button class="nav-btn" data-view="view-validacion" data-label="Validación" onclick="showView('view-validacion')"><span class="nav-icon">⚠️</span><span class="nav-label"> Validación</span></button>
+        <button class="nav-btn" id="navBtnGestion" data-view="view-gestion" data-label="Gestión" onclick="_gOpenPanel()" style="display:none"><span class="nav-icon">⚙️</span><span class="nav-label"> Gestión</span></button>
+      </div>
+    </div>
   </aside>
 
   <div class="spa-main">
@@ -2483,6 +2539,50 @@ function openLoadPanelForNew(){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SECCIONES DEL MENÚ (Paso 3 del rediseño UX) — colapsar/expandir
+// ═══════════════════════════════════════════════════════════════════════════
+function _navToggleSection(sectionId){
+  const sec = document.querySelector(`.nav-section[data-section="${sectionId}"]`);
+  if(!sec) return;
+  sec.classList.toggle('collapsed');
+  // Persistir estado
+  try{
+    const collapsed = {};
+    document.querySelectorAll('.nav-section[data-section]').forEach(s=>{
+      collapsed[s.dataset.section] = s.classList.contains('collapsed');
+    });
+    localStorage.setItem('nav_sections_collapsed', JSON.stringify(collapsed));
+  }catch(_){}
+}
+function _navRestoreSections(){
+  try{
+    const raw = localStorage.getItem('nav_sections_collapsed');
+    if(!raw) return;
+    const collapsed = JSON.parse(raw);
+    Object.entries(collapsed).forEach(([id, val])=>{
+      const sec = document.querySelector(`.nav-section[data-section="${id}"]`);
+      if(sec && val) sec.classList.add('collapsed');
+    });
+  }catch(_){}
+}
+// Auto-expandir la sección que contiene la vista activa
+function _navAutoExpandActive(viewId){
+  const btn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
+  if(!btn) return;
+  const sec = btn.closest('.nav-section');
+  if(sec && sec.classList.contains('collapsed')){
+    sec.classList.remove('collapsed');
+    // No persistimos esta auto-expansión (solo al click del usuario)
+  }
+}
+// Llamar tras DOM ready
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', _navRestoreSections);
+} else {
+  setTimeout(_navRestoreSections, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // FILTROS GLOBALES (Paso 2 del rediseño UX)
 // ═══════════════════════════════════════════════════════════════════════════
 const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
@@ -2638,6 +2738,8 @@ function showView(viewId){
   }
   document.querySelectorAll('.spa-view').forEach(v=>v.classList.toggle('active',v.id===viewId));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
+  // Auto-expandir sección del menú si la vista activa está dentro
+  if(typeof _navAutoExpandActive === 'function') _navAutoExpandActive(viewId);
   // Filtros globales: mostrar/ocultar barra y sincronizar con filtros locales
   if(typeof _gfShowHideBar === 'function') _gfShowHideBar(viewId);
   // Auto-abrir panel de carga solo si no hay datos cargados
@@ -2787,7 +2889,7 @@ const ALL_VIEWS = [
   {id:'view-analisis',    icon:'👤', label:'Análisis individual'},
   {id:'view-comparativo', icon:'⚔️', label:'Comparativo'},
   {id:'view-equipos',     icon:'🚴', label:'Equipos'},
-  {id:'view-tactica',     icon:'🧠', label:'Táctica'},
+  {id:'view-tactica',     icon:'🧠', label:'Estrategia'},
   {id:'view-graficos',    icon:'📊', label:'Gráficos'},
   {id:'view-top10',       icon:'🏁', label:'Top 10'},
   {id:'view-evolucion',   icon:'📈', label:'Evolución'},
@@ -2919,6 +3021,11 @@ function _rbacRenderMenu(){
   ALL_VIEWS.forEach(v=>{
     const btn = nav.querySelector(`[data-view="${v.id}"]`);
     if(btn) btn.style.display = _rbacPerms.has(v.id) ? '' : 'none';
+  });
+  // Ocultar secciones cuyos items estén todos ocultos
+  nav.querySelectorAll('.nav-section').forEach(sec=>{
+    const visibleBtns = [...sec.querySelectorAll('.nav-btn')].filter(b=>b.style.display!=='none');
+    sec.style.display = visibleBtns.length ? '' : 'none';
   });
 }
 
@@ -9799,6 +9906,17 @@ function exportFilteredClassificationPDF(){
 .nav-btn{display:flex;align-items:center;gap:9px;width:100%;min-height:44px;border:1px solid #d0d5dd;background:#f8fbff;color:#182230;border-radius:13px;padding:10px 12px;text-align:left;font-weight:850;cursor:pointer;font-size:14px;white-space:nowrap;transition:background .15s,border-color .15s,padding .3s,justify-content .3s}
 .nav-btn:hover{background:#eef4ff;border-color:#84caff}
 .nav-btn.active{background:#1f6feb;color:#fff;border-color:#1f6feb}
+/* Secciones agrupadas del menú · Paso 3 rediseño UX */
+.nav-section{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.nav-section-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 4px;font-size:10.5px;font-weight:900;letter-spacing:.8px;color:#64748b;cursor:pointer;user-select:none;border-radius:6px;transition:background .15s}
+.nav-section-header:hover{background:#eef4ff;color:#1f6feb}
+.nav-section-title{flex:1}
+.nav-section-chevron{font-size:11px;color:#94a3b8;transition:transform .2s}
+.nav-section.collapsed .nav-section-chevron{transform:rotate(-90deg)}
+.nav-section-items{display:flex;flex-direction:column;gap:6px;overflow:hidden;transition:max-height .25s ease}
+.nav-section.collapsed .nav-section-items{max-height:0;display:none}
+.side-nav.collapsed .nav-section-header{display:none}
+.side-nav.collapsed .nav-section-items{max-height:none !important;display:flex !important}
 .nav-icon{font-size:18px;flex-shrink:0;line-height:1}
 .nav-label{overflow:hidden;transition:opacity .25s,max-width .3s ease;max-width:200px}
 /* Collapsed */
