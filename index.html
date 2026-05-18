@@ -5504,6 +5504,8 @@ function renderStats(){
   updateRaceHeader(activeView?activeView.id:'');
 }
 function renderTable(){
+  // Propagar CCAA dentro de cada equipo en cada render (red de seguridad)
+  if(typeof inferRegionsFromTeam==='function'){ inferRegionsFromTeam(riders); }
   renderSortIndicators();
   $('shownCount').textContent=filtered.length+' corredores mostrados';
   $('resultsBody').innerHTML=filtered.length?filtered.map((r,idx)=>{
@@ -5617,16 +5619,27 @@ async function saveTableRowEdit(key){
   }
 
   _editingRowKey=null;
-  renderTable();
-  renderStats();
+  // Usar renderAll para que enrichRiders → inferRegionsFromTeam se ejecute
+  if(typeof renderAll==='function') renderAll(); else { renderTable(); renderStats(); }
+
+  console.log('[CCAA edit]', {oldRegion, newRegion, regionChanged, newTeam, teamPropagatedCount});
 
   if(teamPropagatedCount>0){
-    console.log(`✓ CCAA "${newRegion}" propagada a ${teamPropagatedCount} compañero(s) de "${newTeam}".`);
+    // Toast visible al usuario
+    try{
+      const t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:99999;font-size:14px';
+      t.textContent=`✓ CCAA "${newRegion}" aplicada a ${teamPropagatedCount} compañero(s) de "${newTeam}"`;
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),3500);
+    }catch(_){}
   }
 
   // ── Propagar cambio de CCAA a todo el historial ──────────────────────────
   if(regionChanged){
     const extraMsg=teamPropagatedCount>0 ? `\n\n(También se ha aplicado a ${teamPropagatedCount} compañero(s) del mismo equipo "${newTeam}" en esta carrera.)` : '';
+    // Pequeño delay para que el render termine antes del confirm
+    await new Promise(res=>setTimeout(res,100));
     const ok=confirm(
       `CCAA modificada: "${oldRegion||'(vacío)'}" → "${newRegion}"\n\n`+
       `¿Aplicar este cambio a TODAS las pruebas de "${newName}" guardadas en el historial?\n\n`+
