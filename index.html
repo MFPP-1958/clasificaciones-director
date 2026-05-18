@@ -6314,6 +6314,7 @@ async function saveTableRowEdit(key){
 
   const oldRegion=(r.region||'').trim();
   const oldName=(r.name||'').trim();
+  const oldCat=(r.cat||'').trim();
 
   const newPos   =parseInt($('eri-pos')?.value)||r.pos;
   const newBib   =parseInt($('eri-bib')?.value)||r.bib;
@@ -6379,6 +6380,74 @@ async function saveTableRowEdit(key){
       `Esto actualizará los registros en Supabase.${extraMsg}`
     );
     if(ok) await propagateRegionChange(newName,newRegion);
+  }
+
+  // ── Propagar cambio de CATEGORÍA del rider a todo el historial ───────────
+  const catChanged = newCat && newCat !== oldCat;
+  if(catChanged){
+    const raceYear = (typeof _getRaceYear==='function' ? _getRaceYear() : new Date().getFullYear());
+    // 1) Guardar override LOCAL (instantáneo: getRiderCorrectCat lo lee en todas las vistas)
+    try{
+      const overrides = (typeof _loadRiderCatOverrides==='function' ? _loadRiderCatOverrides() : []);
+      const nameKey = newName.trim().toLowerCase();
+      const cleaned = overrides.filter(o =>
+        !(o.riderName.trim().toLowerCase() === nameKey && parseInt(o.year) === raceYear)
+      );
+      cleaned.push({riderName:newName, year:raceYear, correctCat:newCat});
+      if(typeof _saveRiderCatOverrides==='function') _saveRiderCatOverrides(cleaned);
+    }catch(e){ console.warn('No se pudo guardar override local de categoría', e); }
+
+    // 2) Toast visible
+    try{
+      const t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0b2f6b;color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:99999;font-size:14px';
+      t.textContent=`✓ Categoría "${newCat}" guardada para "${newName}" (${raceYear})`;
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),3500);
+    }catch(_){}
+
+    // 3) Ofrecer propagación a Supabase
+    await new Promise(res=>setTimeout(res,200));
+    const okCat = confirm(
+      `Categoría modificada: "${oldCat||'(vacío)'}" → "${newCat}"\n\n`+
+      `¿Aplicar este cambio a TODAS las pruebas de "${newName}" del año ${raceYear} guardadas en el historial?\n\n`+
+      `Se actualizarán los registros en Supabase para que el cambio sea permanente y se vea en todos los dispositivos.`
+    );
+    if(okCat) await propagateCategoryChange(newName, raceYear, newCat);
+  }
+}
+
+// ─── Propagación global de CATEGORÍA del rider ────────────────────────────
+async function propagateCategoryChange(riderName, year, newCat){
+  if(!_sb){ alert('Supabase no disponible — el cambio está guardado solo localmente.'); return; }
+  if(typeof showLoading==='function') showLoading('Actualizando historial…',`Aplicando categoría "${newCat}" a "${riderName}" (${year}).`);
+  try{
+    const {data:races,error}=await _sb
+      .from('races')
+      .select('id, date, race_results(id, name, cat)')
+      .eq('race_type','clasificacion');
+    if(error) throw error;
+
+    const normTarget = normalizeForMatching(riderName);
+    let updated = 0;
+    for(const race of (races||[])){
+      const raceYear = (race.date||'').slice(0,4);
+      if(year && String(raceYear) !== String(year)) continue;
+      for(const rr of (race.race_results||[])){
+        if(normalizeForMatching(rr.name) !== normTarget) continue;
+        if((rr.cat||'') === newCat) continue;
+        const {error:updErr} = await _sb.from('race_results').update({cat:newCat}).eq('id', rr.id);
+        if(!updErr) updated++;
+      }
+    }
+    _cachedHistory = null;
+    if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB();
+    if(typeof hideLoading==='function') hideLoading();
+    alert(`✅ Categoría "${newCat}" aplicada a "${riderName}" en ${updated} resultado(s) del historial (${year}).`);
+  }catch(e){
+    if(typeof hideLoading==='function') hideLoading();
+    alert('Error al actualizar la categoría en el historial: '+(e.message||e));
+    console.error(e);
   }
 }
 
