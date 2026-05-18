@@ -1038,6 +1038,10 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       </div>
     </div>
 
+    <div class="nav-section" data-section="calendario">
+      <button class="nav-btn" data-view="view-calendario" data-label="Calendario" onclick="showView('view-calendario')"><span class="nav-icon">📅</span><span class="nav-label"> Calendario</span></button>
+    </div>
+
     <div class="nav-section" data-section="resumen">
       <button class="nav-btn" data-view="view-resumen" data-label="Resumen Temporada" onclick="showView('view-resumen')"><span class="nav-icon">🏅</span><span class="nav-label"> Resumen Temporada</span></button>
     </div>
@@ -2179,11 +2183,10 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       <section class="panel">
         <div class="section-title"><h2>🏅 Resumen de Temporada</h2></div>
 
-        <!-- Pestañas -->
+        <!-- Pestañas (Calendario movido a su propia vista) -->
         <div style="display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:20px">
           <button id="resTabStats" onclick="_resSetTab('stats')" style="padding:12px 20px;border:none;background:none;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid #1a56db;margin-bottom:-2px;color:#1a56db">📊 Estadísticas</button>
           <button id="resTabScout" onclick="_resSetTab('scout')" style="padding:12px 20px;border:none;background:none;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;color:#6b7280">🔍 Seguimiento</button>
-          <button id="resTabCal" onclick="_resSetTab('cal')" style="padding:12px 20px;border:none;background:none;font-weight:700;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;color:#6b7280">📅 Calendario</button>
         </div>
 
         <!-- PANEL ESTADÍSTICAS -->
@@ -2211,67 +2214,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
           </div>
         </div>
 
-        <!-- PANEL CALENDARIO -->
-        <div id="resPanelCal" style="display:none">
-          <!-- Controles -->
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
-            <div style="display:flex;align-items:center;gap:8px">
-              <button onclick="_calPrev()" style="background:#f0f5ff;border:1.5px solid #c7d7f5;border-radius:9px;padding:7px 12px;cursor:pointer;font-size:16px;color:#1a56db;font-weight:900">◀</button>
-              <span id="calTitle" style="font-size:17px;font-weight:900;color:#0b2f6b;min-width:180px;text-align:center">—</span>
-              <button onclick="_calNext()" style="background:#f0f5ff;border:1.5px solid #c7d7f5;border-radius:9px;padding:7px 12px;cursor:pointer;font-size:16px;color:#1a56db;font-weight:900">▶</button>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button id="calBtnMonthly" onclick="_calSetView('monthly')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #1a56db;background:#1a56db;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Mensual</button>
-              <button id="calBtnAnnual" onclick="_calSetView('annual')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Anual</button>
-              <button onclick="_calToday()" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Hoy</button>
-              <button onclick="_calPrint()" title="Imprimir / Guardar PDF" style="padding:7px 14px;border-radius:9px;border:1.5px solid #6366f1;background:#6366f1;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px">🖨️ Imprimir</button>
-            </div>
-          </div>
-          <!-- Leyenda -->
-          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;font-weight:700">
-            <span><span style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Carrera disputada</span>
-            <span><span style="display:inline-block;width:12px;height:12px;background:#10b981;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Carrera planificada</span>
-            <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Hoy</span>
-          </div>
-          <!-- Cuerpo del calendario -->
-          <div id="calBody"></div>
-        </div>
-
-        <!-- Modal añadir carrera planificada -->
-        <div id="calModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:center;justify-content:center" onclick="if(event.target===this)_calCloseModal()">
-          <div style="background:#fff;border-radius:18px;padding:28px;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-            <div id="calModalTitle" style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:18px">➕ Añadir carrera planificada</div>
-            <div style="display:flex;flex-direction:column;gap:12px">
-              <div>
-                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOMBRE DE LA CARRERA *</label>
-                <input id="calPlanName" type="text" placeholder="Ej: Copa Comunitat Valenciana" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
-              </div>
-              <div style="display:flex;gap:10px">
-                <div style="flex:1">
-                  <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">FECHA *</label>
-                  <input id="calPlanDate" type="date" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
-                </div>
-                <div style="flex:1">
-                  <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">CATEGORÍA</label>
-                  <input id="calPlanCat" type="text" placeholder="Ej: Cadetes" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
-                </div>
-              </div>
-              <div>
-                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">LOCALIDAD</label>
-                <input id="calPlanLoc" type="text" placeholder="Ej: Jávea" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
-              </div>
-              <div>
-                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOTAS</label>
-                <input id="calPlanNotes" type="text" placeholder="Cualquier anotación..." style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
-              </div>
-            </div>
-            <div id="calModalMsg" style="margin-top:10px;font-size:12px;font-weight:700;min-height:18px"></div>
-            <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
-              <button onclick="_calCloseModal()" style="padding:9px 18px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;cursor:pointer">Cancelar</button>
-              <button onclick="_calSavePlanned()" style="padding:9px 18px;border-radius:9px;border:none;background:#10b981;color:#fff;font-weight:700;cursor:pointer">💾 Guardar</button>
-            </div>
-          </div>
-        </div>
+        <!-- (PANEL CALENDARIO movido a vista propia view-calendario) -->
 
         <!-- PANEL SEGUIMIENTO / SCOUTING -->
         <div id="resPanelScout" style="display:none">
@@ -2324,6 +2267,78 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
         </div>
 
       </section>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         VISTA CALENDARIO — extraída de Resumen Temporada (Paso 3 UX)
+         Mantiene los mismos IDs internos para no romper _calRender, _calPrint,
+         _calSavePlanned, etc. La modal #calModal vive aquí.
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="view-calendario" class="spa-view">
+      <section class="panel">
+        <div class="section-title"><h2>📅 Calendario de carreras</h2></div>
+
+        <!-- Controles -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onclick="_calPrev()" style="background:#f0f5ff;border:1.5px solid #c7d7f5;border-radius:9px;padding:7px 12px;cursor:pointer;font-size:16px;color:#1a56db;font-weight:900">◀</button>
+            <span id="calTitle" style="font-size:17px;font-weight:900;color:#0b2f6b;min-width:180px;text-align:center">—</span>
+            <button onclick="_calNext()" style="background:#f0f5ff;border:1.5px solid #c7d7f5;border-radius:9px;padding:7px 12px;cursor:pointer;font-size:16px;color:#1a56db;font-weight:900">▶</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button id="calBtnMonthly" onclick="_calSetView('monthly')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #1a56db;background:#1a56db;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Mensual</button>
+            <button id="calBtnAnnual" onclick="_calSetView('annual')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Anual</button>
+            <button onclick="_calToday()" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Hoy</button>
+            <button onclick="_calPrint()" title="Imprimir / Guardar PDF" style="padding:7px 14px;border-radius:9px;border:1.5px solid #6366f1;background:#6366f1;color:#fff;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px">🖨️ Imprimir</button>
+          </div>
+        </div>
+
+        <!-- Leyenda -->
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;font-weight:700">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Carrera disputada</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#10b981;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Carrera planificada</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Hoy</span>
+        </div>
+
+        <!-- Cuerpo del calendario -->
+        <div id="calBody"></div>
+      </section>
+
+      <!-- Modal añadir carrera planificada -->
+      <div id="calModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)_calCloseModal()">
+        <div style="background:#fff;border-radius:18px;padding:28px;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+          <div id="calModalTitle" style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:18px">➕ Añadir carrera planificada</div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOMBRE DE LA CARRERA *</label>
+              <input id="calPlanName" type="text" placeholder="Ej: Copa Comunitat Valenciana" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+            </div>
+            <div style="display:flex;gap:10px">
+              <div style="flex:1">
+                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">FECHA *</label>
+                <input id="calPlanDate" type="date" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+              </div>
+              <div style="flex:1">
+                <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">CATEGORÍA</label>
+                <input id="calPlanCat" type="text" placeholder="Ej: Cadetes" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">LOCALIDAD</label>
+              <input id="calPlanLoc" type="text" placeholder="Ej: Jávea" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOTAS</label>
+              <input id="calPlanNotes" type="text" placeholder="Cualquier anotación..." style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
+            </div>
+          </div>
+          <div id="calModalMsg" style="margin-top:10px;font-size:12px;font-weight:700;min-height:18px"></div>
+          <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+            <button onclick="_calCloseModal()" style="padding:9px 18px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;cursor:pointer">Cancelar</button>
+            <button onclick="_calSavePlanned()" style="padding:9px 18px;border-radius:9px;border:none;background:#10b981;color:#fff;font-weight:700;cursor:pointer">💾 Guardar</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="view-gestion" class="spa-view">
@@ -2587,7 +2602,7 @@ if(document.readyState==='loading'){
 // ═══════════════════════════════════════════════════════════════════════════
 const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
 const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
-const _GF_VIEWS_USING_HISTORY = ['view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial'];
+const _GF_VIEWS_USING_HISTORY = ['view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario'];
 
 let _globalFilters = {
   year:   localStorage.getItem('gf_year')   || '',
@@ -2771,6 +2786,7 @@ function showView(viewId){
         if(viewId==='view-top10') renderTop10();
       }
       if(viewId==='view-inicio') renderInicio();
+      if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -2897,6 +2913,7 @@ const ALL_VIEWS = [
   {id:'view-tendencias',  icon:'📉', label:'Tendencias'},
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
   {id:'view-validacion',  icon:'⚠️', label:'Validación'},
+  {id:'view-calendario',  icon:'📅', label:'Calendario'},
   {id:'view-resumen',     icon:'🏅', label:'Resumen Temporada'},
   {id:'view-gestion',     icon:'⚙️', label:'Gestión'},
 ];
@@ -3857,8 +3874,11 @@ async function renderResumen(){
 
 // ── Tabs del Resumen ──────────────────────────────────────────
 function _resSetTab(tab){
-  const tabs = {stats:'resTabStats', scout:'resTabScout', cal:'resTabCal'};
-  const panels = {stats:'resPanelStats', scout:'resPanelScout', cal:'resPanelCal'};
+  // El tab 'cal' fue extraído a su propia vista (view-calendario).
+  // Si por compatibilidad alguien llama _resSetTab('cal'), redirigimos.
+  if(tab==='cal'){ if(typeof showView==='function') showView('view-calendario'); return; }
+  const tabs = {stats:'resTabStats', scout:'resTabScout'};
+  const panels = {stats:'resPanelStats', scout:'resPanelScout'};
   Object.entries(tabs).forEach(([k,id])=>{
     const btn = document.getElementById(id);
     if(btn){ btn.style.borderBottomColor = k===tab?'#1a56db':'transparent'; btn.style.color = k===tab?'#1a56db':'#6b7280'; }
@@ -3868,7 +3888,6 @@ function _resSetTab(tab){
     if(el) el.style.display = k===tab?'':'none';
   });
   if(tab==='scout') _scoutInit();
-  if(tab==='cal')   _calInit();
 }
 
 // ── Scouting: inicializar filtros ────────────────────────────
@@ -9138,6 +9157,7 @@ async function renderInicio(){
     actBox.innerHTML = `
       <button class="inicio-action-btn" onclick="showView('view-carga')"><span class="ia-icon">📤</span>Cargar nueva prueba</button>
       <button class="inicio-action-btn" onclick="showView('view-historial')"><span class="ia-icon">📁</span>Ver historial</button>
+      <button class="inicio-action-btn" onclick="showView('view-calendario')"><span class="ia-icon">📅</span>Calendario</button>
       <button class="inicio-action-btn" onclick="showView('view-seleccion')"><span class="ia-icon">🏆</span>Convocatorias</button>
       <button class="inicio-action-btn" onclick="showView('view-evolucion')"><span class="ia-icon">📈</span>Evolución</button>
       <button class="inicio-action-btn" onclick="showView('view-powerranking')"><span class="ia-icon">⭐</span>Power Ranking</button>
