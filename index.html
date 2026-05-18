@@ -4892,6 +4892,57 @@ function teamKey(name){
     .normalize('NFD').replace(/[̀-ͯ]/g,'')
     .replace(/[.,_\-]/g,' ').replace(/\s+/g,' ').trim();
 }
+// Palabras genéricas a ignorar al comparar equipos
+const _TEAM_STOPWORDS=new Set([
+  'club','team','cycling','ciclismo','ciclista','ciclistas','equipo','sociedad',
+  'asociacion','asociación','agrupacion','agrupación','deportivo','deportiva',
+  'union','unión','cc','cd','ce','sd','cf','ud','ad','sa','sl','sad',
+  'el','la','los','las','de','del','y','i','e','o','u','con',
+  'masculino','femenino','elite','sub23','sub','cadete','cadetes','junior','master',
+  'amateur','aficionados','aficionado'
+]);
+function teamSignificantTokens(name){
+  return teamKey(name).split(/\s+/)
+    .filter(t=>t.length>=2 && !_TEAM_STOPWORDS.has(t));
+}
+// Búsqueda difusa de equipo en la DB: matching por tokens significativos compartidos
+function findTeamMatch(teamName, db){
+  if(!teamName||!db||db.size===0) return null;
+  const tk=teamKey(teamName);
+  if(db.has(tk)) return {region:db.get(tk), matchedKey:tk, score:1, exact:true};
+  const myTokens=teamSignificantTokens(teamName);
+  if(myTokens.length===0) return null;
+  const mySet=new Set(myTokens);
+  const candidates=[];
+  for(const [dbKey,region] of db){
+    const dbTokens=teamSignificantTokens(dbKey);
+    if(dbTokens.length===0) continue;
+    const dbSet=new Set(dbTokens);
+    let shared=0;
+    mySet.forEach(t=>{ if(dbSet.has(t)) shared++; });
+    if(shared===0) continue;
+    const minSize=Math.min(mySet.size,dbSet.size);
+    const maxSize=Math.max(mySet.size,dbSet.size);
+    const score=shared/maxSize; // 1.0 si total contenido en el más grande
+    const isContained=shared===minSize;
+    const isStrong=shared>=2 && (shared/mySet.size)>=0.5;
+    // Acepta si el más pequeño está completamente dentro del más grande (rare-name match)
+    // o si hay buena similitud con >=2 tokens en común
+    if(isContained || isStrong){
+      candidates.push({region, matchedKey:dbKey, score, shared, minSize});
+    }
+  }
+  if(!candidates.length) return null;
+  candidates.sort((a,b)=>b.score-a.score || b.shared-a.shared);
+  const top=candidates[0];
+  // Si el top tiene la misma puntuación que otros con DIFERENTE región → ambiguo, descarta
+  const tiedTop=candidates.filter(c=>c.score===top.score);
+  const tiedRegions=new Set(tiedTop.map(c=>c.region));
+  if(tiedRegions.size>1) return null;
+  // Score mínimo razonable
+  if(top.score<0.4 && !top.exact) return null;
+  return {...top, exact:false};
+}
 let _teamRegionDB=null;
 function buildTeamRegionDB(){
   const counts=new Map();
@@ -4932,24 +4983,38 @@ function showTeamRegionsDialog(){
   const db=getTeamRegionDB();
   const currentTeams=new Set();
   (Array.isArray(riders)?riders:[]).forEach(r=>{ if(r.team) currentTeams.add(teamKey(r.team)); });
-  const knownInCurrent=[], unknownInCurrent=[];
+  const knownInCurrent=[], fuzzyInCurrent=[], unknownInCurrent=[];
   currentTeams.forEach(tk=>{
+    const orig=(riders.find(r=>teamKey(r.team)===tk)||{}).team||tk;
     if(db.has(tk)){
-      const orig=(riders.find(r=>teamKey(r.team)===tk)||{}).team||tk;
       knownInCurrent.push({team:orig, region:db.get(tk)});
-    }else{
-      const orig=(riders.find(r=>teamKey(r.team)===tk)||{}).team||tk;
-      unknownInCurrent.push(orig);
+    } else {
+      const m=findTeamMatch(orig, db);
+      if(m){
+        fuzzyInCurrent.push({team:orig, matched:m.matchedKey, region:m.region, score:m.score});
+      } else {
+        unknownInCurrent.push(orig);
+      }
     }
   });
   const totalDB=db.size;
   let html=`<div style="padding:20px;max-width:600px"><h3 style="margin-top:0">📋 Base de datos Equipos → CCAA</h3>`;
   html+=`<p>Total equipos conocidos en historial: <strong>${totalDB}</strong></p>`;
-  html+=`<p>Equipos en esta carrera: <strong>${currentTeams.size}</strong> (${knownInCurrent.length} con CCAA conocida, <span style="color:#dc2626"><strong>${unknownInCurrent.length} sin CCAA</strong></span>)</p>`;
+  html+=`<p>Equipos en esta carrera: <strong>${currentTeams.size}</strong></p>`;
+  html+=`<p style="margin-top:0;font-size:13px;color:#6b7280">✅ ${knownInCurrent.length} match exacto · 🔵 ${fuzzyInCurrent.length} match por similitud · <span style="color:#dc2626"><strong>⚠️ ${unknownInCurrent.length} sin CCAA</strong></span></p>`;
   if(unknownInCurrent.length){
     html+=`<h4 style="color:#dc2626;margin-bottom:6px">⚠️ Equipos sin CCAA (edita un ciclista de cada uno para añadirlos)</h4>`;
-    html+=`<ul style="max-height:200px;overflow:auto;background:#fef2f2;padding:10px 10px 10px 30px;border-radius:8px">`;
+    html+=`<ul style="max-height:160px;overflow:auto;background:#fef2f2;padding:10px 10px 10px 30px;border-radius:8px">`;
     unknownInCurrent.sort().forEach(t=>{ html+=`<li>${escapeHtml(t)}</li>`; });
+    html+=`</ul>`;
+  }
+  if(fuzzyInCurrent.length){
+    html+=`<h4 style="color:#2563eb;margin-bottom:6px;margin-top:14px">🔵 Equipos con CCAA por similitud (revisa que sean correctos)</h4>`;
+    html+=`<ul style="max-height:160px;overflow:auto;background:#eff6ff;padding:10px 10px 10px 30px;border-radius:8px;font-size:13px">`;
+    fuzzyInCurrent.sort((a,b)=>b.score-a.score).forEach(f=>{
+      const pct=Math.round(f.score*100);
+      html+=`<li><strong>${escapeHtml(f.team)}</strong> → <em>${escapeHtml(f.region)}</em> <span style="color:#9ca3af">(${pct}% similar a "${escapeHtml(f.matched)}")</span></li>`;
+    });
     html+=`</ul>`;
   }
   if(knownInCurrent.length){
@@ -4973,22 +5038,32 @@ function showTeamRegionsDialog(){
 function autoFillRegionsFromTeamDB(list){
   if(!list||!list.length) return 0;
   const db=getTeamRegionDB();
-  let filled=0,canonicalized=0;
+  let filled=0,fuzzyFilled=0,canonicalized=0;
+  const fuzzyMatches=[];
   list.forEach(r=>{
     // Canonicalizar CCAAs existentes (VLC → Comunitat Valenciana, etc.)
     if(r.region){
       const canon=canonicalRegion(r.region);
       if(canon!==r.region){ r.region=canon; canonicalized++; }
     }
-    // Rellenar CCAAs vacías desde el DB de equipos
+    // Rellenar CCAAs vacías con matching exacto + difuso
     if(!r.region && r.team){
-      const tk=teamKey(r.team);
-      const found=db.get(tk);
-      if(found){ r.region=found; filled++; }
+      const match=findTeamMatch(r.team, db);
+      if(match){
+        r.region=match.region;
+        filled++;
+        if(!match.exact){
+          fuzzyFilled++;
+          fuzzyMatches.push({team:r.team, matched:match.matchedKey, region:match.region, score:match.score.toFixed(2)});
+        }
+      }
     }
   });
   if(filled>0||canonicalized>0){
-    console.log(`[autoFillRegions] ${filled} rellenadas desde DB, ${canonicalized} canonicalizadas`);
+    console.log(`[autoFillRegions] ${filled} rellenadas (${fuzzyFilled} por similitud), ${canonicalized} canonicalizadas`);
+    if(fuzzyMatches.length>0){
+      console.table(fuzzyMatches.slice(0,20));
+    }
   }
   return filled;
 }
