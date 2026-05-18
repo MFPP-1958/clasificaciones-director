@@ -13,3 +13,4 @@ fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'dist', 'index.html'), html, 'utf8');
 
 console.log('✅ Build completado → dist/index.html');
+// Build trigger 1779079327
