@@ -13776,7 +13776,7 @@ async function renderSeleccion(){
       if(!riderMap[mk]) riderMap[mk]={name:nameKey, displayName:r.name||nameKey, team, cat:rcat, positions:[], raceIds:new Set(), raceHistory:[]};
       riderMap[mk].positions.push(r.pos);
       riderMap[mk].raceIds.add(raceId);
-      riderMap[mk].raceHistory.push({raceName:race.raceName, raceDate:race.raceDate, pos:r.pos, time:r.time||''});
+      riderMap[mk].raceHistory.push({raceName:race.raceName, raceDate:race.raceDate, pos:r.pos, time:r.time||'', total:(race.riders||[]).length});
     }
   }
 
@@ -13788,7 +13788,7 @@ async function renderSeleccion(){
     const podiums = rd.positions.filter(p=>p<=3).length;
     const top10   = rd.positions.filter(p=>p<=10).length;
     const last3   = rd.raceHistory.slice(-3);
-    const stats   = _computeSelectionStats({positions:rd.positions, avgPos, bestPos, podiums, top10, races:n});
+    const stats   = _computeSelectionStats({positions:rd.positions, avgPos, bestPos, podiums, top10, races:n, raceHistory:rd.raceHistory});
     return {
       name:rd.name, displayName:rd.displayName, team:rd.team, cat:rd.cat,
       avgPos, bestPos, podiums, top10, races:n, last3,
@@ -13905,7 +13905,7 @@ function _buildMyTeamCandidates(history){
       if(!riderMap[mk]) riderMap[mk]={name:nameKey,displayName:r.name||nameKey,team,cat:rcat,positions:[],raceIds:new Set(),raceHistory:[]};
       riderMap[mk].positions.push(r.pos);
       riderMap[mk].raceIds.add(raceId);
-      riderMap[mk].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos,time:r.time||''});
+      riderMap[mk].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos,time:r.time||'',total:(race.riders||[]).length});
     }
   }
 
@@ -13916,7 +13916,7 @@ function _buildMyTeamCandidates(history){
     const podiums = rd.positions.filter(p=>p<=3).length;
     const top10   = rd.positions.filter(p=>p<=10).length;
     const last3   = rd.raceHistory.slice(-3);
-    const stats = _computeSelectionStats({positions:rd.positions, avgPos, bestPos, podiums, top10, races:n});
+    const stats = _computeSelectionStats({positions:rd.positions, avgPos, bestPos, podiums, top10, races:n, raceHistory:rd.raceHistory});
     return {
       name:rd.name, displayName:rd.displayName, team:rd.team, cat:rd.cat,
       avgPos, bestPos, podiums, top10, races:n, last3,
@@ -13958,6 +13958,17 @@ function _buildMyTeamCandidates(history){
 //   +volumen: castigo si <3 carreras (poca muestra)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ═════════════════════════════════════════════════════════════════════
+// FÓRMULA "PROFESIONAL" — criterios reales de seleccionador nacional
+// ═════════════════════════════════════════════════════════════════════
+// 1. DESCARTE DE PEORES — quitar peor 20% de carreras (DNF, averías, caídas)
+// 2. PERCENTIL — pos/total: un 10º entre 200 vale más que un 10º entre 30
+// 3. DECAIMIENTO TEMPORAL — última carrera vale 1.0, hace 60d vale 0.5
+// 4. TECHO DE RENDIMIENTO — bonus por top 5% (resultados excepcionales)
+// 5. VICTORIAS — bonus grande (un ganador es un ganador)
+// 6. CONFIANZA POR VOLUMEN — pocas carreras → score "regresa" a la media
+// 7. FIABILIDAD (solo lado malo) — ya no penaliza los días buenos
+// ═════════════════════════════════════════════════════════════════════
 function _computeSelectionStats(c){
   const positions = c.positions || [];
   const n = c.races || positions.length || 0;
@@ -13966,56 +13977,107 @@ function _computeSelectionStats(c){
   const podiums = c.podiums != null ? c.podiums : positions.filter(p=>p<=3).length;
   const top10   = c.top10   != null ? c.top10   : positions.filter(p=>p<=10).length;
   const wins    = positions.filter(p=>p===1).length;
+  const raceHistory = c.raceHistory || [];
 
-  // ─── Fiabilidad (% carreras sin mal resultado) ─────────────────────
-  const badThreshold = Math.max(avgPos + 5, avgPos * 1.5, 15);
-  const reliableRaces = positions.filter(p => p <= badThreshold).length;
-  const reliability = n > 0 ? reliableRaces / n : 0; // 0-1
+  // ─── PASO 1: DESCARTE DEL PEOR 20% (handles DNF, averías, accidentes) ──
+  // Solo si tiene al menos 5 carreras (sino no merece la pena descartar)
+  let consideredRaces = raceHistory.length ? raceHistory.slice() : positions.map(p=>({pos:p,raceDate:'',total:0}));
+  let droppedCount = 0;
+  if(consideredRaces.length >= 5){
+    consideredRaces.sort((a,b)=>a.pos-b.pos);
+    droppedCount = Math.ceil(consideredRaces.length * 0.20);
+    consideredRaces = consideredRaces.slice(0, consideredRaces.length - droppedCount);
+  }
 
-  // ─── Forma reciente ────────────────────────────────────────────────
+  // ─── PASO 2: PERCENTILES (posición relativa al tamaño del campo) ─────
+  // Si no tenemos `total`, asumimos campo medio de 100 corredores
+  const DEFAULT_FIELD = 100;
+  consideredRaces.forEach(r=>{
+    r.total = r.total || DEFAULT_FIELD;
+    r.percentile = Math.min(1, r.pos / r.total); // 0 = ganador, 1 = último
+  });
+
+  // ─── PASO 3: DECAIMIENTO TEMPORAL ────────────────────────────────────
+  // Última carrera = 1.0, hace 60 días = 0.5, hace 120 días = 0.25
+  const today = new Date();
+  const HALF_LIFE_DAYS = 60;
+  consideredRaces.forEach(r=>{
+    const d = _parseSpanishDate ? _parseSpanishDate(r.raceDate) : null;
+    if(d){
+      const raceDate = new Date(d);
+      const daysAgo = Math.max(0, (today - raceDate) / 86400000);
+      r.recencyWeight = Math.pow(0.5, daysAgo / HALF_LIFE_DAYS);
+    } else {
+      r.recencyWeight = 1; // sin fecha → peso neutro
+    }
+  });
+
+  // ─── PASO 4: PERCENTIL PONDERADO (calidad real ajustada por contexto) ─
+  const totalWeight = consideredRaces.reduce((s,r)=>s+r.recencyWeight, 0);
+  const weightedPercentile = totalWeight > 0
+    ? consideredRaces.reduce((s,r)=>s+r.percentile*r.recencyWeight, 0) / totalWeight
+    : 0.5;
+  const qualityScore = weightedPercentile * 100; // 0-100, menor = mejor
+
+  // ─── PASO 5: TECHO DE RENDIMIENTO (resultados excepcionales) ──────────
+  // % de carreras en Top 5% del campo (premio fuerte a los "días buenos")
+  const ceilingHits = consideredRaces.filter(r=>r.percentile <= 0.05).length;
+  const ceilingBonus = -Math.min(ceilingHits * 8, 40); // hasta -40
+
+  // ─── PASO 6: VICTORIAS Y PODIOS ──────────────────────────────────────
+  const winBonus    = -Math.min(wins * 12, 50);     // hasta -50 (las wins son oro)
+  const podiumBonus = -Math.min(podiums * 4, 30);   // hasta -30
+
+  // ─── PASO 7: CONFIANZA POR VOLUMEN (Bayesian shrinkage) ──────────────
+  // n=0: factor 0 (todo es prior); n=20: factor 0.8 (muy confiable)
+  const SHRINKAGE_K = 5;
+  const confidenceFactor = n / (n + SHRINKAGE_K); // 0-1
+  // Si tienes pocas carreras, el score se "tira" hacia 50 (media del campo)
+  const adjustedQuality = qualityScore * confidenceFactor + 50 * (1 - confidenceFactor);
+
+  // ─── PASO 8: FORMA RECIENTE (últimas 3 carreras) ─────────────────────
   const last3 = positions.slice(-3);
   const recentAvg = last3.length ? last3.reduce((s,v)=>s+v,0)/last3.length : avgPos;
-  const recentTop10Pct = last3.length ? last3.filter(p=>p<=10).length / last3.length : 0;
-  const top10Pct = n > 0 ? top10 / n : 0;
 
-  // ═══════════════════════════════════════════════════════════════════
-  // COMPOSITE — la CALIDAD REAL domina, no la fiabilidad inflada
-  // por muestras pequeñas. Bajo = mejor.
-  // ═══════════════════════════════════════════════════════════════════
-  // 40% calidad base (media de posición sin tope: una media de 107
-  //                    debe ser claramente peor que una de 58)
-  // 20% consistencia Top 10 (% carreras fuera del top 10 → penaliza)
-  // 20% forma reciente (sin tope)
-  //  5% fiabilidad (es filtro, no debe dominar el orden)
-  // 15% bonus por podios + victorias (la calidad real se premia)
-  // + Volumen: penalización fuerte si <5 carreras (poca muestra = poco fiable)
-  const qualityPenalty     = avgPos;                          // sin cap
-  const consistencyPenalty = (1 - top10Pct) * 50;             // 0-50
+  // ─── PASO 9: FIABILIDAD (solo lado malo, mantiene la fórmula buena) ──
+  const badThreshold = Math.max(avgPos + 5, avgPos * 1.5, 15);
+  const reliableRaces = positions.filter(p => p <= badThreshold).length;
+  const reliability = n > 0 ? reliableRaces / n : 0;
+  const top10Pct = n > 0 ? top10 / n : 0;
+  const recentTop10Pct = last3.length ? last3.filter(p=>p<=10).length / last3.length : 0;
+
+  // ─── COMPOSITE FINAL (menor = mejor) ─────────────────────────────────
+  // 50% calidad ponderada (percentil + decaimiento + descartar peor 20%)
+  // 15% forma reciente (las últimas 3 carreras)
+  // 10% consistencia Top 10 (% carreras top 10)
+  // 25% bonus: techo + victorias + podios
+  // Hard penalty si <3 carreras (muestra mínima)
+  const consistencyPenalty = (1 - top10Pct) * 30;            // 0-30
   const recentPenalty      = recentAvg;                       // sin cap
-  const reliabilityPenalty = (1 - reliability) * 30;          // 0-30
-  const podiumBonus        = -Math.min(podiums * 3, 25);      // hasta -25
-  const winBonus           = -Math.min(wins * 5, 25);         // hasta -25
-  const volumePenalty      = n < 5 ? (5 - n) * 10 : 0;        // 0-50
+  const volumePenalty      = n < 3 ? (3 - n) * 15 : 0;        // hasta 30
 
   const composite = (
-    qualityPenalty       * 0.40 +
-    consistencyPenalty   * 0.20 +
-    recentPenalty        * 0.20 +
-    reliabilityPenalty   * 0.05 +
-    podiumBonus          * 0.10 +
-    winBonus             * 0.05
+    adjustedQuality     * 0.50 +
+    recentPenalty       * 0.15 +
+    consistencyPenalty  * 0.10 +
+    ceilingBonus        * 0.10 +
+    winBonus            * 0.10 +
+    podiumBonus         * 0.05
   ) + volumePenalty;
 
-  // ─── Elegibilidad ────────────────────────────────────────────────
-  // Suelo: fiabilidad ≥50% Y al menos 3 carreras (muestra mínima).
-  // Excepción: victorias extraordinarias (3+ wins o 1º + 3+ podios) saltan el suelo.
+  // ─── ELEGIBILIDAD ────────────────────────────────────────────────────
+  // Suelo: fiabilidad ≥50% Y al menos 3 carreras.
+  // Excepción: victorias extraordinarias (3+ wins o 1º + 3+ podios).
   const extraordinaryWins = wins >= 3 || (bestPos === 1 && podiums >= 3);
   const enoughVolume = n >= 3;
   const eligible = (enoughVolume && reliability * 100 >= 50) || extraordinaryWins;
 
   return {
     composite, reliability, top10Pct, recentAvg, recentTop10Pct,
-    eligible, extraordinaryWins, wins, badThreshold, enoughVolume
+    eligible, extraordinaryWins, wins, badThreshold, enoughVolume,
+    // Nuevos campos para transparencia y debug
+    weightedPercentile, qualityScore, adjustedQuality,
+    ceilingHits, confidenceFactor, droppedCount
   };
 }
 
@@ -14074,33 +14136,44 @@ function _selShowAlgoHelp(){
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.onclick=e=>{ if(e.target===overlay) overlay.remove(); };
   overlay.innerHTML=`
-    <div style="background:#fff;border-radius:14px;max-width:720px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:24px;font-family:Arial,sans-serif">
-      <h3 style="margin-top:0;color:#0b2f6b">🤖 ¿Cómo selecciona la IA?</h3>
-      <p style="color:#374151;font-size:14px;margin-bottom:18px">La IA ordena la selección priorizando <strong>consistencia (Fiabilidad &gt; 50%)</strong>, presencia en podios y tendencia en las últimas 3 pruebas.</p>
+    <div style="background:#fff;border-radius:14px;max-width:760px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:24px;font-family:Arial,sans-serif">
+      <h3 style="margin-top:0;color:#0b2f6b">🤖 Algoritmo "Selector Nacional" — criterios profesionales</h3>
+      <p style="color:#374151;font-size:14px;margin-bottom:18px">Tanto <strong>Automática</strong> como <strong>IA</strong> aplican los criterios reales que usan los seleccionadores nacionales — diseñados para ser justos con corredores que tuvieron averías, caídas o días puntualmente malos.</p>
+
+      <div style="background:#f0fdf4;border-left:4px solid #10b981;padding:12px 14px;border-radius:6px;margin-bottom:16px">
+        <strong style="color:#065f46">🛠 Pasos del algoritmo (por corredor)</strong>
+        <ol style="margin:6px 0 0;padding-left:22px;font-size:13px;color:#065f46;line-height:1.55">
+          <li><strong>Descarte del peor 20% de carreras</strong> — neutraliza DNFs, averías, caídas (mínimo 5 carreras para activarse)</li>
+          <li><strong>Posición en percentil</strong> — un 10º entre 200 vale más que un 10º entre 30 (<code>pos/total</code>)</li>
+          <li><strong>Decaimiento temporal</strong> — la carrera de ayer pesa 1.0, hace 60 días pesa 0.5, hace 120 días pesa 0.25</li>
+          <li><strong>Techo de rendimiento</strong> — bonus por cada Top 5% del campo (los "días grandes" valen más que la media)</li>
+          <li><strong>Confianza por volumen (bayesiano)</strong> — con pocas carreras, el score se acerca a la media del campo (no asumimos genialidad con 2 carreras)</li>
+          <li><strong>Fiabilidad solo por el lado malo</strong> — un podio NUNCA es no fiable; solo cuenta como "mal día" si superas <code>max(avg+5, avg×1.5, 15)</code></li>
+        </ol>
+      </div>
+
+      <div style="background:#eff6ff;border-left:4px solid #1286c7;padding:12px 14px;border-radius:6px;margin-bottom:16px">
+        <strong style="color:#1e40af">🛑 Filtro previo de elegibilidad (solo Selección Autonómica)</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#1e3a8a">Ningún corredor con <strong>menos del 50% de fiabilidad</strong> ni <strong>menos de 3 carreras</strong> entra automáticamente, salvo que tenga <strong>victorias extraordinarias</strong> (3+ ganadas o 1º + 3+ podios).<br><em>En Mi Equipo este filtro no se aplica — verás a todos tus chicos ordenados.</em></p>
+      </div>
 
       <div style="background:#eff6ff;border-left:4px solid #1286c7;padding:12px 14px;border-radius:6px;margin-bottom:16px">
         <strong style="color:#1e40af">🛑 Filtro previo de elegibilidad</strong>
         <p style="margin:4px 0 0;font-size:13px;color:#1e3a8a">Ningún corredor con <strong>menos del 50% de fiabilidad</strong> puede ser propuesto automáticamente, salvo que tenga <strong>victorias extraordinarias</strong> (3+ ganadas o 1º + 3+ podios).</p>
       </div>
 
-      <h4 style="color:#0b2f6b;margin-bottom:6px">📊 Fiabilidad (nueva fórmula)</h4>
-      <p style="font-size:13px;color:#374151;margin:0 0 14px">Porcentaje de carreras <strong>sin un mal resultado</strong>. Umbral malo = <code style="background:#f3f4f6;padding:2px 5px;border-radius:3px">max(avg+5, avg×1.5, 15)</code>. Un podio NUNCA es no fiable.</p>
-
-      <h4 style="color:#0b2f6b;margin-bottom:6px">⚖️ Composite Score (menor = mejor)</h4>
+      <h4 style="color:#0b2f6b;margin-bottom:6px">⚖️ Composite Score — Automática (menor = mejor)</h4>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px">
-        <tr style="background:#f9fafb"><td style="padding:6px 10px;border:1px solid #e5e7eb;width:55%">Media de posición (calidad base)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">30%</td></tr>
-        <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">Consistencia en Top 10 (% carreras top 10)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">25%</td></tr>
-        <tr style="background:#f9fafb"><td style="padding:6px 10px;border:1px solid #e5e7eb">Forma reciente (media últimas 3 carreras)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">20%</td></tr>
-        <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">Fiabilidad (% carreras sin mal resultado)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">20%</td></tr>
-        <tr style="background:#fef3c7"><td style="padding:6px 10px;border:1px solid #fbbf24">Bonus por podios (resta al score)</td><td style="padding:6px 10px;border:1px solid #fbbf24;text-align:center;font-weight:700">−10%</td></tr>
-        <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">Castigo si <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px">&lt;3 carreras</code> (muestra pobre)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">+12 max</td></tr>
+        <tr style="background:#f9fafb"><td style="padding:6px 10px;border:1px solid #e5e7eb;width:60%">Calidad ajustada (percentil ponderado por recencia, peor 20% descartado, ajustado por confianza)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">50%</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">Forma reciente (media últimas 3 carreras)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">15%</td></tr>
+        <tr style="background:#f9fafb"><td style="padding:6px 10px;border:1px solid #e5e7eb">Consistencia Top 10 (% carreras en top 10)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">10%</td></tr>
+        <tr style="background:#fef3c7"><td style="padding:6px 10px;border:1px solid #fbbf24">🏆 Bonus por techo de rendimiento (Top 5% del campo)</td><td style="padding:6px 10px;border:1px solid #fbbf24;text-align:center;font-weight:700">−10%</td></tr>
+        <tr style="background:#fef3c7"><td style="padding:6px 10px;border:1px solid #fbbf24">🥇 Bonus por victorias</td><td style="padding:6px 10px;border:1px solid #fbbf24;text-align:center;font-weight:700">−10%</td></tr>
+        <tr style="background:#fef3c7"><td style="padding:6px 10px;border:1px solid #fbbf24">🥉 Bonus por podios</td><td style="padding:6px 10px;border:1px solid #fbbf24;text-align:center;font-weight:700">−5%</td></tr>
       </table>
 
-      <h4 style="color:#0b2f6b;margin-bottom:6px">📐 Diferencia Automática vs IA</h4>
-      <ul style="font-size:13px;color:#374151;padding-left:22px;margin:0 0 14px">
-        <li><strong>Automática:</strong> aplica el composite estándar (más peso a la media base).</li>
-        <li><strong>IA:</strong> sube la importancia de consistencia Top 10 (30%) y forma reciente (25%), baja media a 35%. Ambas usan el mismo filtro de elegibilidad.</li>
-      </ul>
+      <h4 style="color:#0b2f6b;margin-bottom:6px">🤖 Composite IA (más agresivo: detecta talento)</h4>
+      <p style="font-size:13px;color:#374151;margin:0 0 14px">La IA sube el peso del <strong>techo de rendimiento (15%)</strong> y las <strong>victorias (15%)</strong>, y la <strong>forma reciente (25%)</strong>. Detecta corredores en racha o con un techo alto aunque su media no sea la mejor del grupo. Ideal para ojeadores de talento.</p>
 
       <h4 style="color:#0b2f6b;margin-bottom:6px">🎯 Orden de las tarjetas</h4>
       <p style="font-size:13px;color:#374151;margin:0 0 14px">Estrictamente <strong>de izquierda a derecha por composite score</strong>. T1 = el más sólido (Alex Beltrán con 90% fiabilidad va siempre primero). <strong>No se intercambian slots</strong> por diversidad ADN.</p>
@@ -14125,27 +14198,34 @@ function _selIAPropose(){
   _selSetActiveMode('ia');
   const totalSlots = _convoTitularCount + 2;
 
+  // La IA usa la misma base "profesional" pero RE-PONDERA dando más peso a
+  // forma reciente (25% vs 15%) y techo de rendimiento (15% vs 10%).
+  // Pensada para detectar "ciclistas en racha" o "talentos con techo alto"
+  // que merecen una oportunidad aunque su media no sea la mejor.
   const scored = _selPickerAllRiders.map(c=>{
+    const stats = c._stats || _computeSelectionStats(c);
     const positions = c.positions || [];
     const n = c.races || positions.length;
-    const avgPos = c.avgPos;
-    const top10Pct = n>0 ? c.top10/n : 0;
     const last3 = positions.slice(-3);
-    const recentAvg = last3.length ? last3.reduce((s,v)=>s+v,0)/last3.length : avgPos;
-    const reliability = c.reliability != null ? c.reliability : (c._stats?.reliability||0);
-    const wins = positions.filter(p=>p===1).length;
-    // IA: prioriza forma reciente y consistencia, pero la calidad SIN CAP
-    // domina (una media de 107 no puede competir con una de 58).
-    //  35% calidad base · 25% consistencia top10 · 25% forma reciente ·
-    //  10% bonus podios+victorias · 5% fiabilidad
+    const recentAvg = last3.length ? last3.reduce((s,v)=>s+v,0)/last3.length : c.avgPos;
+    const top10Pct = stats.top10Pct;
+    const consistencyPenalty = (1 - top10Pct) * 30;
+    const volumePenalty = n < 3 ? (3 - n) * 15 : 0;
+    const winBonus = -Math.min((c.wins||positions.filter(p=>p===1).length) * 14, 60);
+    const podiumBonus = -Math.min(c.podiums * 4, 30);
+    const ceilingBonus = -Math.min((stats.ceilingHits||0) * 10, 50);
+
+    // IA: 40% calidad / 25% forma reciente / 10% consistencia / 15% techo /
+    // 15% wins / 5% podios + penalización volumen
     const iaScore = (
-      avgPos                       * 0.35 +
-      (1-top10Pct)*50              * 0.25 +
-      recentAvg                    * 0.25 +
-      (1-reliability)*30           * 0.05 +
-      -Math.min(c.podiums*3 + wins*5, 40) * 0.10
-    ) + (n<5 ? (5-n)*10 : 0);
-    return {...c, _iaBase: iaScore};
+      stats.adjustedQuality * 0.40 +
+      recentAvg             * 0.25 +
+      consistencyPenalty    * 0.10 +
+      ceilingBonus          * 0.15 +
+      winBonus              * 0.15 +
+      podiumBonus           * 0.05
+    ) + volumePenalty;
+    return {...c, _iaBase: iaScore, _stats: stats};
   });
 
   // VLC: filtro estricto de elegibilidad (Campeonato — no concesiones)
