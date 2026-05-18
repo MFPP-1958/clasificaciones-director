@@ -979,8 +979,9 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
         <button class="rbac-logout" onclick="_rbacLogout()">Salir</button>
       </div>
     </div>
+    <button class="nav-btn" data-view="view-inicio" data-label="Inicio" onclick="showView('view-inicio')"><span class="nav-icon">🏠</span><span class="nav-label"> Inicio</span></button>
     <button class="nav-btn" data-view="view-historial" data-label="Historial" onclick="showView('view-historial')"><span class="nav-icon">📁</span><span class="nav-label"> Historial</span></button>
-    <button class="nav-btn active" data-view="view-carga" data-label="Carga y Resumen" onclick="showView('view-carga')"><span class="nav-icon">🏠</span><span class="nav-label"> Carga y Resumen</span></button>
+    <button class="nav-btn active" data-view="view-carga" data-label="Carga y Resumen" onclick="showView('view-carga')"><span class="nav-icon">📤</span><span class="nav-label"> Carga y Resumen</span></button>
     <button class="nav-btn" data-view="view-tabla" data-label="Tabla y filtros" onclick="showView('view-tabla')"><span class="nav-icon">📋</span><span class="nav-label"> Tabla y filtros</span></button>
     <button class="nav-btn" data-view="view-analisis" data-label="Análisis individual" onclick="showView('view-analisis')"><span class="nav-icon">👤</span><span class="nav-label"> Análisis individual</span></button>
     <button class="nav-btn" data-view="view-comparativo" data-label="Comparativo" onclick="showView('view-comparativo')"><span class="nav-icon">⚔️</span><span class="nav-label"> Comparativo</span></button>
@@ -1003,6 +1004,76 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       <div class="race-header-title" id="raceHeaderTitle"></div>
       <div class="race-header-meta" id="raceHeaderMeta"></div>
     </div>
+    <!-- ═══════════════════════════════════════════════════════════════
+         VISTA INICIO — Dashboard de entrada al producto
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="view-inicio" class="spa-view">
+      <section class="panel" id="inicioHero" style="background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff;border:none">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px">
+          <div>
+            <div id="inicioHeroTitle" style="font-size:24px;font-weight:900;margin-bottom:4px">👋 Bienvenido, Director</div>
+            <div id="inicioHeroSubtitle" style="font-size:14px;opacity:.9">Cargando…</div>
+          </div>
+          <div id="inicioHeroChips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+      </section>
+
+      <!-- KPIs principales -->
+      <section class="panel">
+        <div class="section-title" style="margin-bottom:14px">
+          <h2 style="margin:0">📊 Resumen general</h2>
+          <span class="small" id="inicioSummaryHint">Datos cargados</span>
+        </div>
+        <div id="inicioKpis" class="evol-kpis"></div>
+      </section>
+
+      <!-- 2 columnas: última prueba + acciones rápidas -->
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px" class="inicio-grid-2col">
+        <section class="panel" style="margin-bottom:0">
+          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🏁 Última prueba cargada</h2></div>
+          <div id="inicioLastRace"></div>
+        </section>
+        <section class="panel" style="margin-bottom:0">
+          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">⚡ Acciones rápidas</h2></div>
+          <div id="inicioActions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+        </section>
+      </div>
+
+      <!-- 2 columnas: top corredores + últimas carreras -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" class="inicio-grid-2col">
+        <section class="panel" style="margin-bottom:0">
+          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🏆 Top corredores de mi equipo</h2></div>
+          <div id="inicioTopRiders"></div>
+        </section>
+        <section class="panel" style="margin-bottom:0">
+          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">📅 Últimas carreras del historial</h2></div>
+          <div id="inicioRecentRaces"></div>
+        </section>
+      </div>
+
+      <style>
+        @media (max-width: 900px){
+          .inicio-grid-2col{grid-template-columns:1fr !important;}
+        }
+        .inicio-action-btn{
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          padding:18px 12px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;
+          color:#0b2f6b;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s;
+          text-align:center;line-height:1.25;min-height:90px;
+        }
+        .inicio-action-btn:hover{border-color:#1286c7;background:#f0f9ff;transform:translateY(-1px);box-shadow:0 4px 12px rgba(18,134,199,.15)}
+        .inicio-action-btn .ia-icon{font-size:26px;margin-bottom:6px;display:block}
+        .inicio-empty{padding:20px;text-align:center;color:#6b7280;background:#f9fafb;border-radius:10px;border:1px dashed #d1d5db}
+        .inicio-rider-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #f3f4f6}
+        .inicio-rider-row:last-child{border-bottom:none}
+        .inicio-rider-pos{font-size:18px;font-weight:900;min-width:34px;text-align:center}
+        .inicio-race-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:background .15s}
+        .inicio-race-row:hover{background:#f9fafb}
+        .inicio-race-row:last-child{border-bottom:none}
+        .inicio-chip{background:rgba(255,255,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700}
+      </style>
+    </div>
+
     <div id="view-carga" class="spa-view active">
 <!-- Barra de carga colapsable -->
 <div id="loadCollapsibleWrap" style="margin-bottom:16px">
@@ -2438,6 +2509,7 @@ function showView(viewId){
         if(viewId==='view-validacion') detectAnomalies();
         if(viewId==='view-top10') renderTop10();
       }
+      if(viewId==='view-inicio') renderInicio();
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -2549,8 +2621,9 @@ INSERT INTO app_permissions (role,view_id,allowed) VALUES
 ON CONFLICT (role,view_id) DO NOTHING;
 */
 const ALL_VIEWS = [
+  {id:'view-inicio',      icon:'🏠', label:'Inicio'},
   {id:'view-historial',   icon:'📁', label:'Historial'},
-  {id:'view-carga',       icon:'🏠', label:'Carga y Resumen'},
+  {id:'view-carga',       icon:'📤', label:'Carga y Resumen'},
   {id:'view-tabla',       icon:'📋', label:'Tabla y filtros'},
   {id:'view-analisis',    icon:'👤', label:'Análisis individual'},
   {id:'view-comparativo', icon:'⚔️', label:'Comparativo'},
@@ -8664,6 +8737,199 @@ function _mostrarDialogoDuplicado(fecha, nombreExistente, nCorredores){
     overlay.onclick=e=>{ if(e.target===overlay) cleanup('cancelar'); };
   });
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// VISTA INICIO — Dashboard de entrada
+// Lee de: _rbacUser, myTeam, riders, _cachedHistory, _sb
+// ═══════════════════════════════════════════════════════════════════════════
+async function renderInicio(){
+  // ─── 1. HERO (bienvenida) ──────────────────────────────────────────
+  const user = (typeof _rbacUser !== 'undefined' && _rbacUser) ? _rbacUser : null;
+  const displayName = user?.name || user?.email?.split('@')[0] || 'Director';
+  const role = user?.role || 'SUPERADMIN';
+  const team = (typeof myTeam !== 'undefined' && myTeam) ? myTeam : '';
+  const sbOk = (typeof _sb !== 'undefined' && _sb) ? true : false;
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? '☀️ Buenos días' : (hour < 20 ? '👋 Buenas tardes' : '🌙 Buenas noches');
+  const heroTitle = `${greeting}, ${escapeHtml(displayName)}`;
+  const heroSub = team
+    ? `Estás llevando el equipo <strong>${escapeHtml(team)}</strong>`
+    : 'Configura tu equipo en el panel de carga para activar funciones personalizadas';
+
+  const elHT = document.getElementById('inicioHeroTitle');
+  const elHS = document.getElementById('inicioHeroSubtitle');
+  const elHC = document.getElementById('inicioHeroChips');
+  if(elHT) elHT.textContent = heroTitle.replace(/<[^>]+>/g,'');
+  if(elHS) elHS.innerHTML = heroSub;
+  if(elHC){
+    const chips = [
+      `<span class="inicio-chip">🎫 ${escapeHtml(role)}</span>`,
+      sbOk ? `<span class="inicio-chip" style="background:rgba(16,185,129,.25)">🟢 Conectado a Supabase</span>`
+           : `<span class="inicio-chip" style="background:rgba(239,68,68,.4)">🔴 Sin conexión</span>`,
+      `<span class="inicio-chip">📅 ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'})}</span>`
+    ];
+    elHC.innerHTML = chips.join('');
+  }
+
+  // ─── 2. KPIs principales ────────────────────────────────────────────
+  // Esperar al historial si todavía está cargando
+  let history = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  if(!history.length && typeof _ensureHistory === 'function'){
+    try{ history = await _ensureHistory(); }catch(e){ history = []; }
+  }
+  const totalRaces = history.length;
+  const uniqueRiders = new Set();
+  history.forEach(race => (race.riders||[]).forEach(r => {
+    if(r.name) uniqueRiders.add(normalizeRiderName(r.name).toLowerCase());
+  }));
+  // Última carrera por fecha
+  const sortedByDate = history.slice().sort((a,b)=>(_parseSpanishDate(b.raceDate)||'').localeCompare(_parseSpanishDate(a.raceDate)||''));
+  const lastRace = sortedByDate[0];
+  // Total ciclistas en mi equipo (en el historial)
+  let myTeamRiders = 0;
+  if(team){
+    const myTeamKey = (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim());
+    const set = new Set();
+    history.forEach(race => (race.riders||[]).forEach(r => {
+      const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+      if(tk === myTeamKey) set.add(normalizeRiderName(r.name||'').toLowerCase());
+    }));
+    myTeamRiders = set.size;
+  }
+
+  const kpiBox = document.getElementById('inicioKpis');
+  if(kpiBox){
+    kpiBox.innerHTML = `
+      <div class="evol-kpi"><div class="ek-label">Carreras en historial</div><div class="ek-value">${totalRaces}</div><div class="ek-sub">Pruebas guardadas</div></div>
+      <div class="evol-kpi"><div class="ek-label">Ciclistas únicos</div><div class="ek-value">${uniqueRiders.size}</div><div class="ek-sub">En todas las pruebas</div></div>
+      <div class="evol-kpi"><div class="ek-label">Mi equipo</div><div class="ek-value" style="font-size:16px">${team ? escapeHtml(team) : '—'}</div><div class="ek-sub">${myTeamRiders} ciclista${myTeamRiders!==1?'s':''}</div></div>
+      <div class="evol-kpi"><div class="ek-label">Última prueba</div><div class="ek-value" style="font-size:14px">${lastRace ? escapeHtml((lastRace.raceName||'').slice(0,40)) : '—'}</div><div class="ek-sub">${lastRace?.raceDate || 'Sin datos'}</div></div>`;
+  }
+
+  // ─── 3. Última prueba cargada (la actual en memoria) ────────────────
+  const lastBox = document.getElementById('inicioLastRace');
+  if(lastBox){
+    const currentRaceName = ($('raceName')?.value || '').trim();
+    const currentRiders = Array.isArray(riders) ? riders : [];
+    if(currentRiders.length){
+      const winner = currentRiders.find(r=>r.pos===1) || currentRiders[0];
+      const date = ($('raceDate')?.value || '').trim();
+      const km   = ($('raceKm')?.value || '').trim();
+      const loc  = ($('raceLocalidad')?.value || '').trim();
+      lastBox.innerHTML = `
+        <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:12px;padding:16px;margin-bottom:12px">
+          <div style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:6px">${escapeHtml(currentRaceName||'Prueba sin nombre')}</div>
+          <div style="font-size:13px;color:#475569;display:flex;flex-wrap:wrap;gap:14px">
+            ${date ? `<span>📅 ${escapeHtml(date)}</span>` : ''}
+            ${loc ? `<span>📍 ${escapeHtml(loc)}</span>` : ''}
+            ${km ? `<span>📏 ${escapeHtml(km)}</span>` : ''}
+            <span>👥 ${currentRiders.length} corredores</span>
+          </div>
+          <div style="font-size:13px;color:#475569;margin-top:6px">
+            🥇 <strong>${escapeHtml((winner.name||'').slice(0,40))}</strong>${winner.team?` · <span style="color:#6b7280">${escapeHtml(winner.team)}</span>`:''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-tabla')">📋 Ver clasificación</button>
+          <button class="btn light" onclick="showView('view-analisis')">👤 Analizar ciclistas</button>
+          <button class="btn light" onclick="showView('view-tactica')">🧠 Estrategia</button>
+        </div>`;
+    } else {
+      lastBox.innerHTML = `
+        <div class="inicio-empty">
+          <div style="font-size:32px;margin-bottom:8px">📤</div>
+          <div style="font-weight:700;color:#374151;margin-bottom:4px">No hay ninguna prueba cargada</div>
+          <div style="font-size:13px;margin-bottom:12px">Carga un PDF, CSV o Excel para empezar a analizar</div>
+          <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-carga')">📤 Cargar nueva prueba</button>
+        </div>`;
+    }
+  }
+
+  // ─── 4. Acciones rápidas ────────────────────────────────────────────
+  const actBox = document.getElementById('inicioActions');
+  if(actBox){
+    actBox.innerHTML = `
+      <button class="inicio-action-btn" onclick="showView('view-carga')"><span class="ia-icon">📤</span>Cargar nueva prueba</button>
+      <button class="inicio-action-btn" onclick="showView('view-historial')"><span class="ia-icon">📁</span>Ver historial</button>
+      <button class="inicio-action-btn" onclick="showView('view-seleccion')"><span class="ia-icon">🏆</span>Convocatorias</button>
+      <button class="inicio-action-btn" onclick="showView('view-evolucion')"><span class="ia-icon">📈</span>Evolución</button>
+      <button class="inicio-action-btn" onclick="showView('view-powerranking')"><span class="ia-icon">⭐</span>Power Ranking</button>
+      <button class="inicio-action-btn" onclick="showView('view-tactica')"><span class="ia-icon">🧠</span>Estrategia</button>`;
+    actBox.style.gridTemplateColumns = 'repeat(2,1fr)';
+  }
+
+  // ─── 5. Top 3 corredores destacados de mi equipo ────────────────────
+  const topBox = document.getElementById('inicioTopRiders');
+  if(topBox){
+    if(!team){
+      topBox.innerHTML = `<div class="inicio-empty">
+        <div style="font-size:28px">⚙️</div>
+        <div style="font-weight:700;margin-top:6px">Configura tu equipo</div>
+        <div style="font-size:13px;margin-top:4px;margin-bottom:10px">En la vista <strong>Carga y Resumen</strong> indica tu equipo para ver tus corredores aquí.</div>
+        <button class="btn light" onclick="showView('view-carga')">Ir a Carga</button>
+      </div>`;
+    } else if(!history.length){
+      topBox.innerHTML = `<div class="inicio-empty">Carga al menos una prueba para empezar a ver estadísticas.</div>`;
+    } else {
+      // Build basic ranking using the same composite score if available
+      const myTeamKey = (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim());
+      const riderStats = new Map();
+      history.forEach(race => (race.riders||[]).forEach(r => {
+        const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+        if(tk !== myTeamKey) return;
+        const nm = normalizeRiderName(r.name||'').trim();
+        if(!nm) return;
+        if(!riderStats.has(nm)) riderStats.set(nm, {name:nm, displayName:r.name||nm, positions:[], raceHistory:[]});
+        const rs = riderStats.get(nm);
+        rs.positions.push(r.pos);
+        rs.raceHistory.push({raceName:race.raceName, raceDate:race.raceDate, pos:r.pos, total:(race.riders||[]).length});
+      }));
+      const arr = [...riderStats.values()].map(rs=>{
+        const n=rs.positions.length, avg=rs.positions.reduce((s,v)=>s+v,0)/n;
+        const stats = typeof _computeSelectionStats === 'function'
+          ? _computeSelectionStats({positions:rs.positions, races:n, avgPos:avg, raceHistory:rs.raceHistory})
+          : {composite:avg};
+        return {...rs, avg, n, composite:stats.composite, podiums:rs.positions.filter(p=>p<=3).length, wins:rs.positions.filter(p=>p===1).length};
+      }).sort((a,b)=>a.composite-b.composite).slice(0,5);
+
+      if(!arr.length){
+        topBox.innerHTML = `<div class="inicio-empty">No se encontraron corredores de "${escapeHtml(team)}" en el historial.</div>`;
+      } else {
+        topBox.innerHTML = arr.map((r,i)=>{
+          const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+          return `<div class="inicio-rider-row">
+            <div class="inicio-rider-pos">${medal}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;color:#0b2f6b">${escapeHtml(r.displayName)}</div>
+              <div style="font-size:12px;color:#6b7280">${r.n} carreras · media ${r.avg.toFixed(1)}º · ${r.podiums} podios${r.wins>0?` · 🏆 ${r.wins} victoria${r.wins>1?'s':''}`:''}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+  }
+
+  // ─── 6. Últimas 5 carreras del historial ────────────────────────────
+  const recBox = document.getElementById('inicioRecentRaces');
+  if(recBox){
+    if(!history.length){
+      recBox.innerHTML = `<div class="inicio-empty">Aún no hay carreras guardadas en el historial.</div>`;
+    } else {
+      const last5 = sortedByDate.slice(0,5);
+      recBox.innerHTML = last5.map(race=>{
+        const nRiders = (race.riders||[]).length;
+        return `<div class="inicio-race-row" onclick="showView('view-historial')">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;color:#0b2f6b">${escapeHtml((race.raceName||'').slice(0,50))}</div>
+            <div style="font-size:12px;color:#6b7280">${race.raceDate||'—'}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''} · ${nRiders} corredores</div>
+          </div>
+          <span style="color:#9ca3af">›</span>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
 async function renderHistory(){
   const box=$('historyBox');
   if(!box) return;
