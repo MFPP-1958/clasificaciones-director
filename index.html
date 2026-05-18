@@ -13967,33 +13967,43 @@ function _computeSelectionStats(c){
   const top10   = c.top10   != null ? c.top10   : positions.filter(p=>p<=10).length;
   const wins    = positions.filter(p=>p===1).length;
 
-  // Fiabilidad: % carreras sin mal resultado
+  // ─── Fiabilidad (% carreras sin mal resultado) ─────────────────────
   const badThreshold = Math.max(avgPos + 5, avgPos * 1.5, 15);
   const reliableRaces = positions.filter(p => p <= badThreshold).length;
   const reliability = n > 0 ? reliableRaces / n : 0; // 0-1
 
-  // Forma reciente
+  // ─── Forma reciente ────────────────────────────────────────────────
   const last3 = positions.slice(-3);
   const recentAvg = last3.length ? last3.reduce((s,v)=>s+v,0)/last3.length : avgPos;
   const recentTop10Pct = last3.length ? last3.filter(p=>p<=10).length / last3.length : 0;
-
-  // % Top 10 (consistencia de calidad)
   const top10Pct = n > 0 ? top10 / n : 0;
 
-  // ─── Penalties (sumar = peor) ─────────────────────────────────────
-  const basePenalty        = Math.min(avgPos, 50);          // 0-50
-  const consistencyPenalty = (1 - top10Pct) * 30;            // 0-30
-  const recentPenalty      = Math.min(recentAvg, 50);        // 0-50
-  const reliabilityPenalty = (1 - reliability) * 40;         // 0-40
-  const podiumBonus        = -Math.min(podiums * 2, 12);     // -12 a 0 (bonus)
-  const volumePenalty      = n < 3 ? (3 - n) * 6 : 0;        // 0-12
+  // ═══════════════════════════════════════════════════════════════════
+  // COMPOSITE — la CALIDAD REAL domina, no la fiabilidad inflada
+  // por muestras pequeñas. Bajo = mejor.
+  // ═══════════════════════════════════════════════════════════════════
+  // 40% calidad base (media de posición sin tope: una media de 107
+  //                    debe ser claramente peor que una de 58)
+  // 20% consistencia Top 10 (% carreras fuera del top 10 → penaliza)
+  // 20% forma reciente (sin tope)
+  //  5% fiabilidad (es filtro, no debe dominar el orden)
+  // 15% bonus por podios + victorias (la calidad real se premia)
+  // + Volumen: penalización fuerte si <5 carreras (poca muestra = poco fiable)
+  const qualityPenalty     = avgPos;                          // sin cap
+  const consistencyPenalty = (1 - top10Pct) * 50;             // 0-50
+  const recentPenalty      = recentAvg;                       // sin cap
+  const reliabilityPenalty = (1 - reliability) * 30;          // 0-30
+  const podiumBonus        = -Math.min(podiums * 3, 25);      // hasta -25
+  const winBonus           = -Math.min(wins * 5, 25);         // hasta -25
+  const volumePenalty      = n < 5 ? (5 - n) * 10 : 0;        // 0-50
 
   const composite = (
-    basePenalty        * 0.30 +
-    consistencyPenalty * 0.25 +
-    recentPenalty      * 0.20 +
-    reliabilityPenalty * 0.20 +
-    podiumBonus        * 0.10
+    qualityPenalty       * 0.40 +
+    consistencyPenalty   * 0.20 +
+    recentPenalty        * 0.20 +
+    reliabilityPenalty   * 0.05 +
+    podiumBonus          * 0.10 +
+    winBonus             * 0.05
   ) + volumePenalty;
 
   // ─── Elegibilidad ────────────────────────────────────────────────
@@ -14080,17 +14090,18 @@ function _selIAPropose(){
     const last3 = positions.slice(-3);
     const recentAvg = last3.length ? last3.reduce((s,v)=>s+v,0)/last3.length : avgPos;
     const reliability = c.reliability != null ? c.reliability : (c._stats?.reliability||0);
-    // IA pondera distinto que Auto:
-    //  35% media base · 30% consistencia top10 · 25% forma reciente ·
-    //  10% fiabilidad (ya es filtro de elegibilidad, peso suave)
-    //  −12% bonus podios
+    const wins = positions.filter(p=>p===1).length;
+    // IA: prioriza forma reciente y consistencia, pero la calidad SIN CAP
+    // domina (una media de 107 no puede competir con una de 58).
+    //  35% calidad base · 25% consistencia top10 · 25% forma reciente ·
+    //  10% bonus podios+victorias · 5% fiabilidad
     const iaScore = (
-      Math.min(avgPos,50)        * 0.35 +
-      (1-top10Pct)*30            * 0.30 +
-      Math.min(recentAvg,50)     * 0.25 +
-      (1-reliability)*40         * 0.10 +
-      -Math.min(c.podiums*2,12)  * 0.12
-    ) + (n<3 ? (3-n)*6 : 0);
+      avgPos                       * 0.35 +
+      (1-top10Pct)*50              * 0.25 +
+      recentAvg                    * 0.25 +
+      (1-reliability)*30           * 0.05 +
+      -Math.min(c.podiums*3 + wins*5, 40) * 0.10
+    ) + (n<5 ? (5-n)*10 : 0);
     return {...c, _iaBase: iaScore};
   });
 
