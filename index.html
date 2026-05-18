@@ -1042,6 +1042,10 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       <button class="nav-btn" data-view="view-calendario" data-label="Calendario" onclick="showView('view-calendario')"><span class="nav-icon">📅</span><span class="nav-label"> Calendario</span></button>
     </div>
 
+    <div class="nav-section" data-section="informe-plantilla">
+      <button class="nav-btn" data-view="view-informe-plantilla" data-label="Informe de Plantilla" onclick="showView('view-informe-plantilla')"><span class="nav-icon">📋</span><span class="nav-label"> Informe de Plantilla</span></button>
+    </div>
+
     <div class="nav-section" data-section="resumen">
       <button class="nav-btn" data-view="view-resumen" data-label="Resumen Temporada" onclick="showView('view-resumen')"><span class="nav-icon">🏅</span><span class="nav-label"> Resumen Temporada</span></button>
     </div>
@@ -2341,6 +2345,43 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         VISTA INFORME DE PLANTILLA — selecciona CUALQUIER equipo
+         del historial y genera su informe (preview + PDF)
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="view-informe-plantilla" class="spa-view">
+      <section class="panel" style="background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff;border:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
+          <div>
+            <div style="font-size:22px;font-weight:900">📋 Informe de Plantilla</div>
+            <div style="font-size:13px;opacity:.85;margin-top:3px">Selecciona cualquier equipo del historial para generar su informe completo</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+          <div style="flex:2;min-width:260px">
+            <label style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px">🚴 Equipo a analizar</label>
+            <input id="ipTeamInput" type="text" placeholder="Escribe o selecciona un equipo..." autocomplete="off"
+              style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:14px;box-sizing:border-box;font-weight:700"
+              oninput="_ipSearchTeam()" onfocus="_ipShowAllTeams()" onkeydown="_ipKey(event)">
+            <div id="ipTeamDropdown" style="display:none;position:absolute;background:#fff;border:1.5px solid #d0d5dd;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;max-height:280px;overflow-y:auto;min-width:300px;margin-top:2px"></div>
+          </div>
+          <div style="flex:1;min-width:140px;max-width:180px">
+            <label style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px">📅 Año</label>
+            <select id="ipYearSelect" onchange="_ipRenderPreview()" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;font-weight:700">
+              <option value="">Toda la historia</option>
+            </select>
+          </div>
+          <button onclick="_ipExportPDF()" id="ipPdfBtn" disabled style="background:#0b2f6b;color:#fff;font-weight:800;padding:10px 18px;border:none;border-radius:9px;font-size:13px;cursor:pointer;opacity:.5">📄 Descargar PDF</button>
+          <button onclick="_ipClear()" style="background:#fff;border:1.5px solid #d0d5dd;color:#475569;font-weight:700;padding:10px 14px;border-radius:9px;font-size:13px;cursor:pointer">✖ Limpiar</button>
+        </div>
+
+        <div id="ipPreview"></div>
+      </section>
+    </div>
+
     <div id="view-gestion" class="spa-view">
       <section class="panel" style="display:flex;align-items:center;justify-content:center;min-height:300px">
         <div style="text-align:center;color:#9ca3af">
@@ -2602,7 +2643,7 @@ if(document.readyState==='loading'){
 // ═══════════════════════════════════════════════════════════════════════════
 const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
 const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
-const _GF_VIEWS_USING_HISTORY = ['view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario'];
+const _GF_VIEWS_USING_HISTORY = ['view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla'];
 
 let _globalFilters = {
   year:   localStorage.getItem('gf_year')   || '',
@@ -2787,6 +2828,7 @@ function showView(viewId){
       }
       if(viewId==='view-inicio') renderInicio();
       if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); }
+      if(viewId==='view-informe-plantilla') { if(typeof _ipInit==='function') _ipInit(); }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -2912,10 +2954,11 @@ const ALL_VIEWS = [
   {id:'view-powerranking',icon:'🏆', label:'Power Ranking'},
   {id:'view-tendencias',  icon:'📉', label:'Tendencias'},
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
-  {id:'view-validacion',  icon:'⚠️', label:'Validación'},
-  {id:'view-calendario',  icon:'📅', label:'Calendario'},
-  {id:'view-resumen',     icon:'🏅', label:'Resumen Temporada'},
-  {id:'view-gestion',     icon:'⚙️', label:'Gestión'},
+  {id:'view-validacion',         icon:'⚠️', label:'Validación'},
+  {id:'view-calendario',         icon:'📅', label:'Calendario'},
+  {id:'view-informe-plantilla',  icon:'📋', label:'Informe de Plantilla'},
+  {id:'view-resumen',            icon:'🏅', label:'Resumen Temporada'},
+  {id:'view-gestion',            icon:'⚙️', label:'Gestión'},
 ];
 const ROLES = ['SUPERADMIN','ADMIN','DIRECTOR','CICLISTA','LECTOR'];
 
@@ -7164,10 +7207,12 @@ async function _eqLoadClub(){
     <div style="font-size:10px;color:#9ca3af;margin-top:10px">💡 Haz clic en cualquier ciclista para ver su historial completo de pruebas.</div>`;
 }
 
-async function _eqExportClubPDF(){
-  const teamName = _eqCurrentClub; if(!teamName){ alert('Selecciona primero un equipo.'); return; }
-  const year = $('eqClubYear')?.value||'';
-  const history = await _ensureHistory();
+// ═════════════════════════════════════════════════════════════════════
+// HELPER reutilizable: calcula los datos del Informe de Plantilla
+// Devuelve {riders, totalRaces, teamWins, teamPodiums, teamTop10}
+// Usado por: _eqExportClubPDF (Explorador de Clubes) y la vista "Informe de Plantilla"
+// ═════════════════════════════════════════════════════════════════════
+function _buildTeamRosterData(history, teamName, year){
   const teamCanon = getCanonicalTeam(teamName).toLowerCase();
   const riderMap = {};
   const allRaceIds = new Set();
@@ -7200,7 +7245,23 @@ async function _eqExportClubPDF(){
     const adn=_computeADN(rd.positions,rd.raceHistory);
     return {displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,races:rd.raceIds.size,totalRaces,score,adn,rel};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
+  const teamWins=riders.reduce((s,r)=>s+r.wins,0);
+  const teamPodiums=riders.reduce((s,r)=>s+r.podiums,0);
+  const teamTop10=riders.reduce((s,r)=>s+r.top10,0);
+  return {riders, totalRaces, teamWins, teamPodiums, teamTop10};
+}
 
+async function _eqExportClubPDF(){
+  const teamName = _eqCurrentClub; if(!teamName){ alert('Selecciona primero un equipo.'); return; }
+  const year = $('eqClubYear')?.value||'';
+  const history = await _ensureHistory();
+  const data = _buildTeamRosterData(history, teamName, year);
+  _openTeamRosterPDFWindow(teamName, year, data);
+}
+
+// Abre la ventana de impresión con el Informe de Plantilla (compartido)
+function _openTeamRosterPDFWindow(teamName, year, data){
+  const {riders, totalRaces, teamWins, teamPodiums, teamTop10} = data;
   const dateStr=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
   const yearLabel=year||'Historial completo';
 
@@ -7218,10 +7279,6 @@ async function _eqExportClubPDF(){
       <td style="text-align:center;color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'};font-weight:700">${r.rel}%</td>
       <td style="text-align:center;color:#667085">${r.races}/${totalRaces}</td>
     </tr>`).join('');
-
-  const teamWins=riders.reduce((s,r)=>s+r.wins,0);
-  const teamPodiums=riders.reduce((s,r)=>s+r.podiums,0);
-  const teamTop10=riders.reduce((s,r)=>s+r.top10,0);
 
   const _pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
   const w=window.open('','_blank');
@@ -7272,6 +7329,202 @@ async function _eqExportClubPDF(){
   </body></html>`);
   w.document.close();
 }
+
+// ═════════════════════════════════════════════════════════════════════
+// VISTA "INFORME DE PLANTILLA" — seguimiento de cualquier equipo
+// ═════════════════════════════════════════════════════════════════════
+let _ipAllTeams = [];   // lista de equipos del historial
+let _ipSelectedTeam = null;
+let _ipHistory = [];
+
+async function _ipInit(){
+  _ipHistory = await _ensureHistory();
+  // Construir lista canónica única de equipos con número de carreras
+  const counts = new Map();
+  _ipHistory.forEach(race=>{
+    const seen = new Set();
+    (race.riders||[]).forEach(r=>{
+      const t = getCanonicalTeam(r.team||'').trim();
+      if(!t) return;
+      seen.add(t);
+    });
+    seen.forEach(t=> counts.set(t, (counts.get(t)||0)+1));
+  });
+  _ipAllTeams = [...counts.entries()].map(([team,n])=>({team,races:n})).sort((a,b)=>b.races-a.races || a.team.localeCompare(b.team));
+  // Poblar años
+  const yearSel = document.getElementById('ipYearSelect');
+  if(yearSel){
+    const years = new Set();
+    _ipHistory.forEach(race=>{
+      const y = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+      if(y) years.add(y);
+    });
+    const sortedYears = [...years].sort().reverse();
+    // Conservar global filter year si está
+    const cur = yearSel.value || (typeof _globalFilters!=='undefined' ? _globalFilters.year : '') || '';
+    yearSel.innerHTML = '<option value="">Toda la historia</option>' + sortedYears.map(y=>`<option value="${y}">${y}</option>`).join('');
+    if([...yearSel.options].some(o=>o.value===cur)) yearSel.value = cur;
+  }
+  // Preselección: si tenemos myTeam y no hay nada elegido aún
+  if(!_ipSelectedTeam && typeof myTeam!=='undefined' && myTeam){
+    const found = _ipAllTeams.find(t=>getCanonicalTeam(t.team).toLowerCase()===getCanonicalTeam(myTeam).toLowerCase());
+    if(found){
+      _ipSelectedTeam = found.team;
+      const inp = document.getElementById('ipTeamInput');
+      if(inp) inp.value = found.team;
+    }
+  }
+  _ipRenderPreview();
+}
+
+function _ipShowAllTeams(){
+  const dd = document.getElementById('ipTeamDropdown'); if(!dd) return;
+  const items = _ipAllTeams.slice(0, 60);
+  dd.innerHTML = items.map(t=>`<div onclick="_ipPickTeam('${escapeAttr(t.team)}')" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;gap:10px" onmouseenter="this.style.background='#f0f9ff'" onmouseleave="this.style.background='#fff'">
+    <span style="font-weight:700;color:#0b2f6b">${escapeHtml(t.team)}</span>
+    <span style="font-size:11px;color:#94a3b8">${t.races} carrera${t.races!==1?'s':''}</span>
+  </div>`).join('');
+  // Posicionar bajo el input
+  const inp = document.getElementById('ipTeamInput');
+  if(inp){
+    const r = inp.getBoundingClientRect();
+    dd.style.position = 'fixed';
+    dd.style.left = r.left + 'px';
+    dd.style.top = (r.bottom + 4) + 'px';
+    dd.style.width = r.width + 'px';
+  }
+  dd.style.display = 'block';
+}
+
+function _ipSearchTeam(){
+  const q = (document.getElementById('ipTeamInput')?.value || '').trim().toLowerCase();
+  const dd = document.getElementById('ipTeamDropdown'); if(!dd) return;
+  if(!q){ _ipShowAllTeams(); return; }
+  const matches = _ipAllTeams.filter(t=>t.team.toLowerCase().includes(q)).slice(0,30);
+  if(!matches.length){ dd.innerHTML = '<div style="padding:14px;color:#9ca3af;font-size:13px">Sin coincidencias</div>'; dd.style.display='block'; return; }
+  dd.innerHTML = matches.map(t=>`<div onclick="_ipPickTeam('${escapeAttr(t.team)}')" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;gap:10px" onmouseenter="this.style.background='#f0f9ff'" onmouseleave="this.style.background='#fff'">
+    <span style="font-weight:700;color:#0b2f6b">${escapeHtml(t.team)}</span>
+    <span style="font-size:11px;color:#94a3b8">${t.races} carrera${t.races!==1?'s':''}</span>
+  </div>`).join('');
+  const inp = document.getElementById('ipTeamInput');
+  if(inp){
+    const r = inp.getBoundingClientRect();
+    dd.style.position = 'fixed';
+    dd.style.left = r.left + 'px';
+    dd.style.top = (r.bottom + 4) + 'px';
+    dd.style.width = r.width + 'px';
+  }
+  dd.style.display = 'block';
+}
+
+function _ipKey(e){
+  if(e.key==='Escape'){ const dd=document.getElementById('ipTeamDropdown'); if(dd) dd.style.display='none'; }
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const q = (document.getElementById('ipTeamInput')?.value || '').trim().toLowerCase();
+    const m = _ipAllTeams.find(t=>t.team.toLowerCase()===q) || _ipAllTeams.find(t=>t.team.toLowerCase().includes(q));
+    if(m) _ipPickTeam(m.team);
+  }
+}
+
+function _ipPickTeam(team){
+  _ipSelectedTeam = team;
+  const inp = document.getElementById('ipTeamInput'); if(inp) inp.value = team;
+  const dd = document.getElementById('ipTeamDropdown'); if(dd) dd.style.display = 'none';
+  _ipRenderPreview();
+}
+
+function _ipClear(){
+  _ipSelectedTeam = null;
+  const inp = document.getElementById('ipTeamInput'); if(inp) inp.value = '';
+  const dd = document.getElementById('ipTeamDropdown'); if(dd) dd.style.display = 'none';
+  _ipRenderPreview();
+}
+
+function _ipRenderPreview(){
+  const box = document.getElementById('ipPreview'); if(!box) return;
+  const btn = document.getElementById('ipPdfBtn');
+  if(!_ipSelectedTeam){
+    box.innerHTML = `<div style="padding:60px 20px;text-align:center;color:#9ca3af">
+      <div style="font-size:48px;margin-bottom:10px">📋</div>
+      <p style="font-size:16px;font-weight:700;color:#374151">Selecciona un equipo para empezar</p>
+      <p style="font-size:13px">${_ipAllTeams.length} equipos disponibles en tu historial</p>
+    </div>`;
+    if(btn){ btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor='not-allowed'; }
+    return;
+  }
+  const year = document.getElementById('ipYearSelect')?.value || '';
+  const data = _buildTeamRosterData(_ipHistory, _ipSelectedTeam, year);
+  if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor='pointer'; }
+  if(!data.riders.length){
+    box.innerHTML = `<div style="padding:50px 20px;text-align:center;color:#9ca3af">
+      <div style="font-size:38px">🤷</div>
+      <p style="font-size:14px;font-weight:700;color:#374151;margin-top:8px">No hay datos para "${escapeHtml(_ipSelectedTeam)}"${year?` en el año ${year}`:''}</p>
+    </div>`;
+    return;
+  }
+  const yearLabel = year || 'Historial completo';
+  const rowsHtml = data.riders.map((r,i)=>`
+    <tr style="border-bottom:1px solid #f3f4f6">
+      <td style="padding:8px 12px;text-align:center;font-weight:900">${i+1}</td>
+      <td style="padding:8px 12px;font-weight:700;color:#0b2f6b">${escapeHtml(_evolNormName(r.displayName))}</td>
+      <td style="padding:8px 12px;color:#475467;font-size:12px">${escapeHtml(r.cat||'—')}</td>
+      <td style="padding:8px 12px;font-size:12px">${r.adn.icon} ${escapeHtml(r.adn.label)}</td>
+      <td style="padding:8px 12px;font-weight:800;color:#0b2f6b;text-align:center">${r.avg.toFixed(1)}º</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:800">${r.best}º</td>
+      <td style="padding:8px 12px;text-align:center;color:${r.wins>0?'#12b76a':'#9ca3af'};font-weight:700">${r.wins||'—'}</td>
+      <td style="padding:8px 12px;text-align:center;color:${r.podiums>0?'#b45309':'#9ca3af'};font-weight:700">${r.podiums||'—'}</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:700">${r.top10}</td>
+      <td style="padding:8px 12px;text-align:center;color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'};font-weight:700">${r.rel}%</td>
+      <td style="padding:8px 12px;text-align:center;color:#667085;font-size:12px">${r.races}/${data.totalRaces}</td>
+    </tr>`).join('');
+  box.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px">
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:900;color:#0b2f6b">${data.riders.length}</div><div style="font-size:11px;text-transform:uppercase;color:#475569;letter-spacing:.4px;margin-top:2px">Ciclistas</div></div>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:900;color:#0b2f6b">${data.totalRaces}</div><div style="font-size:11px;text-transform:uppercase;color:#475569;letter-spacing:.4px;margin-top:2px">Carreras</div></div>
+      <div style="background:${data.teamWins>0?'#f0fdf4':'#f9fafb'};border:1px solid ${data.teamWins>0?'#86efac':'#e5e7eb'};border-radius:10px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:900;color:${data.teamWins>0?'#15803d':'#94a3b8'}">${data.teamWins}</div><div style="font-size:11px;text-transform:uppercase;color:#475569;letter-spacing:.4px;margin-top:2px">Victorias</div></div>
+      <div style="background:${data.teamPodiums>0?'#fef3c7':'#f9fafb'};border:1px solid ${data.teamPodiums>0?'#fcd34d':'#e5e7eb'};border-radius:10px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:900;color:${data.teamPodiums>0?'#b45309':'#94a3b8'}">${data.teamPodiums}</div><div style="font-size:11px;text-transform:uppercase;color:#475569;letter-spacing:.4px;margin-top:2px">Podios</div></div>
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:900;color:#0b2f6b">${data.teamTop10}</div><div style="font-size:11px;text-transform:uppercase;color:#475569;letter-spacing:.4px;margin-top:2px">Top 10</div></div>
+    </div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:8px">📅 <strong>Periodo:</strong> ${escapeHtml(yearLabel)} · 🚴 <strong>Equipo:</strong> ${escapeHtml(_ipSelectedTeam)}</div>
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
+        <thead>
+          <tr style="background:#f0f4f8">
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">#</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Ciclista</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Cat.</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">ADN IA</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Media</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Mejor</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Victorias</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Podios</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Top 10</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Fiabilidad</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Particip.</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+async function _ipExportPDF(){
+  if(!_ipSelectedTeam){ alert('Selecciona primero un equipo.'); return; }
+  const year = document.getElementById('ipYearSelect')?.value || '';
+  const history = _ipHistory && _ipHistory.length ? _ipHistory : await _ensureHistory();
+  const data = _buildTeamRosterData(history, _ipSelectedTeam, year);
+  if(!data.riders.length){ alert('Sin datos para generar el PDF.'); return; }
+  _openTeamRosterPDFWindow(_ipSelectedTeam, year, data);
+}
+
+// Cerrar dropdown al hacer click fuera
+document.addEventListener('click', e=>{
+  const dd = document.getElementById('ipTeamDropdown');
+  const inp = document.getElementById('ipTeamInput');
+  if(!dd || !inp) return;
+  if(e.target!==inp && !dd.contains(e.target)) dd.style.display = 'none';
+});
 
 /* ── Equipos: ayuda contextual ──────────────────────── */
 function _teamHelp(id){
@@ -9158,6 +9411,7 @@ async function renderInicio(){
       <button class="inicio-action-btn" onclick="showView('view-carga')"><span class="ia-icon">📤</span>Cargar nueva prueba</button>
       <button class="inicio-action-btn" onclick="showView('view-historial')"><span class="ia-icon">📁</span>Ver historial</button>
       <button class="inicio-action-btn" onclick="showView('view-calendario')"><span class="ia-icon">📅</span>Calendario</button>
+      <button class="inicio-action-btn" onclick="showView('view-informe-plantilla')"><span class="ia-icon">📋</span>Informe de Plantilla</button>
       <button class="inicio-action-btn" onclick="showView('view-seleccion')"><span class="ia-icon">🏆</span>Convocatorias</button>
       <button class="inicio-action-btn" onclick="showView('view-evolucion')"><span class="ia-icon">📈</span>Evolución</button>
       <button class="inicio-action-btn" onclick="showView('view-powerranking')"><span class="ia-icon">⭐</span>Power Ranking</button>
