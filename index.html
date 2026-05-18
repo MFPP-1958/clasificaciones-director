@@ -4790,6 +4790,13 @@ function normalizeTimeStr(t){
   let s=cleanSpaces(String(t)).trim();
   // Eliminar milisegundos: "01:25:19.000" o "01:25:19,000" → "01:25:19"
   s=s.replace(/(\d{2})[.,]\d+$/, '$1');
+  // Normalizar a HH:MM:SS para evitar ambigüedad (11:51 podría ser 11h o 11min)
+  // Formato 3 partes H:MM:SS → zero-pad HH
+  const three=s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if(three) return String(three[1]).padStart(2,'0')+':'+three[2]+':'+three[3];
+  // Formato 2 partes M:SS o MM:SS (típico de pruebas cadete <1h) → 00:MM:SS
+  const two=s.match(/^(\d{1,2}):(\d{2})$/);
+  if(two) return '00:'+String(two[1]).padStart(2,'0')+':'+two[2];
   return s;
 }
 function timeToSeconds(t){
