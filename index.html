@@ -4978,6 +4978,93 @@ function buildTeamRegionDB(){
 }
 function getTeamRegionDB(){ if(!_teamRegionDB) buildTeamRegionDB(); return _teamRegionDB; }
 function invalidateTeamRegionDB(){ _teamRegionDB=null; }
+
+// Migración: canonicaliza TODAS las CCAAs de TODAS las pruebas guardadas en Supabase
+async function canonicalizeAllRegionsInHistory(){
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const ok=confirm(
+    '⚠️ NORMALIZAR CCAAs EN TODO EL HISTORIAL\n\n'+
+    'Esta operación recorrerá TODAS las pruebas guardadas en Supabase y '+
+    'unificará las CCAAs a su forma canónica:\n\n'+
+    '  • VLC, Valencia, C.V. → Comunitat Valenciana\n'+
+    '  • CLM, Castilla La Mancha → Castilla-La Mancha\n'+
+    '  • MAD → Madrid\n'+
+    '  • CYL → Castilla y León\n'+
+    '  • etc. (17 CCAA + Ceuta + Melilla)\n\n'+
+    'Es seguro (solo cambia textos a su versión canónica) pero modifica '+
+    'registros en la base de datos. ¿Continuar?'
+  );
+  if(!ok) return;
+  showLoading('Cargando historial…','Obteniendo todas las pruebas de Supabase.');
+  try{
+    const {data:races,error}=await _sb
+      .from('races')
+      .select('id, race_name, notes')
+      .eq('race_type','clasificacion');
+    if(error) throw error;
+    const changesSummary=new Map(); // raw → Map(canonical → count)
+    let updatedRaces=0, totalChangedRegions=0;
+    for(let i=0;i<races.length;i++){
+      const race=races[i];
+      if(i%5===0) showLoading('Normalizando CCAAs…',`Prueba ${i+1}/${races.length}`);
+      let extra={};
+      try{ extra=JSON.parse(race.notes||'{}'); }catch(e){ continue; }
+      const regions=extra.regions||{};
+      let changed=false;
+      for(const k of Object.keys(regions)){
+        const raw=String(regions[k]||'').trim();
+        if(!raw) continue;
+        const canon=canonicalRegion(raw);
+        if(canon && canon!==raw){
+          if(!changesSummary.has(raw)) changesSummary.set(raw, new Map());
+          const inner=changesSummary.get(raw);
+          inner.set(canon, (inner.get(canon)||0)+1);
+          regions[k]=canon;
+          changed=true;
+          totalChangedRegions++;
+        }
+      }
+      if(changed){
+        extra.regions=regions;
+        const {error:updErr}=await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',race.id);
+        if(!updErr) updatedRaces++;
+        else console.error('Error updating race',race.id,updErr);
+      }
+    }
+    _cachedHistory=null;
+    invalidateTeamRegionDB();
+    if(typeof _sbLoadHistory==='function'){
+      _sbLoadHistory().then(h=>{ _cachedHistory=h; invalidateTeamRegionDB(); });
+    }
+    hideLoading();
+    let summary='✅ NORMALIZACIÓN COMPLETADA\n\n';
+    summary+=`📊 ${updatedRaces} prueba(s) actualizada(s) de ${races.length} total\n`;
+    summary+=`📝 ${totalChangedRegions} CCAA(s) cambiada(s)\n\n`;
+    if(changesSummary.size){
+      summary+='Cambios aplicados (ordenados por frecuencia):\n';
+      const sorted=[...changesSummary.entries()].sort((a,b)=>{
+        const sumA=[...a[1].values()].reduce((s,n)=>s+n,0);
+        const sumB=[...b[1].values()].reduce((s,n)=>s+n,0);
+        return sumB-sumA;
+      });
+      sorted.slice(0,20).forEach(([raw, canons])=>{
+        canons.forEach((count, canon)=>{
+          summary+=`  • "${raw}" → "${canon}" (${count}×)\n`;
+        });
+      });
+      if(sorted.length>20) summary+=`  … y ${sorted.length-20} más\n`;
+    } else {
+      summary+='✨ Ya estaba todo canonicalizado. Nada que cambiar.';
+    }
+    alert(summary);
+    // Cerrar diálogo de equipos sin CCAA si está abierto
+    document.getElementById('_teamRegionsDialog')?.remove();
+  } catch(e){
+    hideLoading();
+    alert('❌ Error: '+(e.message||e));
+    console.error(e);
+  }
+}
 function showTeamRegionsDialog(){
   invalidateTeamRegionDB();
   const db=getTeamRegionDB();
@@ -4998,7 +5085,12 @@ function showTeamRegionsDialog(){
     }
   });
   const totalDB=db.size;
-  let html=`<div style="padding:20px;max-width:600px"><h3 style="margin-top:0">📋 Base de datos Equipos → CCAA</h3>`;
+  let html=`<div style="padding:20px;max-width:680px"><h3 style="margin-top:0">📋 Base de datos Equipos → CCAA</h3>`;
+  html+=`<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:10px;padding:12px 14px;margin-bottom:14px">
+    <div style="font-weight:700;color:#92400e;margin-bottom:4px">🔄 Mantenimiento</div>
+    <div style="font-size:13px;color:#78350f;margin-bottom:10px">¿Tienes pruebas antiguas con CCAAs en formato no unificado (VLC, CLM, MAD…)? Esto recorre el historial de Supabase y normaliza todas a su forma canónica para que los filtros funcionen.</div>
+    <button class="btn" style="background:#d97706;color:#fff;font-weight:700" onclick="canonicalizeAllRegionsInHistory()">🔄 Normalizar CCAAs en todo el historial</button>
+  </div>`;
   html+=`<p>Total equipos conocidos en historial: <strong>${totalDB}</strong></p>`;
   html+=`<p>Equipos en esta carrera: <strong>${currentTeams.size}</strong></p>`;
   html+=`<p style="margin-top:0;font-size:13px;color:#6b7280">✅ ${knownInCurrent.length} match exacto · 🔵 ${fuzzyInCurrent.length} match por similitud · <span style="color:#dc2626"><strong>⚠️ ${unknownInCurrent.length} sin CCAA</strong></span></p>`;
