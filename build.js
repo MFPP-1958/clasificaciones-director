@@ -14,3 +14,4 @@ fs.writeFileSync(path.join(__dirname, 'dist', 'index.html'), html, 'utf8');
 
 console.log('✅ Build completado → dist/index.html');
 // Build trigger 1779079327
+// Trigger deploy after credits refill 1779079759
