@@ -14019,8 +14019,50 @@ function _computeSelectionStats(c){
   };
 }
 
+// Modo activo de selección: 'auto' | 'ia' | null. Controla el color del botón.
+let _selActiveMode = null;
+
+function _selSetActiveMode(mode){
+  _selActiveMode = mode;
+  // Estilo NARANJA = botón seleccionado (activo); reset = vuelve a su color base
+  const ORANGE = 'linear-gradient(135deg,#ea580c,#f97316)';
+  const ORANGE_BORDER = '#ea580c';
+  // Localizar los 4 botones (Auto y IA en VLC y en Mi Equipo)
+  document.querySelectorAll('[onclick="_selAutoPropose()"]').forEach(btn=>{
+    if(mode==='auto'){
+      btn.style.background = ORANGE;
+      btn.style.color      = '#fff';
+      btn.style.border     = '1.5px solid '+ORANGE_BORDER;
+      btn.style.fontWeight = '700';
+    } else {
+      btn.style.background = '#fff';
+      btn.style.color      = '#374151';
+      btn.style.border     = '1.5px solid #d1d5db';
+      btn.style.fontWeight = '';
+    }
+  });
+  document.querySelectorAll('[onclick="_selIAPropose()"]').forEach(btn=>{
+    if(mode==='ia'){
+      btn.style.background = ORANGE;
+      btn.style.color      = '#fff';
+      btn.style.border     = '1.5px solid '+ORANGE_BORDER;
+      btn.style.fontWeight = '700';
+    } else {
+      // Restaurar color original según el contexto (VLC = azul, Mi Equipo = verde)
+      const isMyTeamBtn = btn.textContent.includes('6+2');
+      btn.style.background = isMyTeamBtn
+        ? 'linear-gradient(135deg,#059669,#10b981)'
+        : 'linear-gradient(135deg,#0b2f6b,#1286c7)';
+      btn.style.color  = '#fff';
+      btn.style.border = '';
+      btn.style.fontWeight = '';
+    }
+  });
+}
+
 function _selAutoPropose(){
   _selManualOverrides = Array(_convoTitularCount + 2).fill(null);
+  _selSetActiveMode('auto');
   renderSeleccion();
 }
 
@@ -14080,6 +14122,7 @@ function _selIAPropose(){
   // consistencia en Top 10. Aplica el mismo suelo de elegibilidad (50% fiabilidad
   // o victorias extraordinarias). NO hace swaps por diversidad ADN: orden estricto.
   if(!_selPickerAllRiders||!_selPickerAllRiders.length) return;
+  _selSetActiveMode('ia');
   const totalSlots = _convoTitularCount + 2;
 
   const scored = _selPickerAllRiders.map(c=>{
