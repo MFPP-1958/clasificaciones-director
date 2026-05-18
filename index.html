@@ -4812,6 +4812,13 @@ function gapSecondsFromTime(t,pos){
   if(/^a\s+/i.test(raw)) return timeToSeconds(raw);
   return null;
 }
+// Formato HH:MM:SS siempre — usado en la columna TIEMPO para evitar ambigüedad
+function formatHMS(sec){
+  if(sec==null || Number.isNaN(sec)) return '—';
+  sec=Math.round(sec);
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
 function formatSeconds(sec){
   if(sec==null || Number.isNaN(sec)) return '—';
   sec=Math.round(sec);
@@ -5474,7 +5481,7 @@ function renderTable(){
   $('resultsBody').innerHTML=filtered.length?filtered.map((r,idx)=>{
     const checked=selectedCompare.some(x=>x.pos===r.pos&&x.bib===r.bib&&x.name===r.name)?'checked':'';
     const gapText=formatSeconds(r.gapSeconds);
-    const timeText=formatSeconds(r.totalSeconds);
+    const timeText=formatHMS(r.totalSeconds);
     const isOwnTeam = isMyTeam(r);
     
     // Medallas (Absolutas y por Categoría)
@@ -5563,17 +5570,39 @@ async function saveTableRowEdit(key){
   Object.assign(r,fields);
   if(rf) Object.assign(rf,fields);
 
+  // ── Propagar CCAA a TODOS los riders del mismo equipo en esta carrera ──
+  const regionChanged=newRegion && newRegion!==oldRegion;
+  let teamPropagatedCount=0;
+  if(regionChanged && newTeam){
+    const teamKey=newTeam.trim().toLowerCase();
+    riders.forEach(other=>{
+      if(other===r) return;
+      if((other.team||'').trim().toLowerCase()===teamKey && (other.region||'')!==newRegion){
+        other.region=newRegion;
+        teamPropagatedCount++;
+      }
+    });
+    filtered.forEach(other=>{
+      if(other===rf) return;
+      if((other.team||'').trim().toLowerCase()===teamKey) other.region=newRegion;
+    });
+  }
+
   _editingRowKey=null;
   renderTable();
   renderStats();
 
+  if(teamPropagatedCount>0){
+    console.log(`✓ CCAA "${newRegion}" propagada a ${teamPropagatedCount} compañero(s) de "${newTeam}".`);
+  }
+
   // ── Propagar cambio de CCAA a todo el historial ──────────────────────────
-  const regionChanged=newRegion && newRegion!==oldRegion;
   if(regionChanged){
+    const extraMsg=teamPropagatedCount>0 ? `\n\n(También se ha aplicado a ${teamPropagatedCount} compañero(s) del mismo equipo "${newTeam}" en esta carrera.)` : '';
     const ok=confirm(
       `CCAA modificada: "${oldRegion||'(vacío)'}" → "${newRegion}"\n\n`+
       `¿Aplicar este cambio a TODAS las pruebas de "${newName}" guardadas en el historial?\n\n`+
-      `Esto actualizará los registros en Supabase.`
+      `Esto actualizará los registros en Supabase.${extraMsg}`
     );
     if(ok) await propagateRegionChange(newName,newRegion);
   }
