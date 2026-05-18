@@ -5,9 +5,22 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Headers de seguridad para todos los recursos
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options        = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy        = "strict-origin-when-cross-origin"
+
+# Forzar revalidación del HTML en cada visita
+# (evita que Safari iOS sirva versiones antiguas cacheadas en iPad/iPhone)
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
