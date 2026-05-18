@@ -4999,14 +4999,14 @@ async function canonicalizeAllRegionsInHistory(){
   try{
     const {data:races,error}=await _sb
       .from('races')
-      .select('id, race_name, notes')
+      .select('id, name, notes')
       .eq('race_type','clasificacion');
     if(error) throw error;
     const changesSummary=new Map(); // raw → Map(canonical → count)
     let updatedRaces=0, totalChangedRegions=0;
     for(let i=0;i<races.length;i++){
       const race=races[i];
-      if(i%5===0) showLoading('Normalizando CCAAs…',`Prueba ${i+1}/${races.length}`);
+      if(i%5===0) showLoading('Normalizando CCAAs…',`Prueba ${i+1}/${races.length} — ${race.name||''}`);
       let extra={};
       try{ extra=JSON.parse(race.notes||'{}'); }catch(e){ continue; }
       const regions=extra.regions||{};
