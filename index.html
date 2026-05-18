@@ -5004,7 +5004,7 @@ function parseCSVLike(text){
 
   let headerIdx=rows.findIndex(r=>{
     const h=r.map(normalizeHeader).join(' ');
-    return /(pos|puesto)/.test(h) && /(dorsal|dor)/.test(h) && /(nombre|ciclista|corredor)/.test(h);
+    return /(pos|puesto|clasif|\bpl[\. ])/.test(h) && /(dorsal|dor)/.test(h) && /(nombre|ciclista|corredor)/.test(h);
   });
 
   let map={pos:0,bib:1,name:2,surname:null,cat:null,team:4,region:null,time:5};
@@ -5166,6 +5166,16 @@ function normalizeRiderName(rawName, nombre, apellido1, apellido2){
   if(isAllCaps){
     // "SANCHEZ TORAL IVAN" → primer apellido = words[0], nombre = last word
     return `${_titleCase(words[0])}, ${_titleCase(words[words.length-1])}`;
+  }
+  // "GREUS I SORIANO Marc" → APELLIDOS EN MAYÚSCULAS + nombre en minúsculas al final
+  // Detectar: primera palabra toda mayúsculas, última palabra con minúsculas (no toda mayúsculas)
+  const lastWord=words[words.length-1];
+  const firstWord=words[0];
+  const lastHasLower=lastWord!==lastWord.toUpperCase()&&/[A-Za-záéíóúñ]/.test(lastWord);
+  const firstIsAllUpper=firstWord===firstWord.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(firstWord);
+  if(lastHasLower&&firstIsAllUpper){
+    // primer apellido = words[0], nombre = último word
+    return `${_titleCase(firstWord)}, ${_titleCase(lastWord)}`;
   }
   // "Ivan Sanchez Toral" → nombre = words[0], primer apellido = words[1]
   return `${_titleCase(words[1])}, ${_titleCase(words[0])}`;
