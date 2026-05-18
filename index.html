@@ -1005,6 +1005,30 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       <div class="race-header-meta" id="raceHeaderMeta"></div>
     </div>
     <!-- ═══════════════════════════════════════════════════════════════
+         BARRA DE FILTROS GLOBALES — Paso 2 del rediseño UX
+         Aparece solo en vistas que consumen historial (temporada).
+         Sincroniza con los filtros locales existentes en cada vista.
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="globalFilterBar" style="display:none;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1.5px solid #bae6fd;border-radius:12px;padding:10px 14px;margin-bottom:14px;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#0b2f6b;font-size:13px;letter-spacing:.3px">
+        <span style="font-size:16px">🎛️</span> FILTROS GLOBALES
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="font-size:12px;font-weight:700;color:#475569">📅 Año:</label>
+        <select id="gfYear" onchange="_gfOnChange()" style="border:1.5px solid #93c5fd;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fff;color:#0b2f6b;min-width:110px">
+          <option value="">Todos los años</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="font-size:12px;font-weight:700;color:#475569">🗺️ CCAA:</label>
+        <select id="gfRegion" onchange="_gfOnChange()" style="border:1.5px solid #93c5fd;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fff;color:#0b2f6b;min-width:170px">
+          <option value="">Todas las CCAA</option>
+        </select>
+      </div>
+      <button onclick="_gfReset()" style="background:#fff;border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#475569;cursor:pointer" title="Restablecer ambos filtros">✖ Limpiar</button>
+      <span id="gfStatus" style="font-size:11px;color:#0369a1;font-weight:600;margin-left:auto"></span>
+    </div>
+    <!-- ═══════════════════════════════════════════════════════════════
          VISTA INICIO — Dashboard de entrada al producto
          ═══════════════════════════════════════════════════════════════ -->
     <div id="view-inicio" class="spa-view">
@@ -2458,6 +2482,139 @@ function openLoadPanelForNew(){
   setTimeout(()=>{ const dz=$('dropZone'); if(dz) dz.scrollIntoView({behavior:'smooth',block:'nearest'}); },100);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FILTROS GLOBALES (Paso 2 del rediseño UX)
+// ═══════════════════════════════════════════════════════════════════════════
+const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
+const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
+const _GF_VIEWS_USING_HISTORY = ['view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial'];
+
+let _globalFilters = {
+  year:   localStorage.getItem('gf_year')   || '',
+  region: localStorage.getItem('gf_region') || ''
+};
+let _gfReady = false;
+let _gfSyncing = false; // evitar loops cuando propagamos
+
+function _gfPopulateYears(){
+  const sel = document.getElementById('gfYear');
+  if(!sel) return;
+  const years = new Set();
+  if(typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)){
+    _cachedHistory.forEach(race=>{
+      const y = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+      if(y) years.add(y);
+    });
+  }
+  // Incluir año actual si no hay datos
+  if(!years.size) years.add(String(new Date().getFullYear()));
+  const sortedYears = [...years].sort().reverse();
+  const currentValue = _globalFilters.year || '';
+  sel.innerHTML = '<option value="">Todos los años</option>' + sortedYears.map(y=>`<option value="${y}">${y}</option>`).join('');
+  if([...sel.options].some(o=>o.value===currentValue)) sel.value = currentValue;
+}
+
+function _gfPopulateRegions(){
+  const sel = document.getElementById('gfRegion');
+  if(!sel) return;
+  // Lista de CCAA canónicas del mapa global
+  const regions = new Set();
+  if(typeof _REGION_MAP_GLOBAL === 'object' && _REGION_MAP_GLOBAL){
+    Object.values(_REGION_MAP_GLOBAL).forEach(r=>regions.add(r));
+  }
+  // Añadir las que aparezcan en el historial (por si hay alguna no mapeada)
+  if(typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)){
+    _cachedHistory.forEach(race=>(race.riders||[]).forEach(r=>{
+      if(r.region) regions.add(typeof canonicalRegion==='function' ? canonicalRegion(r.region) : r.region);
+    }));
+  }
+  const sorted = [...regions].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  const currentValue = _globalFilters.region || '';
+  sel.innerHTML = '<option value="">Todas las CCAA</option>' + sorted.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  if([...sel.options].some(o=>o.value===currentValue)) sel.value = currentValue;
+}
+
+function _gfApplyToLocalFilters(){
+  // Propaga el valor global a TODOS los selects locales que existan
+  _gfSyncing = true;
+  _GF_YEAR_IDS.forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && [...el.options].some(o=>o.value===_globalFilters.year)){
+      if(el.value !== _globalFilters.year){ el.value = _globalFilters.year; }
+    }
+  });
+  _GF_REGION_IDS.forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && [...el.options].some(o=>o.value===_globalFilters.region)){
+      if(el.value !== _globalFilters.region){ el.value = _globalFilters.region; }
+    }
+  });
+  _gfSyncing = false;
+}
+
+function _gfTriggerCurrentViewRerender(){
+  const v = document.querySelector('.spa-view.active');
+  if(!v) return;
+  const id = v.id;
+  try{
+    if(id==='view-evolucion'   && typeof renderEvolucion==='function')   renderEvolucion();
+    if(id==='view-powerranking'&& typeof renderPowerRanking==='function')renderPowerRanking();
+    if(id==='view-tendencias'  && typeof renderTendencias==='function')  renderTendencias();
+    if(id==='view-seleccion'   && typeof renderSeleccion==='function')   renderSeleccion();
+    if(id==='view-resumen'     && typeof renderResumen==='function')     renderResumen();
+    if(id==='view-historial'   && typeof renderHistory==='function')     renderHistory();
+  }catch(e){ console.warn('[gf] error re-renderizando',id,e); }
+}
+
+function _gfOnChange(){
+  _globalFilters.year   = document.getElementById('gfYear')?.value   || '';
+  _globalFilters.region = document.getElementById('gfRegion')?.value || '';
+  localStorage.setItem('gf_year',   _globalFilters.year);
+  localStorage.setItem('gf_region', _globalFilters.region);
+  _gfApplyToLocalFilters();
+  _gfUpdateStatus();
+  _gfTriggerCurrentViewRerender();
+}
+
+function _gfReset(){
+  _globalFilters = {year:'', region:''};
+  localStorage.removeItem('gf_year');
+  localStorage.removeItem('gf_region');
+  const y = document.getElementById('gfYear');   if(y) y.value='';
+  const r = document.getElementById('gfRegion'); if(r) r.value='';
+  _gfApplyToLocalFilters();
+  _gfUpdateStatus();
+  _gfTriggerCurrentViewRerender();
+}
+
+function _gfUpdateStatus(){
+  const st = document.getElementById('gfStatus');
+  if(!st) return;
+  const parts = [];
+  if(_globalFilters.year)   parts.push(`Año: ${_globalFilters.year}`);
+  if(_globalFilters.region) parts.push(`CCAA: ${_globalFilters.region}`);
+  st.textContent = parts.length ? `Filtrando por ${parts.join(' · ')}` : '(sin filtros aplicados)';
+}
+
+function _gfShowHideBar(viewId){
+  const bar = document.getElementById('globalFilterBar');
+  if(!bar) return;
+  const shouldShow = _GF_VIEWS_USING_HISTORY.includes(viewId);
+  bar.style.display = shouldShow ? 'flex' : 'none';
+  if(shouldShow && !_gfReady){
+    _gfPopulateYears();
+    _gfPopulateRegions();
+    _gfUpdateStatus();
+    _gfReady = true;
+  } else if(shouldShow){
+    // Repoblar por si llegaron nuevos datos
+    _gfPopulateYears();
+    _gfPopulateRegions();
+    _gfUpdateStatus();
+  }
+  if(shouldShow) _gfApplyToLocalFilters();
+}
+
 function showView(viewId){
   // RBAC: check permission
   if(_rbacUser && !_rbacPerms.has(viewId)){
@@ -2481,6 +2638,8 @@ function showView(viewId){
   }
   document.querySelectorAll('.spa-view').forEach(v=>v.classList.toggle('active',v.id===viewId));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
+  // Filtros globales: mostrar/ocultar barra y sincronizar con filtros locales
+  if(typeof _gfShowHideBar === 'function') _gfShowHideBar(viewId);
   // Auto-abrir panel de carga solo si no hay datos cargados
   if(viewId==='view-carga' && !hasValidData){
     const body=$('loadPanelBody');
@@ -4414,7 +4573,28 @@ async function _ensureHistory(){
   return _cachedHistory;
 }
 
-if(_sb){ _sbLoadHistory().then(h=>{ _cachedHistory = h; if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB(); }); }
+if(_sb){ _sbLoadHistory().then(h=>{ _cachedHistory = h; if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB(); if(typeof _gfPopulateYears==='function'){ _gfPopulateYears(); _gfPopulateRegions(); } }); }
+
+// Sincronización bidireccional: si el usuario cambia un filtro LOCAL,
+// actualizamos el global para que persista al cambiar de vista.
+document.addEventListener('change', e=>{
+  if(typeof _gfSyncing!=='undefined' && _gfSyncing) return; // evitar loops
+  const id = e.target?.id;
+  if(!id) return;
+  if(_GF_YEAR_IDS && _GF_YEAR_IDS.includes(id)){
+    _globalFilters.year = e.target.value;
+    localStorage.setItem('gf_year', _globalFilters.year);
+    const g = document.getElementById('gfYear'); if(g && g.value!==e.target.value && [...g.options].some(o=>o.value===e.target.value)) g.value = e.target.value;
+    _gfApplyToLocalFilters();
+    _gfUpdateStatus();
+  } else if(_GF_REGION_IDS && _GF_REGION_IDS.includes(id)){
+    _globalFilters.region = e.target.value;
+    localStorage.setItem('gf_region', _globalFilters.region);
+    const g = document.getElementById('gfRegion'); if(g && g.value!==e.target.value && [...g.options].some(o=>o.value===e.target.value)) g.value = e.target.value;
+    _gfApplyToLocalFilters();
+    _gfUpdateStatus();
+  }
+});
 // ===== FIN BLOQUE SUPABASE INIT =====
 
 // ===== BLOQUE 1: MI EQUIPO =====
