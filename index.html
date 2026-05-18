@@ -4826,11 +4826,39 @@ function formatSeconds(sec){
   if(h>0) return h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   return m+':'+String(s).padStart(2,'0');
 }
+// Propaga la CCAA dentro de cada equipo: si algún corredor del equipo tiene
+// CCAA conocida, todos los demás del mismo equipo heredan esa CCAA.
+// Resuelve el caso "edité una y los demás se quedan vacíos".
+function inferRegionsFromTeam(list){
+  if(!list || !list.length) return;
+  const teamRegion=new Map();
+  // Primera pasada: para cada equipo, contar las CCAAs no vacías
+  list.forEach(r=>{
+    const team=(r.team||'').trim().toLowerCase();
+    const region=(r.region||'').trim();
+    if(!team || !region) return;
+    if(!teamRegion.has(team)) teamRegion.set(team, new Map());
+    const counts=teamRegion.get(team);
+    counts.set(region, (counts.get(region)||0)+1);
+  });
+  // Segunda pasada: rellenar CCAAs vacías con la más frecuente del equipo
+  list.forEach(r=>{
+    if((r.region||'').trim()) return;
+    const team=(r.team||'').trim().toLowerCase();
+    if(!team || !teamRegion.has(team)) return;
+    const counts=teamRegion.get(team);
+    let best=null, bestN=0;
+    counts.forEach((n,reg)=>{ if(n>bestN){bestN=n;best=reg;} });
+    if(best) r.region=best;
+  });
+}
+
 function enrichRiders(list){
   // COMENTARIO: cálculo robusto de gaps y tiempos totales.
   // - Tiempo absoluto sin "a": se interpreta como tiempo real de carrera.
   // - Diferencia con "a": se interpreta como gap respecto al ganador.
   // - Campo vacío: hereda el gap del bloque anterior.
+  inferRegionsFromTeam(list);
   const sorted=list.slice().sort((a,b)=>a.pos-b.pos);
   const km=parseKmValue();
 
