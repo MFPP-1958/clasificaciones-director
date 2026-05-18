@@ -1918,9 +1918,10 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
               <label>🎽 Cats:</label>
               <div id="selCatPills" class="pr-cat-pills"></div>
             </div>
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn" style="font-size:12px;padding:8px 16px;background:#fff;color:#374151;border:1.5px solid #d1d5db" onclick="_selAutoPropose()">⚡ Automática</button>
-              <button class="btn" style="font-size:12px;padding:8px 16px;background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff" onclick="_selIAPropose()" title="Pondera posición media (70%) + tendencia reciente (30%)">🤖 Propuesta IA</button>
+            <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+              <button class="btn" style="font-size:12px;padding:8px 16px;background:#fff;color:#374151;border:1.5px solid #d1d5db" onclick="_selAutoPropose()" title="Selección automática estricta">⚡ Automática</button>
+              <button class="btn" style="font-size:12px;padding:8px 16px;background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff" onclick="_selIAPropose()" title="IA: ordena por composite priorizando consistencia (>50% fiabilidad), Top 10 y forma reciente">🤖 Propuesta IA</button>
+              <button class="btn" style="font-size:14px;padding:6px 10px;background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;font-weight:700;border-radius:50%;line-height:1" onclick="_selShowAlgoHelp()" title="¿Cómo se calcula la selección?">?</button>
             </div>
           </div>
 
@@ -13787,17 +13788,33 @@ async function renderSeleccion(){
     const podiums = rd.positions.filter(p=>p<=3).length;
     const top10   = rd.positions.filter(p=>p<=10).length;
     const last3   = rd.raceHistory.slice(-3);
-    const raceBonus = Math.max(0,5-n)*5; // penalizar pocos partidos
-    const score = avgPos + raceBonus;
-    return {name:rd.name, displayName:rd.displayName, team:rd.team, cat:rd.cat, avgPos, bestPos, podiums, top10, races:n, last3, score, positions:rd.positions, raceHistory:rd.raceHistory};
+    const stats   = _computeSelectionStats({positions:rd.positions, avgPos, bestPos, podiums, top10, races:n});
+    return {
+      name:rd.name, displayName:rd.displayName, team:rd.team, cat:rd.cat,
+      avgPos, bestPos, podiums, top10, races:n, last3,
+      score: stats.composite,         // menor = mejor (compatibilidad con sort ascendente)
+      composite: stats.composite,
+      reliability: stats.reliability, // 0-1
+      eligible: stats.eligible,
+      _stats: stats,
+      positions:rd.positions, raceHistory:rd.raceHistory
+    };
   }).filter(Boolean);
 
-  candidates.sort((a,b)=>a.score-b.score);
+  // ORDEN ESTRICTO: primero por elegibilidad (cumple suelo 50% o tiene victorias
+  // extraordinarias) y luego por composite score (menor = mejor).
+  candidates.sort((a,b)=>{
+    if(a.eligible!==b.eligible) return a.eligible ? -1 : 1;
+    return a.composite - b.composite;
+  });
   _selPickerAllRiders = candidates;
 
-  // Aplicar overrides (VLC mode, 4+2)
+  // Aplicar overrides (VLC mode, 4+2). Para auto-selección solo elegibles.
   const totalSlots = _convoTitularCount + 2;
-  const baseN = candidates.slice(0, totalSlots);
+  const eligiblePool = candidates.filter(c=>c.eligible);
+  const baseN = eligiblePool.slice(0, totalSlots);
+  // Si no llenamos slots con elegibles, dejamos huecos (mejor vacío que erróneo)
+  while(baseN.length<totalSlots) baseN.push(null);
   const currentN = [];
   for(let i=0;i<totalSlots;i++){
     const ov = _selManualOverrides[i];
@@ -13899,17 +13916,97 @@ function _buildMyTeamCandidates(history){
     const podiums = rd.positions.filter(p=>p<=3).length;
     const top10   = rd.positions.filter(p=>p<=10).length;
     const last3   = rd.raceHistory.slice(-3);
-    const last3pos= last3.map(r=>r.pos);
-    const formaAvg= last3pos.length>0 ? last3pos.reduce((s,v)=>s+v,0)/last3pos.length : avgPos;
-    const margin  = Math.max(3, Math.round(avgPos*0.3));
-    const rel     = rd.positions.filter(p=>Math.abs(p-avgPos)<=margin).length/n; // 0-1
-    // Score: lower = better. Forma 50% + avgPos 30% + unreliability penalty 20%
-    const score   = formaAvg*0.5 + avgPos*0.3 + avgPos*(1-rel)*0.2;
-    return {name:rd.name,displayName:rd.displayName,team:rd.team,cat:rd.cat,avgPos,bestPos,podiums,top10,races:n,last3,score,positions:rd.positions,raceHistory:rd.raceHistory};
+    const stats = _computeSelectionStats({positions:rd.positions, avgPos, bestPos, podiums, top10, races:n});
+    return {
+      name:rd.name, displayName:rd.displayName, team:rd.team, cat:rd.cat,
+      avgPos, bestPos, podiums, top10, races:n, last3,
+      score: stats.composite,
+      composite: stats.composite,
+      reliability: stats.reliability,
+      eligible: stats.eligible,
+      _stats: stats,
+      positions:rd.positions, raceHistory:rd.raceHistory
+    };
   }).filter(Boolean);
 
-  candidates.sort((a,b)=>a.score-b.score);
+  // En Mi Equipo no se aplica el suelo estricto (somos pocos), pero sí se ordena
+  // por composite respetando la elegibilidad como primer criterio.
+  candidates.sort((a,b)=>{
+    if(a.eligible!==b.eligible) return a.eligible ? -1 : 1;
+    return a.composite - b.composite;
+  });
   return candidates;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FÓRMULA DE SELECCIÓN DE ÉLITE (Convocatorias VLC + Mi Equipo)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+//  FIABILIDAD = % de carreras SIN un mal resultado
+//    Umbral malo = max(avgPos + 5, avgPos × 1.5, 15)
+//    → Un podio NUNCA es no fiable. Un mal día sí.
+//
+//  ELEGIBILIDAD (filtro estricto, sin excepciones para Auto/IA):
+//    fiabilidad ≥ 50%   O   victorias extraordinarias (≥3 wins ó 1º + ≥3 podios)
+//
+//  COMPOSITE SCORE (menor = mejor):
+//    30% media de posición (calidad base)
+//    25% consistencia en Top 10 (% de carreras top10 invertido)
+//    20% forma reciente (media últimas 3 carreras)
+//    20% fiabilidad invertida (% carreras "no fiables")
+//   −10% bonus por podios (resta al penalty total)
+//   +volumen: castigo si <3 carreras (poca muestra)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _computeSelectionStats(c){
+  const positions = c.positions || [];
+  const n = c.races || positions.length || 0;
+  const avgPos = c.avgPos != null ? c.avgPos : (n ? positions.reduce((s,v)=>s+v,0)/n : 0);
+  const bestPos = c.bestPos != null ? c.bestPos : (n ? Math.min(...positions) : 99);
+  const podiums = c.podiums != null ? c.podiums : positions.filter(p=>p<=3).length;
+  const top10   = c.top10   != null ? c.top10   : positions.filter(p=>p<=10).length;
+  const wins    = positions.filter(p=>p===1).length;
+
+  // Fiabilidad: % carreras sin mal resultado
+  const badThreshold = Math.max(avgPos + 5, avgPos * 1.5, 15);
+  const reliableRaces = positions.filter(p => p <= badThreshold).length;
+  const reliability = n > 0 ? reliableRaces / n : 0; // 0-1
+
+  // Forma reciente
+  const last3 = positions.slice(-3);
+  const recentAvg = last3.length ? last3.reduce((s,v)=>s+v,0)/last3.length : avgPos;
+  const recentTop10Pct = last3.length ? last3.filter(p=>p<=10).length / last3.length : 0;
+
+  // % Top 10 (consistencia de calidad)
+  const top10Pct = n > 0 ? top10 / n : 0;
+
+  // ─── Penalties (sumar = peor) ─────────────────────────────────────
+  const basePenalty        = Math.min(avgPos, 50);          // 0-50
+  const consistencyPenalty = (1 - top10Pct) * 30;            // 0-30
+  const recentPenalty      = Math.min(recentAvg, 50);        // 0-50
+  const reliabilityPenalty = (1 - reliability) * 40;         // 0-40
+  const podiumBonus        = -Math.min(podiums * 2, 12);     // -12 a 0 (bonus)
+  const volumePenalty      = n < 3 ? (3 - n) * 6 : 0;        // 0-12
+
+  const composite = (
+    basePenalty        * 0.30 +
+    consistencyPenalty * 0.25 +
+    recentPenalty      * 0.20 +
+    reliabilityPenalty * 0.20 +
+    podiumBonus        * 0.10
+  ) + volumePenalty;
+
+  // ─── Elegibilidad ────────────────────────────────────────────────
+  // Suelo: fiabilidad ≥50% Y al menos 3 carreras (muestra mínima).
+  // Excepción: victorias extraordinarias (3+ wins o 1º + 3+ podios) saltan el suelo.
+  const extraordinaryWins = wins >= 3 || (bestPos === 1 && podiums >= 3);
+  const enoughVolume = n >= 3;
+  const eligible = (enoughVolume && reliability * 100 >= 50) || extraordinaryWins;
+
+  return {
+    composite, reliability, top10Pct, recentAvg, recentTop10Pct,
+    eligible, extraordinaryWins, wins, badThreshold, enoughVolume
+  };
 }
 
 function _selAutoPropose(){
@@ -13917,51 +14014,110 @@ function _selAutoPropose(){
   renderSeleccion();
 }
 
+function _selShowAlgoHelp(){
+  const old=document.getElementById('_selAlgoHelpDialog');
+  if(old) old.remove();
+  const overlay=document.createElement('div');
+  overlay.id='_selAlgoHelpDialog';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick=e=>{ if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML=`
+    <div style="background:#fff;border-radius:14px;max-width:720px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:24px;font-family:Arial,sans-serif">
+      <h3 style="margin-top:0;color:#0b2f6b">🤖 ¿Cómo selecciona la IA?</h3>
+      <p style="color:#374151;font-size:14px;margin-bottom:18px">La IA ordena la selección priorizando <strong>consistencia (Fiabilidad &gt; 50%)</strong>, presencia en podios y tendencia en las últimas 3 pruebas.</p>
+
+      <div style="background:#eff6ff;border-left:4px solid #1286c7;padding:12px 14px;border-radius:6px;margin-bottom:16px">
+        <strong style="color:#1e40af">🛑 Filtro previo de elegibilidad</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#1e3a8a">Ningún corredor con <strong>menos del 50% de fiabilidad</strong> puede ser propuesto automáticamente, salvo que tenga <strong>victorias extraordinarias</strong> (3+ ganadas o 1º + 3+ podios).</p>
+      </div>
+
+      <h4 style="color:#0b2f6b;margin-bottom:6px">📊 Fiabilidad (nueva fórmula)</h4>
+      <p style="font-size:13px;color:#374151;margin:0 0 14px">Porcentaje de carreras <strong>sin un mal resultado</strong>. Umbral malo = <code style="background:#f3f4f6;padding:2px 5px;border-radius:3px">max(avg+5, avg×1.5, 15)</code>. Un podio NUNCA es no fiable.</p>
+
+      <h4 style="color:#0b2f6b;margin-bottom:6px">⚖️ Composite Score (menor = mejor)</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px">
+        <tr style="background:#f9fafb"><td style="padding:6px 10px;border:1px solid #e5e7eb;width:55%">Media de posición (calidad base)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">30%</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">Consistencia en Top 10 (% carreras top 10)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">25%</td></tr>
+        <tr style="background:#f9fafb"><td style="padding:6px 10px;border:1px solid #e5e7eb">Forma reciente (media últimas 3 carreras)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">20%</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">Fiabilidad (% carreras sin mal resultado)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">20%</td></tr>
+        <tr style="background:#fef3c7"><td style="padding:6px 10px;border:1px solid #fbbf24">Bonus por podios (resta al score)</td><td style="padding:6px 10px;border:1px solid #fbbf24;text-align:center;font-weight:700">−10%</td></tr>
+        <tr><td style="padding:6px 10px;border:1px solid #e5e7eb">Castigo si <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px">&lt;3 carreras</code> (muestra pobre)</td><td style="padding:6px 10px;border:1px solid #e5e7eb;text-align:center;font-weight:700">+12 max</td></tr>
+      </table>
+
+      <h4 style="color:#0b2f6b;margin-bottom:6px">📐 Diferencia Automática vs IA</h4>
+      <ul style="font-size:13px;color:#374151;padding-left:22px;margin:0 0 14px">
+        <li><strong>Automática:</strong> aplica el composite estándar (más peso a la media base).</li>
+        <li><strong>IA:</strong> sube la importancia de consistencia Top 10 (30%) y forma reciente (25%), baja media a 35%. Ambas usan el mismo filtro de elegibilidad.</li>
+      </ul>
+
+      <h4 style="color:#0b2f6b;margin-bottom:6px">🎯 Orden de las tarjetas</h4>
+      <p style="font-size:13px;color:#374151;margin:0 0 14px">Estrictamente <strong>de izquierda a derecha por composite score</strong>. T1 = el más sólido (Alex Beltrán con 90% fiabilidad va siempre primero). <strong>No se intercambian slots</strong> por diversidad ADN.</p>
+
+      <div style="background:#fef2f2;border-left:4px solid #dc2626;padding:10px 12px;border-radius:6px;margin-bottom:18px">
+        <strong style="color:#991b1b">⚠️ Si no hay 6 elegibles…</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#7f1d1d">Se dejan slots vacíos. Es preferible un hueco a una mala propuesta. El botón mostrará <code>(X/6 elegibles)</code>.</p>
+      </div>
+
+      <div style="text-align:right">
+        <button class="btn" onclick="document.getElementById('_selAlgoHelpDialog')?.remove()" style="background:#0b2f6b;color:#fff;font-weight:700">Cerrar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
 function _selIAPropose(){
-  // Fórmula 40% avgPos + 30% tendencia reciente + 30% diversidad ADN
+  // IA = mismo composite que Auto pero priorizando MÁS la forma reciente y la
+  // consistencia en Top 10. Aplica el mismo suelo de elegibilidad (50% fiabilidad
+  // o victorias extraordinarias). NO hace swaps por diversidad ADN: orden estricto.
   if(!_selPickerAllRiders||!_selPickerAllRiders.length) return;
   const totalSlots = _convoTitularCount + 2;
 
-  // Paso 1: score base
   const scored = _selPickerAllRiders.map(c=>{
-    const last3pos = (c.last3||[]).map(x=>x.pos).filter(Number.isFinite);
-    const recentTrend = last3pos.length>0 ? last3pos.reduce((s,v)=>s+v,0)/last3pos.length : c.avgPos;
-    const adn = _computeADN(c.positions||[], c.raceHistory||[]);
-    return {...c, _iaBase: c.avgPos*0.4 + recentTrend*0.3, _adn: adn};
+    const positions = c.positions || [];
+    const n = c.races || positions.length;
+    const avgPos = c.avgPos;
+    const top10Pct = n>0 ? c.top10/n : 0;
+    const last3 = positions.slice(-3);
+    const recentAvg = last3.length ? last3.reduce((s,v)=>s+v,0)/last3.length : avgPos;
+    const reliability = c.reliability != null ? c.reliability : (c._stats?.reliability||0);
+    // IA pondera distinto que Auto:
+    //  35% media base · 30% consistencia top10 · 25% forma reciente ·
+    //  10% fiabilidad (ya es filtro de elegibilidad, peso suave)
+    //  −12% bonus podios
+    const iaScore = (
+      Math.min(avgPos,50)        * 0.35 +
+      (1-top10Pct)*30            * 0.30 +
+      Math.min(recentAvg,50)     * 0.25 +
+      (1-reliability)*40         * 0.10 +
+      -Math.min(c.podiums*2,12)  * 0.12
+    ) + (n<3 ? (3-n)*6 : 0);
+    return {...c, _iaBase: iaScore};
   });
-  scored.sort((a,b)=>a._iaBase-b._iaBase);
 
-  // Paso 2: selección con diversidad ADN (intentar al menos 1 Hombre de Hierro y 1 Rematador)
-  let selection = scored.slice(0, totalSlots);
-  const remaining = scored.slice(totalSlots);
+  // Filtro estricto de elegibilidad (no excepciones)
+  const eligible = scored.filter(c=>c.eligible);
+  eligible.sort((a,b)=>a._iaBase - b._iaBase);
 
-  const hasHH = ()=>selection.some(r=>r._adn.label==='Hombre de Hierro');
-  const hasRM = ()=>selection.some(r=>r._adn.label==='Rematador');
-
-  // Si no hay Hombre de Hierro, buscar el mejor en los candidatos restantes y swapear slot 5 (S2)
-  if(!hasHH()){
-    const bestHH = [...remaining, ...scored.slice(4,6)].find(r=>r._adn.label==='Hombre de Hierro');
-    if(bestHH && !selection.includes(bestHH)){
-      selection[5] = bestHH;
-    }
-  }
-  // Si no hay Rematador, swapear slot 4 (S1) — solo si aún no está cubierto
-  if(!hasRM()){
-    const candidates = [...remaining, scored[4]].filter(r=>r && !selection.includes(r));
-    const bestRM = candidates.find(r=>r._adn.label==='Rematador');
-    if(bestRM) selection[4] = bestRM;
-  }
+  // Construir selección: rellenar con elegibles. Si faltan slots → null
+  const selection = eligible.slice(0, totalSlots);
+  while(selection.length<totalSlots) selection.push(null);
 
   _selManualOverrides = Array(totalSlots).fill(null);
-  const baseN = selection.slice(0, totalSlots);
-  _selCurrentSlots = baseN;
-  _selRenderCards(baseN);
-  _selRenderRadar(baseN);
-  _selRenderMerits(baseN);
+  _selCurrentSlots = selection;
+  _selRenderCards(selection);
+  _selRenderRadar(selection);
+  _selRenderMerits(selection);
 
-  // Feedback
+  // Feedback con info
   const btn = document.querySelector('[onclick="_selIAPropose()"]');
-  if(btn){ const orig=btn.textContent; btn.textContent='✅ IA aplicada'; setTimeout(()=>btn.textContent=orig,2500); }
+  const filled = selection.filter(Boolean).length;
+  if(btn){
+    const orig=btn.textContent;
+    btn.textContent = filled<totalSlots
+      ? `✅ IA aplicada (${filled}/${totalSlots} elegibles)`
+      : '✅ IA aplicada';
+    setTimeout(()=>btn.textContent=orig,3000);
+  }
 }
 
 function _selRenderCards(slots){
@@ -13984,11 +14140,11 @@ function _selRenderCards(slots){
       card.style.cursor = 'pointer';
       card.onclick = ()=>_selOpenDetail(i);
       const svg = _selMiniChart(rider.last3);
-      // Reliability: % races within ±margin of avgPos
       const riderAdn = _computeADN(rider.positions||[], rider.raceHistory||[]);
-      const margin = Math.max(3, Math.round(rider.avgPos * 0.3));
-      const relCount = (rider.positions||[]).filter(p=>Math.abs(p-rider.avgPos)<=margin).length;
-      const reliability = rider.races>0 ? Math.round(relCount/rider.races*100) : 0;
+      // Fiabilidad NUEVA: % de carreras SIN mal resultado (umbral malo = max(avg+5, avg×1.5, 15))
+      // Un podio nunca es no fiable; solo cuenta como malo si está claramente por debajo de la media
+      const stats = rider._stats || _computeSelectionStats(rider);
+      const reliability = Math.round(stats.reliability * 100);
       const relColor = reliability>=75?'#12b76a':reliability>=50?'#f59e0b':'#dc2626';
       card.innerHTML = `
         <button class="sel-change-btn" onclick="event.stopPropagation();_selOpenPicker(${i})" title="Cambiar ciclista">⇄</button>
