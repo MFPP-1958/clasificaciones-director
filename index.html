@@ -1156,6 +1156,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
     <div class="classification-actions">
       <span class="small" id="shownCount">0 corredores mostrados · Tip: pulsa una fila para abrir el análisis individual</span>
       <button class="btn light" onclick="enrichFromHistory()" title="Busca en el historial datos de categoría y comunidad autónoma que falten">🔍 Completar datos con historial</button>
+      <button class="btn light" onclick="showTeamRegionsDialog()" title="Equipos sin CCAA conocida en el historial">📋 Equipos sin CCAA</button>
       <button class="btn" style="background:#059669;border-color:#059669" onclick="saveHistory()" title="Guarda los datos actuales (incluidos los completados desde historial) en Supabase">💾 Guardar cambios</button>
       <button class="btn light" onclick="exportFilteredClassificationPDF()">Descargar PDF</button>
     </div>
@@ -4339,7 +4340,7 @@ async function _ensureHistory(){
   return _cachedHistory;
 }
 
-if(_sb){ _sbLoadHistory().then(h=>{ _cachedHistory = h; }); }
+if(_sb){ _sbLoadHistory().then(h=>{ _cachedHistory = h; if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB(); }); }
 // ===== FIN BLOQUE SUPABASE INIT =====
 
 // ===== BLOQUE 1: MI EQUIPO =====
@@ -4853,11 +4854,151 @@ function inferRegionsFromTeam(list){
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DB GLOBAL DE EQUIPOS → CCAA (aprende del historial Supabase)
+// ═══════════════════════════════════════════════════════════════════════════
+const _REGION_MAP_GLOBAL={
+  'cv':'Comunitat Valenciana','c v':'Comunitat Valenciana','vlc':'Comunitat Valenciana',
+  'comunitat valenciana':'Comunitat Valenciana','comunidad valenciana':'Comunitat Valenciana',
+  'valenciana':'Comunitat Valenciana','valencia':'Comunitat Valenciana',
+  'c valencia':'Comunitat Valenciana','pais valenciano':'Comunitat Valenciana',
+  'cat':'Cataluña','catalunya':'Cataluña','cataluña':'Cataluña','cataluna':'Cataluña',
+  'mad':'Madrid','madrid':'Madrid','comunidad de madrid':'Madrid','c madrid':'Madrid',
+  'and':'Andalucía','andalucia':'Andalucía',
+  'ara':'Aragón','aragon':'Aragón','ar':'Aragón',
+  'ast':'Asturias','asturias':'Asturias','principado de asturias':'Asturias','p asturias':'Asturias',
+  'can':'Canarias','canarias':'Canarias','islas canarias':'Canarias',
+  'cant':'Cantabria','cantabria':'Cantabria',
+  'clm':'Castilla-La Mancha','castilla la mancha':'Castilla-La Mancha','castilla-la mancha':'Castilla-La Mancha',
+  'cyl':'Castilla y León','castilla y leon':'Castilla y León','castilla y león':'Castilla y León','castilla leon':'Castilla y León',
+  'ext':'Extremadura','extremadura':'Extremadura',
+  'gal':'Galicia','galicia':'Galicia',
+  'bal':'Islas Baleares','baleares':'Islas Baleares','islas baleares':'Islas Baleares','illes balears':'Islas Baleares',
+  'rio':'La Rioja','la rioja':'La Rioja','rioja':'La Rioja',
+  'mur':'Murcia','murcia':'Murcia','region de murcia':'Murcia',
+  'nav':'Navarra','navarra':'Navarra','comunidad foral de navarra':'Navarra',
+  'pv':'País Vasco','pais vasco':'País Vasco','euskadi':'País Vasco','euskal herria':'País Vasco',
+  'ceu':'Ceuta','mel':'Melilla'
+};
+function canonicalRegion(r){
+  if(!r) return '';
+  const k=String(r).toLowerCase().trim()
+    .replace(/\./g,'').replace(/\s+/g,' ')
+    .normalize('NFD').replace(/[̀-ͯ]/g,'');
+  return _REGION_MAP_GLOBAL[k] || String(r).trim();
+}
+function teamKey(name){
+  return (name||'').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[.,_\-]/g,' ').replace(/\s+/g,' ').trim();
+}
+let _teamRegionDB=null;
+function buildTeamRegionDB(){
+  const counts=new Map();
+  const history=Array.isArray(_cachedHistory)?_cachedHistory:[];
+  history.forEach(race=>{
+    (race.riders||[]).forEach(r=>{
+      const tk=teamKey(r.team);
+      const rg=canonicalRegion(r.region);
+      if(!tk||!rg) return;
+      if(!counts.has(tk)) counts.set(tk,new Map());
+      const c=counts.get(tk);
+      c.set(rg,(c.get(rg)||0)+1);
+    });
+  });
+  // También incluir la carrera actual en memoria
+  (Array.isArray(riders)?riders:[]).forEach(r=>{
+    const tk=teamKey(r.team);
+    const rg=canonicalRegion(r.region);
+    if(!tk||!rg) return;
+    if(!counts.has(tk)) counts.set(tk,new Map());
+    const c=counts.get(tk);
+    c.set(rg,(c.get(rg)||0)+1);
+  });
+  const result=new Map();
+  counts.forEach((c,tk)=>{
+    let best=null,bestN=0;
+    c.forEach((n,rg)=>{ if(n>bestN){bestN=n;best=rg;} });
+    if(best) result.set(tk,best);
+  });
+  _teamRegionDB=result;
+  console.log(`[TeamRegionDB] ${result.size} equipos con CCAA conocida (de ${history.length} carreras + carrera actual)`);
+  return result;
+}
+function getTeamRegionDB(){ if(!_teamRegionDB) buildTeamRegionDB(); return _teamRegionDB; }
+function invalidateTeamRegionDB(){ _teamRegionDB=null; }
+function showTeamRegionsDialog(){
+  invalidateTeamRegionDB();
+  const db=getTeamRegionDB();
+  const currentTeams=new Set();
+  (Array.isArray(riders)?riders:[]).forEach(r=>{ if(r.team) currentTeams.add(teamKey(r.team)); });
+  const knownInCurrent=[], unknownInCurrent=[];
+  currentTeams.forEach(tk=>{
+    if(db.has(tk)){
+      const orig=(riders.find(r=>teamKey(r.team)===tk)||{}).team||tk;
+      knownInCurrent.push({team:orig, region:db.get(tk)});
+    }else{
+      const orig=(riders.find(r=>teamKey(r.team)===tk)||{}).team||tk;
+      unknownInCurrent.push(orig);
+    }
+  });
+  const totalDB=db.size;
+  let html=`<div style="padding:20px;max-width:600px"><h3 style="margin-top:0">📋 Base de datos Equipos → CCAA</h3>`;
+  html+=`<p>Total equipos conocidos en historial: <strong>${totalDB}</strong></p>`;
+  html+=`<p>Equipos en esta carrera: <strong>${currentTeams.size}</strong> (${knownInCurrent.length} con CCAA conocida, <span style="color:#dc2626"><strong>${unknownInCurrent.length} sin CCAA</strong></span>)</p>`;
+  if(unknownInCurrent.length){
+    html+=`<h4 style="color:#dc2626;margin-bottom:6px">⚠️ Equipos sin CCAA (edita un ciclista de cada uno para añadirlos)</h4>`;
+    html+=`<ul style="max-height:200px;overflow:auto;background:#fef2f2;padding:10px 10px 10px 30px;border-radius:8px">`;
+    unknownInCurrent.sort().forEach(t=>{ html+=`<li>${escapeHtml(t)}</li>`; });
+    html+=`</ul>`;
+  }
+  if(knownInCurrent.length){
+    html+=`<h4 style="color:#059669;margin-bottom:6px;margin-top:14px">✅ Equipos con CCAA conocida</h4>`;
+    html+=`<ul style="max-height:200px;overflow:auto;background:#f0fdf4;padding:10px 10px 10px 30px;border-radius:8px">`;
+    knownInCurrent.sort((a,b)=>a.team.localeCompare(b.team)).forEach(k=>{
+      html+=`<li><strong>${escapeHtml(k.team)}</strong> → <em>${escapeHtml(k.region)}</em></li>`;
+    });
+    html+=`</ul>`;
+  }
+  html+=`<div style="text-align:right;margin-top:16px"><button class="btn" onclick="document.getElementById('_teamRegionsDialog')?.remove()">Cerrar</button></div></div>`;
+  const old=document.getElementById('_teamRegionsDialog');
+  if(old) old.remove();
+  const overlay=document.createElement('div');
+  overlay.id='_teamRegionsDialog';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick=e=>{ if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:700px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">${html}</div>`;
+  document.body.appendChild(overlay);
+}
+function autoFillRegionsFromTeamDB(list){
+  if(!list||!list.length) return 0;
+  const db=getTeamRegionDB();
+  let filled=0,canonicalized=0;
+  list.forEach(r=>{
+    // Canonicalizar CCAAs existentes (VLC → Comunitat Valenciana, etc.)
+    if(r.region){
+      const canon=canonicalRegion(r.region);
+      if(canon!==r.region){ r.region=canon; canonicalized++; }
+    }
+    // Rellenar CCAAs vacías desde el DB de equipos
+    if(!r.region && r.team){
+      const tk=teamKey(r.team);
+      const found=db.get(tk);
+      if(found){ r.region=found; filled++; }
+    }
+  });
+  if(filled>0||canonicalized>0){
+    console.log(`[autoFillRegions] ${filled} rellenadas desde DB, ${canonicalized} canonicalizadas`);
+  }
+  return filled;
+}
+
 function enrichRiders(list){
   // COMENTARIO: cálculo robusto de gaps y tiempos totales.
   // - Tiempo absoluto sin "a": se interpreta como tiempo real de carrera.
   // - Diferencia con "a": se interpreta como gap respecto al ganador.
   // - Campo vacío: hereda el gap del bloque anterior.
+  autoFillRegionsFromTeamDB(list);
   inferRegionsFromTeam(list);
   const sorted=list.slice().sort((a,b)=>a.pos-b.pos);
   const km=parseKmValue();
@@ -5619,6 +5760,8 @@ async function saveTableRowEdit(key){
   }
 
   _editingRowKey=null;
+  // Si cambió la CCAA, invalidar la DB global de team→region para que se rebuild
+  if(regionChanged && typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB();
   // Usar renderAll para que enrichRiders → inferRegionsFromTeam se ejecute
   if(typeof renderAll==='function') renderAll(); else { renderTable(); renderStats(); }
 
