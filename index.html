@@ -10924,11 +10924,16 @@ function _evolRenderRiders(history,myTeam){
   const riderKeys=[...riderMap.keys()].sort((a,b)=>riderMap.get(a).displayName.localeCompare(riderMap.get(b).displayName));
   window._evolRiderMap=riderMap;
   panel.innerHTML=`
-    <label style="font-weight:700;font-size:13px;display:block;margin-bottom:6px">Selecciona un corredor</label>
-    <select class="evol-select" id="evolRiderSelect" onchange="evolSelectRider(this.value)">
-      <option value="">— Elige corredor —</option>
-      ${riderKeys.map(k=>{const e=riderMap.get(k);return`<option value="${escapeHtml(k)}">${escapeHtml(e.displayName)} (${e.races.length} carrera${e.races.length!==1?'s':''})</option>`;}).join('')}
-    </select>
+    <div style="display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+      <div style="flex:1;min-width:240px">
+        <label style="font-weight:700;font-size:13px;display:block;margin-bottom:6px">Selecciona un corredor</label>
+        <select class="evol-select" id="evolRiderSelect" onchange="evolSelectRider(this.value)" style="margin-bottom:0">
+          <option value="">— Elige corredor —</option>
+          ${riderKeys.map(k=>{const e=riderMap.get(k);return`<option value="${escapeHtml(k)}">${escapeHtml(e.displayName)} (${e.races.length} carrera${e.races.length!==1?'s':''})</option>`;}).join('')}
+        </select>
+      </div>
+      <button class="btn" id="evolExportImgBtn" onclick="exportEvolRiderImage()" style="background:#0b2f6b;color:#fff;font-weight:700;padding:9px 16px;white-space:nowrap" title="Genera una imagen PNG con la trayectoria del corredor seleccionado">📸 Crear imagen</button>
+    </div>
     <div id="evolRiderContent"></div>`;
   // Auto-seleccionar: corredor con más carreras; en empate, mejor posición media
   const bestKey=riderKeys.reduce((best,k)=>{
@@ -13178,6 +13183,114 @@ function _trendDownload(canvas, filename){
   a.href = canvas.toDataURL('image/png');
   a.download = `${filename}-${new Date().toISOString().slice(0,10)}.png`;
   a.click();
+}
+
+// ─── Export imagen PNG de Trayectoria de un corredor (vista Evolución) ─────
+async function exportEvolRiderImage(){
+  const sel=document.getElementById('evolRiderSelect');
+  if(!sel||!sel.value){ alert('Primero selecciona un corredor.'); return; }
+  const riderMap=window._evolRiderMap;
+  const entry=riderMap?.get(sel.value);
+  if(!entry){ alert('No se han encontrado datos del corredor.'); return; }
+
+  const chartCanvas=document.getElementById('evolRiderChart');
+  const content=document.getElementById('evolRiderContent');
+  const tableEl=content?.querySelector('table');
+  if(!chartCanvas||!tableEl){ alert('Aún no se ha renderizado el gráfico. Cambia de corredor y vuelve a pulsar.'); return; }
+
+  const races=entry.races.slice();
+  const positions=races.map(r=>r.pos);
+  const best=Math.min(...positions);
+  const avg=(positions.reduce((s,n)=>s+n,0)/positions.length).toFixed(1);
+  const totalCarreras=races.length;
+  // Fechas: primera y última (cronológico)
+  const sortedByDate=races.slice().sort((a,b)=>(_parseSpanishDate(a.raceDate)||'0000').localeCompare(_parseSpanishDate(b.raceDate)||'0000'));
+  const firstDate=sortedByDate[0]?.raceDate||'';
+  const lastDate=sortedByDate[sortedByDate.length-1]?.raceDate||'';
+  const dateStr=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+  const periodoStr=firstDate&&lastDate ? `${firstDate} → ${lastDate}` : '—';
+
+  // Equipo/categoría detectados (de la carrera más reciente)
+  const lastRace=sortedByDate[sortedByDate.length-1]||{};
+  const teamGuess=(riders||[]).find(r=>(r.name||'').toLowerCase()===entry.displayName.toLowerCase())?.team||'';
+  const catGuess=lastRace.cat||'';
+
+  const tmpWrap=document.createElement('div');
+  const W=Math.max(820, (chartCanvas.offsetWidth||820));
+  tmpWrap.style.cssText=`position:fixed;top:0;left:-9999px;z-index:-1;background:#f4f7fb;font-family:Arial,sans-serif;width:${W+40}px;box-sizing:border-box`;
+
+  // Header MFPP estilo gradiente azul
+  const hdr=document.createElement('div');
+  hdr.style.cssText='background:linear-gradient(135deg,#0b2f6b,#1286c7);padding:16px 22px 14px;color:#fff;border-radius:14px 14px 0 0';
+  hdr.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px">
+      <div>
+        <div style="font-size:22px;font-weight:900;line-height:1.2">🚴 Trayectoria — ${escapeHtml(entry.displayName)}</div>
+        <div style="font-size:12px;opacity:.85;margin-top:4px">Periodo: ${escapeHtml(periodoStr)}</div>
+      </div>
+      <div style="font-size:11px;opacity:.75;text-align:right">Generado: ${dateStr}<br>MFPP Cycling Specialist</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+      <span style="background:rgba(255,255,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">🏁 ${totalCarreras} carreras</span>
+      <span style="background:rgba(255,255,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">🥇 Mejor: ${best}º</span>
+      <span style="background:rgba(255,255,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">📊 Media: ${avg}º</span>
+      ${teamGuess?`<span style="background:rgba(255,255,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">🚴 ${escapeHtml(teamGuess)}</span>`:''}
+      ${catGuess?`<span style="background:rgba(255,255,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700">🎽 ${escapeHtml(catGuess)}</span>`:''}
+    </div>`;
+
+  // Cuerpo blanco
+  const body=document.createElement('div');
+  body.style.cssText='background:#fff;padding:18px 20px;border-radius:0 0 14px 14px';
+
+  // Gráfico como imagen
+  const chartImg=_canvasToImg(chartCanvas, W, Math.min(360, chartCanvas.offsetHeight||320));
+  chartImg.style.borderRadius='8px';
+  chartImg.style.background='#fff';
+  body.appendChild(chartImg);
+
+  // Tabla clonada (con estilos básicos)
+  const tableClone=tableEl.cloneNode(true);
+  tableClone.style.cssText='width:100%;border-collapse:collapse;font-size:12px;margin-top:14px';
+  tableClone.querySelectorAll('th,td').forEach(c=>{
+    c.style.padding='7px 10px';
+    c.style.borderBottom='1px solid #e5e7eb';
+    c.style.textAlign='left';
+  });
+  tableClone.querySelectorAll('th').forEach(th=>{
+    th.style.background='#f3f4f6';
+    th.style.fontWeight='800';
+    th.style.color='#374151';
+  });
+  body.appendChild(tableClone);
+
+  // Footer
+  const footer=document.createElement('div');
+  footer.style.cssText='text-align:center;font-size:10px;color:#6b7280;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb';
+  footer.textContent=`Resumen de trayectoria deportiva · Director Ciclismo MFPP · ${dateStr}`;
+  body.appendChild(footer);
+
+  tmpWrap.appendChild(hdr);
+  tmpWrap.appendChild(body);
+  document.body.appendChild(tmpWrap);
+
+  try{
+    const btn=document.getElementById('evolExportImgBtn');
+    const origText=btn?.textContent;
+    if(btn){ btn.disabled=true; btn.textContent='⏳ Generando…'; }
+
+    const cv=await html2canvas(tmpWrap,{scale:2, backgroundColor:'#f4f7fb', useCORS:true, logging:false});
+    const slug=entry.displayName.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+    _trendDownload(cv, `trayectoria-${slug}`);
+
+    if(btn){ btn.disabled=false; btn.textContent=origText||'📸 Crear imagen'; }
+  }catch(err){
+    console.error('Error generando imagen de trayectoria:', err);
+    alert('No se ha podido generar la imagen. Revisa la consola.');
+    const btn=document.getElementById('evolExportImgBtn');
+    if(btn){ btn.disabled=false; btn.textContent='📸 Crear imagen'; }
+  }finally{
+    tmpWrap.remove();
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════
