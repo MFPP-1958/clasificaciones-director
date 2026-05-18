@@ -14105,13 +14105,23 @@ function _selIAPropose(){
     return {...c, _iaBase: iaScore};
   });
 
-  // Filtro estricto de elegibilidad (no excepciones)
-  const eligible = scored.filter(c=>c.eligible);
-  eligible.sort((a,b)=>a._iaBase - b._iaBase);
-
-  // Construir selección: rellenar con elegibles. Si faltan slots → null
-  const selection = eligible.slice(0, totalSlots);
-  while(selection.length<totalSlots) selection.push(null);
+  // VLC: filtro estricto de elegibilidad (Campeonato — no concesiones)
+  // Mi Equipo: TODOS los corredores ordenados (la elegibilidad solo afecta al sort)
+  let selection;
+  if(_convoMode==='myteam'){
+    // Ordenar: elegibles primero, luego por iaScore ascendente
+    scored.sort((a,b)=>{
+      if(a.eligible!==b.eligible) return a.eligible ? -1 : 1;
+      return a._iaBase - b._iaBase;
+    });
+    selection = scored.slice(0, totalSlots);
+    while(selection.length<totalSlots) selection.push(null);
+  } else {
+    const eligible = scored.filter(c=>c.eligible);
+    eligible.sort((a,b)=>a._iaBase - b._iaBase);
+    selection = eligible.slice(0, totalSlots);
+    while(selection.length<totalSlots) selection.push(null);
+  }
 
   _selManualOverrides = Array(totalSlots).fill(null);
   _selCurrentSlots = selection;
@@ -14119,16 +14129,17 @@ function _selIAPropose(){
   _selRenderRadar(selection);
   _selRenderMerits(selection);
 
-  // Feedback con info
-  const btn = document.querySelector('[onclick="_selIAPropose()"]');
+  // Feedback visible — actualiza AMBOS botones IA (VLC y Mi Equipo)
   const filled = selection.filter(Boolean).length;
-  if(btn){
-    const orig=btn.textContent;
-    btn.textContent = filled<totalSlots
+  const btns = document.querySelectorAll('[onclick="_selIAPropose()"]');
+  btns.forEach(btn=>{
+    if(!btn.dataset.origText) btn.dataset.origText = btn.textContent;
+    btn.textContent = (_convoMode==='vlc' && filled<totalSlots)
       ? `✅ IA aplicada (${filled}/${totalSlots} elegibles)`
       : '✅ IA aplicada';
-    setTimeout(()=>btn.textContent=orig,3000);
-  }
+    setTimeout(()=>{ btn.textContent = btn.dataset.origText; }, 3000);
+  });
+  console.log('[IA]', _convoMode, 'aplicada — ', selection.filter(Boolean).map(s=>`${s.displayName}(${s._iaBase.toFixed(1)})`).join(', '));
 }
 
 function _selRenderCards(slots){
