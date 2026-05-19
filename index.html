@@ -2279,6 +2279,61 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
          _calSavePlanned, etc. La modal #calModal vive aquí.
          ═══════════════════════════════════════════════════════════════ -->
     <div id="view-calendario" class="spa-view">
+      <!-- ═══════════════════════════════════════════════════════════════
+           LECTOR DINÁMICO FCCV — panel colapsable arriba (NO toca el
+           calendario azul/verde de abajo)
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="panel" id="fccvPanel" style="border:1.5px solid #fcd34d;background:linear-gradient(135deg,#fffbeb,#fef3c7)">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="_fccvToggle()">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:22px">🏛️</span>
+            <div>
+              <div style="font-size:16px;font-weight:900;color:#92400e">Lector Dinámico — Federación Ciclismo CV</div>
+              <div style="font-size:11px;color:#a16207">Consulta el calendario oficial de la FCCV y añade pruebas a tu planificación</div>
+            </div>
+          </div>
+          <span id="fccvChevron" style="font-size:14px;color:#92400e;font-weight:900">▾</span>
+        </div>
+
+        <div id="fccvBody" style="margin-top:14px">
+          <!-- Filtros + Sync -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+            <div style="flex:1;min-width:130px">
+              <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">📅 Año</label>
+              <select id="fccvYear" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
+              </select>
+            </div>
+            <div style="flex:1;min-width:140px">
+              <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">🎽 Categoría</label>
+              <select id="fccvCat" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
+                <option value="">Todas</option>
+                <option value="cadete">Cadetes</option>
+                <option value="junior">Junior</option>
+                <option value="sub23">Sub-23</option>
+                <option value="elite">Elite</option>
+                <option value="master">Master</option>
+                <option value="femenino">Femenino</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:140px">
+              <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">🚴 Modalidad</label>
+              <select id="fccvMod" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
+                <option value="">Todas</option>
+                <option value="carretera">Carretera</option>
+                <option value="btt">BTT / MTB</option>
+                <option value="cx">Ciclocross</option>
+                <option value="pista">Pista</option>
+                <option value="trial">Trial</option>
+              </select>
+            </div>
+            <button onclick="_fccvSync()" id="fccvSyncBtn" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,.35);white-space:nowrap">🔄 Sincronizar con Federación</button>
+          </div>
+
+          <div id="fccvStatus" style="font-size:12px;color:#92400e;font-weight:600;margin-bottom:8px"></div>
+          <div id="fccvResults"></div>
+        </div>
+      </section>
+
       <section class="panel">
         <div class="section-title"><h2>📅 Calendario de carreras</h2></div>
 
@@ -3154,6 +3209,8 @@ async function _calInit(){
     await _calLoadData();
   }
   _calRender();
+  // Inicializar selector de año del lector FCCV (solo la primera vez)
+  if(typeof _fccvInitYears === 'function') _fccvInitYears();
 }
 
 async function _calLoadData(){
@@ -3924,6 +3981,357 @@ function _calRaceModalGotoRider(riderName){
       }
     }
   }, 300);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// LECTOR DINÁMICO FCCV (Federación Ciclismo Comunidad Valenciana)
+// Scraping en tiempo real del calendario oficial vía proxy CORS
+// ═════════════════════════════════════════════════════════════════════
+
+// Lista de proxies CORS — se prueban en orden hasta que uno funcione
+const _FCCV_PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+];
+
+let _fccvLastResults = [];
+let _fccvPanelOpen = true;
+
+function _fccvToggle(){
+  _fccvPanelOpen = !_fccvPanelOpen;
+  const body = document.getElementById('fccvBody');
+  const chev = document.getElementById('fccvChevron');
+  if(body) body.style.display = _fccvPanelOpen ? '' : 'none';
+  if(chev) chev.style.transform = _fccvPanelOpen ? '' : 'rotate(-90deg)';
+}
+
+function _fccvInitYears(){
+  const sel = document.getElementById('fccvYear');
+  if(!sel || sel.options.length>1) return;
+  const cur = new Date().getFullYear();
+  const years = [cur-1, cur, cur+1];
+  sel.innerHTML = years.map(y=>`<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
+}
+
+async function _fccvFetch(url){
+  let lastErr = null;
+  for(const proxify of _FCCV_PROXIES){
+    try{
+      const proxyUrl = proxify(url);
+      const r = await fetch(proxyUrl, {signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined});
+      if(r.ok){
+        const text = await r.text();
+        if(text && text.length > 200) return text;
+      }
+      lastErr = new Error(`Proxy responded ${r.status}`);
+    } catch(e){
+      lastErr = e;
+      console.warn('[FCCV] proxy falló:', e.message);
+    }
+  }
+  throw lastErr || new Error('Todos los proxies CORS fallaron');
+}
+
+// Parser flexible: intenta detectar filas con fecha + nombre + localidad
+function _fccvParseHtml(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const races = [];
+  const dateRe = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
+  const seen = new Set();
+
+  // Estrategia 1: filas de tabla
+  doc.querySelectorAll('tr').forEach(row=>{
+    const text = (row.textContent||'').replace(/\s+/g,' ').trim();
+    if(!text || text.length < 8) return;
+    const m = text.match(dateRe);
+    if(!m) return;
+    const cells = [...row.querySelectorAll('td')].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
+    if(cells.length < 2) return;
+    const dateCell = cells.find(c=>dateRe.test(c)) || '';
+    const others = cells.filter(c=>c!==dateCell);
+    const name = others.sort((a,b)=>b.length-a.length)[0] || '';
+    if(name.length < 5) return;
+    const location = others.find(c=>c!==name && c.length>2 && c.length<60) || '';
+    // Reconstruir fecha
+    const dd = m[1].padStart(2,'0');
+    const mm = m[2].padStart(2,'0');
+    let yy = m[3]; if(yy.length===2) yy='20'+yy;
+    const isoDate = `${yy}-${mm}-${dd}`;
+    const key = isoDate + '|' + name.toLowerCase().slice(0,40);
+    if(seen.has(key)) return;
+    seen.add(key);
+    races.push({date:isoDate, dateText:dateCell, name, location, rawText:text});
+  });
+
+  // Estrategia 2 (fallback): bloques div/li con fecha
+  if(races.length === 0){
+    doc.querySelectorAll('div, li, article').forEach(el=>{
+      // Solo elementos con texto razonable y al menos 1 link/título
+      if(!el.querySelector('a, h2, h3, h4, strong')) return;
+      const text = (el.textContent||'').replace(/\s+/g,' ').trim();
+      if(text.length < 10 || text.length > 500) return;
+      const m = text.match(dateRe);
+      if(!m) return;
+      // Nombre: primer link o heading
+      const nameEl = el.querySelector('a, h2, h3, h4, strong');
+      const name = (nameEl?.textContent||'').replace(/\s+/g,' ').trim();
+      if(name.length < 5 || name.length > 120) return;
+      const dd = m[1].padStart(2,'0');
+      const mm = m[2].padStart(2,'0');
+      let yy = m[3]; if(yy.length===2) yy='20'+yy;
+      const isoDate = `${yy}-${mm}-${dd}`;
+      const key = isoDate + '|' + name.toLowerCase().slice(0,40);
+      if(seen.has(key)) return;
+      seen.add(key);
+      // Buscar localidad: texto que no sea el nombre ni la fecha
+      const restText = text.replace(name,'').replace(m[0],'').replace(/\s+/g,' ').trim();
+      const location = restText.split(/[·•|,\-—]/).map(s=>s.trim()).find(s=>s.length>2&&s.length<60) || '';
+      races.push({date:isoDate, dateText:m[0], name, location, rawText:text});
+    });
+  }
+
+  // Ordenar por fecha
+  races.sort((a,b)=>a.date.localeCompare(b.date));
+  return races;
+}
+
+// Aplica filtros con la lógica de exclusión (no mezclar Cadetes con Escuela/Infantil)
+function _fccvApplyFilters(races, cat, mod){
+  return races.filter(r=>{
+    const txt = (r.rawText||r.name||'').toLowerCase();
+
+    // ── MODALIDAD ──
+    if(mod){
+      const modPatterns = {
+        'carretera': /(carretera|ruta|\bcri\b|cronometro|circuito|critérium|criterium|copa.*carretera)/i,
+        'btt':       /(\bbtt\b|\bmtb\b|monta[ñn]a|descenso|enduro|maratón|xc\b)/i,
+        'cx':        /(\bcx\b|ciclo.?cross|ciclocross)/i,
+        'pista':     /pista/i,
+        'trial':     /trial/i,
+      };
+      const p = modPatterns[mod];
+      if(p && !p.test(txt)) return false;
+      // Exclusiones cruzadas: si pides CARRETERA, no debe ser explícitamente BTT/CX
+      if(mod==='carretera' && /(\bbtt\b|\bmtb\b|ciclo.?cross|\bcx\b|monta[ñn]a)/i.test(txt)) return false;
+      if(mod==='btt' && /carretera|ruta/i.test(txt) && !/btt|mtb/i.test(txt)) return false;
+    }
+
+    // ── CATEGORÍA ──
+    if(cat){
+      const catPatterns = {
+        'cadete':    /(\bcadete[s]?\b|\bcad-?[12]?\b)/i,
+        'junior':    /(\bjunior[es]?\b|\bjun\b|sub.?19|sub.?17)/i,
+        'sub23':     /(sub.?23)/i,
+        'elite':     /(\belite\b|\bélite\b)/i,
+        'master':    /(\bmaster[s]?\b|\bm-?\d)/i,
+        'femenino':  /(femenin|f-cad|f-jun|fem\b|\bf\b)/i,
+      };
+      const p = catPatterns[cat];
+      if(p && !p.test(txt)) return false;
+
+      // EXCLUSIÓN CRÍTICA: cuando pides cadete/junior/sub23/elite no queremos
+      // pruebas mezcladas con ESCUELA/INFANTIL/ALEVÍN/PRINCIPIANTES
+      const adultCategories = ['cadete','junior','sub23','elite','master'];
+      if(adultCategories.includes(cat)){
+        if(/(\bescuela[s]?\b|\bescolar\b|\binfantil[es]?\b|\balev[ií]n[es]?\b|\bprincipiant|\bpre.?infantil|\bpromesa[s]?\b)/i.test(txt)){
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+}
+
+async function _fccvSync(){
+  _fccvInitYears();
+  const year = document.getElementById('fccvYear')?.value || new Date().getFullYear();
+  const cat  = document.getElementById('fccvCat')?.value || '';
+  const mod  = document.getElementById('fccvMod')?.value || '';
+
+  const btn = document.getElementById('fccvSyncBtn');
+  const status = document.getElementById('fccvStatus');
+  const results = document.getElementById('fccvResults');
+  if(results) results.innerHTML = '';
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Consultando FCCV...'; btn.style.opacity = '.7'; }
+  if(status) status.textContent = `Conectando con fccv.es (vía proxy CORS)...`;
+
+  const fccvUrl = `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${year}`;
+  try{
+    const html = await _fccvFetch(fccvUrl);
+    if(status) status.textContent = `📄 HTML recibido (${(html.length/1024).toFixed(1)} KB). Analizando...`;
+    const all = _fccvParseHtml(html);
+    if(!all.length){
+      if(results) results.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b;font-size:13px">
+        ⚠️ Se recibió el HTML pero no se detectó ninguna carrera con el formato esperado.<br>
+        Puede que la estructura de la web haya cambiado. <a href="${fccvUrl}" target="_blank" style="color:#dc2626;font-weight:700">Abrir calendario FCCV en nueva pestaña</a> para inspeccionar.
+      </div>`;
+      if(status) status.textContent = '';
+      return;
+    }
+    const filtered = _fccvApplyFilters(all, cat, mod);
+    _fccvLastResults = filtered;
+    if(status) status.textContent = `✅ ${all.length} carreras encontradas en la FCCV · ${filtered.length} pasan los filtros · ${new Date().toLocaleTimeString('es-ES')}`;
+    _fccvRenderResults(filtered);
+  } catch(e){
+    if(results) results.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b;font-size:13px">
+      ❌ <strong>No se pudo conectar con la FCCV:</strong> ${escapeHtml(e.message||String(e))}<br>
+      <span style="font-size:11px">Los proxies CORS pueden estar caídos. Reintenta en unos segundos o abre directamente <a href="${fccvUrl}" target="_blank" style="color:#dc2626;font-weight:700">${fccvUrl}</a></span>
+    </div>`;
+    if(status) status.textContent = '';
+    console.error('[FCCV] Error:', e);
+  } finally{
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 Sincronizar con Federación'; btn.style.opacity = '1'; }
+  }
+}
+
+function _fccvRenderResults(races){
+  const box = document.getElementById('fccvResults');
+  if(!box) return;
+  if(!races.length){
+    box.innerHTML = `<div style="background:#fff;border:1px dashed #fcd34d;border-radius:10px;padding:18px;text-align:center;color:#92400e">
+      <div style="font-size:28px;margin-bottom:6px">🤷</div>
+      Ninguna carrera coincide con los filtros aplicados. Prueba a ampliar los criterios.
+    </div>`;
+    return;
+  }
+
+  // Identificar cuáles ya están en tu calendario (planned o past)
+  const existingPlanned = (typeof _calPlanned!=='undefined'?_calPlanned:[]) || [];
+  const existingPast    = (typeof _calPast   !=='undefined'?_calPast   :[]) || [];
+
+  const normalize = (s)=>(s||'').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9 ]/g,'')
+    .replace(/\s+/g,' ').trim();
+
+  const findMatch = (race)=>{
+    const nKey = normalize(race.name);
+    if(!nKey || nKey.length<5) return null;
+    // Matching por nombre normalizado (substring de 8+ caracteres)
+    const snippet = nKey.slice(0,Math.min(20, nKey.length));
+    const matchInList = (list, type)=>{
+      for(const it of list){
+        const itKey = normalize(it.name);
+        if(!itKey) continue;
+        if(itKey === nKey || itKey.includes(snippet) || nKey.includes(itKey.slice(0,Math.min(20,itKey.length)))){
+          return {item:it, type};
+        }
+      }
+      return null;
+    };
+    return matchInList(existingPlanned, 'planned') || matchInList(existingPast, 'past');
+  };
+
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;overflow:hidden;border:1px solid #fcd34d">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#fef3c7">
+        <tr>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:110px">Fecha</th>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f">Nombre de la prueba</th>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:140px">Localidad</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:90px">Estado</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:70px">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${races.map((r,i)=>{
+          const match = findMatch(r);
+          let estado='', accion='';
+          if(!match){
+            estado = `<span style="background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700">🆕 Nueva</span>`;
+            accion = `<button onclick="_fccvAddRace(${i})" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-weight:800;font-size:12px;cursor:pointer">＋ Añadir</button>`;
+          } else if(match.type==='planned'){
+            const sameDate = (match.item.dateStr||'').slice(0,10) === r.date;
+            if(sameDate){
+              estado = `<span style="background:#dbeafe;color:#1d4ed8;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700">✓ Planificada</span>`;
+              accion = `<span style="font-size:11px;color:#94a3b8">—</span>`;
+            } else {
+              estado = `<span style="background:#fef3c7;color:#92400e;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700">📅 Cambio fecha</span>`;
+              accion = `<button onclick="_fccvAddRace(${i})" style="background:#d97706;color:#fff;border:none;border-radius:7px;padding:5px 10px;font-weight:800;font-size:12px;cursor:pointer" title="Actualizar fecha sin perder datos">↻ Actualizar</button>`;
+            }
+          } else { // past
+            estado = `<span style="background:#e0e7ff;color:#4338ca;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700">🏁 Disputada</span>`;
+            accion = `<span style="font-size:11px;color:#94a3b8">—</span>`;
+          }
+          const [y,m,d] = r.date.split('-');
+          const dateDisplay = `${d}/${m}/${y}`;
+          return `<tr style="border-top:1px solid #fef3c7">
+            <td style="padding:9px 12px;font-family:monospace;font-weight:700;color:#0b2f6b">${dateDisplay}</td>
+            <td style="padding:9px 12px;font-weight:700">${escapeHtml(r.name)}</td>
+            <td style="padding:9px 12px;color:#6b7280;font-size:12px">${escapeHtml(r.location||'—')}</td>
+            <td style="padding:9px 12px;text-align:center">${estado}</td>
+            <td style="padding:9px 12px;text-align:center">${accion}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+async function _fccvAddRace(idx){
+  const race = _fccvLastResults[idx];
+  if(!race){ alert('Carrera no encontrada.'); return; }
+  if(!_sb){ alert('Necesitas estar conectado a Supabase para añadir carreras al calendario.'); return; }
+
+  const normalize = (s)=>(s||'').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+
+  // Comprobar si ya está en planificadas (match flexible)
+  const existing = (_calPlanned||[]).find(p=>{
+    const a=normalize(p.name), b=normalize(race.name);
+    if(!a||!b) return false;
+    return a===b || a.includes(b.slice(0,Math.min(20,b.length))) || b.includes(a.slice(0,Math.min(20,a.length)));
+  });
+
+  try{
+    if(existing){
+      // Actualizar fecha (intelligent update — preserva el resto del notes JSON)
+      const sameDate = (existing.dateStr||'').slice(0,10) === race.date;
+      if(sameDate){ alert('Esta carrera ya estaba en tu calendario con la misma fecha.'); return; }
+      const oldDate = existing.dateStr||'';
+      let extra = {};
+      try{
+        // Recuperar el notes original de Supabase para no perder otros campos
+        const {data} = await _sb.from('races').select('notes').eq('id', existing.id).maybeSingle();
+        if(data && data.notes){ try{ extra = JSON.parse(data.notes); }catch(_){} }
+      }catch(_){}
+      // Añadir traza de la actualización
+      extra.fccvSync = {previousDate: oldDate, syncedAt: new Date().toISOString(), source:'FCCV'};
+      if(race.location && !extra.localidad) extra.localidad = race.location;
+      const {error} = await _sb.from('races').update({date: race.date, notes: JSON.stringify(extra)}).eq('id', existing.id);
+      if(error) throw error;
+      alert(`✅ Fecha actualizada para "${race.name}":\n${oldDate} → ${race.date}\n\nLos demás datos (categoría, notas, etc.) se han mantenido.`);
+    } else {
+      // Insertar nueva planificada
+      const notes = JSON.stringify({
+        localidad: race.location || '',
+        cat: '',
+        notes: '',
+        fccvSync: {syncedAt: new Date().toISOString(), source:'FCCV'}
+      });
+      const {error} = await _sb.from('races').insert({name: race.name, date: race.date, notes, race_type:'planificada'});
+      if(error) throw error;
+      // Toast
+      try{
+        const t=document.createElement('div');
+        t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:99999;font-size:14px';
+        t.textContent=`✓ "${race.name}" añadida al calendario (planificada)`;
+        document.body.appendChild(t);
+        setTimeout(()=>t.remove(),3500);
+      }catch(_){}
+    }
+    // Refrescar calendario
+    await _calLoadData();
+    _calRender();
+    // Refrescar la tabla de resultados FCCV (para que actualice los badges)
+    _fccvRenderResults(_fccvLastResults);
+  } catch(e){
+    alert('❌ Error guardando en el calendario: '+(e.message||String(e)));
+    console.error(e);
+  }
 }
 
 async function _calSavePlanned(){
