@@ -4114,7 +4114,7 @@ function _fccvParseDate(text, defaultYear){
   return null;
 }
 
-// Valida que un nombre de carrera no sea un email, URL, etc.
+// Valida que un nombre de carrera no sea un email, URL, etiqueta de cat/modalidad, etc.
 function _fccvIsValidRaceName(n){
   if(!n) return false;
   n = String(n).trim();
@@ -4123,8 +4123,17 @@ function _fccvIsValidRaceName(n){
   if(/^\d+$/.test(n)) return false;
   if(/^https?:\/\//i.test(n)) return false;
   if(/^(tel\.?|email|web|fax|administra|auxiliar|secretar|calendario|normativa|seguro|federarse|tramitaci|accid|palau\b|c\/|c\.\/?)\s/i.test(n)) return false;
-  // Que tenga al menos 1 letra (no solo números/símbolos)
   if(!/[a-záéíóúñ]/i.test(n)) return false;
+  // Rechaza ETIQUETAS de modalidad puras
+  if(/^(carretera|btt|btt\s*rally|mtb|ciclo.?cross|cx|pista|trial|cicloturismo|ciclismo\s+para\s+todos|escuelas?\s+ciclismo|ciclisme|escolar)$/i.test(n)) return false;
+  // Rechaza ETIQUETAS de categoría puras (o listas de categorías)
+  if(/^(cadete[s]?|cadet[s]?|cadete\s+fem\.?|cadete\s+femenino|junior[s]?|junior\s+fem\.?|sub.?23|elite|elite\s+fem\.?|master[s]?|alev[ií]n(?:\s+femenino(?:\s+\d)?)?|infantil[es]?|principiantes|promesa[s]?|a\s+partir\s+de\s+\d+\s+a[ñn]os)$/i.test(n)) return false;
+  // Rechaza listas de categorías estilo "Cadete, Cadete Fem., Juni..." o "Elite, Sub-23"
+  if(/^[a-záéíóúñ\s,.]+\.\.\.\s*$/i.test(n) && /,/.test(n)) return false;
+  // Rechaza códigos UCI (1.12.5, 40.B, 16.C, etc)
+  if(/^\d+\.\d+(\.[A-Z0-9+]+)?$/i.test(n)) return false;
+  // Rechaza nombres que sean SOLO modalidad+categoría
+  if(/^(carretera|btt|cx|pista|trial|cicloturismo)\s+(cadet|junior|sub|elite|master|fem)/i.test(n) && n.length < 35) return false;
   return true;
 }
 
@@ -4157,97 +4166,86 @@ function _fccvParseHtml(html, defaultYear){
     races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||''});
   };
 
-  // ── ESTRATEGIA PRINCIPAL FCCV: detectar filas con Unix timestamp ──
-  // La FCCV embebe Unix timestamps en cada fila/celda. Las usamos como ancla:
-  // por cada timestamp encontramos, extraemos el contexto (fila padre).
-  const allEls = doc.querySelectorAll('tr, li, div, article, section');
-  allEls.forEach(el=>{
-    const text = (el.textContent||'').replace(/\s+/g,' ').trim();
-    if(!text || text.length < 20 || text.length > 800) return;
-    if(!_FCCV_TS_RE.test(text)) return;
-    const d = _fccvParseDate(text, yearStr);
-    if(!d) return;
-    // Extraer nombre: en estructuras de tabla, la celda más larga (excluyendo
-    // la del timestamp y la fecha) suele ser el nombre.
-    const cells = [...el.querySelectorAll('td')].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
-    let name = '';
-    let location = '';
-    let modality = '';
-    let category = '';
-    if(cells.length >= 3){
-      // Detectar primero la celda de CATEGORÍAS (lista separada por comas con tokens
-      // como "Cadete, Cadete Fem., Juniors") y la celda de LOCALIDAD (PUEBLO (PROVINCIA))
-      const isCatListCell = (c)=>{
-        if(c.length>120) return false;
-        // Lista de categorías: tokens separados por coma, todos breves y reconocibles
-        if(/^\s*(cadet|junior|sub.?23|elite|master|escola|infantil|alev|feme|cicloturism|promesa)/i.test(c)){
-          // Y contiene varias categorías separadas por coma
-          if(/,/.test(c) || /\bfem\.?\b/i.test(c)) return true;
-        }
-        return false;
-      };
-      const isLocationCell = (c)=>{
-        if(!c) return false;
-        // Formato típico: "BENICARLO (CASTELLON)", "VALENCIA (VALENCIA)"
-        return /^[A-Z][A-ZÁÉÍÓÚÑ\s'`´·\-]{2,40}\s*\([A-ZÁÉÍÓÚÑ\s]+\)\s*$/i.test(c.trim());
-      };
-      const isRaceNameCell = (c)=>{
-        if(!c) return false;
-        if(!_fccvIsValidRaceName(c)) return false;
-        if(isCatListCell(c)) return false;
-        if(isLocationCell(c)) return false;
-        // Bonus: las que contengan palabras típicas de carreras
-        return true;
-      };
-      // Calcular cada celda
-      const nameCandidates = cells.filter(isRaceNameCell);
-      // Priorizar las que tienen palabras de carrera (TROFEO/MEMORIAL/COPA/CHALLENGE/CRI/VUELTA/etc.)
-      const racePat = /\b(trofeo|trofeu|memorial|copa|challenge|cri\b|vuelta|criterium|critèrium|premi|premio|campeonato|cpto|cronoescalada|cronometro|gran\s+premi|gp\s|circuit|copa|liga)\b/i;
-      const named = nameCandidates.sort((a,b)=>{
-        const ar = racePat.test(a) ? 0 : 1;
-        const br = racePat.test(b) ? 0 : 1;
-        if(ar!==br) return ar-br;        // priorizar las que contengan keywords
-        return b.length - a.length;       // si empate, la más larga
-      });
-      name = named[0] || nameCandidates[0] || '';
-      // Localidad: la celda con formato CIUDAD (PROVINCIA)
-      location = cells.find(c=>c!==name && isLocationCell(c)) || cells.find(c=>c!==name && /\([A-ZÁÉÍÓÚ ]+\)/.test(c)) || '';
-      // Categoría: la celda con lista de categorías o un valor de categoría puro
-      category = cells.find(c=>isCatListCell(c)) || cells.find(c=>/^(cadet[es]?|junior[s]?|sub.?23|elite|master|escola[rs]?|infantil[es]?|alev[ií]n|principiant|promesa[s]?|cicloturism\w*)$/i.test(c.trim())) || '';
-      // Modalidad: celda con un valor de modalidad puro
-      modality = cells.find(c=>/^(carretera|btt|mtb|ciclo.?cross|cx|pista|trial|cicloturismo|ciclisme|escolar)$/i.test(c.trim())) || '';
-    } else {
-      // Fallback sin celdas: extraer del texto continuo
-      // Quita timestamp + DDMES inicial, el resto es nombre+localidad
-      let cleaned = text.replace(_FCCV_TS_RE,'').replace(_FCCV_DDMON_RE,'').replace(/\s+/g,' ').trim();
-      // Buscar localidad: parentesis (VALENCIA), (CASTELLON), etc.
-      const locMatch = cleaned.match(/([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\-]+\s*\((?:VALENCIA|CASTELL[ÓO]N|ALICANTE|ALACANT)\))/i);
-      if(locMatch) location = locMatch[1].trim();
-      // Buscar modalidad/categoría en el cuerpo
-      const modMatch = cleaned.match(/\b(carretera|btt|mtb|ciclo.?cross|pista|trial|cicloturismo)\b/i);
-      if(modMatch) modality = modMatch[1];
-      const catMatch = cleaned.match(/\b(cadet[es]?|junior[s]?|sub.?23|elite|master|escola[rs]?|infantil[es]?|alev[ií]n)\b/i);
-      if(catMatch) category = catMatch[1];
-      // El nombre suele ser la parte central — la cadena más larga entre separadores
-      // Heurística: extraer el texto entre la modalidad/categoría y la localidad
-      name = cleaned;
-      if(modality && name.includes(modality)){
-        name = name.substring(name.indexOf(modality) + modality.length);
-      }
-      if(category && name.includes(category)){
-        name = name.substring(name.indexOf(category) + category.length);
-      }
-      // Quitar códigos UCI tipo 1.30.3.+H, 1.14.5
-      name = name.replace(/\b\d+\.\d+(?:\.\d+)?(?:\.\+?[A-Z]+)?\b/g, '');
-      // Cortar en la localidad si la encontramos
-      if(location && name.includes(location)){
-        name = name.substring(0, name.indexOf(location)).trim();
-      }
-      name = name.replace(/\s+/g,' ').trim();
-      // Limitar longitud
-      if(name.length > 120) name = name.slice(0,120);
+  // Helpers de clasificación de celdas
+  const isCatListCell = (c)=>{
+    if(!c || c.length<3 || c.length>200) return false;
+    // Lista de categorías: empieza con un token de categoría conocido
+    if(/^\s*(cadet|junior|sub.?23|elite|master|escola|infantil|alev|feme?ni|cicloturism|promesa|a\s+partir|principiant)/i.test(c)){
+      // Y contiene marcas: coma, "fem.", "..." o solo una palabra de cat
+      if(/,|\bfem\.?\b|\.\.\.|\s+\d/i.test(c) || /^(cadete[s]?|junior[s]?|elite|master|sub.?23|cadet)$/i.test(c.trim())) return true;
     }
-    push(d.iso, name, location, text, modality, category);
+    return false;
+  };
+  const isLocationCell = (c)=>{
+    if(!c) return false;
+    // PUEBLO (PROVINCIA), PROVINCIA NOMBRE (PROVINCIA), VILA-REAL I MORELLA (CASTELLON)
+    return /^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9\s'`´·\-\/]{2,60}\s*\([A-ZÁÉÍÓÚÑ\s]+\)\s*$/i.test(c.trim());
+  };
+  const isModalityCell = (c)=>{
+    if(!c) return false;
+    return /^(carretera|btt(\s*rally)?|mtb|ciclo.?cross|cx|pista|trial|cicloturismo|ciclismo\s+para\s+todos|escuelas?\s+ciclismo|ciclisme|escolar)$/i.test(c.trim());
+  };
+  const isUCICodeCell = (c)=>{
+    if(!c) return false;
+    return /^\d+\.\d+(\.[A-Z0-9+]+)?(\.\+?[A-Z]+)?$/i.test(c.trim());
+  };
+  const isDDMESCell = (c)=>{
+    if(!c) return false;
+    return /^\s*\d{1,2}\s{0,5}(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC)\s*$/i.test(c);
+  };
+  const racePat = /\b(trofeo|trofeu|memorial|copa|challenge|cri\b|vuelta|criterium|critèrium|premi|premio|campeonato|cpto|cronoescalada|cronometro|gran\s+premi|gp\s|circuit|liga|marcha|desafio|reto|clasica|classica|open\b|trial)\b/i;
+
+  // ── ESTRATEGIA PRINCIPAL FCCV: cada <tr> con celdas <td> es una carrera ──
+  doc.querySelectorAll('tr').forEach(row=>{
+    const cells = [...row.querySelectorAll('td')];
+    if(cells.length < 3) return;
+
+    const tdTexts = cells.map(td=>(td.textContent||'').replace(/\s+/g,' ').trim());
+
+    // Buscar fecha: prioriza data-* (DataTables suele guardar timestamp en data-order/data-sort)
+    let dateSource = '';
+    const allDataValues = cells.map(td=>{
+      const vals = [];
+      for(const attr of td.attributes){
+        if(attr.name.startsWith('data-')) vals.push(attr.value);
+      }
+      // También en spans hijos
+      td.querySelectorAll('[data-order],[data-sort],[data-time]').forEach(c=>{
+        ['data-order','data-sort','data-time'].forEach(k=>{
+          const v = c.getAttribute(k); if(v) vals.push(v);
+        });
+      });
+      return vals.join(' ');
+    }).join(' ');
+    dateSource = allDataValues + ' ' + tdTexts.join(' ');
+
+    const d = _fccvParseDate(dateSource, yearStr);
+    if(!d) return;
+
+    // Clasificar cada celda por su FORMATO (no por su posición)
+    let location = tdTexts.find(isLocationCell) || '';
+    let modality = tdTexts.find(isModalityCell) || '';
+    let category = tdTexts.find(isCatListCell) || tdTexts.find(c=>/^(cadet[es]?|junior[s]?|sub.?23|elite|master|escola[rs]?|infantil[es]?|alev[ií]n|principiant|promesa[s]?|cicloturism\w*)$/i.test(c.trim())) || '';
+
+    // Candidatos a NOMBRE: las que no sean ninguna de las clasificadas
+    const used = new Set([location, modality, category].filter(Boolean));
+    const nameCandidates = tdTexts.filter(c=>{
+      if(used.has(c)) return false;
+      if(isDDMESCell(c) || isUCICodeCell(c)) return false;
+      return _fccvIsValidRaceName(c);
+    });
+
+    // Priorizar nombres con palabras-clave de carrera
+    const named = nameCandidates.sort((a,b)=>{
+      const ar = racePat.test(a) ? 0 : 1;
+      const br = racePat.test(b) ? 0 : 1;
+      if(ar!==br) return ar-br;
+      return b.length - a.length;
+    });
+    const name = named[0] || nameCandidates[0] || '';
+    if(!name) return;
+
+    push(d.iso, name, location, tdTexts.join(' | '), modality, category);
   });
 
   // ── ESTRATEGIA FALLBACK: filas tr con cualquier fecha (sin timestamp) ──
