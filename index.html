@@ -4056,8 +4056,9 @@ const _FCCV_DATENUM_RE = /\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/;
 const _FCCV_DATEISO_RE = /\b(20[2-3]\d)-(\d{1,2})-(\d{1,2})\b/;
 const _FCCV_DATEWORD_RE = new RegExp(`\\b(\\d{1,2})\\s*(?:de\\s+)?(${Object.keys(FCCV_MON_FULL).join('|')})(?:\\s+(?:de|del)\\s+)?(\\d{4})?\\b`, 'i');
 
-function _fccvParseDate(text){
+function _fccvParseDate(text, defaultYear){
   if(!text) return null;
+  const fallbackYear = defaultYear ? String(defaultYear) : String(new Date().getFullYear());
   // 1) Unix timestamp (más fiable en FCCV)
   const mts = text.match(_FCCV_TS_RE);
   if(mts){
@@ -4075,16 +4076,16 @@ function _fccvParseDate(text){
     const yy = mi[1], mm = mi[2].padStart(2,'0'), dd = mi[3].padStart(2,'0');
     if(+mm>=1&&+mm<=12&&+dd>=1&&+dd<=31) return {iso:`${yy}-${mm}-${dd}`, raw: mi[0], src:'iso'};
   }
-  // 3) DDMES (13JUN, 01ABR) — formato FCCV
+  // 3) DDMES (13JUN, 01ABR) — formato FCCV (sin año, usar el del filtro)
   const mddmon = text.match(_FCCV_DDMON_RE);
   if(mddmon){
     const dd = mddmon[1].padStart(2,'0');
     const monKey = mddmon[2].toUpperCase();
     const mm = String(FCCV_MON_ABBR[monKey]).padStart(2,'0');
     if(+dd>=1&&+dd<=31){
-      // Buscar año explícito 2024-2033 en el mismo texto
+      // Año: el explícito si está · si no, el del desplegable
       const ymatch = text.match(/\b(20[2-3]\d)\b/);
-      const yy = ymatch ? ymatch[1] : String(new Date().getFullYear());
+      const yy = ymatch ? ymatch[1] : fallbackYear;
       return {iso:`${yy}-${mm}-${dd}`, raw: mddmon[0], src:'ddmon'};
     }
   }
@@ -4104,7 +4105,7 @@ function _fccvParseDate(text){
   if(mw){
     const dd = mw[1].padStart(2,'0');
     const mm = String(FCCV_MON_FULL[mw[2].toLowerCase()]).padStart(2,'0');
-    const yy = mw[3] || String(new Date().getFullYear());
+    const yy = mw[3] || fallbackYear;
     return {iso:`${yy}-${mm}-${dd}`, raw: mw[0], src:'word'};
   }
   return null;
@@ -4135,15 +4136,18 @@ function _fccvCleanRaceName(rawName){
   return s.trim();
 }
 
-function _fccvParseHtml(html){
+function _fccvParseHtml(html, defaultYear){
   _fccvLastRawHtml = html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const races = [];
   const seen = new Set();
+  const yearStr = defaultYear ? String(defaultYear) : String(new Date().getFullYear());
 
   const push = (date, name, location, rawText, modality, category) => {
     name = _fccvCleanRaceName(name);
     if(!date || !_fccvIsValidRaceName(name)) return;
+    // Filtrar por año seleccionado (descarta restos de otros años en la página)
+    if(date.slice(0,4) !== yearStr) return;
     const key = date + '|' + name.toLowerCase().slice(0,50);
     if(seen.has(key)) return;
     seen.add(key);
@@ -4158,7 +4162,7 @@ function _fccvParseHtml(html){
     const text = (el.textContent||'').replace(/\s+/g,' ').trim();
     if(!text || text.length < 20 || text.length > 800) return;
     if(!_FCCV_TS_RE.test(text)) return;
-    const d = _fccvParseDate(text);
+    const d = _fccvParseDate(text, yearStr);
     if(!d) return;
     // Extraer nombre: en estructuras de tabla, la celda más larga (excluyendo
     // la del timestamp y la fecha) suele ser el nombre.
@@ -4249,7 +4253,7 @@ function _fccvParseHtml(html){
       const text = (row.textContent||'').replace(/\s+/g,' ').trim();
       if(!text || text.length < 10 || text.length > 800) return;
       if(_FCCV_TS_RE.test(text)) return; // ya procesada
-      const d = _fccvParseDate(text);
+      const d = _fccvParseDate(text, yearStr);
       if(!d) return;
       const cells = [...row.querySelectorAll('td')].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
       const validCells = cells.filter(c=>_fccvIsValidRaceName(c));
@@ -4266,7 +4270,7 @@ function _fccvParseHtml(html){
       const text = (el.textContent||'').replace(/\s+/g,' ').trim();
       if(text.length < 10 || text.length > 800) return;
       if(_FCCV_TS_RE.test(text)) return;
-      const d = _fccvParseDate(text);
+      const d = _fccvParseDate(text, yearStr);
       if(!d) return;
       const nameEl = el.querySelector('a, h2, h3, h4, h5, strong, b');
       const name = (nameEl?.textContent||'').replace(/\s+/g,' ').trim();
@@ -4280,6 +4284,30 @@ function _fccvParseHtml(html){
   // Ordenar por fecha
   races.sort((a,b)=>a.date.localeCompare(b.date));
   return races;
+}
+
+// Extrae texto de categoría del rawText (mejor esfuerzo) — para mostrar en
+// la columna Categoría de la tabla de resultados FCCV.
+function _fccvExtractCategoryFromText(txt){
+  if(!txt) return '';
+  const s = String(txt);
+  // Buscar tokens de categoría conocidos, intentar capturar la lista completa
+  // Ej: "Cadete, Cadete Fem., Junior" o "Elite, Sub-23"
+  const catTokens = /\b(?:cadet[es]?(?:\s+fem\.?)?|junior[s]?(?:\s+fem\.?)?|sub.?23(?:\s+fem\.?)?|elite(?:\s+fem\.?)?|master[s]?|alev[ií]n(?:\s+femenino)?(?:\s+\d)?|infantil[es]?|escola[rs]?\s*ciclismo|cicloturismo|principiantes|promesa[s]?)/ig;
+  const matches = s.match(catTokens);
+  if(!matches || !matches.length) return '';
+  // Eliminar duplicados conservando orden, máximo 4 categorías
+  const seen = new Set();
+  const unique = [];
+  matches.forEach(m=>{
+    const k = m.toLowerCase().replace(/\s+/g,' ').trim();
+    if(seen.has(k)) return;
+    seen.add(k);
+    unique.push(m.replace(/\s+/g,' ').trim());
+  });
+  let result = unique.slice(0,4).join(', ');
+  if(unique.length > 4) result += '...';
+  return result;
 }
 
 // Detecta si una prueba es FEMENINO-ONLY (solo mujeres)
@@ -4409,8 +4437,8 @@ async function _fccvSync(){
   const fccvUrl = `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${year}`;
   try{
     const html = await _fccvFetch(fccvUrl);
-    if(status) status.textContent = `📄 HTML recibido (${(html.length/1024).toFixed(1)} KB). Analizando...`;
-    const all = _fccvParseHtml(html);
+    if(status) status.textContent = `📄 HTML recibido (${(html.length/1024).toFixed(1)} KB). Analizando con año=${year}...`;
+    const all = _fccvParseHtml(html, year);
     if(!all.length){
       if(results) results.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b;font-size:13px">
         ⚠️ Se recibió el HTML pero no se detectó ninguna carrera con el formato esperado.<br>
@@ -4483,6 +4511,7 @@ function _fccvRenderResults(races){
         <tr>
           <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:110px">Fecha</th>
           <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f">Nombre de la prueba</th>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:170px">Categoría</th>
           <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:140px">Localidad</th>
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:90px">Estado</th>
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:70px">Acción</th>
@@ -4510,9 +4539,11 @@ function _fccvRenderResults(races){
           }
           const [y,m,d] = r.date.split('-');
           const dateDisplay = `${d}/${m}/${y}`;
+          const catLabel = r.category || _fccvExtractCategoryFromText(r.rawText) || '—';
           return `<tr style="border-top:1px solid #fef3c7">
             <td style="padding:9px 12px;font-family:monospace;font-weight:700;color:#0b2f6b">${dateDisplay}</td>
             <td style="padding:9px 12px;font-weight:700">${escapeHtml(r.name)}</td>
+            <td style="padding:9px 12px;color:#475569;font-size:12px;font-weight:600">${escapeHtml(catLabel)}</td>
             <td style="padding:9px 12px;color:#6b7280;font-size:12px">${escapeHtml(r.location||'—')}</td>
             <td style="padding:9px 12px;text-align:center">${estado}</td>
             <td style="padding:9px 12px;text-align:center">${accion}</td>
