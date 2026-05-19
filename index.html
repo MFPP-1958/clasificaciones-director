@@ -4051,7 +4051,8 @@ const FCCV_MON_FULL = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,
 
 // Patrones de fecha en orden de prioridad
 const _FCCV_TS_RE = /\b(1[5-9]\d{8}|20\d{8})\b/;
-const _FCCV_DDMON_RE = /\b(\d{1,2})(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC)\b/i;
+// Acepta 23MAY · 23 MAY · 23\nMAY (la FCCV los muestra en celdas con salto de línea)
+const _FCCV_DDMON_RE = /\b(\d{1,2})\s{0,5}(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC)\b/i;
 const _FCCV_DATENUM_RE = /\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/;
 const _FCCV_DATEISO_RE = /\b(20[2-3]\d)-(\d{1,2})-(\d{1,2})\b/;
 const _FCCV_DATEWORD_RE = new RegExp(`\\b(\\d{1,2})\\s*(?:de\\s+)?(${Object.keys(FCCV_MON_FULL).join('|')})(?:\\s+(?:de|del)\\s+)?(\\d{4})?\\b`, 'i');
@@ -4059,15 +4060,17 @@ const _FCCV_DATEWORD_RE = new RegExp(`\\b(\\d{1,2})\\s*(?:de\\s+)?(${Object.keys
 function _fccvParseDate(text, defaultYear){
   if(!text) return null;
   const fallbackYear = defaultYear ? String(defaultYear) : String(new Date().getFullYear());
-  // 1) Unix timestamp (más fiable en FCCV)
+  // 1) Unix timestamp (más fiable en FCCV). Sumamos 12h para evitar bugs de
+  // zona horaria entre Madrid (UTC+1/+2) y UTC (FCCV guarda midnight Madrid).
   const mts = text.match(_FCCV_TS_RE);
   if(mts){
     const ts = parseInt(mts[1]);
-    const d = new Date(ts * 1000);
-    const y = d.getFullYear();
+    const d = new Date((ts + 12*3600) * 1000);
+    const y = d.getUTCFullYear();
     if(y >= 2020 && y <= 2033){
-      const iso = d.toISOString().slice(0,10);
-      return {iso, raw: mts[0], src:'timestamp'};
+      const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+      const dd = String(d.getUTCDate()).padStart(2,'0');
+      return {iso:`${y}-${mm}-${dd}`, raw: mts[0], src:'timestamp'};
     }
   }
   // 2) ISO YYYY-MM-DD
@@ -4311,27 +4314,49 @@ function _fccvExtractCategoryFromText(txt){
 }
 
 // Detecta si una prueba es FEMENINO-ONLY (solo mujeres)
-// Tokens femeninos: femení, femenina, feminas, mujeres, dones (CA/VA)
-// Importante: una prueba puede tener "Cadete Fem." entre OTRAS categorías
-// (mixta). Solo es FEM-ONLY si TODAS sus categorías son femeninas o si
-// el nombre/título es explícitamente femenino sin contrapartida masculina.
-function _fccvIsFemaleOnly(txt){
+// Estrategia: 2 pruebas (más fuerte si la columna "Categorías" está disponible)
+function _fccvIsFemaleOnly(txt, categoryField){
   const lower = (txt||'').toLowerCase();
-  // Indicadores fuertes de femenino-only en el TÍTULO
-  const titleFemaleOnly = /(\bfemen[ií]n[oa]?\b|\bfemen[ií]s?\b|\bmujeres\b|\bfeminas\b|\bdones\b|gran\s+premi\s+femen|trofeo\s+femen|copa\s+femen|carrera\s+ciclista\s+femen|trofeo\s+f[eé]minas|\bf[eé]mina[s]?\b)/i.test(lower);
-  if(titleFemaleOnly){
-    // Si además aparecen menciones masculinas (cadete sin fem, junior sin fem, etc.) podría ser mixta
-    // Pero si el nombre dice "FEMENI" "MUJERES" "FEMINAS", suele ser solo féminas
-    return true;
+
+  // PRUEBA 1 — La más fiable: columna Categorías celda a celda.
+  // Si TODAS las categorías listadas contienen "fem", "femenin" o "mujer",
+  // es 100% femenina.
+  if(categoryField && categoryField.trim()){
+    const tokens = categoryField.toLowerCase()
+      .split(/[,;]/)
+      .map(s=>s.replace(/\.\.\.$/,'').trim())
+      .filter(s=>s.length>=3);
+    if(tokens.length){
+      const allFem = tokens.every(t=>/\bfem\b|fem\.|femen|mujer|dones/i.test(t));
+      if(allFem) return true;
+    }
   }
-  return false;
+
+  // PRUEBA 2 — Indicadores fuertes en el TÍTULO o rawText
+  const titlePatterns = /(\bfemen[ií]n[oa]?\b|\bfemen[ií]s?\b|\bmujeres\b|\bfeminas\b|\bdones\b|gran\s+premi\s+femen|trofeo\s+femen|copa\s+femen|carrera\s+ciclista\s+femen|trofeo\s+f[eé]minas|\bf[eé]mina[s]?\b|challenge\s+mujeres|copa\s+mujeres|reto\s+mujeres)/i;
+  return titlePatterns.test(lower);
 }
 
 // Detecta si tiene categoría masculina (no fem) entre sus categorías
-function _fccvHasMaleCategory(txt){
+function _fccvHasMaleCategory(txt, categoryField){
+  // 1) Si tenemos columna Categorías, decidimos por celdas
+  if(categoryField && categoryField.trim()){
+    const tokens = categoryField.toLowerCase()
+      .split(/[,;]/)
+      .map(s=>s.replace(/\.\.\.$/,'').trim())
+      .filter(s=>s.length>=3);
+    if(tokens.length){
+      // Una categoría MASCULINA es una que tiene "cadete/junior/sub23/elite/master"
+      // y NO tiene "fem"/"femen"/"mujer"
+      const hasMale = tokens.some(t=>
+        /\b(cadet|junior|sub.?23|elite|master)/i.test(t) &&
+        !/\bfem\b|fem\.|femen|mujer|dones/i.test(t)
+      );
+      return hasMale;
+    }
+  }
+  // 2) Fallback general
   const lower = (txt||'').toLowerCase();
-  // Una categoría base SIN "fem"/"femen" detrás cercano = masculina
-  // Buscamos "cadete" sin que vaya seguido de fem
   const malePatterns = [
     /\bcadet[es]?\b(?!\s*(?:fem|femen|f\.|f,))/,
     /\bjunior[es]?\b(?!\s*(?:fem|femen|f\.|f,))/,
@@ -4395,23 +4420,22 @@ function _fccvApplyFilters(races, cat, mod, gen){
     }
 
     // ── GÉNERO ──
-    // Lógica:
-    //  - "masculino": excluir pruebas marcadas como FEMENINO-ONLY en el título
-    //  - "femenino":  solo pruebas con indicador femenino (femení, mujeres, etc)
-    //  - "mixto":     debe tener tanto categoría masculina como femenina indicada
+    // Lógica más estricta usando la columna Categorías cuando está disponible:
+    //  - "masculino": excluye pruebas FEMENINO-ONLY (todas sus categorías son fem)
+    //  - "femenino":  solo pruebas con al menos una categoría femenina
+    //  - "mixto":     debe tener al menos 1 categoría masculina Y 1 femenina
     //  - "" (Todos):  no filtra por género
     if(gen){
-      const isFem = _fccvIsFemaleOnly(txt);
-      const hasMale = _fccvHasMaleCategory(txt);
+      // Si el campo category está vacío, intentamos extraerlo del rawText
+      const catField = r.category || _fccvExtractCategoryFromText(r.rawText) || '';
+      const isFem = _fccvIsFemaleOnly(txt, catField);
+      const hasMale = _fccvHasMaleCategory(txt, catField);
       if(gen==='masculino'){
-        // Excluir las femenino-only sin contrapartida masculina
         if(isFem && !hasMale) return false;
       } else if(gen==='femenino'){
-        // Solo mostrar las que tengan indicador femenino
-        if(!isFem && !/\b(fem|femen|femina|mujeres|dones)/i.test(txt)) return false;
+        if(!isFem && !/\b(fem\b|fem\.|femen|femina|mujer|dones)/i.test(txt)) return false;
       } else if(gen==='mixto'){
-        // Debe tener AMBOS (categoría base + variante fem)
-        const hasFemMark = /\b(fem\.?|femen|femina|mujeres|dones)/i.test(txt);
+        const hasFemMark = /\bfem\b|fem\.|femen|femina|mujer|dones/i.test(catField || txt);
         if(!(hasMale && hasFemMark)) return false;
       }
     }
