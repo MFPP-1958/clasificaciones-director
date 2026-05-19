@@ -4034,101 +4034,203 @@ async function _fccvFetch(url){
   throw lastErr || new Error('Todos los proxies CORS fallaron');
 }
 
-// Parser flexible: intenta detectar filas con fecha + nombre + localidad.
-// Almacena el HTML crudo para diagnóstico.
+// Parser FCCV-específico: la FCCV usa Unix timestamps + códigos DDMES
 let _fccvLastRawHtml = '';
+
+const FCCV_MON_ABBR = {ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,SET:9,OCT:10,NOV:11,DIC:12};
+const FCCV_MON_FULL = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12,gener:1,febrer:2,març:3,marc:3,maig:5,juny:6,juliol:7,agost:8,setembre:9,novembre:11,desembre:12};
+
+// Patrones de fecha en orden de prioridad
+const _FCCV_TS_RE = /\b(1[5-9]\d{8}|20\d{8})\b/;
+const _FCCV_DDMON_RE = /\b(\d{1,2})(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC)\b/i;
+const _FCCV_DATENUM_RE = /\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/;
+const _FCCV_DATEISO_RE = /\b(20[2-3]\d)-(\d{1,2})-(\d{1,2})\b/;
+const _FCCV_DATEWORD_RE = new RegExp(`\\b(\\d{1,2})\\s*(?:de\\s+)?(${Object.keys(FCCV_MON_FULL).join('|')})(?:\\s+(?:de|del)\\s+)?(\\d{4})?\\b`, 'i');
+
+function _fccvParseDate(text){
+  if(!text) return null;
+  // 1) Unix timestamp (más fiable en FCCV)
+  const mts = text.match(_FCCV_TS_RE);
+  if(mts){
+    const ts = parseInt(mts[1]);
+    const d = new Date(ts * 1000);
+    const y = d.getFullYear();
+    if(y >= 2020 && y <= 2033){
+      const iso = d.toISOString().slice(0,10);
+      return {iso, raw: mts[0], src:'timestamp'};
+    }
+  }
+  // 2) ISO YYYY-MM-DD
+  const mi = text.match(_FCCV_DATEISO_RE);
+  if(mi){
+    const yy = mi[1], mm = mi[2].padStart(2,'0'), dd = mi[3].padStart(2,'0');
+    if(+mm>=1&&+mm<=12&&+dd>=1&&+dd<=31) return {iso:`${yy}-${mm}-${dd}`, raw: mi[0], src:'iso'};
+  }
+  // 3) DDMES (13JUN, 01ABR) — formato FCCV
+  const mddmon = text.match(_FCCV_DDMON_RE);
+  if(mddmon){
+    const dd = mddmon[1].padStart(2,'0');
+    const monKey = mddmon[2].toUpperCase();
+    const mm = String(FCCV_MON_ABBR[monKey]).padStart(2,'0');
+    if(+dd>=1&&+dd<=31){
+      // Buscar año explícito 2024-2033 en el mismo texto
+      const ymatch = text.match(/\b(20[2-3]\d)\b/);
+      const yy = ymatch ? ymatch[1] : String(new Date().getFullYear());
+      return {iso:`${yy}-${mm}-${dd}`, raw: mddmon[0], src:'ddmon'};
+    }
+  }
+  // 4) DD/MM/YYYY
+  const mn = text.match(_FCCV_DATENUM_RE);
+  if(mn){
+    const dd = mn[1].padStart(2,'0');
+    const mm = mn[2].padStart(2,'0');
+    let yy = mn[3]; if(yy.length===2) yy='20'+yy;
+    const y = +yy;
+    if(y>=2020&&y<=2033&&+mm>=1&&+mm<=12&&+dd>=1&&+dd<=31){
+      return {iso:`${yy}-${mm}-${dd}`, raw: mn[0], src:'datenum'};
+    }
+  }
+  // 5) "12 de mayo de 2026"
+  const mw = text.match(_FCCV_DATEWORD_RE);
+  if(mw){
+    const dd = mw[1].padStart(2,'0');
+    const mm = String(FCCV_MON_FULL[mw[2].toLowerCase()]).padStart(2,'0');
+    const yy = mw[3] || String(new Date().getFullYear());
+    return {iso:`${yy}-${mm}-${dd}`, raw: mw[0], src:'word'};
+  }
+  return null;
+}
+
+// Valida que un nombre de carrera no sea un email, URL, etc.
+function _fccvIsValidRaceName(n){
+  if(!n) return false;
+  n = String(n).trim();
+  if(n.length < 5 || n.length > 200) return false;
+  if(/@/.test(n)) return false;
+  if(/^\d+$/.test(n)) return false;
+  if(/^https?:\/\//i.test(n)) return false;
+  if(/^(tel\.?|email|web|fax|administra|auxiliar|secretar|calendario|normativa|seguro|federarse|tramitaci|accid|palau\b|c\/|c\.\/?)\s/i.test(n)) return false;
+  // Que tenga al menos 1 letra (no solo números/símbolos)
+  if(!/[a-záéíóúñ]/i.test(n)) return false;
+  return true;
+}
+
+// Limpia el nombre de carrera quitando códigos, timestamps, datos sobrantes
+function _fccvCleanRaceName(rawName){
+  if(!rawName) return '';
+  let s = String(rawName).replace(/\s+/g,' ').trim();
+  // Quitar timestamp inicial
+  s = s.replace(/^\s*1[5-9]\d{8}\s+/,'').replace(/^\s*20\d{8}\s+/,'');
+  // Quitar código DDMES inicial
+  s = s.replace(/^\s*\d{1,2}(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC)\s+/i,'');
+  return s.trim();
+}
 
 function _fccvParseHtml(html){
   _fccvLastRawHtml = html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const races = [];
-  // Fechas: DD/MM/YYYY · DD-MM-YYYY · YYYY-MM-DD · "12 de Mayo de 2026"
-  const dateNumRe   = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
-  const dateIsoRe   = /(\d{4})-(\d{1,2})-(\d{1,2})/;
-  const _MONTHS_ES  = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12,gener:1,febrer:2,març:3,marc:3,maig:5,juny:6,juliol:7,agost:8,setembre:9,octubre:10,novembre:11,desembre:12};
-  const dateWordRe  = new RegExp(`(\\d{1,2})\\s*(?:de\\s+)?(${Object.keys(_MONTHS_ES).join('|')})(?:\\s+(?:de|del)\\s+)?(\\d{4})?`, 'i');
-
-  const parseDate = (text)=>{
-    if(!text) return null;
-    // ISO YYYY-MM-DD primero
-    const mi = text.match(dateIsoRe);
-    if(mi){
-      const yy = mi[1], mm = mi[2].padStart(2,'0'), dd = mi[3].padStart(2,'0');
-      return {iso:`${yy}-${mm}-${dd}`, raw: mi[0]};
-    }
-    // Numérico DD/MM/YYYY
-    const mn = text.match(dateNumRe);
-    if(mn){
-      const dd = mn[1].padStart(2,'0');
-      const mm = mn[2].padStart(2,'0');
-      let yy = mn[3]; if(yy.length===2) yy='20'+yy;
-      return {iso:`${yy}-${mm}-${dd}`, raw: mn[0]};
-    }
-    // Palabra "12 mayo 2026"
-    const mw = text.match(dateWordRe);
-    if(mw){
-      const dd = mw[1].padStart(2,'0');
-      const mm = String(_MONTHS_ES[mw[2].toLowerCase()]).padStart(2,'0');
-      const yy = mw[3] || String(new Date().getFullYear());
-      return {iso:`${yy}-${mm}-${dd}`, raw: mw[0]};
-    }
-    return null;
-  };
-
   const seen = new Set();
-  const push = (date, name, location, rawText) => {
-    if(!date || !name || name.length < 5) return;
-    const key = date + '|' + name.toLowerCase().replace(/\s+/g,' ').slice(0,50);
+
+  const push = (date, name, location, rawText, modality, category) => {
+    name = _fccvCleanRaceName(name);
+    if(!date || !_fccvIsValidRaceName(name)) return;
+    const key = date + '|' + name.toLowerCase().slice(0,50);
     if(seen.has(key)) return;
     seen.add(key);
-    races.push({date, dateText:date, name:name.replace(/\s+/g,' ').trim(), location:(location||'').trim(), rawText:(rawText||name)});
+    races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||''});
   };
 
-  // ── Estrategia 1: filas de tabla ──
-  doc.querySelectorAll('tr').forEach(row=>{
-    const text = (row.textContent||'').replace(/\s+/g,' ').trim();
-    if(!text || text.length < 8) return;
-    const d = parseDate(text);
+  // ── ESTRATEGIA PRINCIPAL FCCV: detectar filas con Unix timestamp ──
+  // La FCCV embebe Unix timestamps en cada fila/celda. Las usamos como ancla:
+  // por cada timestamp encontramos, extraemos el contexto (fila padre).
+  const allEls = doc.querySelectorAll('tr, li, div, article, section');
+  allEls.forEach(el=>{
+    const text = (el.textContent||'').replace(/\s+/g,' ').trim();
+    if(!text || text.length < 20 || text.length > 800) return;
+    if(!_FCCV_TS_RE.test(text)) return;
+    const d = _fccvParseDate(text);
     if(!d) return;
-    const cells = [...row.querySelectorAll('td')].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
-    if(!cells.length) return;
-    const dateCell = cells.find(c=>parseDate(c)) || '';
-    const others = cells.filter(c=>c!==dateCell);
-    const name = others.sort((a,b)=>b.length-a.length)[0] || '';
-    const location = others.find(c=>c!==name && c.length>2 && c.length<60) || '';
-    push(d.iso, name, location, text);
+    // Extraer nombre: en estructuras de tabla, la celda más larga (excluyendo
+    // la del timestamp y la fecha) suele ser el nombre.
+    const cells = [...el.querySelectorAll('td')].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
+    let name = '';
+    let location = '';
+    let modality = '';
+    let category = '';
+    if(cells.length >= 3){
+      // Buscar la celda más larga que parezca un nombre
+      const validCells = cells.filter(c=>_fccvIsValidRaceName(c) && !_FCCV_TS_RE.test(c) && !_FCCV_DDMON_RE.test(c));
+      name = validCells.sort((a,b)=>b.length-a.length)[0] || '';
+      location = validCells.find(c=>c!==name && /\([A-ZÁÉÍÓÚ ]+\)/.test(c)) || validCells.find(c=>c!==name && c.length>2 && c.length<60) || '';
+      // Detectar modalidad y categoría
+      modality = cells.find(c=>/^(carretera|btt|mtb|ciclo.?cross|cx|pista|trial|cicloturismo|ciclisme|escolar)$/i.test(c)) || '';
+      category = cells.find(c=>/^(cadet[es]?|junior[s]?|sub.?23|elite|master|escola[rs]?|infantil[es]?|alev[ií]n|principiant|promesa[s]?)$/i.test(c)) || '';
+    } else {
+      // Fallback sin celdas: extraer del texto continuo
+      // Quita timestamp + DDMES inicial, el resto es nombre+localidad
+      let cleaned = text.replace(_FCCV_TS_RE,'').replace(_FCCV_DDMON_RE,'').replace(/\s+/g,' ').trim();
+      // Buscar localidad: parentesis (VALENCIA), (CASTELLON), etc.
+      const locMatch = cleaned.match(/([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\-]+\s*\((?:VALENCIA|CASTELL[ÓO]N|ALICANTE|ALACANT)\))/i);
+      if(locMatch) location = locMatch[1].trim();
+      // Buscar modalidad/categoría en el cuerpo
+      const modMatch = cleaned.match(/\b(carretera|btt|mtb|ciclo.?cross|pista|trial|cicloturismo)\b/i);
+      if(modMatch) modality = modMatch[1];
+      const catMatch = cleaned.match(/\b(cadet[es]?|junior[s]?|sub.?23|elite|master|escola[rs]?|infantil[es]?|alev[ií]n)\b/i);
+      if(catMatch) category = catMatch[1];
+      // El nombre suele ser la parte central — la cadena más larga entre separadores
+      // Heurística: extraer el texto entre la modalidad/categoría y la localidad
+      name = cleaned;
+      if(modality && name.includes(modality)){
+        name = name.substring(name.indexOf(modality) + modality.length);
+      }
+      if(category && name.includes(category)){
+        name = name.substring(name.indexOf(category) + category.length);
+      }
+      // Quitar códigos UCI tipo 1.30.3.+H, 1.14.5
+      name = name.replace(/\b\d+\.\d+(?:\.\d+)?(?:\.\+?[A-Z]+)?\b/g, '');
+      // Cortar en la localidad si la encontramos
+      if(location && name.includes(location)){
+        name = name.substring(0, name.indexOf(location)).trim();
+      }
+      name = name.replace(/\s+/g,' ').trim();
+      // Limitar longitud
+      if(name.length > 120) name = name.slice(0,120);
+    }
+    push(d.iso, name, location, text, modality, category);
   });
 
-  // ── Estrategia 2: bloques div/li/article con título + fecha ──
-  if(races.length < 3){
-    doc.querySelectorAll('div, li, article, section').forEach(el=>{
-      if(!el.querySelector('a, h2, h3, h4, h5, strong, b')) return;
-      const text = (el.textContent||'').replace(/\s+/g,' ').trim();
-      if(text.length < 10 || text.length > 800) return;
-      const d = parseDate(text);
+  // ── ESTRATEGIA FALLBACK: filas tr con cualquier fecha (sin timestamp) ──
+  if(races.length < 5){
+    doc.querySelectorAll('tr').forEach(row=>{
+      const text = (row.textContent||'').replace(/\s+/g,' ').trim();
+      if(!text || text.length < 10 || text.length > 800) return;
+      if(_FCCV_TS_RE.test(text)) return; // ya procesada
+      const d = _fccvParseDate(text);
       if(!d) return;
-      const nameEl = el.querySelector('a, h2, h3, h4, h5, strong, b');
-      const name = (nameEl?.textContent||'').replace(/\s+/g,' ').trim();
-      if(name.length < 5 || name.length > 200) return;
-      const restText = text.replace(name,'').replace(d.raw,'').replace(/\s+/g,' ').trim();
-      const location = restText.split(/[·•|,\-—()/]/).map(s=>s.trim()).find(s=>s.length>2&&s.length<60) || '';
+      const cells = [...row.querySelectorAll('td')].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
+      const validCells = cells.filter(c=>_fccvIsValidRaceName(c));
+      const name = validCells.sort((a,b)=>b.length-a.length)[0] || '';
+      const location = validCells.find(c=>c!==name && c.length>2 && c.length<60) || '';
       push(d.iso, name, location, text);
     });
   }
 
-  // ── Estrategia 3 (agresiva): cualquier <a> que contenga texto con fecha cerca ──
-  if(races.length < 3){
-    doc.querySelectorAll('a').forEach(a=>{
-      const name = (a.textContent||'').replace(/\s+/g,' ').trim();
-      if(name.length < 8 || name.length > 200) return;
-      // Buscar fecha en el padre o abuelo cercano
-      let parent = a.parentElement;
-      for(let i=0; i<4 && parent; i++){
-        const ptxt = (parent.textContent||'').replace(/\s+/g,' ').trim();
-        const d = parseDate(ptxt);
-        if(d){ push(d.iso, name, '', ptxt); break; }
-        parent = parent.parentElement;
-      }
+  // ── ESTRATEGIA FALLBACK: bloques div/li con título + fecha ──
+  if(races.length < 5){
+    doc.querySelectorAll('div, li, article, section').forEach(el=>{
+      if(!el.querySelector('a, h2, h3, h4, h5, strong, b')) return;
+      const text = (el.textContent||'').replace(/\s+/g,' ').trim();
+      if(text.length < 10 || text.length > 800) return;
+      if(_FCCV_TS_RE.test(text)) return;
+      const d = _fccvParseDate(text);
+      if(!d) return;
+      const nameEl = el.querySelector('a, h2, h3, h4, h5, strong, b');
+      const name = (nameEl?.textContent||'').replace(/\s+/g,' ').trim();
+      if(!_fccvIsValidRaceName(name)) return;
+      const restText = text.replace(name,'').replace(d.raw,'').replace(/\s+/g,' ').trim();
+      const location = restText.split(/[·•|,\-—()/]/).map(s=>s.trim()).find(s=>s.length>2&&s.length<60) || '';
+      push(d.iso, name, location, text);
     });
   }
 
@@ -4140,7 +4242,8 @@ function _fccvParseHtml(html){
 // Aplica filtros con la lógica de exclusión (no mezclar Cadetes con Escuela/Infantil)
 function _fccvApplyFilters(races, cat, mod){
   return races.filter(r=>{
-    const txt = (r.rawText||r.name||'').toLowerCase();
+    // Buscar en rawText + name + modality + category (cada uno aporta señal)
+    const txt = [(r.rawText||''), (r.name||''), (r.modality||''), (r.category||'')].join(' ').toLowerCase();
 
     // ── MODALIDAD ──
     if(mod){
