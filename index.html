@@ -4160,7 +4160,12 @@ function _fccvParseHtml(html, defaultYear){
     if(!date || !_fccvIsValidRaceName(name)) return;
     // Filtrar por año seleccionado (descarta restos de otros años en la página)
     if(date.slice(0,4) !== yearStr) return;
-    const key = date + '|' + name.toLowerCase().slice(0,50);
+    // Incluir categoría en la clave de dedup: la FCCV publica varias filas con el
+    // mismo nombre y fecha pero distintas categorías (ej. una para Junior y otra
+    // para Cadete). Si dedup solo usa nombre+fecha se descarta la segunda.
+    const catKey = (category||'').toLowerCase().replace(/\s+/g,' ').slice(0,60);
+    const modKey = (modality||'').toLowerCase().replace(/\s+/g,' ').slice(0,30);
+    const key = date + '|' + name.toLowerCase().slice(0,50) + '|' + catKey + '|' + modKey;
     if(seen.has(key)) return;
     seen.add(key);
     races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||''});
