@@ -2326,6 +2326,15 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
                 <option value="trial">Trial</option>
               </select>
             </div>
+            <div style="flex:1;min-width:130px">
+              <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">⚥ Género</label>
+              <select id="fccvGen" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
+                <option value="">Todos</option>
+                <option value="masculino">Masculino</option>
+                <option value="femenino">Femenino</option>
+                <option value="mixto">Mixto (M+F)</option>
+              </select>
+            </div>
             <button onclick="_fccvSync()" id="fccvSyncBtn" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,.35);white-space:nowrap">🔄 Sincronizar con Federación</button>
           </div>
 
@@ -4159,13 +4168,47 @@ function _fccvParseHtml(html){
     let modality = '';
     let category = '';
     if(cells.length >= 3){
-      // Buscar la celda más larga que parezca un nombre
-      const validCells = cells.filter(c=>_fccvIsValidRaceName(c) && !_FCCV_TS_RE.test(c) && !_FCCV_DDMON_RE.test(c));
-      name = validCells.sort((a,b)=>b.length-a.length)[0] || '';
-      location = validCells.find(c=>c!==name && /\([A-ZÁÉÍÓÚ ]+\)/.test(c)) || validCells.find(c=>c!==name && c.length>2 && c.length<60) || '';
-      // Detectar modalidad y categoría
-      modality = cells.find(c=>/^(carretera|btt|mtb|ciclo.?cross|cx|pista|trial|cicloturismo|ciclisme|escolar)$/i.test(c)) || '';
-      category = cells.find(c=>/^(cadet[es]?|junior[s]?|sub.?23|elite|master|escola[rs]?|infantil[es]?|alev[ií]n|principiant|promesa[s]?)$/i.test(c)) || '';
+      // Detectar primero la celda de CATEGORÍAS (lista separada por comas con tokens
+      // como "Cadete, Cadete Fem., Juniors") y la celda de LOCALIDAD (PUEBLO (PROVINCIA))
+      const isCatListCell = (c)=>{
+        if(c.length>120) return false;
+        // Lista de categorías: tokens separados por coma, todos breves y reconocibles
+        if(/^\s*(cadet|junior|sub.?23|elite|master|escola|infantil|alev|feme|cicloturism|promesa)/i.test(c)){
+          // Y contiene varias categorías separadas por coma
+          if(/,/.test(c) || /\bfem\.?\b/i.test(c)) return true;
+        }
+        return false;
+      };
+      const isLocationCell = (c)=>{
+        if(!c) return false;
+        // Formato típico: "BENICARLO (CASTELLON)", "VALENCIA (VALENCIA)"
+        return /^[A-Z][A-ZÁÉÍÓÚÑ\s'`´·\-]{2,40}\s*\([A-ZÁÉÍÓÚÑ\s]+\)\s*$/i.test(c.trim());
+      };
+      const isRaceNameCell = (c)=>{
+        if(!c) return false;
+        if(!_fccvIsValidRaceName(c)) return false;
+        if(isCatListCell(c)) return false;
+        if(isLocationCell(c)) return false;
+        // Bonus: las que contengan palabras típicas de carreras
+        return true;
+      };
+      // Calcular cada celda
+      const nameCandidates = cells.filter(isRaceNameCell);
+      // Priorizar las que tienen palabras de carrera (TROFEO/MEMORIAL/COPA/CHALLENGE/CRI/VUELTA/etc.)
+      const racePat = /\b(trofeo|trofeu|memorial|copa|challenge|cri\b|vuelta|criterium|critèrium|premi|premio|campeonato|cpto|cronoescalada|cronometro|gran\s+premi|gp\s|circuit|copa|liga)\b/i;
+      const named = nameCandidates.sort((a,b)=>{
+        const ar = racePat.test(a) ? 0 : 1;
+        const br = racePat.test(b) ? 0 : 1;
+        if(ar!==br) return ar-br;        // priorizar las que contengan keywords
+        return b.length - a.length;       // si empate, la más larga
+      });
+      name = named[0] || nameCandidates[0] || '';
+      // Localidad: la celda con formato CIUDAD (PROVINCIA)
+      location = cells.find(c=>c!==name && isLocationCell(c)) || cells.find(c=>c!==name && /\([A-ZÁÉÍÓÚ ]+\)/.test(c)) || '';
+      // Categoría: la celda con lista de categorías o un valor de categoría puro
+      category = cells.find(c=>isCatListCell(c)) || cells.find(c=>/^(cadet[es]?|junior[s]?|sub.?23|elite|master|escola[rs]?|infantil[es]?|alev[ií]n|principiant|promesa[s]?|cicloturism\w*)$/i.test(c.trim())) || '';
+      // Modalidad: celda con un valor de modalidad puro
+      modality = cells.find(c=>/^(carretera|btt|mtb|ciclo.?cross|cx|pista|trial|cicloturismo|ciclisme|escolar)$/i.test(c.trim())) || '';
     } else {
       // Fallback sin celdas: extraer del texto continuo
       // Quita timestamp + DDMES inicial, el resto es nombre+localidad
@@ -4239,8 +4282,40 @@ function _fccvParseHtml(html){
   return races;
 }
 
+// Detecta si una prueba es FEMENINO-ONLY (solo mujeres)
+// Tokens femeninos: femení, femenina, feminas, mujeres, dones (CA/VA)
+// Importante: una prueba puede tener "Cadete Fem." entre OTRAS categorías
+// (mixta). Solo es FEM-ONLY si TODAS sus categorías son femeninas o si
+// el nombre/título es explícitamente femenino sin contrapartida masculina.
+function _fccvIsFemaleOnly(txt){
+  const lower = (txt||'').toLowerCase();
+  // Indicadores fuertes de femenino-only en el TÍTULO
+  const titleFemaleOnly = /(\bfemen[ií]n[oa]?\b|\bfemen[ií]s?\b|\bmujeres\b|\bfeminas\b|\bdones\b|gran\s+premi\s+femen|trofeo\s+femen|copa\s+femen|carrera\s+ciclista\s+femen|trofeo\s+f[eé]minas|\bf[eé]mina[s]?\b)/i.test(lower);
+  if(titleFemaleOnly){
+    // Si además aparecen menciones masculinas (cadete sin fem, junior sin fem, etc.) podría ser mixta
+    // Pero si el nombre dice "FEMENI" "MUJERES" "FEMINAS", suele ser solo féminas
+    return true;
+  }
+  return false;
+}
+
+// Detecta si tiene categoría masculina (no fem) entre sus categorías
+function _fccvHasMaleCategory(txt){
+  const lower = (txt||'').toLowerCase();
+  // Una categoría base SIN "fem"/"femen" detrás cercano = masculina
+  // Buscamos "cadete" sin que vaya seguido de fem
+  const malePatterns = [
+    /\bcadet[es]?\b(?!\s*(?:fem|femen|f\.|f,))/,
+    /\bjunior[es]?\b(?!\s*(?:fem|femen|f\.|f,))/,
+    /\bsub.?23\b(?!\s*(?:fem|femen|f\.))/,
+    /\belite\b(?!\s*(?:fem|femen|f\.))/,
+    /\bmaster[s]?\b(?!\s*(?:fem|femen|f\.))/,
+  ];
+  return malePatterns.some(re=>re.test(lower));
+}
+
 // Aplica filtros con la lógica de exclusión (no mezclar Cadetes con Escuela/Infantil)
-function _fccvApplyFilters(races, cat, mod){
+function _fccvApplyFilters(races, cat, mod, gen){
   return races.filter(r=>{
     // Buscar en rawText + name + modality + category (cada uno aporta señal)
     const txt = [(r.rawText||''), (r.name||''), (r.modality||''), (r.category||'')].join(' ').toLowerCase();
@@ -4291,6 +4366,28 @@ function _fccvApplyFilters(races, cat, mod){
       }
     }
 
+    // ── GÉNERO ──
+    // Lógica:
+    //  - "masculino": excluir pruebas marcadas como FEMENINO-ONLY en el título
+    //  - "femenino":  solo pruebas con indicador femenino (femení, mujeres, etc)
+    //  - "mixto":     debe tener tanto categoría masculina como femenina indicada
+    //  - "" (Todos):  no filtra por género
+    if(gen){
+      const isFem = _fccvIsFemaleOnly(txt);
+      const hasMale = _fccvHasMaleCategory(txt);
+      if(gen==='masculino'){
+        // Excluir las femenino-only sin contrapartida masculina
+        if(isFem && !hasMale) return false;
+      } else if(gen==='femenino'){
+        // Solo mostrar las que tengan indicador femenino
+        if(!isFem && !/\b(fem|femen|femina|mujeres|dones)/i.test(txt)) return false;
+      } else if(gen==='mixto'){
+        // Debe tener AMBOS (categoría base + variante fem)
+        const hasFemMark = /\b(fem\.?|femen|femina|mujeres|dones)/i.test(txt);
+        if(!(hasMale && hasFemMark)) return false;
+      }
+    }
+
     return true;
   });
 }
@@ -4300,6 +4397,7 @@ async function _fccvSync(){
   const year = document.getElementById('fccvYear')?.value || new Date().getFullYear();
   const cat  = document.getElementById('fccvCat')?.value || '';
   const mod  = document.getElementById('fccvMod')?.value || '';
+  const gen  = document.getElementById('fccvGen')?.value || '';
 
   const btn = document.getElementById('fccvSyncBtn');
   const status = document.getElementById('fccvStatus');
@@ -4321,7 +4419,7 @@ async function _fccvSync(){
       if(status) status.textContent = '';
       return;
     }
-    const filtered = _fccvApplyFilters(all, cat, mod);
+    const filtered = _fccvApplyFilters(all, cat, mod, gen);
     _fccvLastResults = filtered;
     _fccvLastAllRaces = all;
     if(status){
