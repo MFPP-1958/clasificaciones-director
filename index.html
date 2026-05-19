@@ -4458,8 +4458,11 @@ function _fccvApplyFilters(races, cat, mod, gen){
     }
 
     // ── GÉNERO ──
-    // Lógica más estricta usando la columna Categorías cuando está disponible:
-    //  - "masculino": excluye pruebas FEMENINO-ONLY (todas sus categorías son fem)
+    // Lógica estricta usando la columna Categorías cuando está disponible:
+    //  - "masculino": excluye pruebas FEMENINO-ONLY (todas sus categorías son fem).
+    //                 Además, si se ha pedido también una categoría concreta
+    //                 (cadete/junior/...), exige que esa categoría aparezca SIN
+    //                 marca fem en al menos un token (p.ej. "Cadete" sí, "Cadete Fem." no).
     //  - "femenino":  solo pruebas con al menos una categoría femenina
     //  - "mixto":     debe tener al menos 1 categoría masculina Y 1 femenina
     //  - "" (Todos):  no filtra por género
@@ -4470,6 +4473,20 @@ function _fccvApplyFilters(races, cat, mod, gen){
       const hasMale = _fccvHasMaleCategory(txt, catField);
       if(gen==='masculino'){
         if(isFem && !hasMale) return false;
+        // Si además filtra por categoría concreta (cadete/junior/sub23/elite/master),
+        // exige que esa categoría exista SIN marca fem en al menos un token.
+        const adultCats = {
+          'cadete':/cadet/i, 'junior':/j[uú]nior|\bjun\b/i, 'sub23':/sub.?23/i,
+          'elite':/[éeÉE]lite/i, 'master':/master/i
+        };
+        if(cat && adultCats[cat] && catField){
+          const tokens = catField.toLowerCase()
+            .split(/[,;]/).map(s=>s.replace(/\.\.\.$/,'').trim()).filter(s=>s.length>=2);
+          const hasMaleVariant = tokens.some(t=>
+            adultCats[cat].test(t) && !/\bfem\b|fem\.|femen|mujer|dones/i.test(t)
+          );
+          if(tokens.length && !hasMaleVariant) return false;
+        }
       } else if(gen==='femenino'){
         if(!isFem && !/\b(fem\b|fem\.|femen|femina|mujer|dones)/i.test(txt)) return false;
       } else if(gen==='mixto'){
