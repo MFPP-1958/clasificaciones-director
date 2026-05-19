@@ -4166,6 +4166,18 @@ function _fccvParseHtml(html, defaultYear){
     races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||''});
   };
 
+  // Diagnóstico: contadores de estadísticas del parser
+  const _stats = {
+    tablesFound: doc.querySelectorAll('table').length,
+    rowsTotal: doc.querySelectorAll('tr').length,
+    rowsWithTd: 0,
+    rowsWith3plus: 0,
+    rowsWithDate: 0,
+    rowsWithValidName: 0,
+    rowsAccepted: 0,
+    samples: []
+  };
+
   // Helpers de clasificación de celdas
   const isCatListCell = (c)=>{
     if(!c || c.length<3 || c.length>200) return false;
@@ -4198,29 +4210,34 @@ function _fccvParseHtml(html, defaultYear){
   // ── ESTRATEGIA PRINCIPAL FCCV: cada <tr> con celdas <td> es una carrera ──
   doc.querySelectorAll('tr').forEach(row=>{
     const cells = [...row.querySelectorAll('td')];
-    if(cells.length < 3) return;
+    if(cells.length){ _stats.rowsWithTd++; }
+    if(cells.length < 2) return;
+    _stats.rowsWith3plus++;
 
     const tdTexts = cells.map(td=>(td.textContent||'').replace(/\s+/g,' ').trim());
 
-    // Buscar fecha: prioriza data-* (DataTables suele guardar timestamp en data-order/data-sort)
-    let dateSource = '';
-    const allDataValues = cells.map(td=>{
+    // Buscar fecha: TODOS los attrs + textContent + outerHTML (extra: timestamps en JS embebido)
+    const allAttrs = cells.flatMap(td=>{
       const vals = [];
-      for(const attr of td.attributes){
-        if(attr.name.startsWith('data-')) vals.push(attr.value);
-      }
-      // También en spans hijos
-      td.querySelectorAll('[data-order],[data-sort],[data-time]').forEach(c=>{
-        ['data-order','data-sort','data-time'].forEach(k=>{
-          const v = c.getAttribute(k); if(v) vals.push(v);
-        });
+      for(const attr of td.attributes) vals.push(attr.value);
+      td.querySelectorAll('*').forEach(c=>{
+        for(const attr of c.attributes) vals.push(attr.value);
       });
-      return vals.join(' ');
+      return vals;
     }).join(' ');
-    dateSource = allDataValues + ' ' + tdTexts.join(' ');
+    // También revisar la propia <tr>
+    const trAttrs = [...row.attributes].map(a=>a.value).join(' ');
+    const dateSource = trAttrs + ' ' + allAttrs + ' ' + tdTexts.join(' ');
 
     const d = _fccvParseDate(dateSource, yearStr);
-    if(!d) return;
+    if(!d){
+      // Guardar muestra para debug
+      if(_stats.samples.length < 8){
+        _stats.samples.push({reason:'sin_fecha', tdTexts: tdTexts.slice(0,8), attrs: trAttrs.slice(0,300)});
+      }
+      return;
+    }
+    _stats.rowsWithDate++;
 
     // Clasificar cada celda por su FORMATO (no por su posición)
     let location = tdTexts.find(isLocationCell) || '';
@@ -4243,10 +4260,28 @@ function _fccvParseHtml(html, defaultYear){
       return b.length - a.length;
     });
     const name = named[0] || nameCandidates[0] || '';
-    if(!name) return;
+    if(!name){
+      if(_stats.samples.length < 8){
+        _stats.samples.push({reason:'sin_nombre', date:d.iso, tdTexts: tdTexts.slice(0,8), category, modality, location});
+      }
+      return;
+    }
+    _stats.rowsWithValidName++;
 
+    const before = races.length;
     push(d.iso, name, location, tdTexts.join(' | '), modality, category);
+    if(races.length > before){
+      _stats.rowsAccepted++;
+    } else {
+      // No se aceptó (filtro de año o duplicado)
+      if(_stats.samples.length < 8){
+        _stats.samples.push({reason:'push_rechazo', date:d.iso, name, yearExpected: yearStr});
+      }
+    }
   });
+
+  // Almacenar stats en variable global para que el debug los muestre
+  window._fccvLastStats = _stats;
 
   // ── ESTRATEGIA FALLBACK: filas tr con cualquier fecha (sin timestamp) ──
   if(races.length < 5){
@@ -4581,12 +4616,41 @@ function _fccvRenderResults(races){
 // problemas de parsing.
 function _fccvShowDebug(){
   const all = _fccvLastAllRaces || [];
-  const rawSnippet = (_fccvLastRawHtml||'').slice(0, 6000);
+  const stats = window._fccvLastStats || {tablesFound:0,rowsTotal:0,rowsWithTd:0,rowsWith3plus:0,rowsWithDate:0,rowsWithValidName:0,rowsAccepted:0,samples:[]};
+  const rawFirst = (_fccvLastRawHtml||'').slice(0, 6000);
+  const rawLast = (_fccvLastRawHtml||'').length > 8000
+    ? (_fccvLastRawHtml||'').slice(-6000)
+    : '';
+  const totalKb = ((_fccvLastRawHtml||'').length/1024).toFixed(1);
+
+  const statsHtml = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:monospace">
+      <tr><td style="padding:4px 8px;border:1px solid #e5e7eb;background:#f9fafb">Tablas encontradas</td><td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700">${stats.tablesFound}</td></tr>
+      <tr><td style="padding:4px 8px;border:1px solid #e5e7eb;background:#f9fafb">&lt;tr&gt; totales</td><td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700">${stats.rowsTotal}</td></tr>
+      <tr><td style="padding:4px 8px;border:1px solid #e5e7eb;background:#f9fafb">&lt;tr&gt; con &lt;td&gt;</td><td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700">${stats.rowsWithTd}</td></tr>
+      <tr><td style="padding:4px 8px;border:1px solid #e5e7eb;background:#f9fafb">&lt;tr&gt; con ≥2 celdas</td><td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700">${stats.rowsWith3plus}</td></tr>
+      <tr><td style="padding:4px 8px;border:1px solid #e5e7eb;background:#fef3c7">&lt;tr&gt; con FECHA detectada</td><td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700;background:#fef3c7">${stats.rowsWithDate}</td></tr>
+      <tr><td style="padding:4px 8px;border:1px solid #e5e7eb;background:#fef3c7">&lt;tr&gt; con NOMBRE válido</td><td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700;background:#fef3c7">${stats.rowsWithValidName}</td></tr>
+      <tr><td style="padding:4px 8px;border:1px solid #e5e7eb;background:#dcfce7">&lt;tr&gt; aceptadas finalmente</td><td style="padding:4px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:700;background:#dcfce7">${stats.rowsAccepted}</td></tr>
+    </table>
+  `;
+
+  const samplesHtml = stats.samples.length
+    ? `<ol style="font-size:11px;font-family:monospace;padding-left:18px;margin:0">
+        ${stats.samples.map(s=>`<li style="margin-bottom:6px;padding:6px;background:#fff;border:1px solid #e5e7eb;border-radius:6px">
+          <strong style="color:#dc2626">[${s.reason}]</strong>
+          ${s.date?` fecha: <code>${s.date}</code>`:''}
+          ${s.name?` nombre: <strong>${escapeHtml(s.name)}</strong>`:''}
+          ${s.tdTexts?`<br><span style="color:#64748b">td: ${s.tdTexts.map(t=>escapeHtml((t||'').slice(0,40))).join(' | ')}</span>`:''}
+        </li>`).join('')}
+      </ol>`
+    : `<div style="color:#94a3b8;padding:10px">Sin muestras de descarte.</div>`;
+
   const allHtml = all.length
     ? `<ol style="font-size:12px;font-family:monospace;padding-left:20px;margin:0">
-        ${all.map(r=>`<li style="margin-bottom:4px"><strong>${r.date}</strong> — ${escapeHtml(r.name)} <span style="color:#94a3b8">${escapeHtml(r.location||'')}</span><br><span style="color:#64748b;font-size:11px">${escapeHtml((r.rawText||'').slice(0,200))}</span></li>`).join('')}
+        ${all.map(r=>`<li style="margin-bottom:4px"><strong>${r.date}</strong> — ${escapeHtml(r.name)} <span style="color:#94a3b8">${escapeHtml(r.location||'')}</span></li>`).join('')}
       </ol>`
-    : `<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:8px">⚠️ El parser no detectó ninguna carrera. Esto significa que la estructura HTML de la FCCV no encaja con ninguna de las 3 estrategias de parsing.</div>`;
+    : `<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:8px">⚠️ El parser no detectó ninguna carrera.</div>`;
 
   const old = document.getElementById('_fccvDebugDialog');
   if(old) old.remove();
@@ -4594,22 +4658,41 @@ function _fccvShowDebug(){
   overlay.id = '_fccvDebugDialog';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
-  overlay.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px">
+  overlay.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:1000px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <h3 style="margin:0;color:#0b2f6b">🔍 Debug del parser FCCV</h3>
       <button onclick="document.getElementById('_fccvDebugDialog')?.remove()" style="background:#f3f4f6;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer">✕ Cerrar</button>
     </div>
-    <p style="font-size:13px;color:#374151;margin:0 0 14px"><strong>${all.length}</strong> carreras detectadas antes de aplicar filtros (categoría/modalidad).</p>
+    <p style="font-size:13px;color:#374151;margin:0 0 10px"><strong>${all.length}</strong> carreras detectadas · HTML recibido: <strong>${totalKb} KB</strong></p>
+
     <details open style="margin-bottom:14px">
-      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">📋 Carreras detectadas (sin filtrar)</summary>
-      <div style="padding:12px;background:#f9fafb;border-radius:8px;margin-top:6px;max-height:380px;overflow-y:auto">${allHtml}</div>
+      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">📊 Estadísticas del parser</summary>
+      <div style="padding:10px;background:#f9fafb;border-radius:8px;margin-top:6px">${statsHtml}</div>
     </details>
+
     <details style="margin-bottom:14px">
-      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">🌐 HTML crudo recibido (primeros 6 KB)</summary>
-      <pre style="padding:12px;background:#1f2937;color:#86efac;border-radius:8px;font-size:11px;overflow-x:auto;max-height:380px;margin-top:6px;white-space:pre-wrap;word-break:break-all">${escapeHtml(rawSnippet)}</pre>
+      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#fef2f2;border-radius:8px">⚠️ Filas descartadas (primeras 8 muestras)</summary>
+      <div style="padding:10px;background:#fef9f9;border-radius:8px;margin-top:6px;max-height:280px;overflow-y:auto">${samplesHtml}</div>
     </details>
-    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;font-size:12px;color:#78350f">
-      💡 <strong>¿No aparece la carrera que esperas?</strong> Copia y pega aquí el nombre EXACTO de la carrera tal como aparece en fccv.es y la fecha. Con eso puedo ajustar el parser/regex.
+
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">📋 Carreras detectadas (sin filtrar)</summary>
+      <div style="padding:12px;background:#f9fafb;border-radius:8px;margin-top:6px;max-height:300px;overflow-y:auto">${allHtml}</div>
+    </details>
+
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">🌐 HTML primeros 6 KB</summary>
+      <pre style="padding:12px;background:#1f2937;color:#86efac;border-radius:8px;font-size:11px;overflow-x:auto;max-height:280px;margin-top:6px;white-space:pre-wrap;word-break:break-all">${escapeHtml(rawFirst)}</pre>
+    </details>
+
+    ${rawLast ? `<details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">🌐 HTML últimos 6 KB</summary>
+      <pre style="padding:12px;background:#1f2937;color:#86efac;border-radius:8px;font-size:11px;overflow-x:auto;max-height:280px;margin-top:6px;white-space:pre-wrap;word-break:break-all">${escapeHtml(rawLast)}</pre>
+    </details>`:''}
+
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="navigator.clipboard.writeText(_fccvLastRawHtml||'').then(()=>alert('✓ HTML completo copiado al portapapeles ('+((_fccvLastRawHtml||'').length/1024).toFixed(1)+' KB)'))" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">📋 Copiar HTML completo</button>
+      <button onclick="navigator.clipboard.writeText(JSON.stringify({stats: window._fccvLastStats, races: _fccvLastAllRaces}, null, 2)).then(()=>alert('✓ Stats y carreras copiadas al portapapeles'))" style="background:#fff;color:#0b2f6b;border:1.5px solid #0b2f6b;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">📋 Copiar stats + carreras</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
