@@ -2307,7 +2307,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
               <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">🎽 Categoría</label>
               <select id="fccvCat" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
                 <option value="">Todas</option>
-                <option value="cadete">Cadetes</option>
+                <option value="cadete">Cadete</option>
                 <option value="junior">Junior</option>
                 <option value="sub23">Sub-23</option>
                 <option value="elite">Elite</option>
@@ -3996,6 +3996,7 @@ const _FCCV_PROXIES = [
 ];
 
 let _fccvLastResults = [];
+let _fccvLastAllRaces = [];
 let _fccvPanelOpen = true;
 
 function _fccvToggle(){
@@ -4033,61 +4034,101 @@ async function _fccvFetch(url){
   throw lastErr || new Error('Todos los proxies CORS fallaron');
 }
 
-// Parser flexible: intenta detectar filas con fecha + nombre + localidad
+// Parser flexible: intenta detectar filas con fecha + nombre + localidad.
+// Almacena el HTML crudo para diagnóstico.
+let _fccvLastRawHtml = '';
+
 function _fccvParseHtml(html){
+  _fccvLastRawHtml = html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const races = [];
-  const dateRe = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
-  const seen = new Set();
+  // Fechas: DD/MM/YYYY · DD-MM-YYYY · YYYY-MM-DD · "12 de Mayo de 2026"
+  const dateNumRe   = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
+  const dateIsoRe   = /(\d{4})-(\d{1,2})-(\d{1,2})/;
+  const _MONTHS_ES  = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12,gener:1,febrer:2,març:3,marc:3,maig:5,juny:6,juliol:7,agost:8,setembre:9,octubre:10,novembre:11,desembre:12};
+  const dateWordRe  = new RegExp(`(\\d{1,2})\\s*(?:de\\s+)?(${Object.keys(_MONTHS_ES).join('|')})(?:\\s+(?:de|del)\\s+)?(\\d{4})?`, 'i');
 
-  // Estrategia 1: filas de tabla
+  const parseDate = (text)=>{
+    if(!text) return null;
+    // ISO YYYY-MM-DD primero
+    const mi = text.match(dateIsoRe);
+    if(mi){
+      const yy = mi[1], mm = mi[2].padStart(2,'0'), dd = mi[3].padStart(2,'0');
+      return {iso:`${yy}-${mm}-${dd}`, raw: mi[0]};
+    }
+    // Numérico DD/MM/YYYY
+    const mn = text.match(dateNumRe);
+    if(mn){
+      const dd = mn[1].padStart(2,'0');
+      const mm = mn[2].padStart(2,'0');
+      let yy = mn[3]; if(yy.length===2) yy='20'+yy;
+      return {iso:`${yy}-${mm}-${dd}`, raw: mn[0]};
+    }
+    // Palabra "12 mayo 2026"
+    const mw = text.match(dateWordRe);
+    if(mw){
+      const dd = mw[1].padStart(2,'0');
+      const mm = String(_MONTHS_ES[mw[2].toLowerCase()]).padStart(2,'0');
+      const yy = mw[3] || String(new Date().getFullYear());
+      return {iso:`${yy}-${mm}-${dd}`, raw: mw[0]};
+    }
+    return null;
+  };
+
+  const seen = new Set();
+  const push = (date, name, location, rawText) => {
+    if(!date || !name || name.length < 5) return;
+    const key = date + '|' + name.toLowerCase().replace(/\s+/g,' ').slice(0,50);
+    if(seen.has(key)) return;
+    seen.add(key);
+    races.push({date, dateText:date, name:name.replace(/\s+/g,' ').trim(), location:(location||'').trim(), rawText:(rawText||name)});
+  };
+
+  // ── Estrategia 1: filas de tabla ──
   doc.querySelectorAll('tr').forEach(row=>{
     const text = (row.textContent||'').replace(/\s+/g,' ').trim();
     if(!text || text.length < 8) return;
-    const m = text.match(dateRe);
-    if(!m) return;
+    const d = parseDate(text);
+    if(!d) return;
     const cells = [...row.querySelectorAll('td')].map(td=>(td.textContent||'').replace(/\s+/g,' ').trim()).filter(Boolean);
-    if(cells.length < 2) return;
-    const dateCell = cells.find(c=>dateRe.test(c)) || '';
+    if(!cells.length) return;
+    const dateCell = cells.find(c=>parseDate(c)) || '';
     const others = cells.filter(c=>c!==dateCell);
     const name = others.sort((a,b)=>b.length-a.length)[0] || '';
-    if(name.length < 5) return;
     const location = others.find(c=>c!==name && c.length>2 && c.length<60) || '';
-    // Reconstruir fecha
-    const dd = m[1].padStart(2,'0');
-    const mm = m[2].padStart(2,'0');
-    let yy = m[3]; if(yy.length===2) yy='20'+yy;
-    const isoDate = `${yy}-${mm}-${dd}`;
-    const key = isoDate + '|' + name.toLowerCase().slice(0,40);
-    if(seen.has(key)) return;
-    seen.add(key);
-    races.push({date:isoDate, dateText:dateCell, name, location, rawText:text});
+    push(d.iso, name, location, text);
   });
 
-  // Estrategia 2 (fallback): bloques div/li con fecha
-  if(races.length === 0){
-    doc.querySelectorAll('div, li, article').forEach(el=>{
-      // Solo elementos con texto razonable y al menos 1 link/título
-      if(!el.querySelector('a, h2, h3, h4, strong')) return;
+  // ── Estrategia 2: bloques div/li/article con título + fecha ──
+  if(races.length < 3){
+    doc.querySelectorAll('div, li, article, section').forEach(el=>{
+      if(!el.querySelector('a, h2, h3, h4, h5, strong, b')) return;
       const text = (el.textContent||'').replace(/\s+/g,' ').trim();
-      if(text.length < 10 || text.length > 500) return;
-      const m = text.match(dateRe);
-      if(!m) return;
-      // Nombre: primer link o heading
-      const nameEl = el.querySelector('a, h2, h3, h4, strong');
+      if(text.length < 10 || text.length > 800) return;
+      const d = parseDate(text);
+      if(!d) return;
+      const nameEl = el.querySelector('a, h2, h3, h4, h5, strong, b');
       const name = (nameEl?.textContent||'').replace(/\s+/g,' ').trim();
-      if(name.length < 5 || name.length > 120) return;
-      const dd = m[1].padStart(2,'0');
-      const mm = m[2].padStart(2,'0');
-      let yy = m[3]; if(yy.length===2) yy='20'+yy;
-      const isoDate = `${yy}-${mm}-${dd}`;
-      const key = isoDate + '|' + name.toLowerCase().slice(0,40);
-      if(seen.has(key)) return;
-      seen.add(key);
-      // Buscar localidad: texto que no sea el nombre ni la fecha
-      const restText = text.replace(name,'').replace(m[0],'').replace(/\s+/g,' ').trim();
-      const location = restText.split(/[·•|,\-—]/).map(s=>s.trim()).find(s=>s.length>2&&s.length<60) || '';
-      races.push({date:isoDate, dateText:m[0], name, location, rawText:text});
+      if(name.length < 5 || name.length > 200) return;
+      const restText = text.replace(name,'').replace(d.raw,'').replace(/\s+/g,' ').trim();
+      const location = restText.split(/[·•|,\-—()/]/).map(s=>s.trim()).find(s=>s.length>2&&s.length<60) || '';
+      push(d.iso, name, location, text);
+    });
+  }
+
+  // ── Estrategia 3 (agresiva): cualquier <a> que contenga texto con fecha cerca ──
+  if(races.length < 3){
+    doc.querySelectorAll('a').forEach(a=>{
+      const name = (a.textContent||'').replace(/\s+/g,' ').trim();
+      if(name.length < 8 || name.length > 200) return;
+      // Buscar fecha en el padre o abuelo cercano
+      let parent = a.parentElement;
+      for(let i=0; i<4 && parent; i++){
+        const ptxt = (parent.textContent||'').replace(/\s+/g,' ').trim();
+        const d = parseDate(ptxt);
+        if(d){ push(d.iso, name, '', ptxt); break; }
+        parent = parent.parentElement;
+      }
     });
   }
 
@@ -4179,7 +4220,11 @@ async function _fccvSync(){
     }
     const filtered = _fccvApplyFilters(all, cat, mod);
     _fccvLastResults = filtered;
-    if(status) status.textContent = `✅ ${all.length} carreras encontradas en la FCCV · ${filtered.length} pasan los filtros · ${new Date().toLocaleTimeString('es-ES')}`;
+    _fccvLastAllRaces = all;
+    if(status){
+      const debugBtn = ` <button onclick="_fccvShowDebug()" style="background:#fff;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px">🔍 Debug</button>`;
+      status.innerHTML = `✅ ${all.length} carreras detectadas en el HTML · ${filtered.length} pasan los filtros · ${new Date().toLocaleTimeString('es-ES')}${debugBtn}`;
+    }
     _fccvRenderResults(filtered);
   } catch(e){
     if(results) results.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b;font-size:13px">
@@ -4275,6 +4320,45 @@ function _fccvRenderResults(races){
       </tbody>
     </table>
   </div>`;
+}
+
+// Modal de debug: muestra TODAS las carreras detectadas (sin filtrar) y
+// los primeros 6000 caracteres del HTML crudo recibido. Para diagnosticar
+// problemas de parsing.
+function _fccvShowDebug(){
+  const all = _fccvLastAllRaces || [];
+  const rawSnippet = (_fccvLastRawHtml||'').slice(0, 6000);
+  const allHtml = all.length
+    ? `<ol style="font-size:12px;font-family:monospace;padding-left:20px;margin:0">
+        ${all.map(r=>`<li style="margin-bottom:4px"><strong>${r.date}</strong> — ${escapeHtml(r.name)} <span style="color:#94a3b8">${escapeHtml(r.location||'')}</span><br><span style="color:#64748b;font-size:11px">${escapeHtml((r.rawText||'').slice(0,200))}</span></li>`).join('')}
+      </ol>`
+    : `<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:8px">⚠️ El parser no detectó ninguna carrera. Esto significa que la estructura HTML de la FCCV no encaja con ninguna de las 3 estrategias de parsing.</div>`;
+
+  const old = document.getElementById('_fccvDebugDialog');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = '_fccvDebugDialog';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0;color:#0b2f6b">🔍 Debug del parser FCCV</h3>
+      <button onclick="document.getElementById('_fccvDebugDialog')?.remove()" style="background:#f3f4f6;border:none;border-radius:8px;padding:6px 12px;font-weight:700;cursor:pointer">✕ Cerrar</button>
+    </div>
+    <p style="font-size:13px;color:#374151;margin:0 0 14px"><strong>${all.length}</strong> carreras detectadas antes de aplicar filtros (categoría/modalidad).</p>
+    <details open style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">📋 Carreras detectadas (sin filtrar)</summary>
+      <div style="padding:12px;background:#f9fafb;border-radius:8px;margin-top:6px;max-height:380px;overflow-y:auto">${allHtml}</div>
+    </details>
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-weight:800;color:#0b2f6b;padding:8px;background:#f0f9ff;border-radius:8px">🌐 HTML crudo recibido (primeros 6 KB)</summary>
+      <pre style="padding:12px;background:#1f2937;color:#86efac;border-radius:8px;font-size:11px;overflow-x:auto;max-height:380px;margin-top:6px;white-space:pre-wrap;word-break:break-all">${escapeHtml(rawSnippet)}</pre>
+    </details>
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;font-size:12px;color:#78350f">
+      💡 <strong>¿No aparece la carrera que esperas?</strong> Copia y pega aquí el nombre EXACTO de la carrera tal como aparece en fccv.es y la fecha. Con eso puedo ajustar el parser/regex.
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
 }
 
 async function _fccvAddRace(idx){
