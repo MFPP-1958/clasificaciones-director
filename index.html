@@ -4118,25 +4118,32 @@ function _fccvApplyFilters(races, cat, mod){
     }
 
     // ── CATEGORÍA ──
+    // Acepta variantes ES + CA/VA (valenciano) + abreviaciones.
     if(cat){
       const catPatterns = {
-        'cadete':    /(\bcadete[s]?\b|\bcad-?[12]?\b)/i,
-        'junior':    /(\bjunior[es]?\b|\bjun\b|sub.?19|sub.?17)/i,
-        'sub23':     /(sub.?23)/i,
-        'elite':     /(\belite\b|\bélite\b)/i,
-        'master':    /(\bmaster[s]?\b|\bm-?\d)/i,
-        'femenino':  /(femenin|f-cad|f-jun|fem\b|\bf\b)/i,
+        // cadete (ES) · cadet (CA/VA) · cadetes · cadets · CAD · CAD-1 · CAD-2 · CDT
+        'cadete':    /(\bcadet(?:e|es|s)?\b|\bcad(?:[-_ ]?[12])?\b|\bcdt\b)/i,
+        // junior (ES) · júnior · juniors · jun · JUN-1/2 · sub-17 / sub-19 (RFEC)
+        'junior':    /(\bj[uú]nior(?:s|es)?\b|\bjun(?:[-_ ]?[12])?\b|\bsub.?(?:17|19)\b)/i,
+        // sub-23 / sub23
+        'sub23':     /(\bsub.?23\b)/i,
+        // elite / élite
+        'elite':     /(\b[éeÉE]lite\b)/i,
+        // master / masters / M30 / M40 ...
+        'master':    /(\bmaster[s]?\b|\bm[-_ ]?\d{2,3}\b)/i,
+        // femenino / femení (CA/VA) / fem / F-CAD / F-JUN
+        'femenino':  /(femenin[oa]?\b|femen[ií]\b|\bfem\b|\bf[-_ ]?(?:cad|jun|elite|master))/i,
       };
       const p = catPatterns[cat];
       if(p && !p.test(txt)) return false;
 
-      // EXCLUSIÓN CRÍTICA: cuando pides cadete/junior/sub23/elite no queremos
-      // pruebas mezcladas con ESCUELA/INFANTIL/ALEVÍN/PRINCIPIANTES
+      // EXCLUSIÓN CRÍTICA: cuando pides cadete/junior/sub23/elite/master no queremos
+      // pruebas mezcladas con ESCUELA/INFANTIL/ALEVÍN/PRINCIPIANTES/PROMESAS/BENJAMÍN
+      // (idiomas ES + CA/VA)
       const adultCategories = ['cadete','junior','sub23','elite','master'];
       if(adultCategories.includes(cat)){
-        if(/(\bescuela[s]?\b|\bescolar\b|\binfantil[es]?\b|\balev[ií]n[es]?\b|\bprincipiant|\bpre.?infantil|\bpromesa[s]?\b)/i.test(txt)){
-          return false;
-        }
+        const exclusionRe = /(\bescuela[s]?\b|\bescolar(?:es)?\b|\bescola[rs]?\b|\binfantil[es]?\b|\binfantí?l[s]?\b|\balev[ií]n(?:es)?\b|\balev[ií]?[ns]?\b|\bprincipiant\w*\b|\bpre[-_ ]?infantil\w*\b|\bpromesa[s]?\b|\bbenjam[ií]n(?:es)?\b|\bbenjamí?[ns]?\b)/i;
+        if(exclusionRe.test(txt)) return false;
       }
     }
 
