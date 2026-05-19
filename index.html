@@ -4155,7 +4155,7 @@ function _fccvParseHtml(html, defaultYear){
   const seen = new Set();
   const yearStr = defaultYear ? String(defaultYear) : String(new Date().getFullYear());
 
-  const push = (date, name, location, rawText, modality, category) => {
+  const push = (date, name, location, rawText, modality, category, fccvId) => {
     name = _fccvCleanRaceName(name);
     if(!date || !_fccvIsValidRaceName(name)) return;
     // Filtrar por año seleccionado (descarta restos de otros años en la página)
@@ -4168,7 +4168,7 @@ function _fccvParseHtml(html, defaultYear){
     const key = date + '|' + name.toLowerCase().slice(0,50) + '|' + catKey + '|' + modKey;
     if(seen.has(key)) return;
     seen.add(key);
-    races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||''});
+    races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||'', fccvId: fccvId||''});
   };
 
   // Diagnóstico: contadores de estadísticas del parser
@@ -4273,8 +4273,14 @@ function _fccvParseHtml(html, defaultYear){
     }
     _stats.rowsWithValidName++;
 
+    // Extraer ID de prueba FCCV del HTML de la fila (data-target="#prueba12345"
+    // o href="#prueba12345"); permite enlazar a la documentación oficial.
+    let fccvId = '';
+    const idMatch = (row.outerHTML||'').match(/prueba(\d{3,7})\b/);
+    if(idMatch) fccvId = idMatch[1];
+
     const before = races.length;
-    push(d.iso, name, location, tdTexts.join(' | '), modality, category);
+    push(d.iso, name, location, tdTexts.join(' | '), modality, category, fccvId);
     if(races.length > before){
       _stats.rowsAccepted++;
     } else {
@@ -4593,6 +4599,7 @@ function _fccvRenderResults(races){
           <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:170px">Categoría</th>
           <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:140px">Localidad</th>
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:90px">Estado</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:60px" title="Abre la ficha oficial de la FCCV con reglamento e info">FCCV</th>
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:70px">Acción</th>
         </tr>
       </thead>
@@ -4619,12 +4626,22 @@ function _fccvRenderResults(races){
           const [y,m,d] = r.date.split('-');
           const dateDisplay = `${d}/${m}/${y}`;
           const catLabel = r.category || _fccvExtractCategoryFromText(r.rawText) || '—';
+          // Enlace a la ficha oficial FCCV (reglamento, info detallada)
+          const fccvYear = (r.date||'').slice(0,4) || new Date().getFullYear();
+          const fccvBase = `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${fccvYear}`;
+          const fccvLink = r.fccvId
+            ? `${fccvBase}#prueba${r.fccvId}`
+            : fccvBase;
+          const linkBtn = r.fccvId
+            ? `<a href="${fccvLink}" target="_blank" rel="noopener" title="Abrir ficha oficial FCCV (prueba ${r.fccvId})" style="display:inline-flex;align-items:center;gap:4px;background:#1e40af;color:#fff;text-decoration:none;border-radius:7px;padding:5px 9px;font-weight:800;font-size:12px;cursor:pointer">🔗 Ver</a>`
+            : `<a href="${fccvBase}" target="_blank" rel="noopener" title="Abrir calendario FCCV (no se detectó ID de prueba en esta fila)" style="display:inline-flex;align-items:center;gap:4px;background:#94a3b8;color:#fff;text-decoration:none;border-radius:7px;padding:5px 9px;font-weight:700;font-size:11px;cursor:pointer">🔗</a>`;
           return `<tr style="border-top:1px solid #fef3c7">
             <td style="padding:9px 12px;font-family:monospace;font-weight:700;color:#0b2f6b">${dateDisplay}</td>
             <td style="padding:9px 12px;font-weight:700">${escapeHtml(r.name)}</td>
             <td style="padding:9px 12px;color:#475569;font-size:12px;font-weight:600">${escapeHtml(catLabel)}</td>
             <td style="padding:9px 12px;color:#6b7280;font-size:12px">${escapeHtml(r.location||'—')}</td>
             <td style="padding:9px 12px;text-align:center">${estado}</td>
+            <td style="padding:9px 12px;text-align:center">${linkBtn}</td>
             <td style="padding:9px 12px;text-align:center">${accion}</td>
           </tr>`;
         }).join('')}
