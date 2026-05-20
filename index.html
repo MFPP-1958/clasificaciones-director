@@ -8752,16 +8752,26 @@ function _eqCcaaRender(){
     return;
   }
 
-  box.innerHTML = `<div style="background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb">
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+      <colgroup>
+        <col style="width:22%">
+        <col style="width:6%">
+        <col style="width:6%">
+        <col style="width:25%">
+        <col style="width:22%">
+        <col style="width:9%">
+        <col style="width:10%">
+      </colgroup>
       <thead style="background:#f8fafc">
         <tr>
           <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#475569">Equipo</th>
-          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#475569;width:80px" title="Número de corredores únicos en histórico">👥 Corredores</th>
-          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#475569;width:80px" title="Número de pruebas donde aparece el equipo">🏁 Pruebas</th>
-          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569;width:240px">Distribución CCAA actual</th>
-          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569;width:180px">Fijar CCAA</th>
-          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#475569;width:140px">Acción</th>
+          <th style="padding:10px 6px;text-align:center;font-size:11px;color:#475569" title="Número de corredores únicos en histórico">👥</th>
+          <th style="padding:10px 6px;text-align:center;font-size:11px;color:#475569" title="Número de pruebas donde aparece el equipo">🏁</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569">Distribución CCAA</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569">Fijar CCAA</th>
+          <th style="padding:10px 6px;text-align:left;font-size:11px;color:#475569">o nueva</th>
+          <th style="padding:10px 6px;text-align:center;font-size:11px;color:#475569">Acción</th>
         </tr>
       </thead>
       <tbody>
@@ -8780,19 +8790,21 @@ function _eqCcaaRender(){
             .concat(sortedRegions.map(r=>`<option value="${escapeAttr(r)}" ${r===d.dominant?'selected':''}>${escapeHtml(r)}</option>`))
             .join('');
           return `<tr style="background:${rowBg};border-top:1px solid #f3f4f6">
-            <td style="padding:10px 12px;font-weight:800;color:#0b2f6b">
+            <td style="padding:10px 12px;font-weight:800;color:#0b2f6b;word-break:break-word">
               ${escapeHtml(d.team)}
               <div style="margin-top:3px">${badge}</div>
             </td>
-            <td style="padding:10px 12px;text-align:center;font-weight:700;color:#475569">${d.riders.size}</td>
-            <td style="padding:10px 12px;text-align:center;font-weight:700;color:#475569">${d.races.size}</td>
+            <td style="padding:10px 6px;text-align:center;font-weight:700;color:#475569">${d.riders.size}</td>
+            <td style="padding:10px 6px;text-align:center;font-weight:700;color:#475569">${d.races.size}</td>
             <td style="padding:10px 12px">${dist}</td>
-            <td style="padding:10px 12px">
+            <td style="padding:10px 8px">
               <select id="${idAttr}" style="width:100%;border:1.5px solid #c7d7f5;border-radius:7px;padding:6px 8px;font-size:12px;font-weight:700;background:#fff">${opts}</select>
-              <input type="text" placeholder="o escribe nueva CCAA…" oninput="document.getElementById('${idAttr}').value='';this.dataset.custom='1'" style="width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:11px;margin-top:4px" id="${idAttr}_custom">
             </td>
-            <td style="padding:10px 12px;text-align:center">
-              <button onclick="_eqCcaaApplyTeam('${escapeAttr(d.team)}','${idAttr}')" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-weight:800;font-size:12px;cursor:pointer">✓ Aplicar</button>
+            <td style="padding:10px 6px">
+              <input type="text" placeholder="nueva…" id="${idAttr}_custom" style="width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:11px;box-sizing:border-box">
+            </td>
+            <td style="padding:10px 6px;text-align:center">
+              <button onclick="_eqCcaaApplyTeam('${escapeAttr(d.team)}','${idAttr}')" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:7px 10px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap">✓ Aplicar</button>
             </td>
           </tr>`;
         }).join('')}
@@ -8815,30 +8827,29 @@ async function _eqCcaaApplyTeam(team, selectId){
 
   showLoading('Aplicando CCAA al equipo…', `Equipo: ${team} · CCAA: ${newRegion}`);
   try{
-    // Para cada corredor del equipo, propagar la CCAA
-    let totalUpdated = 0;
-    const riders = [...teamData.riders];
-    for(const rider of riders){
-      // Reproducimos la lógica de propagateRegionChange sin alertas intermedias
-      const normTarget = typeof normalizeForMatching==='function' ? normalizeForMatching(rider) : rider.toLowerCase();
-      const {data:races, error} = await _sb
-        .from('races')
-        .select('id, notes, race_results(name, team)')
-        .eq('race_type','clasificacion');
-      if(error) throw error;
-      for(const race of (races||[])){
-        // Solo actualizar pruebas donde este corredor pertenece a este equipo
-        const appearsForThisTeam = (race.race_results||[]).some(rr=>{
-          const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(rr.name||'') : (rr.name||'').toLowerCase();
-          return nk===normTarget && (rr.team||'').trim()===team;
-        });
-        if(!appearsForThisTeam) continue;
+    const normTeam = (team||'').trim().toLowerCase();
+    // Una sola consulta a la BD con todas las pruebas
+    const {data:races, error} = await _sb
+      .from('races')
+      .select('id, notes, race_results(name, team)')
+      .eq('race_type','clasificacion');
+    if(error) throw error;
 
-        let extra = {};
-        try{ extra = JSON.parse(race.notes||'{}'); }catch(_){}
-        const regions = extra.regions||{};
-        let changed = false;
-        // Buscar clave por nombre exacto o normalizado
+    // Por cada prueba: para cada race_results cuya `team` coincida (case/space
+    // insensitive) con el equipo objetivo, fijar regions[name]=newRegion.
+    let racesUpdated = 0, ridersUpdated = 0, racesWithErrors = 0, errorSamples = [];
+    for(const race of (races||[])){
+      const matching = (race.race_results||[]).filter(rr=>(rr.team||'').trim().toLowerCase()===normTeam);
+      if(!matching.length) continue;
+      let extra = {};
+      try{ extra = JSON.parse(race.notes||'{}'); }catch(_){}
+      const regions = extra.regions||{};
+      let changed = false;
+      for(const rr of matching){
+        const rider = (rr.name||'').trim();
+        if(!rider) continue;
+        const normTarget = typeof normalizeForMatching==='function' ? normalizeForMatching(rider) : rider.toLowerCase();
+        // Buscar entrada existente (por nombre exacto o normalizado) y actualizarla
         let found = false;
         for(const k of Object.keys(regions)){
           const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(k) : k.toLowerCase();
@@ -8847,26 +8858,39 @@ async function _eqCcaaApplyTeam(team, selectId){
             found = true;
           }
         }
+        // Si no había entrada previa para este corredor en esta prueba, crearla
         if(!found){
-          const rawName = (race.race_results||[]).find(rr=>{
-            const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(rr.name||'') : (rr.name||'').toLowerCase();
-            return nk===normTarget;
-          })?.name || rider;
-          regions[rawName] = newRegion;
+          regions[rider] = newRegion;
           changed = true;
         }
-        if(changed){
-          extra.regions = regions;
-          const {error:updErr} = await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id', race.id);
-          if(!updErr) totalUpdated++;
+        ridersUpdated++;
+      }
+      if(changed){
+        extra.regions = regions;
+        const {error:updErr} = await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id', race.id);
+        if(updErr){
+          racesWithErrors++;
+          if(errorSamples.length<3) errorSamples.push(`race id ${race.id}: ${updErr.message}`);
+        } else {
+          racesUpdated++;
         }
       }
     }
     _cachedHistory = null;
     if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB();
     hideLoading();
-    alert(`✅ CCAA "${newRegion}" aplicada a ${riders.length} corredor(es) del equipo "${team}" en ${totalUpdated} prueba(s).`);
-    // Recargar la vista
+    let msg = `✅ CCAA "${newRegion}" aplicada al equipo "${team}":\n` +
+              `• ${racesUpdated} prueba(s) actualizadas\n` +
+              `• ${ridersUpdated} resultado(s) de corredor afectados`;
+    if(racesWithErrors){
+      msg += `\n\n⚠️ ${racesWithErrors} prueba(s) NO se pudieron actualizar (posible RLS o permisos):\n` + errorSamples.join('\n');
+    }
+    if(racesUpdated===0 && !racesWithErrors){
+      msg += `\n\n⚠️ No se actualizó ninguna prueba. Posibles causas:\n` +
+             `• El equipo ya tenía esa CCAA en todas las pruebas.\n` +
+             `• El nombre del equipo no coincide exactamente con lo guardado.`;
+    }
+    alert(msg);
     _eqCcaaInit();
   }catch(e){
     hideLoading();
