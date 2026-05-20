@@ -4269,47 +4269,25 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     _fccvShowPickerForDate(name, dateIso, sameDay);
     return;
   }
-  // No hay match en el scrape actual. La FCCV recorta su calendario público
-  // a "hoy en adelante", así que pruebas ya disputadas dentro del año en curso
-  // no aparecen en el HTML (y no podemos rascarlas). Pero la ficha individual
-  // sigue accesible si conocemos su ID — pedirla al usuario.
-  const pasted = prompt(
-    `No encuentro esta prueba automáticamente.\n\n` +
-    `Causa probable: la FCCV oculta las pruebas ya disputadas del calendario público (su HTML solo muestra desde hoy en adelante).\n\n` +
-    `Pega aquí la URL de la prueba en fccv.es (o solo su ID numérico). La consultaré directamente y la vincularé a esta carrera para siempre.\n\n` +
-    `Ej:  https://fccv.es/index.php/es/smartweb/prueba/32973\n` +
-    `o simplemente:  32973`
-  );
-  if(pasted){
-    const idMatch = pasted.match(/(\d{3,7})/);
-    if(idMatch){
-      const newId = idMatch[1];
-      // Descargar la ficha individual
-      const raw = await _fccvFetchDetailById(newId);
-      if(raw){
-        // Si encontramos la carrera planificada en _calPlanned, guardar el ID
-        try{
-          const planned = (_calPlanned||[]).find(p=>p.name===name && (p.dateStr||'').slice(0,10)===dateIso);
-          if(planned && _sb && !String(planned.id).startsWith('local-')){
-            const {data} = await _sb.from('races').select('notes').eq('id', planned.id).maybeSingle();
-            let extra = {};
-            if(data?.notes){ try{ extra = JSON.parse(data.notes); }catch(_){} }
-            extra.fccvId = newId;
-            await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', planned.id);
-            planned.fccvId = newId;
-          }
-        }catch(_){}
-        _fccvShowRaceDetails(newId);
-        return;
-      } else {
-        alert(`No pude descargar la ficha del ID ${newId}. Verifica que el ID sea correcto.`);
-        return;
+  // No hay match en el scrape actual. Forzamos una sincronización del año
+  // intentando todas las variantes posibles (GET con muchos parámetros + POST
+  // con form-data). Si tras eso seguimos sin encontrarla, mostramos un único
+  // mensaje claro: la FCCV no nos está dejando acceder a ese histórico.
+  const targetYear = dateIso ? dateIso.slice(0,4) : String(new Date().getFullYear());
+  try{
+    const yearSel = document.getElementById('fccvYear');
+    if(yearSel){
+      if(![...yearSel.options].some(o=>o.value===targetYear)){
+        const opt = document.createElement('option');
+        opt.value = targetYear; opt.textContent = targetYear;
+        yearSel.appendChild(opt);
       }
-    } else {
-      alert('No detecté un ID válido en lo que pegaste. Debería ser un número de 3-7 dígitos.');
-      return;
+      yearSel.value = targetYear;
     }
-  }
+    await _fccvSync();
+    const m2 = _calFindFccvForRace(fakeRace);
+    if(m2){ _fccvShowRaceDetails(m2.fccvId); return; }
+  }catch(e){ console.error(e); }
 
   // Diagnóstico avanzado: muestra fechas reales del scrape cercanas a la pedida
   const allDates = (_fccvLastAllRaces||[]).filter(c=>c.date).map(c=>c.date).sort();
@@ -4864,18 +4842,36 @@ async function _fccvSync(){
   const yyyy = String(year);
   const dateFrom = `${yyyy}-01-01`;
   const dateTo   = `${yyyy}-12-31`;
+  const dateFromES = `01/01/${yyyy}`;
+  const dateToES   = `31/12/${yyyy}`;
   // Probamos varios nombres de parámetros de filtro de fechas que usa Smartweb /
-  // Joomla. Nos quedamos con la URL que devuelva MÁS pruebas (la que el
-  // servidor honra realmente). El usuario quiere ver TODA la temporada del año
-  // seleccionado, no solo "desde hoy en adelante".
+  // Joomla. Incluimos también formatos DD/MM/YYYY y rutas con segmentos.
   const candidateUrls = [
+    // Variantes con fechas ISO YYYY-MM-DD
     `${baseUrl}?fechaDesde=${dateFrom}&fechaHasta=${dateTo}`,
     `${baseUrl}?desde=${dateFrom}&hasta=${dateTo}`,
     `${baseUrl}?from=${dateFrom}&to=${dateTo}`,
     `${baseUrl}?fecha_inicio=${dateFrom}&fecha_fin=${dateTo}`,
     `${baseUrl}?inicio=${dateFrom}&fin=${dateTo}`,
+    `${baseUrl}?fechaInicio=${dateFrom}&fechaFin=${dateTo}`,
     `${baseUrl}?d1=${dateFrom}&d2=${dateTo}`,
     `${baseUrl}?start=${dateFrom}&end=${dateTo}`,
+    `${baseUrl}?fechaIni=${dateFrom}&fechaFin=${dateTo}`,
+    // Variantes con fechas DD/MM/YYYY (más típico en formularios españoles)
+    `${baseUrl}?fechaDesde=${encodeURIComponent(dateFromES)}&fechaHasta=${encodeURIComponent(dateToES)}`,
+    `${baseUrl}?desde=${encodeURIComponent(dateFromES)}&hasta=${encodeURIComponent(dateToES)}`,
+    `${baseUrl}?fecha_inicio=${encodeURIComponent(dateFromES)}&fecha_fin=${encodeURIComponent(dateToES)}`,
+    // Variante con parámetros típicos de Joomla SmartWeb
+    `${baseUrl}?filter_fechaInicio=${dateFrom}&filter_fechaFin=${dateTo}`,
+    `${baseUrl}?filter[fechaInicio]=${dateFrom}&filter[fechaFin]=${dateTo}`,
+    // Forzar vista "todas" / archivo
+    `${baseUrl}?all=1`,
+    `${baseUrl}?past=1`,
+    `${baseUrl}?archivo=1`,
+    `${baseUrl}?ver=todas`,
+    `${baseUrl}/archivo`,
+    `${baseUrl}/todas`,
+    `${baseUrl}/historico`,
     baseUrl // fallback sin filtro (solo futuros)
   ];
   const fccvUrl = baseUrl; // para mensajes/UI
