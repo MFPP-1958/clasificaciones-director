@@ -4280,10 +4280,13 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
   ldr.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center';
   ldr.innerHTML = `<div style="background:#fff;border-radius:14px;padding:24px 32px;text-align:center;font-family:system-ui;box-shadow:0 20px 60px rgba(0,0,0,.4);max-width:380px">
     <div style="font-size:28px;margin-bottom:10px">⏳</div>
-    <div style="font-weight:800;color:#0b2f6b;font-size:14px;margin-bottom:4px">Buscando la prueba en la FCCV…</div>
-    <div style="font-size:11px;color:#6b7280">Año ${targetYear} · puede tardar unos segundos</div>
+    <div style="font-weight:800;color:#0b2f6b;font-size:14px;margin-bottom:4px" id="_fccvAutoMsg">Buscando la prueba en la FCCV…</div>
+    <div style="font-size:11px;color:#6b7280" id="_fccvAutoSub">Año ${targetYear}</div>
+    <button id="_fccvAutoCancel" style="margin-top:14px;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;padding:6px 14px;font-weight:700;font-size:12px;cursor:pointer">Cancelar</button>
   </div>`;
   document.body.appendChild(ldr);
+  let cancelled = false;
+  document.getElementById('_fccvAutoCancel').onclick = ()=>{ cancelled = true; ldr.remove(); };
   try{
     const yearSel = document.getElementById('fccvYear');
     if(yearSel){
@@ -4295,9 +4298,96 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
       yearSel.value = targetYear;
     }
     await _fccvSync();
+    if(cancelled) return;
     const m2 = _calFindFccvForRace(fakeRace);
+    if(m2){ ldr.remove(); _fccvShowRaceDetails(m2.fccvId); return; }
+
+    // ─ BRUTE FORCE AUTOMÁTICO ─
+    // El scrape sigue sin tener la prueba. La FCCV recorta su HTML público a
+    // "hoy en adelante" y no hemos encontrado un parámetro de filtro que abra
+    // el archivo. Barrido inteligente: cogemos el ID más bajo conocido del año
+    // y bajamos descargando fichas individuales hasta dar con la nuestra.
+    const yearRaces = (_fccvLastAllRaces||[]).filter(c=>c.fccvId && c.date && c.date.startsWith(targetYear)).sort((a,b)=>a.date.localeCompare(b.date));
+    if(!yearRaces.length){
+      ldr.remove();
+      alert(`No hay datos del año ${targetYear} en el scrape. Sincroniza desde el panel FCCV primero.`);
+      return;
+    }
+    // Encontrar el ID conocido cuya fecha está MÁS cerca (por arriba) de la pedida
+    const targetMs = new Date(dateIso+'T12:00:00').getTime();
+    let anchorId = parseInt(yearRaces[0].fccvId, 10);
+    let anchorDate = yearRaces[0].date;
+    for(const c of yearRaces){
+      const cMs = new Date(c.date+'T12:00:00').getTime();
+      if(cMs >= targetMs){ anchorId = parseInt(c.fccvId,10); anchorDate = c.date; break; }
+    }
+    // Estimar cuántos IDs hay que retroceder: ~5-10 IDs por día de diferencia
+    const daysBetween = Math.max(0, Math.round((new Date(anchorDate+'T12:00:00').getTime() - targetMs)/86400000));
+    const estimatedSpan = Math.max(40, daysBetween*8 + 40);
+    // Iterar IDs hacia abajo. Si se quedan en negativo paramos.
+    let scanned = 0, found = null;
+    const sub = document.getElementById('_fccvAutoSub');
+    const msg = document.getElementById('_fccvAutoMsg');
+    if(msg) msg.textContent = `Buscando ficha en archivo FCCV…`;
+    const tryId = async (id)=>{
+      if(cancelled || found) return null;
+      try{
+        const raw = await _fccvFetchDetailById(String(id));
+        if(!raw) return null;
+        // Parsear: buscar fecha y nombre dentro del HTML descargado
+        const tmp = document.createElement('div');
+        tmp.innerHTML = raw;
+        const text = (tmp.textContent||'').replace(/\s+/g,' ');
+        // ¿Aparece la fecha pedida (DD/MM/YYYY o YYYY-MM-DD)?
+        const [yy,mm,dd] = dateIso.split('-');
+        const dateRegex = new RegExp(`\\b${dd}[/\\-\\. ]${mm}[/\\-\\. ]${yy}\\b|\\b${yy}[/\\-]${mm}[/\\-]${dd}\\b`, 'i');
+        const hasDate = dateRegex.test(text);
+        if(!hasDate) return null;
+        // Compara nombre con tokens del nombre pedido
+        const userNameTokens = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+          .replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(t=>t.length>=4);
+        const textLow = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+        const matchTokens = userNameTokens.filter(t=>textLow.includes(t)).length;
+        if(matchTokens>=2 || matchTokens===userNameTokens.length){
+          return String(id);
+        }
+        return null;
+      }catch(_){ return null; }
+    };
+    // Escaneo en paralelo en bloques de 4 IDs descendentes
+    const PARALLEL = 4;
+    for(let offset=1; offset<=estimatedSpan && !cancelled && !found; offset+=PARALLEL){
+      const batch = [];
+      for(let k=0;k<PARALLEL;k++){
+        const id = anchorId - offset - k;
+        if(id<1000) continue;
+        batch.push(tryId(id));
+      }
+      if(msg) msg.textContent = `Buscando ficha en archivo FCCV…`;
+      if(sub) sub.textContent = `Año ${targetYear} · revisadas ${scanned} fichas`;
+      const results = await Promise.all(batch);
+      scanned += batch.length;
+      for(const r of results){ if(r){ found = r; break; } }
+    }
+    if(cancelled){ return; }
+    if(found){
+      // Vincular el fccvId a la carrera planificada para futuras consultas
+      try{
+        const planned = (_calPlanned||[]).find(p=>p.name===name && (p.dateStr||'').slice(0,10)===dateIso);
+        if(planned && _sb && !String(planned.id).startsWith('local-')){
+          const {data} = await _sb.from('races').select('notes').eq('id', planned.id).maybeSingle();
+          let extra = {};
+          if(data?.notes){ try{ extra = JSON.parse(data.notes); }catch(_){} }
+          extra.fccvId = found;
+          await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', planned.id);
+          planned.fccvId = found;
+        }
+      }catch(_){}
+      ldr.remove();
+      _fccvShowRaceDetails(found);
+      return;
+    }
     ldr.remove();
-    if(m2){ _fccvShowRaceDetails(m2.fccvId); return; }
   }catch(e){
     console.error(e);
     ldr.remove();
