@@ -2339,6 +2339,22 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
           </div>
 
           <div id="fccvStatus" style="font-size:12px;color:#92400e;font-weight:600;margin-bottom:8px"></div>
+
+          <!-- Zona de drop para Excel exportado de la FCCV -->
+          <div id="fccvExcelDrop" style="border:2px dashed #fcd34d;border-radius:10px;padding:14px;background:#fffbeb;text-align:center;cursor:pointer;margin-bottom:10px;transition:background .2s"
+            onclick="document.getElementById('fccvExcelInput').click()"
+            ondragover="event.preventDefault();this.style.background='#fef3c7'"
+            ondragleave="this.style.background='#fffbeb'"
+            ondrop="event.preventDefault();this.style.background='#fffbeb';_fccvHandleExcelDrop(event)">
+            <div style="font-size:24px">📥</div>
+            <div style="font-weight:800;color:#78350f;font-size:13px;margin-top:4px">Arrastra aquí el Excel exportado de la FCCV</div>
+            <div style="font-size:11px;color:#92400e;margin-top:2px">
+              En <a href="https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/2026" target="_blank" style="color:#1d4ed8;font-weight:700">fccv.es</a> pulsa el icono Excel y luego arrastra el fichero descargado aquí (o haz clic para elegirlo).<br>
+              Importará TODAS las pruebas del año, incluidas las ya disputadas.
+            </div>
+            <input type="file" id="fccvExcelInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="_fccvHandleExcelInput(event)">
+          </div>
+
           <div id="fccvResults"></div>
         </div>
       </section>
@@ -4926,6 +4942,133 @@ function _fccvApplyFilters(races, cat, mod, gen){
 
     return true;
   });
+}
+
+// ── Importador de Excel exportado desde la FCCV ──
+// La FCCV permite exportar a Excel todo el calendario del año (incluyendo
+// pruebas ya disputadas que no aparecen en el HTML público). El usuario
+// arrastra ese fichero aquí y nosotros lo parseamos con SheetJS.
+function _fccvHandleExcelInput(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(file) _fccvParseExcelFile(file);
+  ev.target.value = ''; // reset para permitir re-seleccionar el mismo fichero
+}
+function _fccvHandleExcelDrop(ev){
+  const file = ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if(file) _fccvParseExcelFile(file);
+}
+async function _fccvParseExcelFile(file){
+  const status = document.getElementById('fccvStatus');
+  if(status){ status.textContent = `📥 Leyendo ${file.name}…`; status.style.color = '#92400e'; }
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array', cellHTML:true, cellDates:true});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    if(!sheet){ throw new Error('Excel sin hojas'); }
+    const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:false});
+    if(rows.length < 2){ throw new Error('Excel vacío o sin filas de datos'); }
+
+    // Detectar encabezados (primera fila con varias celdas que parecen títulos)
+    let headerIdx = 0;
+    for(let i=0;i<Math.min(rows.length,5);i++){
+      const r = rows[i].map(c=>String(c||'').toLowerCase());
+      if(r.some(c=>/fecha/.test(c)) && r.some(c=>/prueba|nombre/.test(c))){
+        headerIdx = i; break;
+      }
+    }
+    const header = rows[headerIdx].map(c=>String(c||'').toLowerCase().trim());
+    const idx = {
+      fecha:    header.findIndex(c=>/fecha/.test(c)),
+      modalidad:header.findIndex(c=>/modalidad/.test(c)),
+      cat:      header.findIndex(c=>/categor/.test(c)),
+      clase:    header.findIndex(c=>/clase|uci/.test(c)),
+      prueba:   header.findIndex(c=>/prueba|nombre/.test(c)),
+      lugar:    header.findIndex(c=>/lugar|localidad|poblaci/.test(c)),
+      club:     header.findIndex(c=>/club|organiz/.test(c)),
+    };
+    if(idx.fecha<0 || idx.prueba<0){
+      throw new Error('No se detectaron las columnas Fecha y Prueba. Cabeceras: '+header.join(' | '));
+    }
+
+    // Parsear fechas en formato español DD/MM/YYYY o Date
+    const parseFecha = (val)=>{
+      if(!val) return '';
+      if(val instanceof Date && !isNaN(val)){
+        const y = val.getFullYear(), m = String(val.getMonth()+1).padStart(2,'0'), d = String(val.getDate()).padStart(2,'0');
+        return `${y}-${m}-${d}`;
+      }
+      const s = String(val).trim();
+      let m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+      if(m){
+        let yy = m[3]; if(yy.length===2) yy = (parseInt(yy,10)>50?'19':'20')+yy;
+        return `${yy}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+      }
+      m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+      return '';
+    };
+
+    const newRaces = [];
+    for(let i=headerIdx+1; i<rows.length; i++){
+      const r = rows[i];
+      if(!r || !r.length) continue;
+      const fecha = parseFecha(r[idx.fecha]);
+      const name = String(r[idx.prueba]||'').trim();
+      if(!fecha || !name) continue;
+      newRaces.push({
+        date: fecha,
+        dateText: fecha,
+        name,
+        location: idx.lugar>=0 ? String(r[idx.lugar]||'').trim() : '',
+        rawText: r.join(' | '),
+        modality: idx.modalidad>=0 ? String(r[idx.modalidad]||'').trim() : '',
+        category: idx.cat>=0 ? String(r[idx.cat]||'').trim() : '',
+        club: idx.club>=0 ? String(r[idx.club]||'').trim() : '',
+        clase: idx.clase>=0 ? String(r[idx.clase]||'').trim() : '',
+        fccvId: '',         // el Excel no incluye ID interno
+        fccvDetailUrl: '',
+        source: 'excel'
+      });
+    }
+
+    // Merge con scrape acumulado: indexamos por (fecha + nombre normalizado + cat)
+    // para no duplicar. Las entradas del Excel pueden no tener fccvId — no las
+    // tocamos pero las usamos para matching/info básica.
+    const norm = s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const key = c=>`${c.date||''}|${norm(c.name).slice(0,50)}|${norm(c.category).slice(0,30)}`;
+    const merged = new Map();
+    for(const c of (_fccvLastAllRaces||[])) merged.set(key(c), c);
+    let added = 0, updated = 0;
+    for(const c of newRaces){
+      const k = key(c);
+      const prev = merged.get(k);
+      if(prev){
+        // Si el previo no tenía algunos campos, los rellena con los del Excel
+        if(!prev.modality && c.modality) prev.modality = c.modality;
+        if(!prev.category && c.category) prev.category = c.category;
+        if(!prev.location && c.location) prev.location = c.location;
+        updated++;
+      } else {
+        merged.set(k, c);
+        added++;
+      }
+    }
+    _fccvLastAllRaces = [...merged.values()].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    _fccvPersistScrape();
+    if(status){
+      status.textContent = `✅ Excel importado · ${added} pruebas nuevas, ${updated} actualizadas · total en caché: ${_fccvLastAllRaces.length}`;
+      status.style.color = '#15803d';
+    }
+    // Refrescar la vista del calendario (los botones Info reaccionarán al nuevo cache)
+    if(typeof _calRender==='function') _calRender();
+  }catch(e){
+    console.error(e);
+    if(status){
+      status.textContent = `❌ Error procesando Excel: ${e.message}`;
+      status.style.color = '#dc2626';
+    }
+    alert('No pude leer el Excel.\n\n' + e.message + '\n\nAsegúrate de descargarlo desde el botón Excel del calendario FCCV.');
+  }
 }
 
 async function _fccvSync(){
