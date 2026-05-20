@@ -3353,11 +3353,11 @@ function _calBuildMonth(y, m){
       const canClickPast = !isPlan && r.id;
       const rowClick = canClickPast ? `onclick="_calOpenRaceDetails('${escapeAttr(String(r.id))}')"` : '';
       const rowHover = canClickPast ? 'transition:background .15s' : '';
-      // Buscar ficha FCCV (planificadas o pasadas) por nombre + fecha
-      const fccvMatch = _calFindFccvForRace(r);
-      const infoBtn = fccvMatch
-        ? `<button onclick="event.stopPropagation();_fccvShowRaceDetails('${fccvMatch.fccvId}')" style="background:#1e40af;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px" title="Ficha oficial FCCV (reglamento, planos, clasificación...)">ℹ️ Info</button>`
-        : '';
+      // Botón Info: SIEMPRE visible. Al hacer clic buscamos la ficha FCCV;
+      // si no se encuentra, avisamos y ofrecemos sincronizar.
+      const safeName = escapeAttr(r.name||'');
+      const safeDate = r.date ? `${r.date.getFullYear()}-${String(r.date.getMonth()+1).padStart(2,'0')}-${String(r.date.getDate()).padStart(2,'0')}` : '';
+      const infoBtn = `<button onclick="event.stopPropagation();_calOpenFccvInfo('${safeName}','${safeDate}')" style="background:#1e40af;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px" title="Ficha oficial FCCV (reglamento, planos, clasificación...)">ℹ️ Info</button>`;
       html += `<div ${rowClick} style="display:flex;align-items:center;gap:12px;background:${isPlan?'#f0fdf4':'#eff6ff'};border:1px solid ${isPlan?'#a7f3d0':'#bfdbfe'};border-radius:10px;padding:10px 14px;${canClickPast?'cursor:pointer;':''}${rowHover}"
         ${canClickPast?`onmouseenter="this.style.background='#dbeafe'" onmouseleave="this.style.background='#eff6ff'"`:''}>
         <div style="width:10px;height:10px;border-radius:50%;background:${isPlan?'#10b981':'#3b82f6'};flex-shrink:0"></div>
@@ -4192,6 +4192,32 @@ function _fccvCleanRaceName(rawName){
   return s.trim();
 }
 
+// Dispatcher para el botón "ℹ️ Info" de la lista de carreras del calendario.
+// Acepta nombre + fecha (yyyy-mm-dd) crudos y resuelve la ficha FCCV.
+async function _calOpenFccvInfo(name, dateIso){
+  // Construir un objeto compatible con _calFindFccvForRace
+  const fakeRace = {name, date: dateIso ? new Date(dateIso) : null};
+  let m = _calFindFccvForRace(fakeRace);
+  if(m){ _fccvShowRaceDetails(m.fccvId); return; }
+  // No hay match. Si el scrape está vacío, ofrecer sincronizar.
+  if(!(_fccvLastAllRaces||[]).length){
+    if(confirm('No hay datos de la FCCV cargados.\n¿Sincronizar ahora con la Federación?')){
+      try{
+        // Ir a la vista calendario si no está
+        if(typeof showView==='function' && document.getElementById('view-calendario')){
+          showView('view-calendario');
+        }
+        await _fccvSync();
+        m = _calFindFccvForRace(fakeRace);
+        if(m){ _fccvShowRaceDetails(m.fccvId); return; }
+      }catch(e){ console.error(e); }
+    }
+    alert('No se encontró esta prueba en el calendario actual de la FCCV.\n• La prueba puede haber sido retirada del calendario.\n• O el nombre difiere demasiado del oficial.');
+    return;
+  }
+  alert('No se encontró esta prueba en el último scrape FCCV.\n\nPrueba a:\n• Volver a sincronizar con la Federación (botón "Sincronizar")\n• Verificar que el nombre y fecha coinciden con la web oficial');
+}
+
 // Busca, en el último scrape FCCV, una carrera que coincida con la fila del
 // calendario por nombre+fecha (matching laxo). Devuelve {fccvId,...} o null.
 function _calFindFccvForRace(r){
@@ -4221,7 +4247,7 @@ function _calFindFccvForRace(r){
     if(c.date===dateIso) score += 50;
     if(score>bestScore){ bestScore = score; best = c; }
   }
-  return bestScore>=50 ? best : null;
+  return bestScore>=24 ? best : null;
 }
 
 function _fccvParseHtml(html, defaultYear){
