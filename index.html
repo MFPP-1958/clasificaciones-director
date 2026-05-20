@@ -2307,7 +2307,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
               <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">🎽 Categoría</label>
               <select id="fccvCat" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
                 <option value="">Todas</option>
-                <option value="cadete">Cadete</option>
+                <option value="cadete" selected>Cadete</option>
                 <option value="junior">Junior</option>
                 <option value="sub23">Sub-23</option>
                 <option value="elite">Elite</option>
@@ -2319,7 +2319,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
               <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">🚴 Modalidad</label>
               <select id="fccvMod" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
                 <option value="">Todas</option>
-                <option value="carretera">Carretera</option>
+                <option value="carretera" selected>Carretera</option>
                 <option value="btt">BTT / MTB</option>
                 <option value="cx">Ciclocross</option>
                 <option value="pista">Pista</option>
@@ -2330,7 +2330,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
               <label style="font-size:10px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">⚥ Género</label>
               <select id="fccvGen" style="width:100%;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:700;background:#fff">
                 <option value="">Todos</option>
-                <option value="masculino">Masculino</option>
+                <option value="masculino" selected>Masculino</option>
                 <option value="femenino">Femenino</option>
                 <option value="mixto">Mixto (M+F)</option>
               </select>
@@ -4218,6 +4218,14 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
   if(fccvId && _fccvDetailsById && _fccvDetailsById[fccvId]){
     _fccvShowRaceDetails(fccvId); return;
   }
+  // Si la prueba planificada no trae categoría/modalidad propias, usamos los
+  // filtros globales de la FCCV como pistas (por defecto Cadete + Carretera +
+  // Masculino para nuestro equipo) — así se desambigua bien cuando hay varias
+  // versiones de la misma prueba el mismo día (Junior vs Cadete, etc.).
+  const fccvCatSel = (document.getElementById('fccvCat')?.value || '').trim();
+  const fccvModSel = (document.getElementById('fccvMod')?.value || '').trim();
+  if(!cat && fccvCatSel) cat = fccvCatSel;
+  if(!modality && fccvModSel) modality = fccvModSel;
   // Construir un objeto compatible con _calFindFccvForRace
   const fakeRace = {name, date: dateIso ? new Date(dateIso) : null, cat: cat||'', modality: modality||'', fccvId: fccvId||''};
   let m = _calFindFccvForRace(fakeRace);
