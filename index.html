@@ -4017,6 +4017,41 @@ let _fccvPanelOpen = true;
 // de la FCCV (que contienen reglamento, info completa, contactos...).
 let _fccvDetailsById = {};
 
+// ── Persistencia local del último scrape FCCV ──
+// Guardamos en localStorage el listado de carreras y los modales para que el
+// botón Info funcione tras recargar la página sin tener que volver a sincronizar.
+const _FCCV_STORAGE_KEY = 'fccvScrapeV1';
+function _fccvPersistScrape(){
+  try{
+    const payload = {
+      ts: Date.now(),
+      races: _fccvLastAllRaces||[],
+      details: _fccvDetailsById||{}
+    };
+    const str = JSON.stringify(payload);
+    // Evitar superar el cupo (5-10MB) — si pesa mucho, descartamos los modales
+    if(str.length > 3_500_000){
+      payload.details = {};
+      localStorage.setItem(_FCCV_STORAGE_KEY, JSON.stringify(payload));
+    } else {
+      localStorage.setItem(_FCCV_STORAGE_KEY, str);
+    }
+  }catch(_){}
+}
+function _fccvLoadScrape(){
+  try{
+    const str = localStorage.getItem(_FCCV_STORAGE_KEY);
+    if(!str) return;
+    const data = JSON.parse(str);
+    if(data && Array.isArray(data.races)){
+      _fccvLastAllRaces = data.races;
+      _fccvDetailsById = data.details || {};
+    }
+  }catch(_){}
+}
+// Cargar al arrancar el script
+_fccvLoadScrape();
+
 function _fccvToggle(){
   _fccvPanelOpen = !_fccvPanelOpen;
   const body = document.getElementById('fccvBody');
@@ -4606,6 +4641,7 @@ async function _fccvSync(){
     const filtered = _fccvApplyFilters(all, cat, mod, gen);
     _fccvLastResults = filtered;
     _fccvLastAllRaces = all;
+    _fccvPersistScrape();
     if(status){
       const debugBtn = ` <button onclick="_fccvShowDebug()" style="background:#fff;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px">🔍 Debug</button>`;
       status.innerHTML = `✅ ${all.length} carreras detectadas en el HTML · ${filtered.length} pasan los filtros · ${new Date().toLocaleTimeString('es-ES')}${debugBtn}`;
