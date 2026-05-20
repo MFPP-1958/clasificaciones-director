@@ -4223,15 +4223,32 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     alert('No se encontró esta prueba en el calendario actual de la FCCV.\n• La prueba puede haber sido retirada del calendario.\n• O el nombre difiere demasiado del oficial.');
     return;
   }
-  // Diagnóstico: mostrar las carreras FCCV de la misma fecha (o ±1 día), y si
+  // Diagnóstico: mostrar las carreras FCCV de la misma fecha (o ±3 días), y si
   // tenemos categoría/modalidad las usamos para acotar.
   const ref = dateIso ? new Date(dateIso+'T12:00:00') : null;
   let sameDay = (_fccvLastAllRaces||[]).filter(c=>{
     if(!c.fccvId || !c.date) return false;
     if(!ref) return false;
     const cd = new Date(c.date+'T12:00:00');
-    return Math.abs((cd-ref)/86400000) <= 1;
+    return Math.abs((cd-ref)/86400000) <= 3;
   });
+  // Fallback: si no hay nada en ±3 días pero el nombre del usuario coincide
+  // razonablemente con alguna prueba, devolvemos esas candidatas igualmente.
+  if(!sameDay.length && name){
+    const norm = s=>(s||'').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const nK = norm(name);
+    const userTokens = nK.split(' ').filter(t=>t.length>=4);
+    sameDay = (_fccvLastAllRaces||[]).filter(c=>{
+      if(!c.fccvId) return false;
+      const cK = norm(c.name);
+      if(cK===nK || cK.includes(nK) || nK.includes(cK)) return true;
+      const ctok = cK.split(' ').filter(t=>t.length>=4);
+      const shared = userTokens.filter(t=>ctok.includes(t)).length;
+      return shared>=2; // al menos 2 tokens compartidos
+    }).slice(0,10);
+  }
   // Filtrar por categoría y modalidad si las tenemos
   const userCatLow = (cat||'').toLowerCase();
   const userModLow = (modality||'').toLowerCase();
@@ -4252,7 +4269,21 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     _fccvShowPickerForDate(name, dateIso, sameDay);
     return;
   }
-  alert(`No hay carreras FCCV registradas el ${dateIso||'(sin fecha)'}.\nScrape actual: ${(_fccvLastAllRaces||[]).length} carreras.\n\nPosibles causas:\n• La prueba no pertenece a la FCCV (Aragón, otra autonomía).\n• Aún no la han publicado o la han retirado.\n• Cambia el año en el filtro FCCV y vuelve a sincronizar.`);
+  // Diagnóstico avanzado: muestra fechas reales del scrape cercanas a la pedida
+  const allDates = (_fccvLastAllRaces||[]).filter(c=>c.date).map(c=>c.date).sort();
+  const datesNear = [];
+  if(ref){
+    for(const c of (_fccvLastAllRaces||[])){
+      if(!c.date) continue;
+      const cd = new Date(c.date+'T12:00:00');
+      const diff = (cd-ref)/86400000;
+      if(Math.abs(diff)<=7) datesNear.push({date:c.date, name:c.name, cat:c.category||'', mod:c.modality||'', fccvId:c.fccvId});
+    }
+  }
+  const diag = datesNear.length
+    ? '\n\nCarreras del scrape en ±7 días:\n' + datesNear.slice(0,8).map(d=>`  • ${d.date} — ${(d.name||'').slice(0,40)} [${(d.mod||'').slice(0,10)} / ${(d.cat||'').slice(0,18)}]`).join('\n')
+    : (allDates.length ? `\n\nRango de fechas en el scrape: ${allDates[0]} … ${allDates[allDates.length-1]}` : '');
+  alert(`No se encontró match el ${dateIso||'(sin fecha)'} ni por nombre similar.\nScrape actual: ${(_fccvLastAllRaces||[]).length} carreras.${diag}\n\nPosibles causas:\n• La prueba no pertenece a la FCCV.\n• El año filtrado al sincronizar fue distinto.\n• Aún no la han publicado o la han retirado.`);
 }
 
 // Selector cuando no encontramos match exacto pero hay candidatas el mismo día.
