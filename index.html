@@ -8831,10 +8831,11 @@ async function _eqCcaaApplyTeam(team, selectId){
   showLoading('Aplicando CCAA al equipo…', `Equipo: ${team} · CCAA: ${newRegion}`);
   try{
     const normTeam = (team||'').trim().toLowerCase();
-    // Una sola consulta a la BD con todas las pruebas
+    // Una sola consulta a la BD con todas las pruebas (incluye name/date para
+    // que los mensajes de error sean comprensibles)
     const {data:races, error} = await _sb
       .from('races')
-      .select('id, notes, race_results(name, team)')
+      .select('id, name, date, notes, race_results(name, team)')
       .eq('race_type','clasificacion');
     if(error) throw error;
 
@@ -8868,7 +8869,20 @@ async function _eqCcaaApplyTeam(team, selectId){
         });
         if(inOtherTeams){
           ambiguousSkipped++;
-          if(ambiguousSamples.length<3) ambiguousSamples.push(`${rider} (race id ${race.id})`);
+          if(ambiguousSamples.length<5){
+            // Capturar el otro team con el que está duplicado para mostrarlo
+            const otherRow = (race.race_results||[]).find(other=>{
+              if(other===rr) return false;
+              const oTeam = (other.team||'').trim().toLowerCase();
+              if(oTeam===normTeam || !oTeam) return false;
+              const oNorm = typeof normalizeForMatching==='function' ? normalizeForMatching((other.name||'').trim()) : (other.name||'').trim().toLowerCase();
+              return oNorm===normTarget;
+            });
+            const otherTeamName = (otherRow?.team||'?').trim();
+            const dateStr = (race.date||'').slice(0,10);
+            const raceName = (race.name||'').slice(0,40);
+            ambiguousSamples.push(`• ${rider}\n   ↳ Prueba: ${raceName} (${dateStr})\n   ↳ Duplicado en team: ${otherTeamName}`);
+          }
           continue; // no tocar — su región es compartida y romperíamos otros teams
         }
         // Buscar entrada existente (por nombre exacto o normalizado) y actualizarla
