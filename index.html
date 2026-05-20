@@ -8838,9 +8838,13 @@ async function _eqCcaaApplyTeam(team, selectId){
       .eq('race_type','clasificacion');
     if(error) throw error;
 
-    // Por cada prueba: para cada race_results cuya `team` coincida (case/space
-    // insensitive) con el equipo objetivo, fijar regions[name]=newRegion.
+    // Por cada prueba: para cada race_results cuya `team` coincida con el
+    // equipo objetivo, fijar regions[name]=newRegion. PERO: si un mismo nombre
+    // de corredor aparece en 2+ teams en la MISMA carrera (duplicación de
+    // datos), NO se toca su región — porque regions[name] es compartido por
+    // todos los teams en esa carrera y cambiarlo crearía conflictos en otros.
     let racesUpdated = 0, ridersUpdated = 0, racesWithErrors = 0, errorSamples = [];
+    let ambiguousSkipped = 0, ambiguousSamples = [];
     for(const race of (races||[])){
       const matching = (race.race_results||[]).filter(rr=>(rr.team||'').trim().toLowerCase()===normTeam);
       if(!matching.length) continue;
@@ -8852,6 +8856,21 @@ async function _eqCcaaApplyTeam(team, selectId){
         const rider = (rr.name||'').trim();
         if(!rider) continue;
         const normTarget = typeof normalizeForMatching==='function' ? normalizeForMatching(rider) : rider.toLowerCase();
+        // ¿Aparece este mismo rider también con OTRO team en la misma carrera?
+        const inOtherTeams = (race.race_results||[]).some(other=>{
+          if(other===rr) return false;
+          const oRider = (other.name||'').trim();
+          const oTeam = (other.team||'').trim().toLowerCase();
+          if(oTeam===normTeam) return false; // mismo team, no es ambiguo
+          if(!oTeam) return false;
+          const oNorm = typeof normalizeForMatching==='function' ? normalizeForMatching(oRider) : oRider.toLowerCase();
+          return oNorm===normTarget;
+        });
+        if(inOtherTeams){
+          ambiguousSkipped++;
+          if(ambiguousSamples.length<3) ambiguousSamples.push(`${rider} (race id ${race.id})`);
+          continue; // no tocar — su región es compartida y romperíamos otros teams
+        }
         // Buscar entrada existente (por nombre exacto o normalizado) y actualizarla
         let found = false;
         for(const k of Object.keys(regions)){
@@ -8892,6 +8911,10 @@ async function _eqCcaaApplyTeam(team, selectId){
       msg += `\n\n⚠️ No se actualizó ninguna prueba. Posibles causas:\n` +
              `• El equipo ya tenía esa CCAA en todas las pruebas.\n` +
              `• El nombre del equipo no coincide exactamente con lo guardado.`;
+    }
+    if(ambiguousSkipped){
+      msg += `\n\n🟠 ${ambiguousSkipped} corredor(es) saltado(s) por estar duplicados con otro equipo en la misma carrera. Su CCAA NO se ha cambiado para no romper otros equipos. Ejemplos:\n` + ambiguousSamples.join('\n') +
+             `\n\nDebes corregir manualmente esos duplicados (un mismo corredor figura en 2 teams en la misma prueba).`;
     }
     console.log('[CCAA] resultado apply:', {team, newRegion, racesUpdated, ridersUpdated, racesWithErrors, errorSamples});
     // Pausa breve antes de recargar para que Supabase consolide los UPDATE
