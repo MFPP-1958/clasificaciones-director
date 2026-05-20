@@ -4166,7 +4166,7 @@ function _fccvParseHtml(html, defaultYear){
   });
   const yearStr = defaultYear ? String(defaultYear) : String(new Date().getFullYear());
 
-  const push = (date, name, location, rawText, modality, category, fccvId) => {
+  const push = (date, name, location, rawText, modality, category, fccvId, fccvDetailUrl) => {
     name = _fccvCleanRaceName(name);
     if(!date || !_fccvIsValidRaceName(name)) return;
     // Filtrar por año seleccionado (descarta restos de otros años en la página)
@@ -4179,7 +4179,7 @@ function _fccvParseHtml(html, defaultYear){
     const key = date + '|' + name.toLowerCase().slice(0,50) + '|' + catKey + '|' + modKey;
     if(seen.has(key)) return;
     seen.add(key);
-    races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||'', fccvId: fccvId||''});
+    races.push({date, dateText:date, name, location:(location||'').trim(), rawText:(rawText||name), modality:modality||'', category:category||'', fccvId: fccvId||'', fccvDetailUrl: fccvDetailUrl||''});
   };
 
   // Diagnóstico: contadores de estadísticas del parser
@@ -4290,8 +4290,30 @@ function _fccvParseHtml(html, defaultYear){
     const idMatch = (row.outerHTML||'').match(/prueba(\d{3,7})\b/);
     if(idMatch) fccvId = idMatch[1];
 
+    // Extraer URL de la página de detalle de la prueba (el botón "Más" del
+    // calendario apunta ahí, y desde ese URL la FCCV expone los tabs:
+    // Información, Documentos, Deportistas, Técnicos/Otros, Clasificación).
+    let fccvDetailUrl = '';
+    const anchors = [...row.querySelectorAll('a[href]')];
+    for(const a of anchors){
+      const href = a.getAttribute('href') || '';
+      const txt = (a.textContent||'').trim().toLowerCase();
+      // Prioridad 1: href que contiene "prueba" o "smartweb" y NO es un ancla a modal
+      if(href && !href.startsWith('#') && !/javascript:/i.test(href) &&
+         (/prueba|smartweb/i.test(href) || /^m[aá]s$|info|detalle/i.test(txt))){
+        fccvDetailUrl = href;
+        if(/prueba/i.test(href)) break; // mejor candidato
+      }
+    }
+    // Convertir a URL absoluta si era relativa
+    if(fccvDetailUrl && !/^https?:/i.test(fccvDetailUrl)){
+      fccvDetailUrl = fccvDetailUrl.startsWith('/')
+        ? 'https://fccv.es' + fccvDetailUrl
+        : 'https://fccv.es/' + fccvDetailUrl;
+    }
+
     const before = races.length;
-    push(d.iso, name, location, tdTexts.join(' | '), modality, category, fccvId);
+    push(d.iso, name, location, tdTexts.join(' | '), modality, category, fccvId, fccvDetailUrl);
     if(races.length > before){
       _stats.rowsAccepted++;
     } else {
@@ -4794,7 +4816,31 @@ function _fccvShowRaceDetails(pruebaId){
   overlay.id = '_fccvDetailsDialog';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
-  const fccvUrl = race ? `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${race.date.slice(0,4)}` : 'https://fccv.es/';
+  const fccvCalUrl = race ? `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${race.date.slice(0,4)}` : 'https://fccv.es/';
+  // URL base de la ficha de detalle (extraída del botón "Más" de la fila).
+  // Los tabs de la FCCV (Información, Documentos, Deportistas, Técnicos/Otros,
+  // Clasificación) viven dentro de esta misma página: la mayoría se gestionan
+  // por hash/fragmento o por subruta. Le ofrecemos al usuario un botón por tab
+  // probando los patrones más comunes; si la FCCV no reconoce el fragmento,
+  // simplemente cae a la pestaña Información que es la por defecto.
+  const detailUrl = race && race.fccvDetailUrl ? race.fccvDetailUrl : '';
+  const tabBtn = (label, hashes, color)=>{
+    if(!detailUrl) return '';
+    // hashes = [posibles fragments]; usamos el primero; el usuario puede
+    // hacer clic en otros tabs dentro de la página si éste no funciona
+    const url = hashes && hashes.length ? `${detailUrl}#${hashes[0]}` : detailUrl;
+    return `<a href="${url}" target="_blank" rel="noopener" style="background:${color};color:#fff;border:none;border-radius:8px;padding:8px 12px;font-weight:700;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px">${label}</a>`;
+  };
+  const tabsHtml = detailUrl
+    ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;padding:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:10px">
+        <div style="width:100%;font-weight:800;color:#78350f;font-size:11px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px">🗂️ Acceso directo a tabs FCCV</div>
+        ${tabBtn('📋 Información',['informacion','info'],'#1e40af')}
+        ${tabBtn('📎 Documentos',['documentos','docs'],'#0891b2')}
+        ${tabBtn('🚴 Deportistas',['deportistas','inscritos'],'#16a34a')}
+        ${tabBtn('👤 Técnicos/Otros',['tecnicos','otros'],'#7c3aed')}
+        ${tabBtn('🏁 Clasificación',['clasificacion','resultados'],'#dc2626')}
+       </div>`
+    : '';
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:14px;max-width:800px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
       <div style="background:linear-gradient(135deg,#1e40af,#0b2f6b);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
@@ -4805,11 +4851,13 @@ function _fccvShowRaceDetails(pruebaId){
         <button onclick="document.getElementById('_fccvDetailsDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer;flex-shrink:0">✕</button>
       </div>
       <div style="padding:18px 20px;overflow-y:auto;flex:1;font-size:13px;line-height:1.5;color:#1f2937">
+        ${tabsHtml}
         ${dlHtml}
         <div class="_fccvDetailContent" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px">${html}</div>
       </div>
       <div style="border-top:1px solid #e5e7eb;padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb">
-        <a href="${fccvUrl}" target="_blank" rel="noopener" style="background:#fff;color:#0b2f6b;border:1.5px solid #0b2f6b;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;text-decoration:none">↗ Abrir calendario FCCV</a>
+        ${detailUrl?`<a href="${detailUrl}" target="_blank" rel="noopener" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;text-decoration:none">↗ Ficha completa FCCV</a>`:''}
+        <a href="${fccvCalUrl}" target="_blank" rel="noopener" style="background:#fff;color:#0b2f6b;border:1.5px solid #0b2f6b;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;text-decoration:none">↗ Calendario FCCV</a>
         <button onclick="document.getElementById('_fccvDetailsDialog').remove()" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-weight:700;cursor:pointer">Cerrar</button>
       </div>
     </div>`;
