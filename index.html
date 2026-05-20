@@ -9203,11 +9203,15 @@ async function _riderCatApply(riderName, selectId){
 
 // Modal con la plantilla del equipo en el año actual (corredores + categoría).
 // Reutiliza _buildTeamRosterData y _openTeamRosterPDFWindow (mismo formato que
-// usamos en Explorador de Clubes y Informe de Plantilla).
+// usamos en Explorador de Clubes y Informe de Plantilla). Incluye filtro por
+// categoría y ordenación por columna (clic en cabecera).
+let _eqRosterState = null; // {teamName, year, data, sortKey, sortDir, catFilter}
+
 async function _eqCcaaShowTeamModal(teamName){
   const year = (_globalFilters?.year || String(new Date().getFullYear()));
   const history = await _ensureHistory();
   const data = _buildTeamRosterData(history, teamName, year);
+  _eqRosterState = { teamName, year, data, sortKey:'score', sortDir:'asc', catFilter:'' };
 
   const old = document.getElementById('_eqCcaaTeamDialog');
   if(old) old.remove();
@@ -9216,8 +9220,105 @@ async function _eqCcaaShowTeamModal(teamName){
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
 
-  const ridersRows = data.riders.length
-    ? data.riders.map((r,i)=>`<tr style="border-top:1px solid #f3f4f6">
+  // Categorías únicas (orden alfabético) para el desplegable de filtro
+  const allCats = [...new Set(data.riders.map(r=>r.cat||'').filter(Boolean))].sort();
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:1000px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">Plantilla del equipo · ${escapeHtml(year)}</div>
+          <div style="font-size:18px;font-weight:900;margin-top:2px">${escapeHtml(teamName)}</div>
+          <div style="font-size:11px;opacity:.85;margin-top:3px">${data.riders.length} corredor(es) · ${data.totalRaces} prueba(s) · 🏆 ${data.teamWins} · 🥉 ${data.teamPodiums} · Top10: ${data.teamTop10}</div>
+        </div>
+        <button onclick="document.getElementById('_eqCcaaTeamDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer;flex-shrink:0">✕</button>
+      </div>
+
+      <!-- Barra de filtro/orden -->
+      <div style="background:#fef3c7;border-bottom:1px solid #fcd34d;padding:10px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:800;color:#78350f;text-transform:uppercase;letter-spacing:.4px">🎽 Filtrar por categoría:</label>
+        <select id="eqRosterCatFilter" onchange="_eqRosterRerender()" style="border:1.5px solid #fcd34d;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;background:#fff;min-width:140px">
+          <option value="">Todas (${data.riders.length})</option>
+          ${allCats.map(c=>{
+            const n = data.riders.filter(r=>(r.cat||'')===c).length;
+            return `<option value="${escapeAttr(c)}">${escapeHtml(c)} (${n})</option>`;
+          }).join('')}
+        </select>
+        <button onclick="_eqRosterResetSort()" style="background:#fff;color:#78350f;border:1.5px solid #fcd34d;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">🔄 Quitar filtros</button>
+        <span id="eqRosterCount" style="font-size:11px;color:#92400e;font-weight:700;margin-left:auto"></span>
+      </div>
+
+      <div style="padding:14px 18px;overflow-y:auto;flex:1">
+        <div id="eqRosterTableBox"></div>
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb">
+        <button onclick="_eqCcaaTeamRosterPDF('${escapeAttr(teamName)}','${escapeAttr(year)}')" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer">📄 Exportar PDF</button>
+        <button onclick="document.getElementById('_eqCcaaTeamDialog').remove()" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer">Cerrar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  _eqRosterRerender();
+}
+
+function _eqRosterSort(key){
+  if(!_eqRosterState) return;
+  if(_eqRosterState.sortKey===key){
+    _eqRosterState.sortDir = _eqRosterState.sortDir==='asc' ? 'desc' : 'asc';
+  } else {
+    _eqRosterState.sortKey = key;
+    // Por defecto las stats van descendente (mejor primero), las de "posición" ascendente
+    _eqRosterState.sortDir = ['wins','podiums','top10','races'].includes(key) ? 'desc' : 'asc';
+  }
+  _eqRosterRerender();
+}
+
+function _eqRosterResetSort(){
+  if(!_eqRosterState) return;
+  _eqRosterState.sortKey = 'score';
+  _eqRosterState.sortDir = 'asc';
+  _eqRosterState.catFilter = '';
+  const sel = document.getElementById('eqRosterCatFilter');
+  if(sel) sel.value = '';
+  _eqRosterRerender();
+}
+
+function _eqRosterRerender(){
+  if(!_eqRosterState) return;
+  const sel = document.getElementById('eqRosterCatFilter');
+  _eqRosterState.catFilter = (sel?.value || '').trim();
+  const {data, sortKey, sortDir, catFilter, year} = _eqRosterState;
+
+  // Filtrar
+  let rows = [...data.riders];
+  if(catFilter) rows = rows.filter(r=>(r.cat||'')===catFilter);
+
+  // Ordenar
+  const sortMul = sortDir==='asc' ? 1 : -1;
+  rows.sort((a,b)=>{
+    const va = a[sortKey], vb = b[sortKey];
+    // Para nombre/cat (strings)
+    if(sortKey==='displayName' || sortKey==='cat'){
+      return (va||'').localeCompare(vb||'') * sortMul;
+    }
+    return ((va||0) - (vb||0)) * sortMul;
+  });
+
+  // Contador
+  const cnt = document.getElementById('eqRosterCount');
+  if(cnt) cnt.textContent = `Mostrando ${rows.length} de ${data.riders.length} corredor(es)`;
+
+  // Render
+  const box = document.getElementById('eqRosterTableBox');
+  if(!box) return;
+
+  const arrow = (key)=>{
+    if(sortKey!==key) return '<span style="opacity:.3">↕</span>';
+    return sortDir==='asc' ? '<span style="color:#1d4ed8">▲</span>' : '<span style="color:#1d4ed8">▼</span>';
+  };
+  const th = (key, label, align='left')=>`<th onclick="_eqRosterSort('${key}')" style="padding:9px 10px;text-align:${align};font-size:11px;color:#475569;cursor:pointer;user-select:none;background:${sortKey===key?'#dbeafe':'#f8fafc'}" title="Clic para ordenar">${label} ${arrow(key)}</th>`;
+
+  const rowsHtml = rows.length
+    ? rows.map((r,i)=>`<tr style="border-top:1px solid #f3f4f6">
         <td style="padding:8px 10px;font-weight:700;color:#475569;width:36px;text-align:center">${i+1}</td>
         <td style="padding:8px 10px;font-weight:800;color:#0b2f6b">${escapeHtml(r.displayName)}</td>
         <td style="padding:8px 10px;font-size:12px">
@@ -9230,42 +9331,24 @@ async function _eqCcaaShowTeamModal(teamName){
         <td style="padding:8px 10px;text-align:center;font-weight:700;color:#475569">${r.avg.toFixed(1)}</td>
         <td style="padding:8px 10px;text-align:center;font-weight:700;color:#16a34a">${r.best}</td>
       </tr>`).join('')
-    : `<tr><td colspan="9" style="padding:30px;text-align:center;color:#9ca3af">No hay corredores de este equipo en el año ${year}.</td></tr>`;
+    : `<tr><td colspan="9" style="padding:30px;text-align:center;color:#9ca3af">No hay corredores que coincidan con el filtro.</td></tr>`;
 
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:14px;max-width:1000px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
-      <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">Plantilla del equipo · ${escapeHtml(year)}</div>
-          <div style="font-size:18px;font-weight:900;margin-top:2px">${escapeHtml(teamName)}</div>
-          <div style="font-size:11px;opacity:.85;margin-top:3px">${data.riders.length} corredor(es) · ${data.totalRaces} prueba(s) · 🏆 ${data.teamWins} · 🥉 ${data.teamPodiums} · Top10: ${data.teamTop10}</div>
-        </div>
-        <button onclick="document.getElementById('_eqCcaaTeamDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer;flex-shrink:0">✕</button>
-      </div>
-      <div style="padding:14px 18px;overflow-y:auto;flex:1">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead style="background:#f8fafc">
-            <tr>
-              <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569">#</th>
-              <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">Corredor</th>
-              <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">Categoría</th>
-              <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569" title="Pruebas en las que ha participado / Pruebas totales del equipo">📊 Participación</th>
-              <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569">🏆</th>
-              <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569">🥉</th>
-              <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569">Top10</th>
-              <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569">Pos. med.</th>
-              <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569">Mejor</th>
-            </tr>
-          </thead>
-          <tbody>${ridersRows}</tbody>
-        </table>
-      </div>
-      <div style="border-top:1px solid #e5e7eb;padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb">
-        <button onclick="_eqCcaaTeamRosterPDF('${escapeAttr(teamName)}','${escapeAttr(year)}')" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer">📄 Exportar PDF</button>
-        <button onclick="document.getElementById('_eqCcaaTeamDialog').remove()" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer">Cerrar</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
+  box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr>
+        <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569;background:#f8fafc">#</th>
+        ${th('displayName','Corredor','left')}
+        ${th('cat','Categoría','left')}
+        ${th('races','📊 Participación','center')}
+        ${th('wins','🏆','center')}
+        ${th('podiums','🥉','center')}
+        ${th('top10','Top10','center')}
+        ${th('avg','Pos. med.','center')}
+        ${th('best','Mejor','center')}
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>`;
 }
 
 // Wrapper para exportar el roster a PDF (recalcula data por si el modal lleva
