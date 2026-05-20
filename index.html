@@ -17765,19 +17765,16 @@ async function renderSeleccion(){
     _selRenderRadar(currentN);
     _selRenderMerits(currentN);
     // ── Fase 2 no-bloqueo: si no hay equipo configurado, mostrar chip ──
+    const existingChip = document.getElementById('selNoTeamChip');
+    if(existingChip) existingChip.remove();
     if(!myTeam){
-      const wrap = document.querySelector('#view-seleccion .panel');
-      const existing = document.getElementById('selNoTeamChip');
-      if(existing) existing.remove();
+      const view = document.getElementById('view-seleccion');
       const chip = document.createElement('div');
       chip.id = 'selNoTeamChip';
-      chip.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:10px 14px;font-size:12.5px;font-weight:700;margin:10px 0;cursor:pointer;display:flex;align-items:center;gap:8px';
+      chip.style.cssText = 'background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;color:#78350f;border-radius:12px;padding:14px 18px;font-size:13px;font-weight:700;margin:14px 0;cursor:pointer;display:flex;align-items:center;gap:10px;box-shadow:0 4px 12px rgba(245,158,11,.2);position:sticky;top:8px;z-index:10';
       chip.onclick = ()=>{ document.getElementById('gfMyTeam')?.focus(); };
-      chip.innerHTML = '⚙️ Modo "Mi Equipo" sin equipo configurado · Mostrando candidatos GLOBALES como referencia. <span style="text-decoration:underline">Configura tu equipo</span> en la barra de filtros para personalizar.';
-      if(wrap) wrap.insertBefore(chip, wrap.firstChild);
-    } else {
-      const existing = document.getElementById('selNoTeamChip');
-      if(existing) existing.remove();
+      chip.innerHTML = '⚙️ <span>Modo <b>Mi Equipo</b> sin equipo configurado · Mostrando candidatos <b>GLOBALES</b> como referencia. <span style="text-decoration:underline">Configura tu equipo</span> en la barra de filtros para personalizar.</span>';
+      if(view) view.insertBefore(chip, view.firstChild);
     }
     return;
   }
