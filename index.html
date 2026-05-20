@@ -4215,7 +4215,52 @@ async function _calOpenFccvInfo(name, dateIso){
     alert('No se encontró esta prueba en el calendario actual de la FCCV.\n• La prueba puede haber sido retirada del calendario.\n• O el nombre difiere demasiado del oficial.');
     return;
   }
-  alert('No se encontró esta prueba en el último scrape FCCV.\n\nPrueba a:\n• Volver a sincronizar con la Federación (botón "Sincronizar")\n• Verificar que el nombre y fecha coinciden con la web oficial');
+  // Diagnóstico: mostrar las carreras FCCV de la misma fecha (o ±1 día) para
+  // que el usuario pueda elegir manualmente.
+  const ref = dateIso ? new Date(dateIso+'T12:00:00') : null;
+  const sameDay = (_fccvLastAllRaces||[]).filter(c=>{
+    if(!c.fccvId || !c.date) return false;
+    if(!ref) return false;
+    const cd = new Date(c.date+'T12:00:00');
+    return Math.abs((cd-ref)/86400000) <= 1;
+  });
+  if(sameDay.length){
+    // Abrir un selector
+    _fccvShowPickerForDate(name, dateIso, sameDay);
+    return;
+  }
+  alert(`No hay carreras FCCV registradas el ${dateIso||'(sin fecha)'}.\nScrape actual: ${(_fccvLastAllRaces||[]).length} carreras.\n\nPosibles causas:\n• La prueba no pertenece a la FCCV (Aragón, otra autonomía).\n• Aún no la han publicado o la han retirado.\n• Cambia el año en el filtro FCCV y vuelve a sincronizar.`);
+}
+
+// Selector cuando no encontramos match exacto pero hay candidatas el mismo día.
+function _fccvShowPickerForDate(name, dateIso, candidates){
+  const old = document.getElementById('_fccvPickerDialog');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = '_fccvPickerDialog';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:580px;width:100%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="background:linear-gradient(135deg,#1e40af,#0b2f6b);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">Selecciona la prueba FCCV correspondiente</div>
+          <div style="font-size:14px;font-weight:700;margin-top:2px">${escapeHtml(name)} · ${dateIso}</div>
+        </div>
+        <button onclick="document.getElementById('_fccvPickerDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:14px 18px;overflow-y:auto;flex:1">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:10px">No pude identificar automáticamente cuál es. Elige tú la prueba en la FCCV que corresponde:</div>
+        ${candidates.map(c=>`
+          <button onclick="document.getElementById('_fccvPickerDialog').remove();_fccvShowRaceDetails('${c.fccvId}')" style="display:block;width:100%;text-align:left;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#f9fafb'">
+            <div style="font-weight:700;color:#0b2f6b;font-size:13px">${escapeHtml(c.name)}</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:3px">📅 ${c.date} · 📍 ${escapeHtml(c.location||'')} · 🏷️ ${escapeHtml(c.category||'')}</div>
+            <div style="font-size:10px;color:#94a3b8;margin-top:2px">FCCV id: ${c.fccvId}</div>
+          </button>
+        `).join('')}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 // Busca, en el último scrape FCCV, una carrera que coincida con la fila del
@@ -4228,26 +4273,44 @@ function _calFindFccvForRace(r){
     .normalize('NFD').replace(/[̀-ͯ]/g,'')
     .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
   const nK = norm(r.name);
-  if(nK.length<5) return null;
+  if(nK.length<3) return null;
   const dateIso = r.date ? `${r.date.getFullYear()}-${String(r.date.getMonth()+1).padStart(2,'0')}-${String(r.date.getDate()).padStart(2,'0')}` : '';
-  let best = null, bestScore = 0;
-  for(const c of all){
-    if(!c.fccvId) continue;
+
+  // Pre-filtrar candidatos por fecha exacta (ventana de ±1 día por si hay
+  // desfases de zona horaria entre el scrape y los datos en Supabase).
+  const onSameDate = [];
+  if(dateIso){
+    const ref = new Date(dateIso+'T12:00:00');
+    for(const c of all){
+      if(!c.fccvId || !c.date) continue;
+      const cDate = new Date(c.date+'T12:00:00');
+      const diffDays = Math.abs((cDate - ref)/86400000);
+      if(diffDays<=1) onSameDate.push(c);
+    }
+  }
+  const pool = onSameDate.length ? onSameDate : all.filter(c=>c.fccvId);
+
+  // Score por nombre (la fecha ya está garantizada en pool)
+  let best = null, bestScore = -1;
+  for(const c of pool){
     const cK = norm(c.name);
     if(!cK) continue;
     let score = 0;
     if(cK===nK) score += 100;
-    else if(cK.includes(nK) || nK.includes(cK)) score += 60;
+    else if(cK.includes(nK) || nK.includes(cK)) score += 70;
     else {
-      // tokens compartidos
       const tok = nK.split(' ').filter(t=>t.length>=4);
-      const m = tok.filter(t=>cK.includes(t)).length;
-      score += m*8;
+      const ctok = cK.split(' ').filter(t=>t.length>=4);
+      const shared = tok.filter(t=>ctok.includes(t)).length;
+      score += shared*12;
     }
-    if(c.date===dateIso) score += 50;
     if(score>bestScore){ bestScore = score; best = c; }
   }
-  return bestScore>=24 ? best : null;
+  // Si la única candidata del día tiene score 0 (nombre totalmente distinto),
+  // igualmente la devolvemos: la fecha es coincidencia suficiente cuando solo
+  // hay 1 carrera FCCV ese día.
+  if(onSameDate.length===1) return onSameDate[0];
+  return bestScore>=12 ? best : null;
 }
 
 function _fccvParseHtml(html, defaultYear){
