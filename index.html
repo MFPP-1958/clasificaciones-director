@@ -8825,6 +8825,9 @@ async function _eqCcaaApplyTeam(team, selectId){
   const teamData = _eqCcaaData.find(d=>d.team===team);
   if(!teamData){ alert('Equipo no encontrado en los datos cargados.'); return; }
 
+  // Snapshot de problemas ANTES del apply
+  const beforeConflicts = _eqCcaaData.filter(d=>d.hasConflict).length;
+  const beforeMissing = _eqCcaaData.filter(d=>d.missing).length;
   showLoading('Aplicando CCAA al equipo…', `Equipo: ${team} · CCAA: ${newRegion}`);
   try{
     const normTeam = (team||'').trim().toLowerCase();
@@ -8891,11 +8894,16 @@ async function _eqCcaaApplyTeam(team, selectId){
              `• El nombre del equipo no coincide exactamente con lo guardado.`;
     }
     console.log('[CCAA] resultado apply:', {team, newRegion, racesUpdated, ridersUpdated, racesWithErrors, errorSamples});
-    alert(msg);
     // Pausa breve antes de recargar para que Supabase consolide los UPDATE
     // antes del próximo SELECT (evita ver datos pre-update).
     await new Promise(r=>setTimeout(r,500));
-    _eqCcaaInit();
+    await _eqCcaaInit();
+    const afterConflicts = _eqCcaaData.filter(d=>d.hasConflict).length;
+    const afterMissing = _eqCcaaData.filter(d=>d.missing).length;
+    msg += `\n\n📊 Conteo de problemas:\n` +
+           `• Conflictos: ${beforeConflicts} → ${afterConflicts}\n` +
+           `• Sin CCAA: ${beforeMissing} → ${afterMissing}`;
+    alert(msg);
   }catch(e){
     hideLoading();
     console.error(e);
