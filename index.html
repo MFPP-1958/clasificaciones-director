@@ -6837,7 +6837,7 @@ function _computeTeamRankingsLocal(ridersList, raceId){
 async function _sbLoadHistory(){
   if(!_sb) return [];
   const {data, error} = await _sb.from('races')
-    .select('id, name, date, notes, race_results(pos, bib, name, team, cat, time, gap_seconds, total_seconds)')
+    .select('id, name, date, notes, race_results(id, pos, bib, name, team, cat, time, gap_seconds, total_seconds)')
     .eq('race_type','clasificacion')
     .order('date', {ascending: false});
   if(error){ console.warn('Supabase historial error:', error); return []; }
@@ -6855,6 +6855,7 @@ async function _sbLoadHistory(){
       riders: (race.race_results||[]).sort((a,b)=>a.pos-b.pos).map(r=>{
         const normName=normalizeRiderName(r.name);
         return {
+          id:r.id, raceId:race.id, // ← claves para poder borrar la fila individual
           pos:r.pos, bib:r.bib, name:normName, team:r.team, cat:r.cat,
           time:normalizeTimeStr(r.time),
           gapSeconds:r.gap_seconds, totalSeconds:r.total_seconds,
@@ -8419,6 +8420,7 @@ function editTableRow(key){
     <td onclick="event.stopPropagation()" style="white-space:nowrap;text-align:center">
       <button class="save-row-btn" onclick="saveTableRowEdit('${escapeAttr(key)}')" title="Guardar cambios">✓</button>
       <button class="cancel-row-btn" onclick="cancelTableRowEdit('${escapeAttr(key)}')" title="Cancelar">✗</button>
+      <button onclick="deleteTableRow('${escapeAttr(key)}')" title="Eliminar este resultado de la base de datos" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:3px 7px;font-weight:800;font-size:12px;cursor:pointer;margin-left:4px">🗑️</button>
     </td>
     <td><input class="edit-input" id="eri-pos" type="number" value="${r.pos}" style="width:42px"></td>
     <td><input class="edit-input" id="eri-bib" type="number" value="${r.bib}" style="width:48px"></td>
@@ -8582,6 +8584,44 @@ async function propagateCategoryChange(riderName, year, newCat){
 function cancelTableRowEdit(key){
   _editingRowKey=null;
   renderTable();
+}
+
+// Borra el resultado individual de la BD (race_results) y refresca la tabla.
+// Útil para eliminar entradas duplicadas (mismo corredor figurando en 2 teams
+// distintos en la misma prueba — bug de carga de clasificaciones).
+async function deleteTableRow(key){
+  const r = riders.find(x=>getRiderKey(x)===key);
+  if(!r){ cancelTableRowEdit(key); return; }
+  if(!r.id){
+    alert('Este resultado no tiene ID en la base de datos (puede ser una carga local sin guardar). No se puede borrar.');
+    return;
+  }
+  if(!confirm(`¿Eliminar este resultado DEFINITIVAMENTE de la base de datos?\n\n` +
+              `Corredor: ${r.name}\nDorsal: ${r.bib}\nPos: ${r.pos}\nEquipo: ${r.team||'—'}\n\n` +
+              `Esta acción NO se puede deshacer.`)) return;
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  try{
+    const {error} = await _sb.from('race_results').delete().eq('id', r.id);
+    if(error) throw error;
+    // Quitar del estado local
+    riders = riders.filter(x=>x!==r);
+    filtered = filtered.filter(x=>getRiderKey(x)!==key);
+    _editingRowKey = null;
+    _cachedHistory = null; // invalidar caché
+    if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB();
+    if(typeof renderAll==='function') renderAll();
+    // Pequeño toast de confirmación
+    try{
+      const t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:99999;font-size:14px';
+      t.textContent=`🗑️ Resultado de "${r.name}" eliminado correctamente`;
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),3500);
+    }catch(_){}
+  }catch(e){
+    console.error(e);
+    alert('Error borrando el resultado: '+(e.message||String(e)));
+  }
 }
 
 // ─── Propagación global de CCAA ──────────────────────────────────────────────
