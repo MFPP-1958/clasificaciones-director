@@ -1058,6 +1058,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       <div class="nav-section-items">
         <button class="nav-btn" data-view="view-validacion" data-label="Validación" onclick="showView('view-validacion')"><span class="nav-icon">⚠️</span><span class="nav-label"> Validación</span></button>
         <button class="nav-btn" data-view="view-equipos-ccaa" data-label="Equipos y CCAA" onclick="showView('view-equipos-ccaa')"><span class="nav-icon">🗺️</span><span class="nav-label"> Equipos y CCAA</span></button>
+        <button class="nav-btn" data-view="view-ciclistas-cat" data-label="Categorías ciclistas" onclick="showView('view-ciclistas-cat')"><span class="nav-icon">🎽</span><span class="nav-label"> Categorías ciclistas</span></button>
         <button class="nav-btn" id="navBtnGestion" data-view="view-gestion" data-label="Gestión" onclick="_gOpenPanel()" style="display:none"><span class="nav-icon">⚙️</span><span class="nav-label"> Gestión</span></button>
       </div>
     </div>
@@ -2494,6 +2495,26 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       </section>
     </div>
 
+    <div id="view-ciclistas-cat" class="spa-view">
+      <section class="panel">
+        <div class="section-title"><h2>🎽 Categorías por ciclista</h2></div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#1e3a8a;line-height:1.55;margin-bottom:14px">
+          Listado de todos los ciclistas que aparecen en las pruebas del <b>año seleccionado</b> en los Filtros Globales.
+          La categoría puede cambiar de año (cadete-1 con 15 años, cadete-2 con 16, juvenil con 17), por eso el filtro es por año.
+          <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:6px;font-weight:700">⚠️ Conflicto</span> = el mismo corredor aparece con categorías distintas en distintas pruebas del año.
+          <span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:6px;font-weight:700">❌ Sin categoría</span> = no tiene categoría asignada en ninguna prueba.
+          Pulsa <b>Aplicar</b> para propagar la categoría elegida a TODAS las pruebas del año.
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+          <button onclick="_riderCatInit()" style="background:linear-gradient(135deg,#1f6feb,#0b2f6b);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer">🔄 Recargar</button>
+          <input id="riderCatSearch" placeholder="🔎 Buscar ciclista…" oninput="_riderCatRender()" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #c7d7f5;border-radius:9px;font-size:13px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;font-weight:700"><input type="checkbox" id="riderCatOnlyProblems" onchange="_riderCatRender()"> Solo conflictos / sin categoría</label>
+          <span id="riderCatSummary" style="font-size:12px;color:#6b7280;font-weight:700"></span>
+        </div>
+        <div id="riderCatTable"></div>
+      </section>
+    </div>
+
     <div id="view-gestion" class="spa-view">
       <section class="panel" style="display:flex;align-items:center;justify-content:center;min-height:300px">
         <div style="text-align:center;color:#9ca3af">
@@ -2942,6 +2963,7 @@ function showView(viewId){
       if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); }
       if(viewId==='view-informe-plantilla') { if(typeof _ipInit==='function') _ipInit(); }
       if(viewId==='view-equipos-ccaa') { if(typeof _eqCcaaInit==='function') _eqCcaaInit(); }
+      if(viewId==='view-ciclistas-cat') { if(typeof _riderCatInit==='function') _riderCatInit(); }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -3069,6 +3091,7 @@ const ALL_VIEWS = [
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
   {id:'view-validacion',         icon:'⚠️', label:'Validación'},
   {id:'view-equipos-ccaa',       icon:'🗺️', label:'Equipos y CCAA'},
+  {id:'view-ciclistas-cat',      icon:'🎽', label:'Categorías ciclistas'},
   {id:'view-calendario',         icon:'📅', label:'Calendario'},
   {id:'view-informe-plantilla',  icon:'📋', label:'Informe de Plantilla'},
   {id:'view-resumen',            icon:'🏅', label:'Resumen Temporada'},
@@ -3160,7 +3183,7 @@ async function _rbacLoadPerms(role){
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
   if(!data || data.length === 0){
     const defaults = {
-      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa'],
+      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa','view-ciclistas-cat'],
       CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos'],
       LECTOR:   ['view-carga','view-tabla']
     };
@@ -8985,6 +9008,196 @@ async function _eqCcaaApplyTeam(team, selectId){
     hideLoading();
     console.error(e);
     alert('Error aplicando la CCAA al equipo: '+(e.message||String(e)));
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// VISTA "Categorías por ciclista" — gestión coherente de categoría por
+// corredor y año. Detecta a todos los ciclistas del año seleccionado,
+// agrupa por nombre, calcula la categoría dominante y permite fijar una
+// canónica que se propaga a TODAS las pruebas del año vía
+// propagateCategoryChange.
+// ═════════════════════════════════════════════════════════════════════
+let _riderCatData = []; // [{name, catCounts:Map, races:Set, totalRows, dominant, hasConflict, missing, counts}]
+let _riderCatYear = '';
+
+async function _riderCatInit(){
+  const box = document.getElementById('riderCatTable');
+  const sum = document.getElementById('riderCatSummary');
+  if(!_sb){
+    if(box) box.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;font-weight:700">Supabase no disponible.</div>`;
+    return;
+  }
+  // El año se toma de los filtros globales; si no hay, usar el actual
+  _riderCatYear = (_globalFilters?.year || String(new Date().getFullYear()));
+  if(box) box.innerHTML = `<div style="padding:30px;text-align:center;color:#6b7280">⏳ Cargando ciclistas del año ${_riderCatYear}…</div>`;
+  if(sum) sum.textContent = '';
+
+  try{
+    const {data:races, error} = await _sb
+      .from('races')
+      .select('id, date, race_results(name, cat)')
+      .eq('race_type','clasificacion');
+    if(error) throw error;
+
+    const yearStr = String(_riderCatYear);
+    // Agregar por nombre normalizado
+    const agg = new Map();
+    for(const race of (races||[])){
+      const ry = (race.date||'').slice(0,4);
+      if(ry !== yearStr) continue;
+      for(const rr of (race.race_results||[])){
+        const name = (rr.name||'').trim();
+        if(!name) continue;
+        const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(name) : name.toLowerCase();
+        if(!agg.has(nk)) agg.set(nk, {name, nk, catCounts:new Map(), races:new Set(), totalRows:0, displayName:name});
+        const a = agg.get(nk);
+        // Preferir el nombre con tildes/casing original si es más largo
+        if(name.length > (a.displayName||'').length) a.displayName = name;
+        a.races.add(race.id);
+        a.totalRows++;
+        const cat = (rr.cat||'').trim();
+        if(cat) a.catCounts.set(cat, (a.catCounts.get(cat)||0)+1);
+      }
+    }
+
+    _riderCatData = [...agg.values()].map(a=>{
+      const counts = [...a.catCounts.entries()].sort((x,y)=>y[1]-x[1]);
+      const dominant = counts[0]?.[0] || '';
+      const distinct = counts.length;
+      const hasConflict = distinct > 1;
+      const missing = distinct === 0;
+      return {...a, dominant, distinct, hasConflict, missing, counts};
+    });
+    _riderCatData.sort((a,b)=>{
+      if(a.hasConflict !== b.hasConflict) return a.hasConflict ? -1 : 1;
+      if(a.missing !== b.missing) return a.missing ? -1 : 1;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    _riderCatRender();
+  }catch(e){
+    console.error(e);
+    if(box) box.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;font-weight:700">Error cargando: ${escapeHtml(e.message||String(e))}</div>`;
+  }
+}
+
+function _riderCatRender(){
+  const box = document.getElementById('riderCatTable');
+  const sum = document.getElementById('riderCatSummary');
+  if(!box) return;
+  const q = (document.getElementById('riderCatSearch')?.value || '').toLowerCase().trim();
+  const onlyProblems = document.getElementById('riderCatOnlyProblems')?.checked;
+
+  let data = _riderCatData;
+  if(q) data = data.filter(d=>d.displayName.toLowerCase().includes(q));
+  if(onlyProblems) data = data.filter(d=>d.hasConflict || d.missing);
+
+  // Categorías disponibles del histórico para el dropdown
+  const allCats = new Set();
+  for(const d of _riderCatData){ for(const [c] of d.counts) allCats.add(c); }
+  const sortedCats = [...allCats].sort();
+
+  if(sum){
+    const total = _riderCatData.length;
+    const nConflict = _riderCatData.filter(d=>d.hasConflict).length;
+    const nMissing  = _riderCatData.filter(d=>d.missing).length;
+    sum.textContent = `${data.length}/${total} ciclistas · año ${_riderCatYear} · ⚠️ ${nConflict} conflictos · ❌ ${nMissing} sin categoría`;
+  }
+
+  if(!data.length){
+    box.innerHTML = `<div style="padding:30px;text-align:center;color:#6b7280">No hay ciclistas que coincidan con los filtros.</div>`;
+    return;
+  }
+
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+      <colgroup>
+        <col style="width:24%">
+        <col style="width:7%">
+        <col style="width:25%">
+        <col style="width:22%">
+        <col style="width:12%">
+        <col style="width:10%">
+      </colgroup>
+      <thead style="background:#f8fafc">
+        <tr>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#475569">Ciclista</th>
+          <th style="padding:10px 6px;text-align:center;font-size:11px;color:#475569" title="Número de pruebas en este año">🏁</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569">Distribución categoría</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569">Fijar categoría</th>
+          <th style="padding:10px 6px;text-align:left;font-size:11px;color:#475569">o nueva</th>
+          <th style="padding:10px 6px;text-align:center;font-size:11px;color:#475569">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.map((d,idx)=>{
+          const rowBg = d.missing ? '#fef2f2' : (d.hasConflict ? '#fffbeb' : '#fff');
+          const badge = d.missing
+            ? `<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800">❌ Sin categoría</span>`
+            : d.hasConflict
+              ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800">⚠️ Conflicto</span>`
+              : `<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800">✓ OK</span>`;
+          const dist = d.counts.length
+            ? d.counts.map(([c,n])=>`<span style="background:#e0e7ff;color:#3730a3;padding:1px 7px;border-radius:6px;font-size:11px;font-weight:700;margin-right:4px;display:inline-block;margin-bottom:2px">${escapeHtml(c)}×${n}</span>`).join('')
+            : '<span style="color:#9ca3af;font-size:11px">—</span>';
+          const idAttr = `riderCatSel_${idx}`;
+          const opts = ['<option value="">— elegir —</option>']
+            .concat(sortedCats.map(c=>`<option value="${escapeAttr(c)}" ${c===d.dominant?'selected':''}>${escapeHtml(c)}</option>`))
+            .join('');
+          return `<tr style="background:${rowBg};border-top:1px solid #f3f4f6">
+            <td style="padding:10px 12px;font-weight:800;color:#0b2f6b;word-break:break-word">
+              ${escapeHtml(d.displayName)}
+              <div style="margin-top:3px">${badge}</div>
+            </td>
+            <td style="padding:10px 6px;text-align:center;font-weight:700;color:#475569">${d.races.size}</td>
+            <td style="padding:10px 12px">${dist}</td>
+            <td style="padding:10px 8px">
+              <select id="${idAttr}" style="width:100%;border:1.5px solid #c7d7f5;border-radius:7px;padding:6px 8px;font-size:12px;font-weight:700;background:#fff">${opts}</select>
+            </td>
+            <td style="padding:10px 6px">
+              <input type="text" placeholder="nueva…" id="${idAttr}_custom" style="width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:11px;box-sizing:border-box">
+            </td>
+            <td style="padding:10px 6px;text-align:center">
+              <button onclick="_riderCatApply('${escapeAttr(d.displayName)}','${idAttr}')" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:7px 10px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap">✓ Aplicar</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+async function _riderCatApply(riderName, selectId){
+  const sel = document.getElementById(selectId);
+  const customInp = document.getElementById(selectId+'_custom');
+  const customVal = (customInp?.value||'').trim();
+  const newCat = customVal || sel?.value || '';
+  if(!newCat){ alert('Elige una categoría del desplegable o escribe una nueva en el campo de texto.'); return; }
+  if(!confirm(`¿Aplicar categoría "${newCat}" a "${riderName}" en TODAS las pruebas del año ${_riderCatYear}?\n\nEsto sobrescribirá cualquier valor previo.`)) return;
+
+  const beforeConflicts = _riderCatData.filter(d=>d.hasConflict).length;
+  const beforeMissing = _riderCatData.filter(d=>d.missing).length;
+  try{
+    // Reutilizamos la función existente que ya recorre el histórico y
+    // actualiza race_results.cat para ese ciclista en ese año.
+    await propagateCategoryChange(riderName, parseInt(_riderCatYear,10), newCat);
+    // propagateCategoryChange ya muestra su propio alert; recargamos
+    await new Promise(r=>setTimeout(r,500));
+    await _riderCatInit();
+    const afterConflicts = _riderCatData.filter(d=>d.hasConflict).length;
+    const afterMissing = _riderCatData.filter(d=>d.missing).length;
+    // Mensaje resumen extra de progreso
+    try{
+      const t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:99999;font-size:14px;white-space:pre-line';
+      t.textContent=`📊 Conflictos: ${beforeConflicts} → ${afterConflicts} · Sin cat: ${beforeMissing} → ${afterMissing}`;
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),4000);
+    }catch(_){}
+  }catch(e){
+    console.error(e);
+    alert('Error aplicando la categoría: '+(e.message||String(e)));
   }
 }
 
