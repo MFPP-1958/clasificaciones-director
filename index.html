@@ -3353,6 +3353,11 @@ function _calBuildMonth(y, m){
       const canClickPast = !isPlan && r.id;
       const rowClick = canClickPast ? `onclick="_calOpenRaceDetails('${escapeAttr(String(r.id))}')"` : '';
       const rowHover = canClickPast ? 'transition:background .15s' : '';
+      // Buscar ficha FCCV (planificadas o pasadas) por nombre + fecha
+      const fccvMatch = _calFindFccvForRace(r);
+      const infoBtn = fccvMatch
+        ? `<button onclick="event.stopPropagation();_fccvShowRaceDetails('${fccvMatch.fccvId}')" style="background:#1e40af;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px" title="Ficha oficial FCCV (reglamento, planos, clasificación...)">ℹ️ Info</button>`
+        : '';
       html += `<div ${rowClick} style="display:flex;align-items:center;gap:12px;background:${isPlan?'#f0fdf4':'#eff6ff'};border:1px solid ${isPlan?'#a7f3d0':'#bfdbfe'};border-radius:10px;padding:10px 14px;${canClickPast?'cursor:pointer;':''}${rowHover}"
         ${canClickPast?`onmouseenter="this.style.background='#dbeafe'" onmouseleave="this.style.background='#eff6ff'"`:''}>
         <div style="width:10px;height:10px;border-radius:50%;background:${isPlan?'#10b981':'#3b82f6'};flex-shrink:0"></div>
@@ -3362,6 +3367,7 @@ function _calBuildMonth(y, m){
           ${canClickPast?`<div style="font-size:11px;color:#1d4ed8;font-weight:600;margin-top:2px">👥 ${r.ridersCount||0} corredores · Click para ver detalle</div>`:''}
         </div>
         <div style="font-size:12px;color:#6b7280;flex-shrink:0">${r.date.getDate()} ${_CAL_MONTHS_ES[r.date.getMonth()]}</div>
+        ${infoBtn}
         ${isPlan?`<button onclick="event.stopPropagation();_calEditPlanned('${r.id}')" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700;margin-right:4px" title="Editar">✏️</button><button onclick="event.stopPropagation();_calDeletePlanned('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700" title="Eliminar">✕</button>`:''}
       </div>`;
     });
@@ -4151,6 +4157,38 @@ function _fccvCleanRaceName(rawName){
   return s.trim();
 }
 
+// Busca, en el último scrape FCCV, una carrera que coincida con la fila del
+// calendario por nombre+fecha (matching laxo). Devuelve {fccvId,...} o null.
+function _calFindFccvForRace(r){
+  if(!r || !r.name) return null;
+  const all = (_fccvLastAllRaces||[]);
+  if(!all.length) return null;
+  const norm = s=>(s||'').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const nK = norm(r.name);
+  if(nK.length<5) return null;
+  const dateIso = r.date ? `${r.date.getFullYear()}-${String(r.date.getMonth()+1).padStart(2,'0')}-${String(r.date.getDate()).padStart(2,'0')}` : '';
+  let best = null, bestScore = 0;
+  for(const c of all){
+    if(!c.fccvId) continue;
+    const cK = norm(c.name);
+    if(!cK) continue;
+    let score = 0;
+    if(cK===nK) score += 100;
+    else if(cK.includes(nK) || nK.includes(cK)) score += 60;
+    else {
+      // tokens compartidos
+      const tok = nK.split(' ').filter(t=>t.length>=4);
+      const m = tok.filter(t=>cK.includes(t)).length;
+      score += m*8;
+    }
+    if(c.date===dateIso) score += 50;
+    if(score>bestScore){ bestScore = score; best = c; }
+  }
+  return bestScore>=50 ? best : null;
+}
+
 function _fccvParseHtml(html, defaultYear){
   _fccvLastRawHtml = html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -4792,21 +4830,53 @@ function _fccvShowRaceDetails(pruebaId){
   const titleName = race ? race.name : `Prueba ${pruebaId}`;
   const titleDate = race ? (()=>{ const [y,m,d]=race.date.split('-'); return `${d}/${m}/${y}`; })() : '';
 
-  // Construir lista de enlaces de descarga (PDF reglamento, etc.) extraídos
+  // Extraer TODOS los ficheros adjuntos (reglamento, planos, tracks GPX/KMZ,
+  // imágenes del recorrido, cartel...). Incluye enlaces con texto ("REGLAMENTO
+  // PÚBLICO") y enlaces que solo contienen un icono <img> (los "planos" suelen
+  // venir así). Deduplicamos por href.
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
+  const seenHref = new Set();
   const downloads = [];
+  const ICONS = {pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',zip:'🗜️',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',gpx:'🛰️',kmz:'🛰️',kml:'🛰️',mp4:'🎬'};
+  const labelFromHref = (h)=>{
+    try{ const seg = decodeURIComponent(h.split('?')[0].split('/').pop()||''); return seg.replace(/[_-]+/g,' ').replace(/\.[a-z0-9]+$/i,'').slice(0,60) || h; }
+    catch(_){ return h; }
+  };
   tmp.querySelectorAll('a[href]').forEach(a=>{
-    const href = a.getAttribute('href') || '';
-    const txt = (a.textContent||'').trim();
-    if(/\.(pdf|docx?|xlsx?|zip)(\?|$)/i.test(href) || /reglament|inscripci|info|bases|cartel/i.test(txt)){
-      downloads.push({href, txt: txt || href.split('/').pop()});
+    let href = a.getAttribute('href') || '';
+    if(!href || href.startsWith('#') || /^(mailto:|tel:|javascript:)/i.test(href)) return;
+    // Solo nos interesan ficheros adjuntos / multimedia, no navegación
+    const isFile = /\.(pdf|docx?|xlsx?|zip|jpe?g|png|gif|gpx|kmz|kml|mp4|svg|tif?f)(\?|$)/i.test(href);
+    const linkTxt = (a.textContent||'').trim();
+    const hasImgChild = !!a.querySelector('img');
+    // También aceptamos links cuyo texto sea claramente un documento aunque
+    // el href no termine en extensión (algunos servidores hacen content-disposition).
+    const looksDocByText = /reglament|inscripci|bases|cartel|plano|track|recorrido|mapa|dorsal|circuit|trayecto|cronometra/i.test(linkTxt);
+    if(!isFile && !hasImgChild && !looksDocByText) return;
+    // Normalizar href absoluto
+    if(!/^https?:/i.test(href)){
+      href = href.startsWith('/') ? 'https://fccv.es'+href : 'https://fccv.es/'+href;
     }
+    if(seenHref.has(href)) return;
+    seenHref.add(href);
+    // Etiqueta: texto del enlace si lo hay, si no, alt de la imagen, si no, nombre del fichero
+    let label = linkTxt;
+    if(!label){
+      const img = a.querySelector('img');
+      label = img?.getAttribute('alt') || img?.getAttribute('title') || '';
+    }
+    if(!label) label = labelFromHref(href);
+    const ext = (href.match(/\.([a-z0-9]+)(\?|$)/i)||[])[1]?.toLowerCase() || '';
+    const icon = ICONS[ext] || '📎';
+    downloads.push({href, label, icon, ext});
   });
   const dlHtml = downloads.length
     ? `<div style="margin-bottom:14px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px">
-        <div style="font-weight:800;color:#1d4ed8;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px">📎 Descargas / enlaces directos</div>
-        ${downloads.map(d=>`<a href="${d.href}" target="_blank" rel="noopener" style="display:inline-block;margin:3px 6px 3px 0;padding:6px 12px;background:#fff;color:#1d4ed8;text-decoration:none;border:1px solid #bfdbfe;border-radius:7px;font-weight:700;font-size:12px">${escapeHtml(d.txt.slice(0,80))}</a>`).join('')}
+        <div style="font-weight:800;color:#1d4ed8;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px">📎 Descargas (${downloads.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${downloads.map(d=>`<a href="${d.href}" target="_blank" rel="noopener" title="${escapeHtml(d.href)}" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;background:#fff;color:#1d4ed8;text-decoration:none;border:1px solid #bfdbfe;border-radius:7px;font-weight:700;font-size:12px"><span>${d.icon}</span><span>${escapeHtml(d.label)}</span>${d.ext?`<span style="background:#dbeafe;color:#1d4ed8;font-size:10px;padding:1px 5px;border-radius:4px;text-transform:uppercase">${d.ext}</span>`:''}</a>`).join('')}
+        </div>
       </div>`
     : '';
 
