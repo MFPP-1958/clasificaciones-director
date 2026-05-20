@@ -8890,7 +8890,11 @@ async function _eqCcaaApplyTeam(team, selectId){
              `• El equipo ya tenía esa CCAA en todas las pruebas.\n` +
              `• El nombre del equipo no coincide exactamente con lo guardado.`;
     }
+    console.log('[CCAA] resultado apply:', {team, newRegion, racesUpdated, ridersUpdated, racesWithErrors, errorSamples});
     alert(msg);
+    // Pausa breve antes de recargar para que Supabase consolide los UPDATE
+    // antes del próximo SELECT (evita ver datos pre-update).
+    await new Promise(r=>setTimeout(r,500));
     _eqCcaaInit();
   }catch(e){
     hideLoading();
