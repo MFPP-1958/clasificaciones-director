@@ -5126,13 +5126,20 @@ async function _fccvSync(){
 
   const baseUrl = `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${year}`;
   const yyyy = String(year);
+  // Timestamps Unix para 1-enero y 31-diciembre del año seleccionado en hora
+  // local Madrid (UTC+1). Estos son los nombres REALES de parámetro que usa
+  // el slider de fechas de la FCCV: fecha_inicio_b / fecha_fin_b.
+  const tsFrom = Math.floor(new Date(`${yyyy}-01-01T00:00:00+01:00`).getTime()/1000);
+  const tsTo   = Math.floor(new Date(`${yyyy}-12-31T23:59:00+01:00`).getTime()/1000);
+  const REAL_FILTER = `${baseUrl}?fecha_inicio_b=${tsFrom}&fecha_fin_b=${tsTo}`;
   const dateFrom = `${yyyy}-01-01`;
   const dateTo   = `${yyyy}-12-31`;
   const dateFromES = `01/01/${yyyy}`;
   const dateToES   = `31/12/${yyyy}`;
-  // Probamos varios nombres de parámetros de filtro de fechas que usa Smartweb /
-  // Joomla. Incluimos también formatos DD/MM/YYYY y rutas con segmentos.
+  // Probamos varios nombres de parámetros de filtro de fechas. El primero es
+  // el que confirmamos que funciona (revisando el HTML del slider).
   const candidateUrls = [
+    REAL_FILTER, // ✅ funciona: devuelve TODO el año (descubierto inspeccionando el HTML real)
     // Variantes con fechas ISO YYYY-MM-DD
     `${baseUrl}?fechaDesde=${dateFrom}&fechaHasta=${dateTo}`,
     `${baseUrl}?desde=${dateFrom}&hasta=${dateTo}`,
