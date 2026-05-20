@@ -4860,11 +4860,42 @@ async function _fccvSync(){
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Consultando FCCV...'; btn.style.opacity = '.7'; }
   if(status) status.textContent = `Conectando con fccv.es (vía proxy CORS)...`;
 
-  const fccvUrl = `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${year}`;
+  const baseUrl = `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${year}`;
+  const yyyy = String(year);
+  const dateFrom = `${yyyy}-01-01`;
+  const dateTo   = `${yyyy}-12-31`;
+  // Probamos varios nombres de parámetros de filtro de fechas que usa Smartweb /
+  // Joomla. Nos quedamos con la URL que devuelva MÁS pruebas (la que el
+  // servidor honra realmente). El usuario quiere ver TODA la temporada del año
+  // seleccionado, no solo "desde hoy en adelante".
+  const candidateUrls = [
+    `${baseUrl}?fechaDesde=${dateFrom}&fechaHasta=${dateTo}`,
+    `${baseUrl}?desde=${dateFrom}&hasta=${dateTo}`,
+    `${baseUrl}?from=${dateFrom}&to=${dateTo}`,
+    `${baseUrl}?fecha_inicio=${dateFrom}&fecha_fin=${dateTo}`,
+    `${baseUrl}?inicio=${dateFrom}&fin=${dateTo}`,
+    `${baseUrl}?d1=${dateFrom}&d2=${dateTo}`,
+    `${baseUrl}?start=${dateFrom}&end=${dateTo}`,
+    baseUrl // fallback sin filtro (solo futuros)
+  ];
+  const fccvUrl = baseUrl; // para mensajes/UI
   try{
-    const html = await _fccvFetch(fccvUrl);
-    if(status) status.textContent = `📄 HTML recibido (${(html.length/1024).toFixed(1)} KB). Analizando con año=${year}...`;
-    const all = _fccvParseHtml(html, year);
+    let html = '', all = [], chosenUrl = '';
+    for(const url of candidateUrls){
+      try{
+        if(status) status.textContent = `Probando ${url.replace(baseUrl,'…')}...`;
+        const h = await _fccvFetch(url);
+        if(!h || h.length<500) continue;
+        const parsed = _fccvParseHtml(h, year);
+        if(parsed.length > all.length){
+          all = parsed; html = h; chosenUrl = url;
+          // Si supera ampliamente el "solo futuros" (>200 pruebas o cubre enero)
+          // ya damos por buena esta variante y dejamos de probar.
+          if(parsed.length>=200 || parsed.some(r=>r.date && r.date.startsWith(yyyy+'-01'))) break;
+        }
+      }catch(e){ /* sigue al siguiente candidato */ }
+    }
+    if(status) status.textContent = `📄 HTML recibido (${(html.length/1024).toFixed(1)} KB) · ${chosenUrl===baseUrl?'sin filtro de fechas':'con filtro de fechas'} · ${all.length} carreras detectadas`;
     if(!all.length){
       if(results) results.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b;font-size:13px">
         ⚠️ Se recibió el HTML pero no se detectó ninguna carrera con el formato esperado.<br>
