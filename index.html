@@ -4022,11 +4022,16 @@ function _calRaceModalGotoRider(riderName){
 // Scraping en tiempo real del calendario oficial vía proxy CORS
 // ═════════════════════════════════════════════════════════════════════
 
-// Lista de proxies CORS — se prueban en orden hasta que uno funcione
+// Lista de proxies CORS — se prueban en orden hasta que uno funcione.
+// IMPORTANTE: codetabs es el único que actualmente devuelve el HTML COMPLETO
+// del calendario FCCV con TODAS las pruebas del año. Los otros dos están
+// devolviendo respuestas vacías/rate-limited en muchos sitios. Por eso va el
+// primero. También exigimos un mínimo razonable de tamaño para detectar
+// respuestas truncadas.
 const _FCCV_PROXIES = [
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ];
 
 let _fccvLastResults = [];
@@ -4087,15 +4092,23 @@ function _fccvInitYears(){
   sel.innerHTML = years.map(y=>`<option value="${y}" ${y===cur?'selected':''}>${y}</option>`).join('');
 }
 
-async function _fccvFetch(url){
+async function _fccvFetch(url, opts){
+  const minBytes = (opts && opts.minBytes) || 200000; // 200KB por defecto:
+  // el HTML del calendario FCCV pesa ~1.6MB, así que cualquier respuesta
+  // pequeña significa que el proxy devolvió error o respuesta vacía.
+  // Para fichas individuales se puede bajar el mínimo con opts.minBytes.
   let lastErr = null;
   for(const proxify of _FCCV_PROXIES){
     try{
       const proxyUrl = proxify(url);
-      const r = await fetch(proxyUrl, {signal: AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined});
+      const r = await fetch(proxyUrl, {signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined});
       if(r.ok){
         const text = await r.text();
-        if(text && text.length > 200) return text;
+        if(text && text.length >= minBytes){
+          console.log(`[FCCV] proxy OK: ${proxyUrl.slice(0,60)}… (${(text.length/1024).toFixed(0)} KB)`);
+          return text;
+        }
+        console.warn(`[FCCV] proxy devolvió respuesta corta (${text.length} bytes, mínimo ${minBytes}):`, proxyUrl.slice(0,60));
       }
       lastErr = new Error(`Proxy responded ${r.status}`);
     } catch(e){
@@ -5421,7 +5434,7 @@ async function _fccvFetchDetailById(fccvId, knownUrl){
 
   for(const url of candidates){
     try{
-      const html = await _fccvFetch(url);
+      const html = await _fccvFetch(url, {minBytes: 2000}); // fichas son pequeñas
       if(!html || html.length<500) continue;
       const doc = new DOMParser().parseFromString(html, 'text/html');
       // Estrategia 1: existe el modal embebido (mismo patrón que el calendario)
