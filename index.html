@@ -4269,30 +4269,45 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     _fccvShowPickerForDate(name, dateIso, sameDay);
     return;
   }
-  // No hay match en el scrape actual. Ofrecer sincronizar años pasados antes
-  // de rendirse — la FCCV no borra pruebas históricas, solo las saca del
-  // calendario "valenciana/{año}" cuando ya se han disputado dentro de ese
-  // año en curso. Sincronizando años anteriores recuperamos sus fccvId.
-  const targetYear = dateIso ? dateIso.slice(0,4) : '';
-  if(targetYear){
-    if(confirm(`No encontré esta prueba en el scrape actual.\n¿Quieres que sincronice el calendario FCCV de ${targetYear} para intentar localizarla?\n\n(Esto consulta fccv.es y puede tardar unos segundos.)`)){
-      try{
-        // Forzar año en el dropdown y sincronizar
-        const yearSel = document.getElementById('fccvYear');
-        if(yearSel){
-          // Asegurar que la opción existe
-          if(![...yearSel.options].some(o=>o.value===targetYear)){
-            const opt = document.createElement('option');
-            opt.value = targetYear; opt.textContent = targetYear;
-            yearSel.appendChild(opt);
+  // No hay match en el scrape actual. La FCCV recorta su calendario público
+  // a "hoy en adelante", así que pruebas ya disputadas dentro del año en curso
+  // no aparecen en el HTML (y no podemos rascarlas). Pero la ficha individual
+  // sigue accesible si conocemos su ID — pedirla al usuario.
+  const pasted = prompt(
+    `No encuentro esta prueba automáticamente.\n\n` +
+    `Causa probable: la FCCV oculta las pruebas ya disputadas del calendario público (su HTML solo muestra desde hoy en adelante).\n\n` +
+    `Pega aquí la URL de la prueba en fccv.es (o solo su ID numérico). La consultaré directamente y la vincularé a esta carrera para siempre.\n\n` +
+    `Ej:  https://fccv.es/index.php/es/smartweb/prueba/32973\n` +
+    `o simplemente:  32973`
+  );
+  if(pasted){
+    const idMatch = pasted.match(/(\d{3,7})/);
+    if(idMatch){
+      const newId = idMatch[1];
+      // Descargar la ficha individual
+      const raw = await _fccvFetchDetailById(newId);
+      if(raw){
+        // Si encontramos la carrera planificada en _calPlanned, guardar el ID
+        try{
+          const planned = (_calPlanned||[]).find(p=>p.name===name && (p.dateStr||'').slice(0,10)===dateIso);
+          if(planned && _sb && !String(planned.id).startsWith('local-')){
+            const {data} = await _sb.from('races').select('notes').eq('id', planned.id).maybeSingle();
+            let extra = {};
+            if(data?.notes){ try{ extra = JSON.parse(data.notes); }catch(_){} }
+            extra.fccvId = newId;
+            await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', planned.id);
+            planned.fccvId = newId;
           }
-          yearSel.value = targetYear;
-        }
-        await _fccvSync();
-        // Reintentar tras la sincronización
-        const m2 = _calFindFccvForRace(fakeRace);
-        if(m2){ _fccvShowRaceDetails(m2.fccvId); return; }
-      }catch(e){ console.error(e); }
+        }catch(_){}
+        _fccvShowRaceDetails(newId);
+        return;
+      } else {
+        alert(`No pude descargar la ficha del ID ${newId}. Verifica que el ID sea correcto.`);
+        return;
+      }
+    } else {
+      alert('No detecté un ID válido en lo que pegaste. Debería ser un número de 3-7 dígitos.');
+      return;
     }
   }
 
