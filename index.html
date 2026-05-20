@@ -3246,7 +3246,7 @@ async function _calLoadData(){
     if(data) _calPlanned = data.map(r=>{
       let extra={};
       try{ extra=JSON.parse(r.notes||'{}'); }catch(e){}
-      return { id:r.id, date: new Date(r.date+'T12:00:00'), dateStr:r.date, name:r.name, localidad:extra.localidad||'', cat:extra.cat||'', notes:extra.notes||'', type:'planned' };
+      return { id:r.id, date: new Date(r.date+'T12:00:00'), dateStr:r.date, name:r.name, localidad:extra.localidad||'', cat:extra.cat||'', modality:extra.modality||'', fccvId:extra.fccvId||'', fccvDetailUrl:extra.fccvDetailUrl||'', notes:extra.notes||'', type:'planned' };
     });
   }
 }
@@ -3357,7 +3357,10 @@ function _calBuildMonth(y, m){
       // si no se encuentra, avisamos y ofrecemos sincronizar.
       const safeName = escapeAttr(r.name||'');
       const safeDate = r.date ? `${r.date.getFullYear()}-${String(r.date.getMonth()+1).padStart(2,'0')}-${String(r.date.getDate()).padStart(2,'0')}` : '';
-      const infoBtn = `<button onclick="event.stopPropagation();_calOpenFccvInfo('${safeName}','${safeDate}')" style="background:#1e40af;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px" title="Ficha oficial FCCV (reglamento, planos, clasificación...)">ℹ️ Info</button>`;
+      const safeCat = escapeAttr(r.cat||'');
+      const safeMod = escapeAttr(r.modality||'');
+      const safeFccvId = escapeAttr(r.fccvId||'');
+      const infoBtn = `<button onclick="event.stopPropagation();_calOpenFccvInfo('${safeName}','${safeDate}','${safeCat}','${safeMod}','${safeFccvId}')" style="background:#1e40af;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px" title="Ficha oficial FCCV (reglamento, planos, clasificación...)">ℹ️ Info</button>`;
       html += `<div ${rowClick} style="display:flex;align-items:center;gap:12px;background:${isPlan?'#f0fdf4':'#eff6ff'};border:1px solid ${isPlan?'#a7f3d0':'#bfdbfe'};border-radius:10px;padding:10px 14px;${canClickPast?'cursor:pointer;':''}${rowHover}"
         ${canClickPast?`onmouseenter="this.style.background='#dbeafe'" onmouseleave="this.style.background='#eff6ff'"`:''}>
         <div style="width:10px;height:10px;border-radius:50%;background:${isPlan?'#10b981':'#3b82f6'};flex-shrink:0"></div>
@@ -4193,10 +4196,15 @@ function _fccvCleanRaceName(rawName){
 }
 
 // Dispatcher para el botón "ℹ️ Info" de la lista de carreras del calendario.
-// Acepta nombre + fecha (yyyy-mm-dd) crudos y resuelve la ficha FCCV.
-async function _calOpenFccvInfo(name, dateIso){
+// Recibe nombre, fecha, categoría, modalidad y, si está disponible, el ID FCCV
+// ya guardado al añadir la prueba desde la federación (match inequívoco).
+async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
+  // Path rápido: tenemos el ID exacto → abrir directamente
+  if(fccvId && _fccvDetailsById && _fccvDetailsById[fccvId]){
+    _fccvShowRaceDetails(fccvId); return;
+  }
   // Construir un objeto compatible con _calFindFccvForRace
-  const fakeRace = {name, date: dateIso ? new Date(dateIso) : null};
+  const fakeRace = {name, date: dateIso ? new Date(dateIso) : null, cat: cat||'', modality: modality||'', fccvId: fccvId||''};
   let m = _calFindFccvForRace(fakeRace);
   if(m){ _fccvShowRaceDetails(m.fccvId); return; }
   // No hay match. Si el scrape está vacío, ofrecer sincronizar.
@@ -4215,15 +4223,30 @@ async function _calOpenFccvInfo(name, dateIso){
     alert('No se encontró esta prueba en el calendario actual de la FCCV.\n• La prueba puede haber sido retirada del calendario.\n• O el nombre difiere demasiado del oficial.');
     return;
   }
-  // Diagnóstico: mostrar las carreras FCCV de la misma fecha (o ±1 día) para
-  // que el usuario pueda elegir manualmente.
+  // Diagnóstico: mostrar las carreras FCCV de la misma fecha (o ±1 día), y si
+  // tenemos categoría/modalidad las usamos para acotar.
   const ref = dateIso ? new Date(dateIso+'T12:00:00') : null;
-  const sameDay = (_fccvLastAllRaces||[]).filter(c=>{
+  let sameDay = (_fccvLastAllRaces||[]).filter(c=>{
     if(!c.fccvId || !c.date) return false;
     if(!ref) return false;
     const cd = new Date(c.date+'T12:00:00');
     return Math.abs((cd-ref)/86400000) <= 1;
   });
+  // Filtrar por categoría y modalidad si las tenemos
+  const userCatLow = (cat||'').toLowerCase();
+  const userModLow = (modality||'').toLowerCase();
+  if(sameDay.length>1 && userCatLow){
+    const tok = /cadet/.test(userCatLow)?'cadet':/j[uú]nior/.test(userCatLow)?'junior':/sub.?23/.test(userCatLow)?'sub23':/elite|[eé]lite/.test(userCatLow)?'elite':/master/.test(userCatLow)?'master':'';
+    if(tok){
+      const filt = sameDay.filter(c=>(c.category||'').toLowerCase().includes(tok.slice(0,5)));
+      if(filt.length) sameDay = filt;
+    }
+  }
+  if(sameDay.length>1 && userModLow){
+    const filt = sameDay.filter(c=>(c.modality||'').toLowerCase().includes(userModLow.slice(0,4)));
+    if(filt.length) sameDay = filt;
+  }
+  if(sameDay.length===1){ _fccvShowRaceDetails(sameDay[0].fccvId); return; }
   if(sameDay.length){
     // Abrir un selector
     _fccvShowPickerForDate(name, dateIso, sameDay);
@@ -4290,7 +4313,43 @@ function _calFindFccvForRace(r){
   }
   const pool = onSameDate.length ? onSameDate : all.filter(c=>c.fccvId);
 
-  // Score por nombre (la fecha ya está garantizada en pool)
+  // Match inequívoco si la carrera planificada guarda su fccvId
+  if(r.fccvId){
+    const hit = pool.find(c=>c.fccvId===r.fccvId);
+    if(hit) return hit;
+  }
+
+  // Token de categoría del usuario (e.g. "cadete", "junior", "elite") y modalidad
+  const userCatTok = (()=>{
+    const c = (r.cat||'').toLowerCase();
+    if(/cadet/.test(c)) return 'cadet';
+    if(/j[uú]nior/.test(c)) return 'junior';
+    if(/sub.?23/.test(c)) return 'sub23';
+    if(/elite|[eé]lite/.test(c)) return 'elite';
+    if(/master/.test(c)) return 'master';
+    if(/infantil/.test(c)) return 'infantil';
+    if(/alev[ií]n/.test(c)) return 'alevin';
+    if(/escola|escuela/.test(c)) return 'escuela';
+    if(/promesa/.test(c)) return 'promesa';
+    if(/principiant/.test(c)) return 'principiant';
+    return '';
+  })();
+  const userIsFem = /\bfem(en[ií]n)?(o|a)?\b|\bf\.?\b|\bmujer/.test((r.cat||'').toLowerCase());
+  const userMod = (r.modality||'').toLowerCase();
+
+  // Helper: detecta si una categoría FCCV contiene un token MASCULINO de la
+  // categoría del usuario (e.g. "Cadete" sin marca fem).
+  const fccvHasUserCat = (fccvCat)=>{
+    if(!userCatTok || !fccvCat) return false;
+    const tokens = fccvCat.toLowerCase().split(/[,;]/).map(s=>s.replace(/\.\.\.$/,'').trim());
+    return tokens.some(t=>{
+      if(!t.includes(userCatTok.slice(0,5))) return false;
+      const isTokFem = /\bfem\b|fem\.|femen|mujer|dones/.test(t);
+      return userIsFem ? isTokFem : !isTokFem;
+    });
+  };
+
+  // Score por nombre + categoría + modalidad
   let best = null, bestScore = -1;
   for(const c of pool){
     const cK = norm(c.name);
@@ -4304,13 +4363,27 @@ function _calFindFccvForRace(r){
       const shared = tok.filter(t=>ctok.includes(t)).length;
       score += shared*12;
     }
+    // BONUS / PENALIZACIÓN por categoría
+    if(userCatTok){
+      const match = fccvHasUserCat(c.category||'');
+      if(match) score += 80;
+      else score -= 40; // descarta fuerte si la categoría del usuario NO aparece
+    }
+    // BONUS por modalidad
+    if(userMod){
+      const cMod = (c.modality||'').toLowerCase();
+      if(cMod && (cMod.includes(userMod.slice(0,4)) || userMod.includes(cMod.slice(0,4)))) score += 30;
+      // Penaliza modalidades opuestas
+      const isCarretera = /carretera|ruta/.test(userMod);
+      const isBtt = /btt|mtb|monta/.test(userMod);
+      if(isCarretera && /btt|mtb/.test(cMod)) score -= 50;
+      if(isBtt && /carretera|ruta/.test(cMod)) score -= 50;
+    }
     if(score>bestScore){ bestScore = score; best = c; }
   }
-  // Si la única candidata del día tiene score 0 (nombre totalmente distinto),
-  // igualmente la devolvemos: la fecha es coincidencia suficiente cuando solo
-  // hay 1 carrera FCCV ese día.
-  if(onSameDate.length===1) return onSameDate[0];
-  return bestScore>=12 ? best : null;
+  // Si la única candidata del día tiene score positivo, igualmente la devolvemos
+  if(onSameDate.length===1 && bestScore>=-20) return onSameDate[0];
+  return bestScore>=24 ? best : null;
 }
 
 function _fccvParseHtml(html, defaultYear){
@@ -5091,18 +5164,26 @@ async function _fccvAddRace(idx){
         const {data} = await _sb.from('races').select('notes').eq('id', existing.id).maybeSingle();
         if(data && data.notes){ try{ extra = JSON.parse(data.notes); }catch(_){} }
       }catch(_){}
-      // Añadir traza de la actualización
+      // Añadir traza de la actualización + identificadores FCCV
       extra.fccvSync = {previousDate: oldDate, syncedAt: new Date().toISOString(), source:'FCCV'};
       if(race.location && !extra.localidad) extra.localidad = race.location;
+      if(race.fccvId) extra.fccvId = race.fccvId;
+      if(race.fccvDetailUrl) extra.fccvDetailUrl = race.fccvDetailUrl;
+      if(race.modality && !extra.modality) extra.modality = race.modality;
+      if(race.category && !extra.cat) extra.cat = race.category;
       const {error} = await _sb.from('races').update({date: race.date, notes: JSON.stringify(extra)}).eq('id', existing.id);
       if(error) throw error;
       alert(`✅ Fecha actualizada para "${race.name}":\n${oldDate} → ${race.date}\n\nLos demás datos (categoría, notas, etc.) se han mantenido.`);
     } else {
-      // Insertar nueva planificada
+      // Insertar nueva planificada (guardamos identificadores FCCV para que
+      // futuros clicks en "ℹ️ Info" abran la ficha correcta de forma inequívoca)
       const notes = JSON.stringify({
         localidad: race.location || '',
-        cat: '',
+        cat: race.category || '',
+        modality: race.modality || '',
         notes: '',
+        fccvId: race.fccvId || '',
+        fccvDetailUrl: race.fccvDetailUrl || '',
         fccvSync: {syncedAt: new Date().toISOString(), source:'FCCV'}
       });
       const {error} = await _sb.from('races').insert({name: race.name, date: race.date, notes, race_type:'planificada'});
