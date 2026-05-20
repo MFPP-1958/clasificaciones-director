@@ -4423,9 +4423,9 @@ function _fccvParseHtml(html, defaultYear){
   const races = [];
   const seen = new Set();
   // Indexar todos los modales <div id="pruebaXXXXX"> con la info completa de
-  // cada prueba (categorías sin truncar, reglamento, contactos...). Los
-  // mostraremos en una ventana propia al hacer clic en "Ver".
-  _fccvDetailsById = {};
+  // cada prueba (categorías sin truncar, reglamento, contactos...). NO
+  // reseteamos el cache: la FCCV solo publica futuras y queremos conservar
+  // los modales de pruebas pasadas para poder seguir consultándolas.
   doc.querySelectorAll('div[id^="prueba"]').forEach(el=>{
     const m = el.id.match(/^prueba(\d+)$/);
     if(m) _fccvDetailsById[m[1]] = el.innerHTML || '';
@@ -4833,7 +4833,22 @@ async function _fccvSync(){
     }
     const filtered = _fccvApplyFilters(all, cat, mod, gen);
     _fccvLastResults = filtered;
-    _fccvLastAllRaces = all;
+    // Fusionar el scrape nuevo con el histórico acumulado: la FCCV solo
+    // publica pruebas futuras en su calendario, así que las que ya se han
+    // disputado desaparecen del HTML — pero nosotros queremos seguir pudiendo
+    // consultar su info / reglamento / clasificación. Solución: nunca borrar,
+    // siempre acumular indexando por fccvId.
+    const prevById = new Map();
+    for(const c of (_fccvLastAllRaces||[])){
+      if(c && c.fccvId) prevById.set(c.fccvId, c);
+    }
+    for(const c of all){
+      if(c && c.fccvId) prevById.set(c.fccvId, c); // sobreescribe con datos más recientes
+    }
+    _fccvLastAllRaces = [...prevById.values()].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    // _fccvDetailsById ya se acumula de forma natural en _fccvParseHtml (no se
+    // resetea aquí). Si una prueba pasada ya no aparece en el scrape nuevo,
+    // su modal HTML guardado seguirá disponible en localStorage.
     _fccvPersistScrape();
     if(status){
       const debugBtn = ` <button onclick="_fccvShowDebug()" style="background:#fff;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px">🔍 Debug</button>`;
