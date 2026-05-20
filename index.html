@@ -2341,21 +2341,6 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 
           <div id="fccvStatus" style="font-size:12px;color:#92400e;font-weight:600;margin-bottom:8px"></div>
 
-          <!-- Zona de drop para Excel exportado de la FCCV -->
-          <div id="fccvExcelDrop" style="border:2px dashed #fcd34d;border-radius:10px;padding:14px;background:#fffbeb;text-align:center;cursor:pointer;margin-bottom:10px;transition:background .2s"
-            onclick="document.getElementById('fccvExcelInput').click()"
-            ondragover="event.preventDefault();this.style.background='#fef3c7'"
-            ondragleave="this.style.background='#fffbeb'"
-            ondrop="event.preventDefault();this.style.background='#fffbeb';_fccvHandleExcelDrop(event)">
-            <div style="font-size:24px">📥</div>
-            <div style="font-weight:800;color:#78350f;font-size:13px;margin-top:4px">Arrastra aquí el Excel exportado de la FCCV</div>
-            <div style="font-size:11px;color:#92400e;margin-top:2px">
-              En <a href="https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/2026" target="_blank" style="color:#1d4ed8;font-weight:700">fccv.es</a> pulsa el icono Excel y luego arrastra el fichero descargado aquí (o haz clic para elegirlo).<br>
-              Importará TODAS las pruebas del año, incluidas las ya disputadas.
-            </div>
-            <input type="file" id="fccvExcelInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="_fccvHandleExcelInput(event)">
-          </div>
-
           <div id="fccvResults"></div>
         </div>
       </section>
