@@ -8530,28 +8530,70 @@ function renderStats(){
   $('totalCats').textContent=new Set(riders.map(r=>r.cat).filter(Boolean)).size;
   const w=riders.find(r=>r.pos===1)||riders[0];
   $('winner').textContent=w?`${w.name}${w.team?' · '+w.team:''}${w.time?' · '+w.time:''}`:'—';
-  // ===== BLOQUE 1: KPIs Mi Equipo =====
+  // ===== BLOQUE 1: KPIs Mi Equipo (Fase 2 no-bloqueo) =====
+  // Si hay equipo: mostramos KPIs del equipo. Si NO hay equipo: mostramos KPIs
+  // globales de la prueba (mejor de la carrera, equipos distintos en top 10,
+  // spread global del top 3) y añadimos un chip discreto invitando a configurar.
   const kpiSection = document.getElementById('myTeamKpis');
-  if(myTeam && riders.length && kpiSection){
-    const myRiders = riders.filter(r=>isMyTeam(r)).sort((a,b)=>a.pos-b.pos);
+  if(riders.length && kpiSection){
     kpiSection.style.display = 'grid';
-    if(myRiders.length){
-      const best = myRiders[0];
-      $('kpiMyBest') && ($('kpiMyBest').textContent = best.pos + 'º — ' + best.name);
-      // Rivales en top 10 (equipos distintos al mío)
-      const top10teams = new Set(riders.filter(r=>r.pos<=10 && !isMyTeam(r)).map(r=>r.team));
-      $('kpiRivals') && ($('kpiRivals').textContent = top10teams.size + ' equipos distintos');
-      // Spread (diferencia pos entre mejor y 3er clasificado del equipo)
-      const spread = myRiders.length>=3 ? myRiders[2].pos - myRiders[0].pos : (myRiders.length>1 ? myRiders[myRiders.length-1].pos - myRiders[0].pos : null);
-      const spreadEl = $('kpiSpread');
-      if(spreadEl){
-        if(spread===null){ spreadEl.textContent='— (pocos datos)'; }
-        else { spreadEl.textContent = spread + ' posiciones'; spreadEl.className = 'value ' + (spread<=8?'spread-low':spread<=20?'spread-mid':'spread-high'); }
+    const sortedAll = [...riders].sort((a,b)=>a.pos-b.pos);
+    if(myTeam){
+      const myRiders = riders.filter(r=>isMyTeam(r)).sort((a,b)=>a.pos-b.pos);
+      if(myRiders.length){
+        const best = myRiders[0];
+        $('kpiMyBest') && ($('kpiMyBest').textContent = best.pos + 'º — ' + best.name);
+        const top10teams = new Set(riders.filter(r=>r.pos<=10 && !isMyTeam(r)).map(r=>r.team));
+        $('kpiRivals') && ($('kpiRivals').textContent = top10teams.size + ' equipos distintos');
+        const spread = myRiders.length>=3 ? myRiders[2].pos - myRiders[0].pos : (myRiders.length>1 ? myRiders[myRiders.length-1].pos - myRiders[0].pos : null);
+        const spreadEl = $('kpiSpread');
+        if(spreadEl){
+          if(spread===null){ spreadEl.textContent='— (pocos datos)'; }
+          else { spreadEl.textContent = spread + ' posiciones'; spreadEl.className = 'value ' + (spread<=8?'spread-low':spread<=20?'spread-mid':'spread-high'); }
+        }
+      } else {
+        $('kpiMyBest') && ($('kpiMyBest').textContent = '— no clasificado');
+        $('kpiRivals') && ($('kpiRivals').textContent = '—');
+        $('kpiSpread') && ($('kpiSpread').textContent = '—');
       }
     } else {
-      $('kpiMyBest') && ($('kpiMyBest').textContent = '— no clasificado');
-      $('kpiRivals') && ($('kpiRivals').textContent = '—');
-      $('kpiSpread') && ($('kpiSpread').textContent = '—');
+      // Sin equipo: KPIs globales de la prueba
+      const winner = sortedAll[0];
+      $('kpiMyBest') && winner && ($('kpiMyBest').textContent = '1º — ' + winner.name + (winner.team?' ('+winner.team+')':''));
+      const top10TeamsAll = new Set(sortedAll.slice(0,10).map(r=>r.team).filter(Boolean));
+      $('kpiRivals') && ($('kpiRivals').textContent = top10TeamsAll.size + ' equipos en Top 10');
+      // Spread = diferencia entre mejor y 3er clasificado overall (informativo)
+      const sp = sortedAll.length>=3 ? sortedAll[2].pos - sortedAll[0].pos : null;
+      const spreadEl = $('kpiSpread');
+      if(spreadEl){
+        if(sp===null){ spreadEl.textContent='— (pocos datos)'; }
+        else { spreadEl.textContent = sp + ' posiciones (Top 3 global)'; spreadEl.className='value spread-low'; }
+      }
+      // Etiquetas más informativas en modo global (modificamos los labels)
+      const labels = kpiSection.querySelectorAll('.label');
+      if(labels[0]) labels[0].textContent = '🟢 Ganador';
+      if(labels[1]) labels[1].textContent = '👥 Top 10';
+      if(labels[2]) labels[2].textContent = '📏 Spread Top 3';
+      // Chip discreto invitando a configurar Mi Equipo
+      if(!document.getElementById('kpiNoTeamChip')){
+        const chip = document.createElement('div');
+        chip.id = 'kpiNoTeamChip';
+        chip.style.cssText='grid-column:1/-1;background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:-4px';
+        chip.title='Configurar Mi Equipo';
+        chip.onclick=()=>{ document.getElementById('gfMyTeam')?.focus(); };
+        chip.innerHTML='⚙️ Mostrando KPIs GLOBALES de esta prueba. <span style="text-decoration:underline">Configura tu equipo</span> para ver los KPIs específicos del tuyo.';
+        kpiSection.appendChild(chip);
+      }
+    }
+    // Si hay equipo, quitar el chip si existía
+    if(myTeam){
+      const chip = document.getElementById('kpiNoTeamChip');
+      if(chip) chip.remove();
+      // Restaurar etiquetas originales
+      const labels = kpiSection.querySelectorAll('.label');
+      if(labels[0]) labels[0].textContent = '🟢 Mejor puesto (mi equipo)';
+      if(labels[1]) labels[1].textContent = '⚠️ Equipos rivales en Top 10';
+      if(labels[2]) labels[2].textContent = '📏 Spread mi equipo';
     }
   } else if(kpiSection){
     kpiSection.style.display = 'none';
@@ -12403,7 +12445,7 @@ async function renderInicio(){
   const heroTitle = `${greeting}, ${escapeHtml(displayName)}`;
   const heroSub = team
     ? `Estás llevando el equipo <strong>${escapeHtml(team)}</strong>`
-    : 'Configura tu equipo en el panel de carga para activar funciones personalizadas';
+    : `Estás viendo datos <strong>globales</strong> · <span onclick="document.getElementById('gfMyTeam')?.focus()" style="cursor:pointer;text-decoration:underline">Configura tu equipo</span> en la barra de filtros para personalizar`;
 
   const elHT = document.getElementById('inicioHeroTitle');
   const elHS = document.getElementById('inicioHeroSubtitle');
@@ -12509,28 +12551,26 @@ async function renderInicio(){
     actBox.style.gridTemplateColumns = 'repeat(2,1fr)';
   }
 
-  // ─── 5. Top 3 corredores destacados de mi equipo ────────────────────
+  // ─── 5. Top 5 corredores destacados ─────────────────────────────────
+  // Filosofía no-bloqueo (Fase 2): si NO hay equipo configurado, mostramos
+  // ranking GLOBAL del histórico con un chip discreto invitando a configurar
+  // el equipo. Si SÍ hay equipo, filtramos solo los suyos.
   const topBox = document.getElementById('inicioTopRiders');
   if(topBox){
-    if(!team){
-      topBox.innerHTML = `<div class="inicio-empty">
-        <div style="font-size:28px">⚙️</div>
-        <div style="font-weight:700;margin-top:6px">Configura tu equipo</div>
-        <div style="font-size:13px;margin-top:4px;margin-bottom:10px">En la vista <strong>Carga y Resumen</strong> indica tu equipo para ver tus corredores aquí.</div>
-        <button class="btn light" onclick="showView('view-carga')">Ir a Carga</button>
-      </div>`;
-    } else if(!history.length){
+    if(!history.length){
       topBox.innerHTML = `<div class="inicio-empty">Carga al menos una prueba para empezar a ver estadísticas.</div>`;
     } else {
-      // Build basic ranking using the same composite score if available
-      const myTeamKey = (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim());
+      const hasTeam = !!team;
+      const myTeamKey = hasTeam ? (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim()) : '';
       const riderStats = new Map();
       history.forEach(race => (race.riders||[]).forEach(r => {
-        const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
-        if(tk !== myTeamKey) return;
+        if(hasTeam){
+          const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+          if(tk !== myTeamKey) return;
+        }
         const nm = normalizeRiderName(r.name||'').trim();
         if(!nm) return;
-        if(!riderStats.has(nm)) riderStats.set(nm, {name:nm, displayName:r.name||nm, positions:[], raceHistory:[]});
+        if(!riderStats.has(nm)) riderStats.set(nm, {name:nm, displayName:r.name||nm, team:r.team||'', positions:[], raceHistory:[]});
         const rs = riderStats.get(nm);
         rs.positions.push(r.pos);
         rs.raceHistory.push({raceName:race.raceName, raceDate:race.raceDate, pos:r.pos, total:(race.riders||[]).length});
@@ -12543,16 +12583,20 @@ async function renderInicio(){
         return {...rs, avg, n, composite:stats.composite, podiums:rs.positions.filter(p=>p<=3).length, wins:rs.positions.filter(p=>p===1).length};
       }).sort((a,b)=>a.composite-b.composite).slice(0,5);
 
+      const chip = hasTeam
+        ? ''
+        : `<div onclick="document.getElementById('gfMyTeam')?.focus()" style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:700;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:6px" title="Configurar Mi Equipo">⚙️ Mostrando ranking GLOBAL. <span style="text-decoration:underline">Configura tu equipo</span> para ver solo los tuyos.</div>`;
+
       if(!arr.length){
-        topBox.innerHTML = `<div class="inicio-empty">No se encontraron corredores de "${escapeHtml(team)}" en el historial.</div>`;
+        topBox.innerHTML = chip + `<div class="inicio-empty">No se encontraron corredores${hasTeam?` de "${escapeHtml(team)}"`:''} en el historial.</div>`;
       } else {
-        topBox.innerHTML = arr.map((r,i)=>{
+        topBox.innerHTML = chip + arr.map((r,i)=>{
           const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
           return `<div class="inicio-rider-row">
             <div class="inicio-rider-pos">${medal}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;color:#0b2f6b">${escapeHtml(r.displayName)}</div>
-              <div style="font-size:12px;color:#6b7280">${r.n} carreras · media ${r.avg.toFixed(1)}º · ${r.podiums} podios${r.wins>0?` · 🏆 ${r.wins} victoria${r.wins>1?'s':''}`:''}</div>
+              <div style="font-size:12px;color:#6b7280">${!hasTeam && r.team?escapeHtml(r.team)+' · ':''}${r.n} carreras · media ${r.avg.toFixed(1)}º · ${r.podiums} podios${r.wins>0?` · 🏆 ${r.wins} victoria${r.wins>1?'s':''}`:''}</div>
             </div>
           </div>`;
         }).join('');
@@ -13759,11 +13803,30 @@ function renderTactica(){
   const catLabel=getTeamRankingCategoryLabel();
 
   if(!myTeamName||myRiders.length===0){
-    estado.textContent='Sin equipo o sin corredores en esta categoría';
-    rival.textContent='---';
-    zona.textContent='---';
-    $('tacticaObjetivos').innerHTML=`<p class="help" style="padding:10px">${!myTeamName?'Configura tu equipo en Carga.':`Tu equipo no tiene corredores en ${escapeHtml(catLabel)}.`}</p>`;
-    $('tacticaRivalList').innerHTML='';
+    // ── Fase 2 no-bloqueo: mostramos estado GLOBAL en lugar de bloquear ──
+    const teamStats=getOfficialTeamRanking();
+    const totalTeams=teamStats.length;
+    if(!totalTeams){
+      estado.textContent='Sin datos';
+      rival.textContent='---';
+      zona.textContent='---';
+      $('tacticaObjetivos').innerHTML=`<p class="help" style="padding:10px">Carga una clasificación para ver el plan táctico.</p>`;
+      $('tacticaRivalList').innerHTML='';
+      return;
+    }
+    const topTeam = teamStats[0];
+    estado.textContent = `Vista global · ${totalTeams} equipos en ${escapeHtml(catLabel)}`;
+    rival.textContent = topTeam ? `1º ${topTeam.team}` : '---';
+    zona.textContent = 'Sin equipo configurado';
+    const chipReason = !myTeamName
+      ? `Estás viendo datos <strong>globales</strong>. <span onclick="document.getElementById('gfMyTeam')?.focus()" style="cursor:pointer;text-decoration:underline">Configura tu equipo</span> en la barra de filtros para activar el plan táctico personalizado.`
+      : `Tu equipo <strong>${escapeHtml(myTeamName)}</strong> no tiene corredores en ${escapeHtml(catLabel)}. Mientras tanto se muestra ranking global.`;
+    $('tacticaObjetivos').innerHTML = `<div style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:10px 12px;font-size:12px;font-weight:600;margin:8px 0">⚙️ ${chipReason}</div>`;
+    // Listado de top 5 equipos como referencia global
+    const top5 = teamStats.slice(0,5);
+    $('tacticaRivalList').innerHTML = top5.length
+      ? `<div style="font-size:11px;color:#475569;font-weight:700;text-transform:uppercase;margin:8px 0 4px">🏁 Top equipos en ${escapeHtml(catLabel)}</div>` + top5.map((t,i)=>`<div style="padding:6px 10px;border-radius:7px;background:${i===0?'#dcfce7':'#fff'};border:1px solid #e5e7eb;margin-bottom:4px;font-size:12px;display:flex;justify-content:space-between"><strong>${i+1}º ${escapeHtml(t.team)}</strong><span style="color:#475569">${t.points||'—'} pts</span></div>`).join('')
+      : '';
     return;
   }
 
@@ -17652,6 +17715,21 @@ async function renderSeleccion(){
     _selRenderCards(currentN);
     _selRenderRadar(currentN);
     _selRenderMerits(currentN);
+    // ── Fase 2 no-bloqueo: si no hay equipo configurado, mostrar chip ──
+    if(!myTeam){
+      const wrap = document.querySelector('#view-seleccion .panel');
+      const existing = document.getElementById('selNoTeamChip');
+      if(existing) existing.remove();
+      const chip = document.createElement('div');
+      chip.id = 'selNoTeamChip';
+      chip.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:10px 14px;font-size:12.5px;font-weight:700;margin:10px 0;cursor:pointer;display:flex;align-items:center;gap:8px';
+      chip.onclick = ()=>{ document.getElementById('gfMyTeam')?.focus(); };
+      chip.innerHTML = '⚙️ Modo "Mi Equipo" sin equipo configurado · Mostrando candidatos GLOBALES como referencia. <span style="text-decoration:underline">Configura tu equipo</span> en la barra de filtros para personalizar.';
+      if(wrap) wrap.insertBefore(chip, wrap.firstChild);
+    } else {
+      const existing = document.getElementById('selNoTeamChip');
+      if(existing) existing.remove();
+    }
     return;
   }
 
@@ -17799,7 +17877,48 @@ function _setConvoMode(mode){
 
 /* Build myteam candidates scored by Forma (50%) + AvgPos (30%) + Fiabilidad (20%) */
 function _buildMyTeamCandidates(history){
-  if(!myTeam){ return []; }
+  // Fase 2 no-bloqueo: si no hay equipo configurado, no devolvemos array vacío;
+  // delegamos en el pipeline normal (sin filtro de equipo) para que el usuario
+  // vea candidatos globales como referencia + chip avisando.
+  if(!myTeam){
+    // Reutilizamos la lógica del pipeline VLC pero sin filtros de región/género
+    // para entregar un top general de candidatos del histórico.
+    try{
+      const year = $('selTeamYearFilter')?.value || '';
+      const selCats = _selSelectedCats;
+      const filtered = history.filter(race=>{
+        const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+        return !year || ry===year;
+      });
+      const riderMap = {};
+      for(const race of filtered){
+        const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+        const raceId = race.id||race.raceName;
+        for(const r of (race.riders||[])){
+          const rcat = getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat);
+          if(selCats && selCats.size>0 && !selCats.has(rcat)) continue;
+          const nameKey = normalizeRiderName(r.name||'').trim();
+          if(!nameKey) continue;
+          if(!riderMap[nameKey]) riderMap[nameKey] = {name:nameKey, displayName:r.name||nameKey, team:r.team||'', cat:rcat, positions:[], raceHistory:[], raceIds:new Set()};
+          riderMap[nameKey].positions.push(r.pos);
+          riderMap[nameKey].raceHistory.push({raceName:race.raceName, raceDate:race.raceDate, pos:r.pos, total:(race.riders||[]).length});
+          riderMap[nameKey].raceIds.add(raceId);
+        }
+      }
+      const list = Object.values(riderMap).map(rd=>{
+        const n = rd.positions.length;
+        const avg = n ? rd.positions.reduce((s,v)=>s+v,0)/n : 999;
+        const stats = typeof _computeSelectionStats==='function'
+          ? _computeSelectionStats({positions:rd.positions, races:n, avgPos:avg, raceHistory:rd.raceHistory})
+          : {composite:avg};
+        return {...rd, races:n, avgPos:avg, composite:stats.composite, _iaBase:stats.composite};
+      }).sort((a,b)=>a.composite-b.composite).slice(0, 30);
+      return list;
+    }catch(e){
+      console.warn('[Convocatorias] fallback global falló:', e);
+      return [];
+    }
+  }
   const myTeamCanon = getCanonicalTeam(myTeam||'').toLowerCase();
   const year   = $('selTeamYearFilter')?.value   || '';
   const region = $('selTeamRegionFilter')?.value || '';
