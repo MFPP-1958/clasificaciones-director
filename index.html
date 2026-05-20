@@ -4269,11 +4269,21 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     _fccvShowPickerForDate(name, dateIso, sameDay);
     return;
   }
-  // No hay match en el scrape actual. Forzamos una sincronización del año
-  // intentando todas las variantes posibles (GET con muchos parámetros + POST
-  // con form-data). Si tras eso seguimos sin encontrarla, mostramos un único
-  // mensaje claro: la FCCV no nos está dejando acceder a ese histórico.
+  // No hay match en el scrape actual. Mostramos un loader y lanzamos sync
+  // (con cache: si ya hay URL ganadora guardada para este año, el sync es rápido).
   const targetYear = dateIso ? dateIso.slice(0,4) : String(new Date().getFullYear());
+  const loaderId = '_fccvAutosyncDialog';
+  const old = document.getElementById(loaderId);
+  if(old) old.remove();
+  const ldr = document.createElement('div');
+  ldr.id = loaderId;
+  ldr.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center';
+  ldr.innerHTML = `<div style="background:#fff;border-radius:14px;padding:24px 32px;text-align:center;font-family:system-ui;box-shadow:0 20px 60px rgba(0,0,0,.4);max-width:380px">
+    <div style="font-size:28px;margin-bottom:10px">⏳</div>
+    <div style="font-weight:800;color:#0b2f6b;font-size:14px;margin-bottom:4px">Buscando la prueba en la FCCV…</div>
+    <div style="font-size:11px;color:#6b7280">Año ${targetYear} · puede tardar unos segundos</div>
+  </div>`;
+  document.body.appendChild(ldr);
   try{
     const yearSel = document.getElementById('fccvYear');
     if(yearSel){
@@ -4286,8 +4296,12 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     }
     await _fccvSync();
     const m2 = _calFindFccvForRace(fakeRace);
+    ldr.remove();
     if(m2){ _fccvShowRaceDetails(m2.fccvId); return; }
-  }catch(e){ console.error(e); }
+  }catch(e){
+    console.error(e);
+    ldr.remove();
+  }
 
   // Diagnóstico avanzado: muestra fechas reales del scrape cercanas a la pedida
   const allDates = (_fccvLastAllRaces||[]).filter(c=>c.date).map(c=>c.date).sort();
@@ -4877,19 +4891,51 @@ async function _fccvSync(){
   const fccvUrl = baseUrl; // para mensajes/UI
   try{
     let html = '', all = [], chosenUrl = '';
-    for(const url of candidateUrls){
+    // Cache de la URL que funcionó la vez anterior — la probamos primero para
+    // resincronizar rápido. Solo hace falta probar todas las variantes la 1ª vez.
+    const cachedUrl = (()=>{ try{ return localStorage.getItem('fccvWorkingUrl_'+yyyy)||''; }catch(_){ return ''; } })();
+    if(cachedUrl){
       try{
-        if(status) status.textContent = `Probando ${url.replace(baseUrl,'…')}...`;
-        const h = await _fccvFetch(url);
-        if(!h || h.length<500) continue;
-        const parsed = _fccvParseHtml(h, year);
-        if(parsed.length > all.length){
-          all = parsed; html = h; chosenUrl = url;
-          // Si supera ampliamente el "solo futuros" (>200 pruebas o cubre enero)
-          // ya damos por buena esta variante y dejamos de probar.
-          if(parsed.length>=200 || parsed.some(r=>r.date && r.date.startsWith(yyyy+'-01'))) break;
+        if(status) status.textContent = `Conectando (filtro guardado)...`;
+        const h = await _fccvFetch(cachedUrl);
+        if(h && h.length>=500){
+          const parsed = _fccvParseHtml(h, year);
+          if(parsed.length>=50){
+            all = parsed; html = h; chosenUrl = cachedUrl;
+          }
         }
-      }catch(e){ /* sigue al siguiente candidato */ }
+      }catch(_){}
+    }
+    // Si la cacheada no dio resultados, probamos las candidatas en PARALELO
+    // (3 a la vez) y nos quedamos con la que devuelva más pruebas.
+    if(!all.length || all.length<200){
+      if(status) status.textContent = `Buscando filtro óptimo de la FCCV...`;
+      const tryOne = async (url)=>{
+        try{
+          const h = await _fccvFetch(url);
+          if(!h || h.length<500) return null;
+          const parsed = _fccvParseHtml(h, year);
+          return {url, h, parsed};
+        }catch(_){ return null; }
+      };
+      // Procesar en chunks de 3 paralelos
+      const CHUNK = 3;
+      for(let i=0;i<candidateUrls.length;i+=CHUNK){
+        const chunk = candidateUrls.slice(i, i+CHUNK);
+        const results = await Promise.all(chunk.map(tryOne));
+        for(const res of results){
+          if(!res) continue;
+          if(res.parsed.length > all.length){
+            all = res.parsed; html = res.h; chosenUrl = res.url;
+          }
+        }
+        // Si ya tenemos buen resultado, paramos
+        if(all.length>=200 || all.some(r=>r.date && r.date.startsWith(yyyy+'-01'))) break;
+      }
+      // Guardar la URL ganadora si supera al fallback "solo futuros"
+      if(chosenUrl && chosenUrl!==baseUrl){
+        try{ localStorage.setItem('fccvWorkingUrl_'+yyyy, chosenUrl); }catch(_){}
+      }
     }
     if(status) status.textContent = `📄 HTML recibido (${(html.length/1024).toFixed(1)} KB) · ${chosenUrl===baseUrl?'sin filtro de fechas':'con filtro de fechas'} · ${all.length} carreras detectadas`;
     if(!all.length){
