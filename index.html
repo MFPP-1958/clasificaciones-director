@@ -2336,6 +2336,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
               </select>
             </div>
             <button onclick="_fccvSync()" id="fccvSyncBtn" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,.35);white-space:nowrap">🔄 Sincronizar con Federación</button>
+            <button onclick="_fccvResetCache()" title="Borra el scrape acumulado y los modales en caché para empezar de cero" style="background:#fff;color:#dc2626;border:1.5px solid #fca5a5;border-radius:9px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer">🗑️ Limpiar caché</button>
           </div>
 
           <div id="fccvStatus" style="font-size:12px;color:#92400e;font-weight:600;margin-bottom:8px"></div>
@@ -4955,6 +4956,31 @@ function _fccvApplyFilters(races, cat, mod, gen){
 
     return true;
   });
+}
+
+// Borra todo el scrape acumulado y los modales en caché. Útil cuando los
+// datos en localStorage están corruptos o desfasados.
+function _fccvResetCache(){
+  if(!confirm('¿Borrar todo el scrape FCCV acumulado y los modales cacheados?\n\nTras esto, la próxima sincronización empezará desde cero descargando el calendario completo.')) return;
+  _fccvLastAllRaces = [];
+  _fccvLastResults = [];
+  _fccvDetailsById = {};
+  try{
+    localStorage.removeItem(_FCCV_STORAGE_KEY);
+    // También borrar URLs ganadoras cacheadas por año
+    for(let i=localStorage.length-1;i>=0;i--){
+      const k = localStorage.key(i);
+      if(k && k.startsWith('fccvWorkingUrl_')) localStorage.removeItem(k);
+    }
+  }catch(_){}
+  const status = document.getElementById('fccvStatus');
+  if(status){
+    status.textContent = '🗑️ Caché borrada. Pulsa Sincronizar para descargar el calendario actualizado.';
+    status.style.color = '#dc2626';
+  }
+  const results = document.getElementById('fccvResults');
+  if(results) results.innerHTML = '';
+  if(typeof _calRender==='function') _calRender();
 }
 
 // ── Importador de Excel exportado desde la FCCV ──
