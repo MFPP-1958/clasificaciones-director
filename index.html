@@ -2947,6 +2947,18 @@ function _gfMyTeamUpdateChip(val){
     inp.style.borderColor = '#e5e7eb';
   }
 }
+
+// ── Cascada Fase 3: escuchar el evento global myteam:changed ──
+// Cualquier módulo que necesite reaccionar al cambio de equipo puede
+// suscribirse aquí. Sincroniza el chip visual + invalida caches relevantes.
+window.addEventListener('myteam:changed', (ev)=>{
+  // Refrescar el chip visual del selector (por si el cambio viene de otro sitio)
+  try{ _gfMyTeamUpdateChip((ev?.detail?.team)||''); }catch(_){}
+  // Invalidar cache que dependa del equipo (no del histórico bruto)
+  try{ if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB(); }catch(_){}
+  // Re-render de la vista activa (idempotente — Save también lo invoca)
+  try{ if(typeof _gfTriggerCurrentViewRerender==='function') _gfTriggerCurrentViewRerender(); }catch(_){}
+});
 let _gfReady = false;
 let _gfSyncing = false; // evitar loops cuando propagamos
 
@@ -3011,12 +3023,29 @@ function _gfTriggerCurrentViewRerender(){
   if(!v) return;
   const id = v.id;
   try{
+    // Vistas que dependen del histórico/filtros globales
+    if(id==='view-inicio'      && typeof renderInicio==='function')      renderInicio();
     if(id==='view-evolucion'   && typeof renderEvolucion==='function')   renderEvolucion();
     if(id==='view-powerranking'&& typeof renderPowerRanking==='function')renderPowerRanking();
     if(id==='view-tendencias'  && typeof renderTendencias==='function')  renderTendencias();
     if(id==='view-seleccion'   && typeof renderSeleccion==='function')   renderSeleccion();
     if(id==='view-resumen'     && typeof renderResumen==='function')     renderResumen();
     if(id==='view-historial'   && typeof renderHistory==='function')     renderHistory();
+    if(id==='view-tactica'     && typeof renderTactica==='function')     renderTactica();
+    if(id==='view-informe-plantilla' && typeof _ipInit==='function')     _ipInit();
+    if(id==='view-equipos-ccaa'      && typeof _eqCcaaInit==='function') _eqCcaaInit();
+    if(id==='view-ciclistas-cat'     && typeof _riderCatInit==='function') _riderCatInit();
+    if(id==='view-calendario'  && typeof _calRender==='function')        _calRender();
+    // Vistas que dependen de la prueba ACTIVA cargada (riders[])
+    if(riders && riders.length){
+      if(id==='view-tabla'      && typeof renderAll==='function')        renderAll();
+      if(id==='view-analisis'   && typeof initAnalisis==='function')     initAnalisis();
+      if(id==='view-comparativo'&& typeof initComparativo==='function')  initComparativo();
+      if(id==='view-equipos'    && typeof renderTeamComparison==='function') renderTeamComparison(false);
+      if(id==='view-graficos'   && typeof renderCharts==='function')     renderCharts();
+      if(id==='view-top10'      && typeof renderTop10==='function')      renderTop10();
+      if(id==='view-validacion' && typeof detectAnomalies==='function')  detectAnomalies();
+    }
   }catch(e){ console.warn('[gf] error re-renderizando',id,e); }
 }
 
