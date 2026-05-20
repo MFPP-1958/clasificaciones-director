@@ -1057,6 +1057,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       </div>
       <div class="nav-section-items">
         <button class="nav-btn" data-view="view-validacion" data-label="Validación" onclick="showView('view-validacion')"><span class="nav-icon">⚠️</span><span class="nav-label"> Validación</span></button>
+        <button class="nav-btn" data-view="view-equipos-ccaa" data-label="Equipos y CCAA" onclick="showView('view-equipos-ccaa')"><span class="nav-icon">🗺️</span><span class="nav-label"> Equipos y CCAA</span></button>
         <button class="nav-btn" id="navBtnGestion" data-view="view-gestion" data-label="Gestión" onclick="_gOpenPanel()" style="display:none"><span class="nav-icon">⚙️</span><span class="nav-label"> Gestión</span></button>
       </div>
     </div>
@@ -2474,6 +2475,25 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
       </section>
     </div>
 
+    <div id="view-equipos-ccaa" class="spa-view">
+      <section class="panel">
+        <div class="section-title"><h2>🗺️ Equipos y Comunidad Autónoma</h2></div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#1e3a8a;line-height:1.55;margin-bottom:14px">
+          Listado de todos los equipos detectados en tu histórico con la CCAA dominante de cada uno.
+          <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:6px;font-weight:700">⚠️ Conflicto</span> = el mismo equipo aparece con CCAA distintas en diferentes pruebas.
+          <span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:6px;font-weight:700">❌ Sin CCAA</span> = el equipo no tiene CCAA asignada en ninguna prueba.
+          Pulsa <b>Aplicar</b> para propagar la CCAA elegida a TODAS las pruebas donde aparece ese equipo (en todos los años).
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+          <button onclick="_eqCcaaInit()" style="background:linear-gradient(135deg,#1f6feb,#0b2f6b);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer">🔄 Recargar</button>
+          <input id="eqCcaaSearch" placeholder="🔎 Buscar equipo…" oninput="_eqCcaaRender()" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #c7d7f5;border-radius:9px;font-size:13px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;font-weight:700"><input type="checkbox" id="eqCcaaOnlyProblems" onchange="_eqCcaaRender()"> Solo conflictos / sin CCAA</label>
+          <span id="eqCcaaSummary" style="font-size:12px;color:#6b7280;font-weight:700"></span>
+        </div>
+        <div id="eqCcaaTable"></div>
+      </section>
+    </div>
+
     <div id="view-gestion" class="spa-view">
       <section class="panel" style="display:flex;align-items:center;justify-content:center;min-height:300px">
         <div style="text-align:center;color:#9ca3af">
@@ -2921,6 +2941,7 @@ function showView(viewId){
       if(viewId==='view-inicio') renderInicio();
       if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); }
       if(viewId==='view-informe-plantilla') { if(typeof _ipInit==='function') _ipInit(); }
+      if(viewId==='view-equipos-ccaa') { if(typeof _eqCcaaInit==='function') _eqCcaaInit(); }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -3047,6 +3068,7 @@ const ALL_VIEWS = [
   {id:'view-tendencias',  icon:'📉', label:'Tendencias'},
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
   {id:'view-validacion',         icon:'⚠️', label:'Validación'},
+  {id:'view-equipos-ccaa',       icon:'🗺️', label:'Equipos y CCAA'},
   {id:'view-calendario',         icon:'📅', label:'Calendario'},
   {id:'view-informe-plantilla',  icon:'📋', label:'Informe de Plantilla'},
   {id:'view-resumen',            icon:'🏅', label:'Resumen Temporada'},
@@ -3138,7 +3160,7 @@ async function _rbacLoadPerms(role){
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
   if(!data || data.length === 0){
     const defaults = {
-      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion'],
+      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa'],
       CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos'],
       LECTOR:   ['view-carga','view-tabla']
     };
@@ -8615,6 +8637,241 @@ async function propagateRegionChange(riderName, newRegion){
   }catch(e){
     hideLoading();
     alert('Error al actualizar el historial: '+(e.message||e));
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// VISTA "Equipos y CCAA" — gestión coherente de comunidad autónoma
+// por equipo. Detecta el equipo en TODOS los race_results del histórico,
+// agrupa por nombre, calcula la CCAA dominante de sus corredores y
+// permite fijar una CCAA canónica que se propaga a TODAS las pruebas.
+// ═════════════════════════════════════════════════════════════════════
+let _eqCcaaData = []; // [{team, riders:Set, regionCounts:Map, races:Set, totalRows}]
+
+async function _eqCcaaInit(){
+  const box = document.getElementById('eqCcaaTable');
+  const sum = document.getElementById('eqCcaaSummary');
+  if(!_sb){
+    if(box) box.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;font-weight:700">Supabase no disponible.</div>`;
+    return;
+  }
+  if(box) box.innerHTML = `<div style="padding:30px;text-align:center;color:#6b7280">⏳ Cargando histórico…</div>`;
+  if(sum) sum.textContent = '';
+
+  try{
+    const {data:races, error} = await _sb
+      .from('races')
+      .select('id, notes, race_results(name, team)')
+      .eq('race_type','clasificacion');
+    if(error) throw error;
+
+    // Agregar: team → {riders, regionCounts, races, totalRows}
+    const agg = new Map();
+    for(const race of (races||[])){
+      let extra = {};
+      try{ extra = JSON.parse(race.notes||'{}'); }catch(_){}
+      const regions = extra.regions||{};
+      // Normalizar nombres de region para conteo coherente
+      const canon = typeof canonicalRegion==='function' ? canonicalRegion : (s=>s);
+      for(const rr of (race.race_results||[])){
+        const team = (rr.team||'').trim();
+        if(!team) continue;
+        const rider = (rr.name||'').trim();
+        // Buscar región de este corredor en notes.regions (busca por nombre normalizado)
+        let region = '';
+        if(regions[rider]) region = regions[rider];
+        else {
+          const normR = typeof normalizeForMatching==='function' ? normalizeForMatching(rider) : rider.toLowerCase();
+          for(const k of Object.keys(regions)){
+            const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(k) : k.toLowerCase();
+            if(nk===normR){ region = regions[k]; break; }
+          }
+        }
+        region = (region||'').trim();
+        if(region) region = canon(region);
+
+        if(!agg.has(team)) agg.set(team, {team, riders:new Set(), regionCounts:new Map(), races:new Set(), totalRows:0});
+        const a = agg.get(team);
+        a.riders.add(rider);
+        a.races.add(race.id);
+        a.totalRows++;
+        if(region){
+          a.regionCounts.set(region, (a.regionCounts.get(region)||0) + 1);
+        }
+      }
+    }
+
+    _eqCcaaData = [...agg.values()].map(a=>{
+      const counts = [...a.regionCounts.entries()].sort((x,y)=>y[1]-x[1]);
+      const dominant = counts[0]?.[0] || '';
+      const distinctRegions = counts.length;
+      const hasConflict = distinctRegions > 1;
+      const missing = distinctRegions === 0;
+      return {...a, dominant, distinctRegions, hasConflict, missing, counts};
+    });
+    // Orden: conflictos primero, luego missing, luego alfabético
+    _eqCcaaData.sort((a,b)=>{
+      if(a.hasConflict !== b.hasConflict) return a.hasConflict ? -1 : 1;
+      if(a.missing !== b.missing) return a.missing ? -1 : 1;
+      return a.team.localeCompare(b.team);
+    });
+
+    _eqCcaaRender();
+  }catch(e){
+    console.error(e);
+    if(box) box.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;font-weight:700">Error cargando: ${escapeHtml(e.message||String(e))}</div>`;
+  }
+}
+
+function _eqCcaaRender(){
+  const box = document.getElementById('eqCcaaTable');
+  const sum = document.getElementById('eqCcaaSummary');
+  if(!box) return;
+  const q = (document.getElementById('eqCcaaSearch')?.value || '').toLowerCase().trim();
+  const onlyProblems = document.getElementById('eqCcaaOnlyProblems')?.checked;
+
+  let data = _eqCcaaData;
+  if(q) data = data.filter(d=>d.team.toLowerCase().includes(q));
+  if(onlyProblems) data = data.filter(d=>d.hasConflict || d.missing);
+
+  // CCAA disponibles del histórico para el dropdown
+  const allRegions = new Set();
+  for(const d of _eqCcaaData){ for(const [r] of d.counts) allRegions.add(r); }
+  const sortedRegions = [...allRegions].sort();
+
+  // Resumen
+  if(sum){
+    const totalTeams = _eqCcaaData.length;
+    const nConflict = _eqCcaaData.filter(d=>d.hasConflict).length;
+    const nMissing  = _eqCcaaData.filter(d=>d.missing).length;
+    sum.textContent = `${data.length}/${totalTeams} equipos · ⚠️ ${nConflict} conflictos · ❌ ${nMissing} sin CCAA`;
+  }
+
+  if(!data.length){
+    box.innerHTML = `<div style="padding:30px;text-align:center;color:#6b7280">No hay equipos que coincidan con los filtros.</div>`;
+    return;
+  }
+
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#f8fafc">
+        <tr>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#475569">Equipo</th>
+          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#475569;width:80px" title="Número de corredores únicos en histórico">👥 Corredores</th>
+          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#475569;width:80px" title="Número de pruebas donde aparece el equipo">🏁 Pruebas</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569;width:240px">Distribución CCAA actual</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#475569;width:180px">Fijar CCAA</th>
+          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#475569;width:140px">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data.map((d,idx)=>{
+          const rowBg = d.missing ? '#fef2f2' : (d.hasConflict ? '#fffbeb' : '#fff');
+          const badge = d.missing
+            ? `<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800">❌ Sin CCAA</span>`
+            : d.hasConflict
+              ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800">⚠️ Conflicto</span>`
+              : `<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800">✓ OK</span>`;
+          const dist = d.counts.length
+            ? d.counts.map(([r,c])=>`<span style="background:#e0e7ff;color:#3730a3;padding:1px 7px;border-radius:6px;font-size:11px;font-weight:700;margin-right:4px;display:inline-block;margin-bottom:2px">${escapeHtml(r)}×${c}</span>`).join('')
+            : '<span style="color:#9ca3af;font-size:11px">—</span>';
+          const idAttr = `eqCcaaSel_${idx}`;
+          const opts = ['<option value="">— elegir —</option>']
+            .concat(sortedRegions.map(r=>`<option value="${escapeAttr(r)}" ${r===d.dominant?'selected':''}>${escapeHtml(r)}</option>`))
+            .join('');
+          return `<tr style="background:${rowBg};border-top:1px solid #f3f4f6">
+            <td style="padding:10px 12px;font-weight:800;color:#0b2f6b">
+              ${escapeHtml(d.team)}
+              <div style="margin-top:3px">${badge}</div>
+            </td>
+            <td style="padding:10px 12px;text-align:center;font-weight:700;color:#475569">${d.riders.size}</td>
+            <td style="padding:10px 12px;text-align:center;font-weight:700;color:#475569">${d.races.size}</td>
+            <td style="padding:10px 12px">${dist}</td>
+            <td style="padding:10px 12px">
+              <select id="${idAttr}" style="width:100%;border:1.5px solid #c7d7f5;border-radius:7px;padding:6px 8px;font-size:12px;font-weight:700;background:#fff">${opts}</select>
+              <input type="text" placeholder="o escribe nueva CCAA…" oninput="document.getElementById('${idAttr}').value='';this.dataset.custom='1'" style="width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:11px;margin-top:4px" id="${idAttr}_custom">
+            </td>
+            <td style="padding:10px 12px;text-align:center">
+              <button onclick="_eqCcaaApplyTeam('${escapeAttr(d.team)}','${idAttr}')" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-weight:800;font-size:12px;cursor:pointer">✓ Aplicar</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+async function _eqCcaaApplyTeam(team, selectId){
+  const sel = document.getElementById(selectId);
+  const customInp = document.getElementById(selectId+'_custom');
+  const customVal = (customInp?.value||'').trim();
+  const newRegion = customVal || sel?.value || '';
+  if(!newRegion){ alert('Elige una CCAA del desplegable o escribe una nueva en el campo de texto.'); return; }
+  if(!confirm(`¿Aplicar CCAA "${newRegion}" a todos los corredores del equipo "${team}" en TODAS las pruebas del histórico?\n\nEsto sobrescribirá cualquier valor previo.`)) return;
+
+  // Encontrar el registro del equipo en _eqCcaaData
+  const teamData = _eqCcaaData.find(d=>d.team===team);
+  if(!teamData){ alert('Equipo no encontrado en los datos cargados.'); return; }
+
+  showLoading('Aplicando CCAA al equipo…', `Equipo: ${team} · CCAA: ${newRegion}`);
+  try{
+    // Para cada corredor del equipo, propagar la CCAA
+    let totalUpdated = 0;
+    const riders = [...teamData.riders];
+    for(const rider of riders){
+      // Reproducimos la lógica de propagateRegionChange sin alertas intermedias
+      const normTarget = typeof normalizeForMatching==='function' ? normalizeForMatching(rider) : rider.toLowerCase();
+      const {data:races, error} = await _sb
+        .from('races')
+        .select('id, notes, race_results(name, team)')
+        .eq('race_type','clasificacion');
+      if(error) throw error;
+      for(const race of (races||[])){
+        // Solo actualizar pruebas donde este corredor pertenece a este equipo
+        const appearsForThisTeam = (race.race_results||[]).some(rr=>{
+          const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(rr.name||'') : (rr.name||'').toLowerCase();
+          return nk===normTarget && (rr.team||'').trim()===team;
+        });
+        if(!appearsForThisTeam) continue;
+
+        let extra = {};
+        try{ extra = JSON.parse(race.notes||'{}'); }catch(_){}
+        const regions = extra.regions||{};
+        let changed = false;
+        // Buscar clave por nombre exacto o normalizado
+        let found = false;
+        for(const k of Object.keys(regions)){
+          const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(k) : k.toLowerCase();
+          if(nk===normTarget){
+            if(regions[k]!==newRegion){ regions[k] = newRegion; changed = true; }
+            found = true;
+          }
+        }
+        if(!found){
+          const rawName = (race.race_results||[]).find(rr=>{
+            const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(rr.name||'') : (rr.name||'').toLowerCase();
+            return nk===normTarget;
+          })?.name || rider;
+          regions[rawName] = newRegion;
+          changed = true;
+        }
+        if(changed){
+          extra.regions = regions;
+          const {error:updErr} = await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id', race.id);
+          if(!updErr) totalUpdated++;
+        }
+      }
+    }
+    _cachedHistory = null;
+    if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB();
+    hideLoading();
+    alert(`✅ CCAA "${newRegion}" aplicada a ${riders.length} corredor(es) del equipo "${team}" en ${totalUpdated} prueba(s).`);
+    // Recargar la vista
+    _eqCcaaInit();
+  }catch(e){
+    hideLoading();
+    console.error(e);
+    alert('Error aplicando la CCAA al equipo: '+(e.message||String(e)));
   }
 }
 
