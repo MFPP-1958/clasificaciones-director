@@ -1091,6 +1091,19 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
           <option value="">Todas las CCAA</option>
         </select>
       </div>
+      <!-- ── Selector Mi Equipo (Fase 1 — persistente y siempre visible) ── -->
+      <div style="display:flex;align-items:center;gap:6px;position:relative">
+        <label style="font-size:12px;font-weight:700;color:#475569">🏆 Mi Equipo:</label>
+        <div style="position:relative">
+          <input id="gfMyTeam" type="text" autocomplete="off"
+                 placeholder="Selecciona tu equipo…"
+                 oninput="_gfMyTeamSearch()" onfocus="_gfMyTeamSearch()" onblur="setTimeout(_gfMyTeamCloseDropdown,180)"
+                 style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:200px;max-width:240px">
+          <div id="gfMyTeamDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;background:#fff;border:1.5px solid #fcd34d;border-radius:8px;margin-top:3px;box-shadow:0 8px 20px rgba(0,0,0,.12);z-index:50"></div>
+        </div>
+        <button onclick="_gfMyTeamUseLastRace()" title="Usar el equipo de la última prueba cargada" style="background:#fef3c7;border:1.5px solid #fcd34d;border-radius:8px;padding:5px 8px;font-size:11px;font-weight:700;color:#78350f;cursor:pointer">⚡</button>
+        <button onclick="_gfMyTeamSave()" id="gfMyTeamSaveBtn" title="Guardar selección" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:800;cursor:pointer">💾</button>
+      </div>
       <button onclick="_gfReset()" style="background:#fff;border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#475569;cursor:pointer" title="Restablecer ambos filtros">✖ Limpiar</button>
       <span id="gfStatus" style="font-size:11px;color:#0369a1;font-weight:600;margin-left:auto"></span>
     </div>
@@ -2776,12 +2789,164 @@ if(document.readyState==='loading'){
 // ═══════════════════════════════════════════════════════════════════════════
 const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
 const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
-const _GF_VIEWS_USING_HISTORY = ['view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla'];
+const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica'];
 
 let _globalFilters = {
   year:   localStorage.getItem('gf_year')   || '',
   region: localStorage.getItem('gf_region') || ''
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MI EQUIPO GLOBAL — selector persistente en la barra de filtros
+// (Fase 1 del rediseño: ubicación + autocompletar + persistencia + cascada)
+// ═══════════════════════════════════════════════════════════════════════════
+function _gfMyTeamInit(){
+  // Restaurar valor desde la variable global ya existente (que se carga
+  // desde localStorage al arrancar el script — ver definición de `myTeam`).
+  const inp = document.getElementById('gfMyTeam');
+  if(!inp) return;
+  inp.value = (typeof myTeam!=='undefined' && myTeam) ? myTeam : '';
+  _gfMyTeamUpdateChip(inp.value);
+}
+
+function _gfMyTeamGetAvailableTeams(){
+  // Lista única de equipos del histórico (más frecuente primero)
+  const counts = new Map();
+  if(typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)){
+    for(const race of _cachedHistory){
+      for(const r of (race.riders||[])){
+        const t = (r.team||'').trim();
+        if(!t) continue;
+        counts.set(t, (counts.get(t)||0)+1);
+      }
+    }
+  }
+  return [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([t,n])=>({team:t, n}));
+}
+
+function _gfMyTeamSearch(){
+  const inp = document.getElementById('gfMyTeam');
+  const dd  = document.getElementById('gfMyTeamDropdown');
+  if(!inp || !dd) return;
+  const q = (inp.value||'').toLowerCase().trim();
+  const all = _gfMyTeamGetAvailableTeams();
+  const matches = q ? all.filter(x=>x.team.toLowerCase().includes(q)) : all;
+  const top = matches.slice(0, 50);
+  if(!top.length){
+    dd.innerHTML = `<div style="padding:10px 14px;color:#9ca3af;font-size:12px">Sin coincidencias en el histórico.</div>`;
+  } else {
+    dd.innerHTML = top.map(x=>{
+      const safe = escapeHtml(x.team);
+      return `<div onclick="_gfMyTeamPick('${escapeAttr(x.team)}')" style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #fef3c7;display:flex;justify-content:space-between;gap:8px" onmouseenter="this.style.background='#fffbeb'" onmouseleave="this.style.background=''"><span style="font-weight:700;color:#78350f">${safe}</span><span style="font-size:10px;color:#92400e;font-weight:700;background:#fef3c7;padding:1px 6px;border-radius:4px">×${x.n}</span></div>`;
+    }).join('');
+  }
+  dd.style.display = 'block';
+}
+
+function _gfMyTeamPick(team){
+  const inp = document.getElementById('gfMyTeam');
+  if(inp) inp.value = team;
+  _gfMyTeamCloseDropdown();
+  // Marcar el botón Guardar como "pendiente" (cambio sin guardar)
+  const btn = document.getElementById('gfMyTeamSaveBtn');
+  if(btn){ btn.style.background = '#f59e0b'; btn.title = 'Hay cambios sin guardar — pulsa para confirmar'; }
+}
+
+function _gfMyTeamCloseDropdown(){
+  const dd = document.getElementById('gfMyTeamDropdown');
+  if(dd) dd.style.display = 'none';
+}
+
+function _gfMyTeamUseLastRace(){
+  // "Ajustar con el equipo de la última prueba cargada"
+  // Estrategia: si hay una prueba activa en memoria (`riders`), busca el equipo
+  // más frecuente entre esos riders. Si no, toma la última del histórico.
+  let pickedTeam = '';
+  try{
+    if(typeof riders !== 'undefined' && Array.isArray(riders) && riders.length){
+      const c = new Map();
+      for(const r of riders){
+        const t = (r.team||'').trim();
+        if(t) c.set(t, (c.get(t)||0)+1);
+      }
+      const sorted = [...c.entries()].sort((a,b)=>b[1]-a[1]);
+      if(sorted.length) pickedTeam = sorted[0][0];
+    }
+    if(!pickedTeam && typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory) && _cachedHistory.length){
+      // Tomar la prueba más reciente y su equipo más representado
+      const sorted = [..._cachedHistory].sort((a,b)=>{
+        const da = _parseSpanishDate(a.raceDate)||a.raceDate||'';
+        const db = _parseSpanishDate(b.raceDate)||b.raceDate||'';
+        return db.localeCompare(da);
+      });
+      const last = sorted[0];
+      if(last){
+        const c = new Map();
+        for(const r of (last.riders||[])){
+          const t = (r.team||'').trim();
+          if(t) c.set(t, (c.get(t)||0)+1);
+        }
+        const s = [...c.entries()].sort((a,b)=>b[1]-a[1]);
+        if(s.length) pickedTeam = s[0][0];
+      }
+    }
+  }catch(e){ console.warn(e); }
+  if(!pickedTeam){
+    alert('No se pudo deducir el equipo: no hay prueba cargada ni histórico disponible.');
+    return;
+  }
+  _gfMyTeamPick(pickedTeam);
+}
+
+async function _gfMyTeamSave(){
+  const inp = document.getElementById('gfMyTeam');
+  if(!inp) return;
+  const val = (inp.value||'').trim();
+  // Actualizar variable global existente
+  if(typeof setMyTeam === 'function'){
+    setMyTeam(val);
+  } else {
+    // Fallback directo a localStorage si setMyTeam aún no está definido
+    try{ localStorage.setItem('myTeam', val); }catch(_){}
+    try{ myTeam = val; }catch(_){}
+  }
+  // Persistencia adicional por usuario en Supabase (si la columna existe)
+  if(_sb && _rbacUser?.email){
+    try{
+      await _sb.from('app_users').update({my_team: val}).eq('email', _rbacUser.email);
+    }catch(_){ /* columna no existe aún — solo se persiste local */ }
+  }
+  // Visual: botón vuelve a verde
+  const btn = document.getElementById('gfMyTeamSaveBtn');
+  if(btn){ btn.style.background = '#10b981'; btn.title = 'Guardar selección'; }
+  _gfMyTeamUpdateChip(val);
+  // Emitir evento para que los módulos que escuchan se refresquen en cascada
+  try{ window.dispatchEvent(new CustomEvent('myteam:changed', {detail:{team:val}})); }catch(_){}
+  // Refrescar la vista activa
+  _gfTriggerCurrentViewRerender();
+  // Toast confirmación
+  try{
+    const t=document.createElement('div');
+    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 18px;border-radius:10px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:99999;font-size:13px';
+    t.textContent = val ? `🏆 Mi Equipo: ${val}` : '🏆 Mi Equipo desactivado (verás datos globales)';
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(),3000);
+  }catch(_){}
+}
+
+function _gfMyTeamUpdateChip(val){
+  const inp = document.getElementById('gfMyTeam');
+  if(!inp) return;
+  if(val){
+    inp.style.background = '#fffbeb';
+    inp.style.color = '#78350f';
+    inp.style.borderColor = '#fcd34d';
+  } else {
+    inp.style.background = '#fff';
+    inp.style.color = '#9ca3af';
+    inp.style.borderColor = '#e5e7eb';
+  }
+}
 let _gfReady = false;
 let _gfSyncing = false; // evitar loops cuando propagamos
 
@@ -2893,12 +3058,14 @@ function _gfShowHideBar(viewId){
   if(shouldShow && !_gfReady){
     _gfPopulateYears();
     _gfPopulateRegions();
+    _gfMyTeamInit();
     _gfUpdateStatus();
     _gfReady = true;
   } else if(shouldShow){
     // Repoblar por si llegaron nuevos datos
     _gfPopulateYears();
     _gfPopulateRegions();
+    _gfMyTeamInit();
     _gfUpdateStatus();
   }
   if(shouldShow) _gfApplyToLocalFilters();
@@ -3167,6 +3334,13 @@ async function _rbacLogin(){
   }
   _rbacUser = {email: data.email, role: data.role, name: data.name||data.email};
   localStorage.setItem('_rbacSession', JSON.stringify(_rbacUser));
+  // Si la BD tiene la columna my_team, restauramos el equipo de este director.
+  // localStorage ya tiene "myTeam" persistido, pero la BD prevalece si hay valor.
+  try{
+    if(data.my_team && typeof setMyTeam==='function'){
+      setMyTeam(data.my_team);
+    }
+  }catch(_){}
   await _rbacLoadPerms(data.role);
   _rbacApplySession();
 }
