@@ -3125,10 +3125,12 @@ function showView(viewId){
         renderTeamTimeRanking();
         if(viewId==='view-comparativo') initComparativo();
         if(viewId==='view-analisis') initAnalisis();
-        if(viewId==='view-tactica') renderTactica();
         if(viewId==='view-validacion') detectAnomalies();
         if(viewId==='view-top10') renderTop10();
       }
+      // view-tactica: se renderiza SIEMPRE (con o sin riders) para mostrar
+      // su estado vacío amable (Fase 2 no-bloqueo).
+      if(viewId==='view-tactica') renderTactica();
       if(viewId==='view-inicio') renderInicio();
       if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); }
       if(viewId==='view-informe-plantilla') { if(typeof _ipInit==='function') _ipInit(); }
