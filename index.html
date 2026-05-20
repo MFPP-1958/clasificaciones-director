@@ -4269,6 +4269,33 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     _fccvShowPickerForDate(name, dateIso, sameDay);
     return;
   }
+  // No hay match en el scrape actual. Ofrecer sincronizar años pasados antes
+  // de rendirse — la FCCV no borra pruebas históricas, solo las saca del
+  // calendario "valenciana/{año}" cuando ya se han disputado dentro de ese
+  // año en curso. Sincronizando años anteriores recuperamos sus fccvId.
+  const targetYear = dateIso ? dateIso.slice(0,4) : '';
+  if(targetYear){
+    if(confirm(`No encontré esta prueba en el scrape actual.\n¿Quieres que sincronice el calendario FCCV de ${targetYear} para intentar localizarla?\n\n(Esto consulta fccv.es y puede tardar unos segundos.)`)){
+      try{
+        // Forzar año en el dropdown y sincronizar
+        const yearSel = document.getElementById('fccvYear');
+        if(yearSel){
+          // Asegurar que la opción existe
+          if(![...yearSel.options].some(o=>o.value===targetYear)){
+            const opt = document.createElement('option');
+            opt.value = targetYear; opt.textContent = targetYear;
+            yearSel.appendChild(opt);
+          }
+          yearSel.value = targetYear;
+        }
+        await _fccvSync();
+        // Reintentar tras la sincronización
+        const m2 = _calFindFccvForRace(fakeRace);
+        if(m2){ _fccvShowRaceDetails(m2.fccvId); return; }
+      }catch(e){ console.error(e); }
+    }
+  }
+
   // Diagnóstico avanzado: muestra fechas reales del scrape cercanas a la pedida
   const allDates = (_fccvLastAllRaces||[]).filter(c=>c.date).map(c=>c.date).sort();
   const datesNear = [];
@@ -5053,14 +5080,86 @@ function _fccvShowDebug(){
   document.body.appendChild(overlay);
 }
 
+// Descarga bajo demanda la ficha individual de una prueba que no esté en
+// cache. La FCCV expone cada prueba bajo URLs con patrones consistentes; se
+// prueban varios hasta encontrar uno que responda. El HTML resultante se
+// guarda en _fccvDetailsById[id] para que futuras consultas sean instantáneas.
+async function _fccvFetchDetailById(fccvId, knownUrl){
+  if(!fccvId) return null;
+  if(_fccvDetailsById[fccvId]) return _fccvDetailsById[fccvId];
+  // Si tenemos un detailUrl conocido (extraído del scrape) lo usamos primero;
+  // luego variantes habituales en Joomla SmartWeb de la FCCV.
+  const candidates = [];
+  if(knownUrl) candidates.push(knownUrl);
+  candidates.push(
+    `https://fccv.es/index.php/es/smartweb/prueba/${fccvId}`,
+    `https://fccv.es/index.php/es/smartweb/seccion/prueba/${fccvId}`,
+    `https://fccv.es/index.php/component/smartweb/?view=prueba&id=${fccvId}`,
+    `https://fccv.es/index.php?option=com_smartweb&view=prueba&id=${fccvId}`
+  );
+
+  for(const url of candidates){
+    try{
+      const html = await _fccvFetch(url);
+      if(!html || html.length<500) continue;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      // Estrategia 1: existe el modal embebido (mismo patrón que el calendario)
+      const modal = doc.querySelector(`#prueba${fccvId}`) ||
+                    doc.querySelector('[id^="prueba"]');
+      let content = '';
+      if(modal){
+        content = modal.innerHTML || '';
+      } else {
+        // Estrategia 2: extraer el contenedor principal de la página
+        const main = doc.querySelector('article, main, #content, .item-page, .smartweb-prueba, .moduletable') ||
+                     doc.querySelector('body');
+        if(main){
+          // Quitar nav/header/footer obvios
+          main.querySelectorAll('nav, header, footer, script, style, .breadcrumb, #aside').forEach(el=>el.remove());
+          content = main.innerHTML || '';
+        }
+      }
+      if(content && content.length>200){
+        _fccvDetailsById[fccvId] = content;
+        try{ _fccvPersistScrape(); }catch(_){}
+        return content;
+      }
+    }catch(e){
+      console.warn(`[FCCV] fetch directo ${url} falló:`, e.message);
+    }
+  }
+  return null;
+}
+
 // Muestra los detalles oficiales de una prueba FCCV (categorías completas,
 // reglamento, contactos) en un modal propio. Reescribe los enlaces relativos
 // del HTML original para que apunten a fccv.es y se abran en pestaña nueva.
-function _fccvShowRaceDetails(pruebaId){
-  const raw = _fccvDetailsById[pruebaId];
+async function _fccvShowRaceDetails(pruebaId){
+  let raw = _fccvDetailsById[pruebaId];
   if(!raw){
-    alert('No se encontraron datos de esta prueba en el HTML descargado.');
-    return;
+    // No tenemos el modal en cache. Mostrar loader y descargar individualmente
+    // desde la FCCV (proxy CORS). Útil para pruebas pasadas que la FCCV ha
+    // sacado del calendario público pero cuya ficha individual sigue accesible.
+    const loaderId = '_fccvLoadingDialog';
+    const old = document.getElementById(loaderId);
+    if(old) old.remove();
+    const ldr = document.createElement('div');
+    ldr.id = loaderId;
+    ldr.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center';
+    ldr.innerHTML = `<div style="background:#fff;border-radius:14px;padding:24px 32px;text-align:center;font-family:system-ui;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="font-size:28px;margin-bottom:10px">⏳</div>
+      <div style="font-weight:800;color:#0b2f6b;font-size:14px">Descargando ficha FCCV...</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:4px">prueba ${pruebaId}</div>
+    </div>`;
+    document.body.appendChild(ldr);
+    // Buscar URL conocida en el scrape acumulado (si existe)
+    const known = (_fccvLastAllRaces||[]).find(r=>r.fccvId===pruebaId);
+    raw = await _fccvFetchDetailById(pruebaId, known?.fccvDetailUrl);
+    ldr.remove();
+    if(!raw){
+      alert(`No se pudo descargar la ficha de la prueba ${pruebaId} desde la FCCV.\nReintenta más tarde — los proxies CORS pueden estar saturados.`);
+      return;
+    }
   }
   // Reescribir URLs relativas → absolutas hacia fccv.es y forzar target="_blank"
   let html = raw
