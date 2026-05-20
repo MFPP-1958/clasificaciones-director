@@ -4007,6 +4007,9 @@ const _FCCV_PROXIES = [
 let _fccvLastResults = [];
 let _fccvLastAllRaces = [];
 let _fccvPanelOpen = true;
+// Mapa { '12345': '<div>...modal HTML...</div>' } con los modales originales
+// de la FCCV (que contienen reglamento, info completa, contactos...).
+let _fccvDetailsById = {};
 
 function _fccvToggle(){
   _fccvPanelOpen = !_fccvPanelOpen;
@@ -4153,6 +4156,14 @@ function _fccvParseHtml(html, defaultYear){
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const races = [];
   const seen = new Set();
+  // Indexar todos los modales <div id="pruebaXXXXX"> con la info completa de
+  // cada prueba (categorías sin truncar, reglamento, contactos...). Los
+  // mostraremos en una ventana propia al hacer clic en "Ver".
+  _fccvDetailsById = {};
+  doc.querySelectorAll('div[id^="prueba"]').forEach(el=>{
+    const m = el.id.match(/^prueba(\d+)$/);
+    if(m) _fccvDetailsById[m[1]] = el.innerHTML || '';
+  });
   const yearStr = defaultYear ? String(defaultYear) : String(new Date().getFullYear());
 
   const push = (date, name, location, rawText, modality, category, fccvId) => {
@@ -4626,15 +4637,16 @@ function _fccvRenderResults(races){
           const [y,m,d] = r.date.split('-');
           const dateDisplay = `${d}/${m}/${y}`;
           const catLabel = r.category || _fccvExtractCategoryFromText(r.rawText) || '—';
-          // Enlace a la ficha oficial FCCV (reglamento, info detallada)
+          // Botón "Info": abre la ficha oficial FCCV (reglamento, categorías
+          // completas, contactos) en una ventana propia, leída del modal que
+          // ya descargamos junto al calendario — instantáneo, sin volver a
+          // filtrar en fccv.es.
           const fccvYear = (r.date||'').slice(0,4) || new Date().getFullYear();
           const fccvBase = `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${fccvYear}`;
-          const fccvLink = r.fccvId
-            ? `${fccvBase}#prueba${r.fccvId}`
-            : fccvBase;
-          const linkBtn = r.fccvId
-            ? `<a href="${fccvLink}" target="_blank" rel="noopener" title="Abrir ficha oficial FCCV (prueba ${r.fccvId})" style="display:inline-flex;align-items:center;gap:4px;background:#1e40af;color:#fff;text-decoration:none;border-radius:7px;padding:5px 9px;font-weight:800;font-size:12px;cursor:pointer">🔗 Ver</a>`
-            : `<a href="${fccvBase}" target="_blank" rel="noopener" title="Abrir calendario FCCV (no se detectó ID de prueba en esta fila)" style="display:inline-flex;align-items:center;gap:4px;background:#94a3b8;color:#fff;text-decoration:none;border-radius:7px;padding:5px 9px;font-weight:700;font-size:11px;cursor:pointer">🔗</a>`;
+          const hasDetails = r.fccvId && _fccvDetailsById[r.fccvId];
+          const linkBtn = hasDetails
+            ? `<button onclick="_fccvShowRaceDetails('${r.fccvId}')" title="Ver ficha oficial FCCV (reglamento, info)" style="display:inline-flex;align-items:center;gap:4px;background:#1e40af;color:#fff;border:none;border-radius:7px;padding:5px 9px;font-weight:800;font-size:12px;cursor:pointer">ℹ️ Info</button>`
+            : `<a href="${fccvBase}" target="_blank" rel="noopener" title="Abrir calendario FCCV (no se detectaron datos de esta prueba)" style="display:inline-flex;align-items:center;gap:4px;background:#94a3b8;color:#fff;text-decoration:none;border-radius:7px;padding:5px 9px;font-weight:700;font-size:11px;cursor:pointer">🔗</a>`;
           return `<tr style="border-top:1px solid #fef3c7">
             <td style="padding:9px 12px;font-family:monospace;font-weight:700;color:#0b2f6b">${dateDisplay}</td>
             <td style="padding:9px 12px;font-weight:700">${escapeHtml(r.name)}</td>
@@ -4735,6 +4747,77 @@ function _fccvShowDebug(){
     </div>
   </div>`;
   document.body.appendChild(overlay);
+}
+
+// Muestra los detalles oficiales de una prueba FCCV (categorías completas,
+// reglamento, contactos) en un modal propio. Reescribe los enlaces relativos
+// del HTML original para que apunten a fccv.es y se abran en pestaña nueva.
+function _fccvShowRaceDetails(pruebaId){
+  const raw = _fccvDetailsById[pruebaId];
+  if(!raw){
+    alert('No se encontraron datos de esta prueba en el HTML descargado.');
+    return;
+  }
+  // Reescribir URLs relativas → absolutas hacia fccv.es y forzar target="_blank"
+  let html = raw
+    .replace(/(href|src)=(["'])\/(?!\/)/g, '$1=$2https://fccv.es/')
+    .replace(/(href|src)=(["'])(?!https?:|mailto:|tel:|#)([^"']+)\2/g, '$1=$2https://fccv.es/$3$2')
+    .replace(/<a\b(?![^>]*\btarget=)/g, '<a target="_blank" rel="noopener"');
+
+  // Localizar nombre y fecha desde _fccvLastResults para mostrarlos como título
+  const race = (_fccvLastResults||[]).find(r=>r.fccvId===pruebaId)
+            || (_fccvLastAllRaces||[]).find(r=>r.fccvId===pruebaId);
+  const titleName = race ? race.name : `Prueba ${pruebaId}`;
+  const titleDate = race ? (()=>{ const [y,m,d]=race.date.split('-'); return `${d}/${m}/${y}`; })() : '';
+
+  // Construir lista de enlaces de descarga (PDF reglamento, etc.) extraídos
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const downloads = [];
+  tmp.querySelectorAll('a[href]').forEach(a=>{
+    const href = a.getAttribute('href') || '';
+    const txt = (a.textContent||'').trim();
+    if(/\.(pdf|docx?|xlsx?|zip)(\?|$)/i.test(href) || /reglament|inscripci|info|bases|cartel/i.test(txt)){
+      downloads.push({href, txt: txt || href.split('/').pop()});
+    }
+  });
+  const dlHtml = downloads.length
+    ? `<div style="margin-bottom:14px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px">
+        <div style="font-weight:800;color:#1d4ed8;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px">📎 Descargas / enlaces directos</div>
+        ${downloads.map(d=>`<a href="${d.href}" target="_blank" rel="noopener" style="display:inline-block;margin:3px 6px 3px 0;padding:6px 12px;background:#fff;color:#1d4ed8;text-decoration:none;border:1px solid #bfdbfe;border-radius:7px;font-weight:700;font-size:12px">${escapeHtml(d.txt.slice(0,80))}</a>`).join('')}
+      </div>`
+    : '';
+
+  const old = document.getElementById('_fccvDetailsDialog');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = '_fccvDetailsDialog';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  const fccvUrl = race ? `https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/${race.date.slice(0,4)}` : 'https://fccv.es/';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:800px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="background:linear-gradient(135deg,#1e40af,#0b2f6b);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px">Ficha oficial FCCV · prueba ${pruebaId}${titleDate?` · ${titleDate}`:''}</div>
+          <div style="font-size:17px;font-weight:800;line-height:1.25">${escapeHtml(titleName)}</div>
+        </div>
+        <button onclick="document.getElementById('_fccvDetailsDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer;flex-shrink:0">✕</button>
+      </div>
+      <div style="padding:18px 20px;overflow-y:auto;flex:1;font-size:13px;line-height:1.5;color:#1f2937">
+        ${dlHtml}
+        <div class="_fccvDetailContent" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px">${html}</div>
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb">
+        <a href="${fccvUrl}" target="_blank" rel="noopener" style="background:#fff;color:#0b2f6b;border:1.5px solid #0b2f6b;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;text-decoration:none">↗ Abrir calendario FCCV</a>
+        <button onclick="document.getElementById('_fccvDetailsDialog').remove()" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-weight:700;cursor:pointer">Cerrar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  // Estilo defensivo para tablas/imágenes dentro del modal FCCV
+  const style = document.createElement('style');
+  style.textContent = `._fccvDetailContent img{max-width:100%;height:auto}._fccvDetailContent table{width:100%;border-collapse:collapse;font-size:12px}._fccvDetailContent td,._fccvDetailContent th{padding:5px 8px;border:1px solid #e5e7eb;text-align:left}._fccvDetailContent a{color:#1d4ed8;font-weight:600}`;
+  overlay.appendChild(style);
 }
 
 async function _fccvAddRace(idx){
