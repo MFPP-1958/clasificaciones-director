@@ -9905,46 +9905,66 @@ async function renderInicio(){
       <div class="evol-kpi"><div class="ek-label">${team?'Podios del equipo':'Podios globales'} (30d)</div><div class="ek-value">${podiums30}</div><div class="ek-sub">vs ${podiumsPrev} mes anterior${trendChip(podiumDelta)}</div></div>`;
   }
 
-  // ─── 3. Próximas pruebas (lee el scrape FCCV cacheado) ──────────────
+  // ─── 3. Próximas pruebas (de TU calendario planificado, NO del scrape FCCV) ──
+  // El usuario quiere ver SOLO las pruebas que él ha añadido a su calendario,
+  // que coinciden con su categoría/modalidad/género. Si no hay ninguna,
+  // sugerimos añadirlas desde la sección Calendario.
   const lastBox = document.getElementById('inicioLastRace');
   if(lastBox){
-    const fccvScrape = (typeof _fccvLastAllRaces !== 'undefined' && Array.isArray(_fccvLastAllRaces)) ? _fccvLastAllRaces : [];
-    // Filtrar próximas (fecha >= hoy a medianoche) y ordenar por fecha
+    // Asegurar que _calPlanned está cargado (si entras directo a Inicio sin
+    // pasar por Calendario, podría estar vacío). En ese caso llamamos a
+    // _calLoadData() y volvemos a renderizar.
+    if(typeof _calPlanned === 'undefined' || (Array.isArray(_calPlanned) && !_calPlanned.length)){
+      if(typeof _calLoadData === 'function'){
+        try{
+          await _calLoadData();
+        }catch(_){}
+      }
+    }
+    const planned = (typeof _calPlanned !== 'undefined' && Array.isArray(_calPlanned)) ? _calPlanned : [];
+    // Filtrar próximas (dateStr o date >= hoy) y ordenar
     const todayIso = new Date().toISOString().slice(0,10);
-    const upcoming = fccvScrape
-      .filter(r => r.date && r.date >= todayIso)
-      .sort((a,b) => (a.date||'').localeCompare(b.date||''))
+    const upcoming = planned
+      .map(p => ({
+        ...p,
+        iso: p.dateStr || (p.date instanceof Date ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}-${String(p.date.getDate()).padStart(2,'0')}` : '')
+      }))
+      .filter(p => p.iso && p.iso >= todayIso)
+      .sort((a,b) => a.iso.localeCompare(b.iso))
       .slice(0, 5);
 
     if(upcoming.length){
-      // Calcular días que faltan
       const daysUntil = (iso)=>{
         const t = new Date(iso+'T12:00:00').getTime();
         return Math.round((t - new Date().setHours(12,0,0,0)) / 86400000);
       };
-      const next = upcoming[0];
-      const nextDays = daysUntil(next.date);
-      const labelDays = nextDays===0 ? '<strong>HOY</strong>' : nextDays===1 ? '<strong>MAÑANA</strong>' : `en <strong>${nextDays} días</strong>`;
-      const [y,m,d] = next.date.split('-');
       const fmtDate = (iso)=>{ const [yy,mm,dd]=iso.split('-'); return `${dd}/${mm}/${yy}`; };
-      // Banner destacado para la siguiente
+      const next = upcoming[0];
+      const nextDays = daysUntil(next.iso);
+      const labelDays = nextDays===0 ? '<strong>HOY</strong>' : nextDays===1 ? '<strong>MAÑANA</strong>' : `en <strong>${nextDays} días</strong>`;
+      // Al hacer clic en una prueba con fccvId guardado, abrimos la ficha;
+      // si no tiene, vamos al Calendario.
+      const handlerFor = (r) => r.fccvId
+        ? `_fccvShowRaceDetails('${escapeAttr(r.fccvId)}')`
+        : `showView('view-calendario')`;
+
       lastBox.innerHTML = `
-        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;margin-bottom:12px;cursor:pointer" onclick="showView('view-calendario')">
+        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;margin-bottom:12px;cursor:pointer" onclick="${handlerFor(next)}">
           <div style="font-size:11px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">🏁 Próxima prueba ${labelDays}</div>
           <div style="font-size:18px;font-weight:900;color:#78350f;margin-bottom:6px">${escapeHtml(next.name)}</div>
           <div style="font-size:13px;color:#92400e;display:flex;flex-wrap:wrap;gap:12px">
-            <span>📅 ${fmtDate(next.date)}</span>
-            ${next.location?`<span>📍 ${escapeHtml(next.location)}</span>`:''}
+            <span>📅 ${fmtDate(next.iso)}</span>
+            ${next.localidad?`<span>📍 ${escapeHtml(next.localidad)}</span>`:''}
             ${next.modality?`<span>🚴 ${escapeHtml(next.modality)}</span>`:''}
-            ${next.category?`<span>🎽 ${escapeHtml(next.category.slice(0,28))}</span>`:''}
+            ${next.cat?`<span>🎽 ${escapeHtml(String(next.cat).slice(0,28))}</span>`:''}
           </div>
         </div>
         ${upcoming.length > 1 ? `
         <div style="font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Siguientes ${upcoming.length-1}</div>
         ${upcoming.slice(1).map(r=>{
-          const dn = daysUntil(r.date);
-          return `<div onclick="${r.fccvId?`_fccvShowRaceDetails('${escapeAttr(r.fccvId)}')`:`showView('view-calendario')`}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:#f9fafb;border:1px solid #f3f4f6;margin-bottom:5px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#f9fafb'">
-            <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:3px 8px;border-radius:6px;min-width:48px;text-align:center">${fmtDate(r.date).slice(0,5)}</div>
+          const dn = daysUntil(r.iso);
+          return `<div onclick="${handlerFor(r)}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:#f9fafb;border:1px solid #f3f4f6;margin-bottom:5px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#f9fafb'">
+            <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:3px 8px;border-radius:6px;min-width:48px;text-align:center">${fmtDate(r.iso).slice(0,5)}</div>
             <div style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0b2f6b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.name)}</div>
             <div style="font-size:10.5px;color:#6b7280">${dn===0?'hoy':dn===1?'mañana':`+${dn}d`}</div>
           </div>`;
@@ -9952,13 +9972,12 @@ async function renderInicio(){
         ` : ''}
         <div style="margin-top:10px"><button class="btn light" onclick="showView('view-calendario')" style="font-size:12px">📅 Ver calendario completo</button></div>`;
     } else {
-      // Sin pruebas próximas en scrape
-      const hasScrape = fccvScrape.length > 0;
+      // Sin pruebas planificadas: invitar a añadirlas desde el Calendario
       lastBox.innerHTML = `
         <div class="inicio-empty">
           <div style="font-size:32px;margin-bottom:8px">📅</div>
-          <div style="font-weight:700;color:#374151;margin-bottom:4px">${hasScrape ? 'Sin pruebas próximas' : 'Sin datos del calendario FCCV'}</div>
-          <div style="font-size:13px;margin-bottom:12px">${hasScrape ? 'No hay pruebas programadas en los próximos días.' : 'Sincroniza con la Federación para ver el calendario.'}</div>
+          <div style="font-weight:700;color:#374151;margin-bottom:4px">No tienes pruebas planificadas próximas</div>
+          <div style="font-size:13px;margin-bottom:12px">Añade tus próximas carreras desde el Calendario.<br>Si tienes Mi Equipo + Categoría + Modalidad configurados, el FCCV te ayudará a localizarlas.</div>
           <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-calendario')">📅 Ir al calendario</button>
         </div>`;
     }
