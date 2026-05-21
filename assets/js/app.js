@@ -9992,25 +9992,18 @@ async function renderInicio(){
     const pendings = [];
     try{
       // 1) Equipos sin CCAA en el histórico
+      // IMPORTANTE: _cachedHistory ya viene procesado por _sbLoadHistory,
+      // donde cada rider tiene su `region` ya extraída de notes.regions[name].
+      // No hay que volver a parsear notes (ni siquiera está en el cache).
+      const canon = typeof canonicalRegion==='function' ? canonicalRegion : (s=>s);
       const teamRegions = new Map();
       history.forEach(race => {
-        let extra = {};
-        try{ extra = JSON.parse(race.notes||'{}'); }catch(_){}
-        const regions = extra.regions||{};
         (race.riders||[]).forEach(r => {
           const t = (r.team||'').trim();
           if(!t) return;
           if(!teamRegions.has(t)) teamRegions.set(t, new Set());
-          // Buscar región del rider
-          let region = regions[r.name] || '';
-          if(!region){
-            const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(r.name) : (r.name||'').toLowerCase();
-            for(const k of Object.keys(regions)){
-              const kn = typeof normalizeForMatching==='function' ? normalizeForMatching(k) : k.toLowerCase();
-              if(kn===nk){ region = regions[k]; break; }
-            }
-          }
-          if(region) teamRegions.get(t).add(region);
+          const region = (r.region||'').trim();
+          if(region) teamRegions.get(t).add(canon(region));
         });
       });
       let teamsMissing = 0, teamsConflict = 0;
