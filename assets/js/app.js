@@ -9786,6 +9786,111 @@ function _mostrarDialogoDuplicado(fecha, nombreExistente, nCorredores){
 // VISTA INICIO — Dashboard de entrada
 // Lee de: _rbacUser, myTeam, riders, _cachedHistory, _sb
 // ═══════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────
+// Modal: lista de pruebas FCCV próximas no planificadas para que el usuario
+// las añada al calendario con un clic (sin tener que ir a la vista FCCV).
+// Se abre desde el "Centro de pendientes" de Inicio.
+// ─────────────────────────────────────────────────────────────────────────
+function _inicioShowUpcomingFCCVModal(){
+  const races = Array.isArray(window._inicioUpcomingFCCV) ? window._inicioUpcomingFCCV : [];
+  const old = document.getElementById('_inicioUpcomingDialog');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = '_inicioUpcomingDialog';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+
+  const fmtDate = (iso)=>{ const [yy,mm,dd]=iso.split('-'); return `${dd}/${mm}/${yy}`; };
+  const today = new Date().setHours(12,0,0,0);
+  const daysUntil = (iso)=> Math.round((new Date(iso+'T12:00:00').getTime()-today)/86400000);
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">Pruebas FCCV próximas (7 días)</div>
+          <div style="font-size:17px;font-weight:900;margin-top:2px">${races.length} prueba${races.length!==1?'s':''} sin añadir al calendario</div>
+          <div style="font-size:11px;opacity:.85;margin-top:3px">Pruebas que están en el scrape FCCV y que aún NO tienes en tu calendario planificado</div>
+        </div>
+        <button onclick="document.getElementById('_inicioUpcomingDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:12px 18px;background:#fef3c7;border-bottom:1px solid #fcd34d;display:flex;align-items:center;gap:10px">
+        <button onclick="_inicioAddAllUpcoming()" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer">＋ Añadir TODAS al calendario</button>
+        <span style="font-size:11.5px;color:#78350f;font-weight:600">o pulsa "+ Añadir" en cada una</span>
+      </div>
+      <div style="padding:10px 18px;overflow-y:auto;flex:1" id="_inicioUpcomingList">
+        ${races.length ? races.map((r,i)=>{
+          const dn = daysUntil(r.date);
+          const dnLbl = dn===0?'HOY':dn===1?'MAÑANA':`+${dn}d`;
+          return `<div id="_iur_${i}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:6px;background:#fff">
+            <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:4px 9px;border-radius:6px;min-width:56px;text-align:center">${fmtDate(r.date).slice(0,5)}<br><span style="font-size:9px">${dnLbl}</span></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:800;color:#0b2f6b;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.name)}</div>
+              <div style="font-size:11px;color:#6b7280;margin-top:2px">${r.location?'📍 '+escapeHtml(r.location):''}${r.modality?' · 🚴 '+escapeHtml(r.modality):''}${r.category?' · 🎽 '+escapeHtml(String(r.category).slice(0,40)):''}</div>
+            </div>
+            ${r.fccvId ? `<button onclick="_fccvShowRaceDetails('${escapeAttr(r.fccvId)}')" title="Ver ficha oficial FCCV" style="background:#fff;color:#1d4ed8;border:1.5px solid #93c5fd;border-radius:7px;padding:6px 10px;font-weight:700;font-size:11px;cursor:pointer">ℹ️</button>` : ''}
+            <button onclick="_inicioAddOneUpcoming(${i})" style="background:#10b981;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-weight:800;font-size:11.5px;cursor:pointer;white-space:nowrap">＋ Añadir</button>
+          </div>`;
+        }).join('') : '<div style="padding:30px;text-align:center;color:#9ca3af">No hay pruebas pendientes.</div>'}
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb">
+        <button onclick="showView('view-calendario');document.getElementById('_inicioUpcomingDialog').remove()" style="background:#fff;color:#0b2f6b;border:1.5px solid #0b2f6b;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;cursor:pointer">📅 Abrir calendario</button>
+        <button onclick="document.getElementById('_inicioUpcomingDialog').remove()" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer">Cerrar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+// Añade UNA prueba al calendario planificado y refresca la lista
+async function _inicioAddOneUpcoming(idx){
+  const races = Array.isArray(window._inicioUpcomingFCCV) ? window._inicioUpcomingFCCV : [];
+  const race = races[idx];
+  if(!race){ alert('Prueba no encontrada.'); return; }
+  if(!_sb){ alert('Necesitas estar conectado a Supabase.'); return; }
+  try{
+    const notes = JSON.stringify({
+      localidad: race.location || '',
+      cat: race.category || '',
+      modality: race.modality || '',
+      notes: '',
+      fccvId: race.fccvId || '',
+      fccvDetailUrl: race.fccvDetailUrl || '',
+      fccvSync: {syncedAt: new Date().toISOString(), source:'FCCV-Inicio'}
+    });
+    const {error} = await _sb.from('races').insert({name: race.name, date: race.date, notes, race_type:'planificada'});
+    if(error) throw error;
+    // Marcar visualmente esa fila como añadida
+    const row = document.getElementById('_iur_'+idx);
+    if(row){
+      row.style.background = '#dcfce7';
+      row.style.borderColor = '#86efac';
+      row.innerHTML = row.innerHTML.replace(/<button[^>]*onclick="_inicioAddOneUpcoming[^>]*>.*?<\/button>/, '<span style="color:#15803d;font-weight:800;font-size:12px;padding:4px 10px">✓ Añadida</span>');
+    }
+    // Recargar _calPlanned en memoria para que Inicio/Calendario reflejen el cambio
+    if(typeof _calLoadData==='function'){
+      try{ await _calLoadData(); }catch(_){}
+    }
+  }catch(e){
+    console.error(e);
+    alert('Error añadiendo al calendario: '+(e.message||String(e)));
+  }
+}
+
+// Añade TODAS las pruebas pendientes de un golpe
+async function _inicioAddAllUpcoming(){
+  const races = Array.isArray(window._inicioUpcomingFCCV) ? window._inicioUpcomingFCCV : [];
+  if(!races.length) return;
+  if(!confirm(`¿Añadir ${races.length} prueba(s) al calendario planificado?`)) return;
+  let ok=0, err=0;
+  for(let i=0;i<races.length;i++){
+    try{
+      await _inicioAddOneUpcoming(i);
+      ok++;
+    }catch(_){ err++; }
+  }
+  if(err) alert(`Añadidas ${ok} de ${races.length}. Errores: ${err}.`);
+}
+
 // Helper: al hacer clic en un corredor del Top desde Inicio, lo abrimos en
 // Análisis Individual. Lo encontramos por nombre normalizado en `riders` (si
 // hay prueba cargada) o redirigimos al Análisis genérico para que el usuario
@@ -10049,7 +10154,11 @@ async function renderInicio(){
         const nm = normalizeRiderName(r.name||'').toLowerCase();
         return !plannedNames.has(nm);
       });
-      if(upcomingNotPlanned.length>0) pendings.push({icon:'📅', color:'#1d4ed8', bg:'#eff6ff', border:'#bfdbfe', label:`${upcomingNotPlanned.length} prueba${upcomingNotPlanned.length!==1?'s':''} FCCV próxima${upcomingNotPlanned.length!==1?'s':''} sin añadir al calendario`, action:"showView('view-calendario')"});
+      if(upcomingNotPlanned.length>0){
+        // Guardar la lista en una global para que el modal la lea sin recalcular
+        window._inicioUpcomingFCCV = upcomingNotPlanned;
+        pendings.push({icon:'📅', color:'#1d4ed8', bg:'#eff6ff', border:'#bfdbfe', label:`${upcomingNotPlanned.length} prueba${upcomingNotPlanned.length!==1?'s':''} FCCV próxima${upcomingNotPlanned.length!==1?'s':''} sin añadir al calendario`, action:"_inicioShowUpcomingFCCVModal()"});
+      }
 
       // 4) Si no hay prueba cargada actualmente y existe historial → sugerir cargar
       const currentRiders = Array.isArray(riders) ? riders : [];
