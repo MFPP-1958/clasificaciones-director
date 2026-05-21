@@ -212,11 +212,17 @@
       <!-- 2 columnas: Pulso del equipo + Próximo objetivo (Tier 2 con guards) -->
       <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px" class="inicio-grid-2col">
         <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">💓 Pulso del equipo</h2></div>
+          <div class="section-title" style="margin-bottom:10px">
+            <h2 style="margin:0">💓 Pulso del equipo</h2>
+            <button class="help-btn" data-help="&lt;strong&gt;💓 Pulso del equipo&lt;/strong&gt;Muestra cómo evoluciona el rendimiento de tu equipo en las últimas pruebas del histórico.&lt;ul&gt;&lt;li&gt;Para cada prueba se toman los &lt;b&gt;3 mejores corredores de tu equipo&lt;/b&gt; (los que entraron en mejor posición).&lt;/li&gt;&lt;li&gt;Se calcula su &lt;b&gt;posición media&lt;/b&gt;: por ejemplo, si tus 3 mejores entraron 1º, 5º y 9º, la media es (1+5+9)/3 = 5,0.&lt;/li&gt;&lt;li&gt;Cada punto azul del gráfico es una prueba. Cuanto más abajo el punto, mejor el resultado.&lt;/li&gt;&lt;li&gt;Pasa el cursor sobre cualquier punto para ver la prueba concreta, fecha y posición media.&lt;/li&gt;&lt;li&gt;El badge de tendencia compara la primera mitad de pruebas con la segunda: &lt;b&gt;🟢 En forma&lt;/b&gt; si mejora más de 1 posición, &lt;b&gt;🔴 Bajando&lt;/b&gt; si empeora más de 1, &lt;b&gt;🟡 Estable&lt;/b&gt; entre medio.&lt;/li&gt;&lt;li&gt;Si no tienes equipo configurado, muestra el pulso del top 3 GLOBAL de cada prueba como referencia.&lt;/li&gt;&lt;/ul&gt;">?</button>
+          </div>
           <div id="inicioPulso"></div>
         </section>
         <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🎯 Tu próximo objetivo</h2></div>
+          <div class="section-title" style="margin-bottom:10px">
+            <h2 style="margin:0">🎯 Tu próximo objetivo</h2>
+            <button class="help-btn" data-help="&lt;strong&gt;🎯 Tu próximo objetivo&lt;/strong&gt;Te dice qué equipo tienes que adelantar en el ranking del año para subir un puesto.&lt;ul&gt;&lt;li&gt;&lt;b&gt;¿Cómo se calculan los puntos?&lt;/b&gt; En cada prueba del año, se suman las posiciones de los &lt;b&gt;3 mejores corredores&lt;/b&gt; de cada equipo. Ejemplo: si en la prueba A tu equipo entró 2º + 5º + 9º, sumas 16 puntos en esa prueba. Esos puntos se acumulan en todas las pruebas del año.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Menos puntos = mejor.&lt;/b&gt; El equipo con menos puntos totales lidera el ranking.&lt;/li&gt;&lt;li&gt;Solo cuentan las pruebas donde tu equipo tuvo al menos 3 corredores en meta.&lt;/li&gt;&lt;li&gt;El filtro de CCAA en los Filtros Globales acota el ranking a equipos de esa comunidad.&lt;/li&gt;&lt;li&gt;Pulsa &lt;b&gt;Ver ranking&lt;/b&gt; para ver el desglose completo en Power Ranking.&lt;/li&gt;&lt;/ul&gt;">?</button>
+          </div>
           <div id="inicioObjetivo"></div>
         </section>
       </div>
