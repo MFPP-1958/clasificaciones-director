@@ -1,0 +1,19 @@
+# Netlify _headers — formato simple, prioridad alta
+# El orden importa: las reglas más específicas tienen que ir ANTES de la
+# regla genérica para que Netlify las aplique correctamente.
+
+# ── Assets versionados (?v=hash): cachear 1 año ───────────────────────────
+/assets/css/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/js/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── Todo lo demás (incluyendo HTML en raíz y subrutas): nunca cachear ────
+/*
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

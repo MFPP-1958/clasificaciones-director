@@ -41,6 +41,13 @@ function copyDirRecursive(src, dst){
 }
 copyDirRecursive(path.join(__dirname, 'assets'), path.join(__dirname, 'dist', 'assets'));
 
+// Copiar el archivo _headers de Netlify (control de cabeceras HTTP, más
+// predecible que netlify.toml para reglas de Cache-Control).
+const headersSrc = path.join(__dirname, '_headers');
+if(fs.existsSync(headersSrc)){
+  fs.copyFileSync(headersSrc, path.join(__dirname, 'dist', '_headers'));
+}
+
 console.log(`✅ Build completado → dist/index.html (css=${cssHash}, js=${jsHash})`);
 // Build trigger 1779079327
 // Trigger deploy after credits refill 1779079759
