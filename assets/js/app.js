@@ -112,9 +112,48 @@ const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','
 const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica'];
 
 let _globalFilters = {
-  year:   localStorage.getItem('gf_year')   || '',
-  region: localStorage.getItem('gf_region') || ''
+  year:     localStorage.getItem('gf_year')     || '',
+  region:   localStorage.getItem('gf_region')   || '',
+  cat:      localStorage.getItem('gf_cat')      || 'cadete',
+  modality: localStorage.getItem('gf_modality') || 'carretera',
+  gender:   localStorage.getItem('gf_gender')   || 'masculino'
 };
+
+// Restaurar valores de los 3 nuevos filtros en los selects al iniciar
+function _gfDefaultsApplyToSelects(){
+  const cat = document.getElementById('gfCat');
+  const mod = document.getElementById('gfMod');
+  const gen = document.getElementById('gfGen');
+  if(cat && [...cat.options].some(o=>o.value===_globalFilters.cat)) cat.value = _globalFilters.cat;
+  if(mod && [...mod.options].some(o=>o.value===_globalFilters.modality)) mod.value = _globalFilters.modality;
+  if(gen && [...gen.options].some(o=>o.value===_globalFilters.gender)) gen.value = _globalFilters.gender;
+}
+
+// Al cambiar Categoría / Modalidad / Género: persistir y disparar cascada
+async function _gfDefaultsOnChange(){
+  _globalFilters.cat      = document.getElementById('gfCat')?.value || '';
+  _globalFilters.modality = document.getElementById('gfMod')?.value || '';
+  _globalFilters.gender   = document.getElementById('gfGen')?.value || '';
+  try{
+    localStorage.setItem('gf_cat',      _globalFilters.cat);
+    localStorage.setItem('gf_modality', _globalFilters.modality);
+    localStorage.setItem('gf_gender',   _globalFilters.gender);
+  }catch(_){}
+  // Persistencia por usuario en Supabase (silently ignora si las columnas no existen)
+  if(_sb && _rbacUser?.email){
+    try{
+      await _sb.from('app_users').update({
+        my_cat:      _globalFilters.cat,
+        my_modality: _globalFilters.modality,
+        my_gender:   _globalFilters.gender
+      }).eq('email', _rbacUser.email);
+    }catch(_){}
+  }
+  _gfUpdateStatus();
+  _gfTriggerCurrentViewRerender();
+  // Notificar al resto de la app
+  try{ window.dispatchEvent(new CustomEvent('myfilters:changed', {detail:{..._globalFilters}})); }catch(_){}
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MI EQUIPO GLOBAL — selector persistente en la barra de filtros
@@ -408,6 +447,7 @@ function _gfShowHideBar(viewId){
     _gfPopulateYears();
     _gfPopulateRegions();
     _gfMyTeamInit();
+    _gfDefaultsApplyToSelects();
     _gfUpdateStatus();
     _gfReady = true;
   } else if(shouldShow){
@@ -415,6 +455,7 @@ function _gfShowHideBar(viewId){
     _gfPopulateYears();
     _gfPopulateRegions();
     _gfMyTeamInit();
+    _gfDefaultsApplyToSelects();
     _gfUpdateStatus();
   }
   if(shouldShow) _gfApplyToLocalFilters();
@@ -693,6 +734,19 @@ async function _rbacLogin(){
   try{
     if(data.my_team && typeof setMyTeam==='function'){
       setMyTeam(data.my_team);
+    }
+    // Restaurar también filtros globales por usuario (cat/modality/gender) si existen
+    if(data.my_cat !== undefined && data.my_cat !== null){
+      _globalFilters.cat = data.my_cat || '';
+      try{ localStorage.setItem('gf_cat', _globalFilters.cat); }catch(_){}
+    }
+    if(data.my_modality !== undefined && data.my_modality !== null){
+      _globalFilters.modality = data.my_modality || '';
+      try{ localStorage.setItem('gf_modality', _globalFilters.modality); }catch(_){}
+    }
+    if(data.my_gender !== undefined && data.my_gender !== null){
+      _globalFilters.gender = data.my_gender || '';
+      try{ localStorage.setItem('gf_gender', _globalFilters.gender); }catch(_){}
     }
   }catch(_){}
   await _rbacLoadPerms(data.role);

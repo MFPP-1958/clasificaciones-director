@@ -158,6 +158,38 @@
           <option value="">Todas las CCAA</option>
         </select>
       </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="font-size:12px;font-weight:700;color:#475569">🎽 Categoría:</label>
+        <select id="gfCat" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:110px">
+          <option value="">Todas</option>
+          <option value="cadete">Cadete</option>
+          <option value="junior">Junior</option>
+          <option value="sub23">Sub-23</option>
+          <option value="elite">Elite</option>
+          <option value="master">Master</option>
+          <option value="femenino">Femenino</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="font-size:12px;font-weight:700;color:#475569">🚴 Modalidad:</label>
+        <select id="gfMod" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:120px">
+          <option value="">Todas</option>
+          <option value="carretera">Carretera</option>
+          <option value="btt">BTT / MTB</option>
+          <option value="cx">Ciclocross</option>
+          <option value="pista">Pista</option>
+          <option value="trial">Trial</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="font-size:12px;font-weight:700;color:#475569">⚥ Género:</label>
+        <select id="gfGen" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:120px">
+          <option value="">Todos</option>
+          <option value="masculino">Masculino</option>
+          <option value="femenino">Femenino</option>
+          <option value="mixto">Mixto</option>
+        </select>
+      </div>
       <!-- ── Selector Mi Equipo (Fase 1 — persistente y siempre visible) ── -->
       <div style="display:flex;align-items:center;gap:6px;position:relative">
         <label style="font-size:12px;font-weight:700;color:#475569">🏆 Mi Equipo:</label>
