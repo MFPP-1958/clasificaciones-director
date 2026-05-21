@@ -10300,7 +10300,12 @@ async function renderInicio(){
         const dotsHtml = lastN.map((p,i) => {
           const x = pad + i*stepX;
           const y = pad + (p.avg - minV)/range * (h - pad*2);
-          return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${lineColor}"></circle>`;
+          // Tooltip nativo SVG: nombre de la prueba + fecha + posición media.
+          // Se ve al pasar el cursor por encima del puntito.
+          const tipName = (p.name||'').replace(/"/g,'&quot;');
+          const tipDate = p.date||'';
+          const tip = `${tipName}${tipDate?' · '+tipDate:''}${'\n'}Posición media top 3: ${p.avg.toFixed(1)}º`;
+          return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${lineColor}" style="cursor:pointer" opacity=".95"><title>${tip}</title></circle>`;
         }).join('');
         pulsoBox.innerHTML = `
           <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
@@ -10335,7 +10340,12 @@ async function renderInicio(){
     const objBox = document.getElementById('inicioObjetivo');
     if(objBox){
       const yearStr = String((typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.year) || new Date().getFullYear());
+      const regionFilter = ((typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '').trim();
+      const canon = typeof canonicalRegion==='function' ? canonicalRegion : (s=>s);
       const teamScores = new Map();
+      // Acumulamos también las regiones de los riders de cada equipo para
+      // poder filtrar por CCAA del filtro global.
+      const teamRegionCounts = new Map();
       for(const race of (history||[])){
         const ry = ((typeof _parseSpanishDate==='function' ? _parseSpanishDate(race.raceDate) : '') || '').slice(0,4);
         if(ry !== yearStr) continue;
@@ -10344,6 +10354,12 @@ async function renderInicio(){
           const t = (r.team||'').trim(); if(!t) continue;
           if(!byTeam[t]) byTeam[t] = [];
           byTeam[t].push(r.pos||999);
+          if(r.region){
+            const cr = canon(r.region);
+            if(!teamRegionCounts.has(t)) teamRegionCounts.set(t, new Map());
+            const m = teamRegionCounts.get(t);
+            m.set(cr, (m.get(cr)||0) + 1);
+          }
         }
         for(const t in byTeam){
           const sorted = byTeam[t].slice().sort((a,b)=>a-b);
@@ -10354,9 +10370,24 @@ async function renderInicio(){
           const e = teamScores.get(t); e.total += points; e.races++;
         }
       }
-      const ranking = [...teamScores.values()]
+      // Asignar la región dominante a cada equipo (la más frecuente)
+      const teamRegion = {};
+      for(const [t, m] of teamRegionCounts){
+        const sorted = [...m.entries()].sort((a,b)=>b[1]-a[1]);
+        if(sorted.length) teamRegion[t] = sorted[0][0];
+      }
+      let ranking = [...teamScores.values()]
         .filter(e => e.races >= 1)
         .sort((a,b) => a.total - b.total);
+      // Filtro por CCAA del filtro global (si el usuario lo ha fijado)
+      if(regionFilter){
+        ranking = ranking.filter(e => {
+          const r = teamRegion[e.team];
+          // Si el equipo no tiene región conocida, lo incluimos solo si es el del usuario
+          if(!r) return team && (typeof teamKey==='function' ? teamKey(e.team)===teamKey(team) : e.team.toLowerCase()===team.toLowerCase());
+          return r === regionFilter;
+        });
+      }
       const myKey = team ? (typeof teamKey==='function' ? teamKey(team) : team.toLowerCase().trim()) : '';
       let myIdx = -1;
       if(team){
@@ -10393,7 +10424,7 @@ async function renderInicio(){
         const diff = myEntry.total - rival.total;
         objBox.innerHTML = `
           <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:14px">
-            <div style="font-size:11px;color:#1d4ed8;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Año ${escapeHtml(yearStr)} · Posición ${myIdx+1}º de ${ranking.length}</div>
+            <div style="font-size:11px;color:#1d4ed8;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Año ${escapeHtml(yearStr)}${regionFilter?` · CCAA: ${escapeHtml(regionFilter)}`:''} · Posición ${myIdx+1}º de ${ranking.length}</div>
             <div style="font-size:14px;color:#0b2f6b;line-height:1.5">Para subir al puesto <strong>${myIdx}º</strong> tienes que adelantar a:</div>
             <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px;margin-top:8px">
               <div style="font-size:16px;font-weight:900;color:#0b2f6b">🎯 ${escapeHtml(rival.team)}</div>
