@@ -5,39 +5,24 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# ─── Seguridad ─────────────────────────────────────────────────────────────
-# Headers de seguridad para todos los recursos
+# ─── Cache-Control por defecto: NUNCA cachear ─────────────────────────────
+# Aplicamos no-cache global. Las reglas específicas para assets versionados
+# (más abajo) anularán esto para CSS/JS que llevan ?v=hash y pueden cachearse
+# durante 1 año sin riesgo. En Netlify la regla más específica gana.
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options        = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy        = "strict-origin-when-cross-origin"
+    Cache-Control          = "no-cache, no-store, must-revalidate"
+    Pragma                 = "no-cache"
+    Expires                = "0"
 
-# ─── HTML: NUNCA cachear ───────────────────────────────────────────────────
-# El HTML contiene las URLs versionadas (?v=hash) de los assets. Si el HTML
-# se cachea el navegador no se entera de que el hash ha cambiado, y por
-# tanto seguiría sirviendo los assets viejos. Forzamos revalidación SIEMPRE.
-[[headers]]
-  for = "/*.html"
-  [headers.values]
-    Cache-Control    = "no-cache, no-store, must-revalidate"
-    Pragma           = "no-cache"
-    Expires          = "0"
-    Content-Type     = "text/html; charset=utf-8"
-
-[[headers]]
-  for = "/"
-  [headers.values]
-    Cache-Control    = "no-cache, no-store, must-revalidate"
-    Pragma           = "no-cache"
-    Expires          = "0"
-    Content-Type     = "text/html; charset=utf-8"
-
-# ─── Assets con cache busting: cachear MUY largo (1 año) ──────────────────
-# Como las URLs llevan ?v=HASH del contenido, cuando cambia el archivo
-# cambia el hash → es una URL "nueva" → se descarga inevitablemente.
-# Por tanto es seguro cachearlos durante 1 año (immutable).
+# ─── Assets con cache busting: cachear 1 año (immutable) ──────────────────
+# Como las URLs llevan ?v=HASH del contenido, cuando cambia el archivo cambia
+# el hash → URL "nueva" para el navegador → descarga inevitable. Es seguro
+# cachearlos durante 1 año.
 [[headers]]
   for = "/assets/css/*"
   [headers.values]
