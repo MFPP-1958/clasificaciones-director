@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
@@ -8,6 +9,20 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 if (supabaseUrl) html = html.replace('%%SUPABASE_URL%%', supabaseUrl);
 if (supabaseKey) html = html.replace('%%SUPABASE_KEY%%', supabaseKey);
+
+// ── Cache busting ──
+// Calcula un hash corto (8 hex) del contenido de cada asset y lo añade como
+// ?v=HASH al final de la URL. Así, cuando despleguemos cambios, los navegadores
+// descargarán automáticamente la versión nueva sin necesidad de que el usuario
+// haga "hard refresh".
+function shortHash(filePath){
+  const buf = fs.readFileSync(filePath);
+  return crypto.createHash('md5').update(buf).digest('hex').slice(0,8);
+}
+const cssHash = shortHash(path.join(__dirname, 'assets', 'css', 'styles.css'));
+const jsHash  = shortHash(path.join(__dirname, 'assets', 'js', 'app.js'));
+html = html.replace('assets/css/styles.css"', `assets/css/styles.css?v=${cssHash}"`);
+html = html.replace('assets/js/app.js"',     `assets/js/app.js?v=${jsHash}"`);
 
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'dist', 'index.html'), html, 'utf8');
@@ -26,6 +41,6 @@ function copyDirRecursive(src, dst){
 }
 copyDirRecursive(path.join(__dirname, 'assets'), path.join(__dirname, 'dist', 'assets'));
 
-console.log('✅ Build completado → dist/index.html (+ dist/assets/)');
+console.log(`✅ Build completado → dist/index.html (css=${cssHash}, js=${jsHash})`);
 // Build trigger 1779079327
 // Trigger deploy after credits refill 1779079759
