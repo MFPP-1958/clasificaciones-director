@@ -9786,6 +9786,30 @@ function _mostrarDialogoDuplicado(fecha, nombreExistente, nCorredores){
 // VISTA INICIO — Dashboard de entrada
 // Lee de: _rbacUser, myTeam, riders, _cachedHistory, _sb
 // ═══════════════════════════════════════════════════════════════════════════
+// Helper: al hacer clic en un corredor del Top desde Inicio, lo abrimos en
+// Análisis Individual. Lo encontramos por nombre normalizado en `riders` (si
+// hay prueba cargada) o redirigimos al Análisis genérico para que el usuario
+// elija manualmente.
+function _inicioOpenRider(displayName){
+  try{
+    const target = (typeof normalizeRiderName==='function' ? normalizeRiderName(displayName) : displayName).toLowerCase();
+    if(typeof riders!=='undefined' && Array.isArray(riders) && riders.length){
+      const m = riders.find(r => (typeof normalizeRiderName==='function' ? normalizeRiderName(r.name||'') : (r.name||'')).toLowerCase()===target);
+      if(m && typeof selectAndAnalyzeRiderByKey==='function' && typeof getRiderKey==='function'){
+        selectAndAnalyzeRiderByKey(getRiderKey(m));
+        showView('view-analisis');
+        return;
+      }
+    }
+    // Fallback: ir a Análisis Individual con el nombre en el buscador
+    showView('view-analisis');
+    setTimeout(()=>{
+      const inp = document.getElementById('analysisSearchInput');
+      if(inp){ inp.value = displayName; inp.dispatchEvent(new Event('input',{bubbles:true})); }
+    }, 200);
+  }catch(e){ console.warn(e); }
+}
+
 async function renderInicio(){
   // ─── 1. HERO (bienvenida) ──────────────────────────────────────────
   const user = (typeof _rbacUser !== 'undefined' && _rbacUser) ? _rbacUser : null;
@@ -9842,67 +9866,202 @@ async function renderInicio(){
     myTeamRiders = set.size;
   }
 
+  // ─── Cálculo de tendencias: últimos 30 días vs 30 días anteriores ───
+  const now = new Date();
+  const day30 = new Date(now.getTime() - 30*86400000);
+  const day60 = new Date(now.getTime() - 60*86400000);
+  const racesByPeriod = (from, to) => history.filter(r => {
+    const d = _parseSpanishDate(r.raceDate);
+    if(!d) return false;
+    const t = new Date(d).getTime();
+    return t >= from.getTime() && t < to.getTime();
+  });
+  const racesLast30 = racesByPeriod(day30, now);
+  const racesPrev30 = racesByPeriod(day60, day30);
+  // Podios de mi equipo en cada periodo
+  const podiumsInRaces = (rcs) => rcs.reduce((s,race) => s + (race.riders||[]).filter(r=>{
+    if(!team) return r.pos<=3;
+    const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+    const mk = typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim();
+    return tk===mk && r.pos<=3;
+  }).length, 0);
+  const podiums30 = podiumsInRaces(racesLast30);
+  const podiumsPrev = podiumsInRaces(racesPrev30);
+  const podiumDelta = podiums30 - podiumsPrev;
+  const racesDelta  = racesLast30.length - racesPrev30.length;
+  // Helper para chip de tendencia
+  const trendChip = (delta, suffix='')=>{
+    if(delta > 0) return `<span style="color:#16a34a;font-weight:800;font-size:11px;margin-left:6px">↑ +${delta}${suffix}</span>`;
+    if(delta < 0) return `<span style="color:#dc2626;font-weight:800;font-size:11px;margin-left:6px">↓ ${delta}${suffix}</span>`;
+    return `<span style="color:#9ca3af;font-weight:700;font-size:11px;margin-left:6px">━ igual</span>`;
+  };
+
   const kpiBox = document.getElementById('inicioKpis');
   if(kpiBox){
     kpiBox.innerHTML = `
-      <div class="evol-kpi"><div class="ek-label">Carreras en historial</div><div class="ek-value">${totalRaces}</div><div class="ek-sub">Pruebas guardadas</div></div>
+      <div class="evol-kpi"><div class="ek-label">Carreras en historial</div><div class="ek-value">${totalRaces}</div><div class="ek-sub">Últimos 30 días: ${racesLast30.length}${trendChip(racesDelta,' pruebas')}</div></div>
       <div class="evol-kpi"><div class="ek-label">Ciclistas únicos</div><div class="ek-value">${uniqueRiders.size}</div><div class="ek-sub">En todas las pruebas</div></div>
       <div class="evol-kpi"><div class="ek-label">Mi equipo</div><div class="ek-value" style="font-size:16px">${team ? escapeHtml(team) : '—'}</div><div class="ek-sub">${myTeamRiders} ciclista${myTeamRiders!==1?'s':''}</div></div>
-      <div class="evol-kpi"><div class="ek-label">Última prueba</div><div class="ek-value" style="font-size:14px">${lastRace ? escapeHtml((lastRace.raceName||'').slice(0,40)) : '—'}</div><div class="ek-sub">${lastRace?.raceDate || 'Sin datos'}</div></div>`;
+      <div class="evol-kpi"><div class="ek-label">${team?'Podios del equipo':'Podios globales'} (30d)</div><div class="ek-value">${podiums30}</div><div class="ek-sub">vs ${podiumsPrev} mes anterior${trendChip(podiumDelta)}</div></div>`;
   }
 
-  // ─── 3. Última prueba cargada (la actual en memoria) ────────────────
+  // ─── 3. Próximas pruebas (lee el scrape FCCV cacheado) ──────────────
   const lastBox = document.getElementById('inicioLastRace');
   if(lastBox){
-    const currentRaceName = ($('raceName')?.value || '').trim();
-    const currentRiders = Array.isArray(riders) ? riders : [];
-    if(currentRiders.length){
-      const winner = currentRiders.find(r=>r.pos===1) || currentRiders[0];
-      const date = ($('raceDate')?.value || '').trim();
-      const km   = ($('raceKm')?.value || '').trim();
-      const loc  = ($('raceLocalidad')?.value || '').trim();
+    const fccvScrape = (typeof _fccvLastAllRaces !== 'undefined' && Array.isArray(_fccvLastAllRaces)) ? _fccvLastAllRaces : [];
+    // Filtrar próximas (fecha >= hoy a medianoche) y ordenar por fecha
+    const todayIso = new Date().toISOString().slice(0,10);
+    const upcoming = fccvScrape
+      .filter(r => r.date && r.date >= todayIso)
+      .sort((a,b) => (a.date||'').localeCompare(b.date||''))
+      .slice(0, 5);
+
+    if(upcoming.length){
+      // Calcular días que faltan
+      const daysUntil = (iso)=>{
+        const t = new Date(iso+'T12:00:00').getTime();
+        return Math.round((t - new Date().setHours(12,0,0,0)) / 86400000);
+      };
+      const next = upcoming[0];
+      const nextDays = daysUntil(next.date);
+      const labelDays = nextDays===0 ? '<strong>HOY</strong>' : nextDays===1 ? '<strong>MAÑANA</strong>' : `en <strong>${nextDays} días</strong>`;
+      const [y,m,d] = next.date.split('-');
+      const fmtDate = (iso)=>{ const [yy,mm,dd]=iso.split('-'); return `${dd}/${mm}/${yy}`; };
+      // Banner destacado para la siguiente
       lastBox.innerHTML = `
-        <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:12px;padding:16px;margin-bottom:12px">
-          <div style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:6px">${escapeHtml(currentRaceName||'Prueba sin nombre')}</div>
-          <div style="font-size:13px;color:#475569;display:flex;flex-wrap:wrap;gap:14px">
-            ${date ? `<span>📅 ${escapeHtml(date)}</span>` : ''}
-            ${loc ? `<span>📍 ${escapeHtml(loc)}</span>` : ''}
-            ${km ? `<span>📏 ${escapeHtml(km)}</span>` : ''}
-            <span>👥 ${currentRiders.length} corredores</span>
-          </div>
-          <div style="font-size:13px;color:#475569;margin-top:6px">
-            🥇 <strong>${escapeHtml((winner.name||'').slice(0,40))}</strong>${winner.team?` · <span style="color:#6b7280">${escapeHtml(winner.team)}</span>`:''}
+        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;margin-bottom:12px;cursor:pointer" onclick="showView('view-calendario')">
+          <div style="font-size:11px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">🏁 Próxima prueba ${labelDays}</div>
+          <div style="font-size:18px;font-weight:900;color:#78350f;margin-bottom:6px">${escapeHtml(next.name)}</div>
+          <div style="font-size:13px;color:#92400e;display:flex;flex-wrap:wrap;gap:12px">
+            <span>📅 ${fmtDate(next.date)}</span>
+            ${next.location?`<span>📍 ${escapeHtml(next.location)}</span>`:''}
+            ${next.modality?`<span>🚴 ${escapeHtml(next.modality)}</span>`:''}
+            ${next.category?`<span>🎽 ${escapeHtml(next.category.slice(0,28))}</span>`:''}
           </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-tabla')">📋 Ver clasificación</button>
-          <button class="btn light" onclick="showView('view-analisis')">👤 Analizar ciclistas</button>
-          <button class="btn light" onclick="showView('view-tactica')">🧠 Estrategia</button>
-        </div>`;
+        ${upcoming.length > 1 ? `
+        <div style="font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Siguientes ${upcoming.length-1}</div>
+        ${upcoming.slice(1).map(r=>{
+          const dn = daysUntil(r.date);
+          return `<div onclick="${r.fccvId?`_fccvShowRaceDetails('${escapeAttr(r.fccvId)}')`:`showView('view-calendario')`}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:#f9fafb;border:1px solid #f3f4f6;margin-bottom:5px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#f9fafb'">
+            <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:3px 8px;border-radius:6px;min-width:48px;text-align:center">${fmtDate(r.date).slice(0,5)}</div>
+            <div style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0b2f6b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.name)}</div>
+            <div style="font-size:10.5px;color:#6b7280">${dn===0?'hoy':dn===1?'mañana':`+${dn}d`}</div>
+          </div>`;
+        }).join('')}
+        ` : ''}
+        <div style="margin-top:10px"><button class="btn light" onclick="showView('view-calendario')" style="font-size:12px">📅 Ver calendario completo</button></div>`;
     } else {
+      // Sin pruebas próximas en scrape
+      const hasScrape = fccvScrape.length > 0;
       lastBox.innerHTML = `
         <div class="inicio-empty">
-          <div style="font-size:32px;margin-bottom:8px">📤</div>
-          <div style="font-weight:700;color:#374151;margin-bottom:4px">No hay ninguna prueba cargada</div>
-          <div style="font-size:13px;margin-bottom:12px">Carga un PDF, CSV o Excel para empezar a analizar</div>
-          <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-carga')">📤 Cargar nueva prueba</button>
+          <div style="font-size:32px;margin-bottom:8px">📅</div>
+          <div style="font-weight:700;color:#374151;margin-bottom:4px">${hasScrape ? 'Sin pruebas próximas' : 'Sin datos del calendario FCCV'}</div>
+          <div style="font-size:13px;margin-bottom:12px">${hasScrape ? 'No hay pruebas programadas en los próximos días.' : 'Sincroniza con la Federación para ver el calendario.'}</div>
+          <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-calendario')">📅 Ir al calendario</button>
         </div>`;
     }
   }
 
-  // ─── 4. Acciones rápidas ────────────────────────────────────────────
+  // ─── 4. Centro de pendientes ────────────────────────────────────────
+  // Detecta automáticamente cosas accionables: equipos sin CCAA, ciclistas
+  // con categoría inconsistente del año actual, pruebas FCCV recientes no
+  // consultadas, etc. Si no hay nada, muestra "todo al día".
   const actBox = document.getElementById('inicioActions');
   if(actBox){
-    actBox.innerHTML = `
-      <button class="inicio-action-btn" onclick="showView('view-carga')"><span class="ia-icon">📤</span>Cargar nueva prueba</button>
-      <button class="inicio-action-btn" onclick="showView('view-historial')"><span class="ia-icon">📁</span>Ver historial</button>
-      <button class="inicio-action-btn" onclick="showView('view-calendario')"><span class="ia-icon">📅</span>Calendario</button>
-      <button class="inicio-action-btn" onclick="showView('view-informe-plantilla')"><span class="ia-icon">📋</span>Informe de Plantilla</button>
-      <button class="inicio-action-btn" onclick="showView('view-seleccion')"><span class="ia-icon">🏆</span>Convocatorias</button>
-      <button class="inicio-action-btn" onclick="showView('view-evolucion')"><span class="ia-icon">📈</span>Evolución</button>
-      <button class="inicio-action-btn" onclick="showView('view-powerranking')"><span class="ia-icon">⭐</span>Power Ranking</button>
-      <button class="inicio-action-btn" onclick="showView('view-tactica')"><span class="ia-icon">🧠</span>Estrategia</button>`;
-    actBox.style.gridTemplateColumns = 'repeat(2,1fr)';
+    const pendings = [];
+    try{
+      // 1) Equipos sin CCAA en el histórico
+      const teamRegions = new Map();
+      history.forEach(race => {
+        let extra = {};
+        try{ extra = JSON.parse(race.notes||'{}'); }catch(_){}
+        const regions = extra.regions||{};
+        (race.riders||[]).forEach(r => {
+          const t = (r.team||'').trim();
+          if(!t) return;
+          if(!teamRegions.has(t)) teamRegions.set(t, new Set());
+          // Buscar región del rider
+          let region = regions[r.name] || '';
+          if(!region){
+            const nk = typeof normalizeForMatching==='function' ? normalizeForMatching(r.name) : (r.name||'').toLowerCase();
+            for(const k of Object.keys(regions)){
+              const kn = typeof normalizeForMatching==='function' ? normalizeForMatching(k) : k.toLowerCase();
+              if(kn===nk){ region = regions[k]; break; }
+            }
+          }
+          if(region) teamRegions.get(t).add(region);
+        });
+      });
+      let teamsMissing = 0, teamsConflict = 0;
+      for(const [, regs] of teamRegions){
+        if(regs.size===0) teamsMissing++;
+        else if(regs.size>1) teamsConflict++;
+      }
+      if(teamsMissing>0) pendings.push({icon:'🗺️', color:'#dc2626', bg:'#fef2f2', border:'#fca5a5', label:`${teamsMissing} equipo${teamsMissing!==1?'s':''} sin CCAA asignada`, action:"showView('view-equipos-ccaa')"});
+      if(teamsConflict>0) pendings.push({icon:'⚠️', color:'#b45309', bg:'#fffbeb', border:'#fcd34d', label:`${teamsConflict} equipo${teamsConflict!==1?'s':''} con CCAA en conflicto`, action:"showView('view-equipos-ccaa')"});
+
+      // 2) Ciclistas con categoría inconsistente en el año actual
+      const yearNow = String(new Date().getFullYear());
+      const riderCats = new Map();
+      history.forEach(race => {
+        const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+        if(ry!==yearNow) return;
+        (race.riders||[]).forEach(r => {
+          const nm = normalizeRiderName(r.name||'').trim();
+          if(!nm) return;
+          if(!riderCats.has(nm)) riderCats.set(nm, new Set());
+          const c = (r.cat||'').trim();
+          if(c) riderCats.get(nm).add(c);
+        });
+      });
+      let ridersConflict = 0;
+      for(const [, cats] of riderCats){ if(cats.size>1) ridersConflict++; }
+      if(ridersConflict>0) pendings.push({icon:'🎽', color:'#b45309', bg:'#fffbeb', border:'#fcd34d', label:`${ridersConflict} ciclista${ridersConflict!==1?'s':''} con categoría inconsistente (${yearNow})`, action:"showView('view-ciclistas-cat')"});
+
+      // 3) Pruebas FCCV próximas en 7 días no añadidas al calendario propio
+      const fccvScrape = (typeof _fccvLastAllRaces !== 'undefined' && Array.isArray(_fccvLastAllRaces)) ? _fccvLastAllRaces : [];
+      const plannedNames = new Set();
+      try{
+        if(typeof _calPlanned!=='undefined' && Array.isArray(_calPlanned)){
+          _calPlanned.forEach(p => plannedNames.add(normalizeRiderName(p.name||'').toLowerCase()));
+        }
+      }catch(_){}
+      const upcomingNotPlanned = fccvScrape.filter(r => {
+        if(!r.date) return false;
+        const todayIso = new Date().toISOString().slice(0,10);
+        if(r.date < todayIso) return false;
+        const t7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+        if(r.date > t7) return false;
+        const nm = normalizeRiderName(r.name||'').toLowerCase();
+        return !plannedNames.has(nm);
+      });
+      if(upcomingNotPlanned.length>0) pendings.push({icon:'📅', color:'#1d4ed8', bg:'#eff6ff', border:'#bfdbfe', label:`${upcomingNotPlanned.length} prueba${upcomingNotPlanned.length!==1?'s':''} FCCV próxima${upcomingNotPlanned.length!==1?'s':''} sin añadir al calendario`, action:"showView('view-calendario')"});
+
+      // 4) Si no hay prueba cargada actualmente y existe historial → sugerir cargar
+      const currentRiders = Array.isArray(riders) ? riders : [];
+      if(!currentRiders.length && history.length>0){
+        pendings.push({icon:'📤', color:'#0b2f6b', bg:'#f0f9ff', border:'#bae6fd', label:'No hay prueba cargada en memoria — abre una desde el Historial', action:"showView('view-historial')"});
+      }
+    }catch(e){ console.warn('[Inicio] detección de pendientes falló:', e); }
+
+    if(pendings.length){
+      actBox.innerHTML = pendings.map(p=>`
+        <div onclick="${p.action}" style="display:flex;align-items:center;gap:10px;background:${p.bg};border:1px solid ${p.border};color:${p.color};border-radius:10px;padding:10px 12px;cursor:pointer;transition:transform .12s,box-shadow .12s" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.08)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+          <div style="font-size:20px;flex-shrink:0">${p.icon}</div>
+          <div style="flex:1;font-size:12.5px;font-weight:700;line-height:1.35">${p.label}</div>
+          <div style="color:${p.color};opacity:.55;font-size:18px">›</div>
+        </div>
+      `).join('');
+    } else {
+      actBox.innerHTML = `
+        <div style="background:#dcfce7;border:1px solid #86efac;color:#15803d;border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:32px;margin-bottom:6px">✅</div>
+          <div style="font-weight:800;font-size:13px">Todo al día</div>
+          <div style="font-size:12px;margin-top:2px;color:#166534">No hay nada pendiente de revisar.</div>
+        </div>`;
+    }
   }
 
   // ─── 5. Top 5 corredores destacados ─────────────────────────────────
@@ -9946,12 +10105,15 @@ async function renderInicio(){
       } else {
         topBox.innerHTML = chip + arr.map((r,i)=>{
           const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
-          return `<div class="inicio-rider-row">
+          // Click → abrir Análisis individual del ciclista
+          const safeNm = escapeAttr(r.displayName||'');
+          return `<div class="inicio-rider-row" onclick="_inicioOpenRider('${safeNm}')" style="cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
             <div class="inicio-rider-pos">${medal}</div>
             <div style="flex:1;min-width:0">
               <div style="font-weight:700;color:#0b2f6b">${escapeHtml(r.displayName)}</div>
               <div style="font-size:12px;color:#6b7280">${!hasTeam && r.team?escapeHtml(r.team)+' · ':''}${r.n} carreras · media ${r.avg.toFixed(1)}º · ${r.podiums} podios${r.wins>0?` · 🏆 ${r.wins} victoria${r.wins>1?'s':''}`:''}</div>
             </div>
+            <div style="color:#9ca3af;font-size:18px">›</div>
           </div>`;
         }).join('');
       }
