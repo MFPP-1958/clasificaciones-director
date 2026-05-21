@@ -10241,7 +10241,181 @@ async function renderInicio(){
     }
   }
 
-  // ─── 6. Últimas 5 carreras del historial ────────────────────────────
+  // ─── 6. Pulso del equipo (sparkline) — protegido con try/catch ──────
+  try{
+    const pulsoBox = document.getElementById('inicioPulso');
+    if(pulsoBox){
+      const hasTeam = !!team;
+      const sortedByDateAsc = (history||[]).slice().sort((a,b) => {
+        const da = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(a.raceDate) : '') || '';
+        const db = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(b.raceDate) : '') || '';
+        return da.localeCompare(db);
+      });
+      const myTeamKeyForPulso = hasTeam ? (typeof teamKey==='function' ? teamKey(team) : team.toLowerCase().trim()) : '';
+      const pulsoPoints = [];
+      for(const race of sortedByDateAsc){
+        let myRiders;
+        if(hasTeam){
+          myRiders = (race.riders||[]).filter(r => {
+            const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+            return tk === myTeamKeyForPulso;
+          });
+          if(!myRiders.length) continue;
+        } else {
+          myRiders = race.riders||[];
+          if(myRiders.length < 3) continue;
+        }
+        const top3 = myRiders.slice().sort((a,b)=>(a.pos||999)-(b.pos||999)).slice(0,3);
+        if(!top3.length) continue;
+        const avg = top3.reduce((s,r)=>s+(r.pos||0),0) / top3.length;
+        pulsoPoints.push({avg, date:race.raceDate||'', name:race.raceName||''});
+      }
+      const lastN = pulsoPoints.slice(-10);
+      if(lastN.length >= 2){
+        const vals = lastN.map(p=>p.avg);
+        const minV = Math.min(...vals);
+        const maxV = Math.max(...vals);
+        const range = (maxV - minV) || 1;
+        const w = 300, h = 80, pad = 8;
+        const stepX = lastN.length > 1 ? (w - pad*2) / (lastN.length - 1) : 0;
+        const points = lastN.map((p,i) => {
+          const x = pad + i*stepX;
+          const y = pad + (p.avg - minV)/range * (h - pad*2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        });
+        const lineColor = '#3b82f6';
+        const fillColor = 'rgba(59,130,246,.12)';
+        const mid = Math.floor(lastN.length/2);
+        const firstAvg = lastN.slice(0,mid).reduce((s,p)=>s+p.avg,0) / Math.max(1,mid);
+        const secondAvg = lastN.slice(mid).reduce((s,p)=>s+p.avg,0) / Math.max(1,(lastN.length-mid));
+        const delta = secondAvg - firstAvg;
+        const trendBadge = delta < -1
+          ? `<span style="background:#dcfce7;color:#15803d;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:800">🟢 En forma</span>`
+          : delta > 1
+          ? `<span style="background:#fee2e2;color:#991b1b;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:800">🔴 Bajando</span>`
+          : `<span style="background:#fef3c7;color:#92400e;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:800">🟡 Estable</span>`;
+        const lastPoint = lastN[lastN.length-1];
+        const polyPts = points.join(' ');
+        const areaPts = `${pad},${h-pad} ${polyPts} ${(pad+(lastN.length-1)*stepX).toFixed(1)},${h-pad}`;
+        const dotsHtml = lastN.map((p,i) => {
+          const x = pad + i*stepX;
+          const y = pad + (p.avg - minV)/range * (h - pad*2);
+          return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${lineColor}"></circle>`;
+        }).join('');
+        pulsoBox.innerHTML = `
+          <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+            <div style="flex:1;min-width:240px">
+              <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">${hasTeam?`Posición media del top 3 — ${escapeHtml(team)}`:'Posición media del top 3 GLOBAL'}</div>
+              <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:80px;display:block">
+                <polygon points="${areaPts}" fill="${fillColor}"></polygon>
+                <polyline points="${polyPts}" fill="none" stroke="${lineColor}" stroke-width="2"></polyline>
+                ${dotsHtml}
+              </svg>
+              <div style="font-size:11px;color:#6b7280;margin-top:4px">${lastN.length} última${lastN.length!==1?'s':''} prueba${lastN.length!==1?'s':''} · Mejor: <strong style="color:#16a34a">${minV.toFixed(1)}º</strong> · Peor: <strong style="color:#dc2626">${maxV.toFixed(1)}º</strong></div>
+            </div>
+            <div style="min-width:140px">
+              <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Tendencia</div>
+              ${trendBadge}
+              <div style="font-size:12px;color:#475569;margin-top:8px">Última: <strong>${lastPoint.avg.toFixed(1)}º</strong></div>
+              <div style="font-size:11px;color:#6b7280;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeAttr(lastPoint.name||'')}">${escapeHtml((lastPoint.name||'').slice(0,28))}</div>
+            </div>
+          </div>`;
+      } else {
+        pulsoBox.innerHTML = `<div class="inicio-empty"><div style="font-size:32px;margin-bottom:8px">💓</div><div style="font-weight:700;color:#374151">Pocas pruebas para calcular el pulso</div><div style="font-size:12px;margin-top:4px;color:#6b7280">Se necesitan al menos 2 pruebas con datos del equipo.</div></div>`;
+      }
+    }
+  }catch(err){
+    console.error('[Inicio Pulso] error:', err);
+    const pulsoBox = document.getElementById('inicioPulso');
+    if(pulsoBox) pulsoBox.innerHTML = `<div class="inicio-empty" style="color:#dc2626"><div style="font-weight:700">Error en el pulso (revisar consola)</div></div>`;
+  }
+
+  // ─── 7. Tu próximo objetivo — protegido con try/catch ──────────────
+  try{
+    const objBox = document.getElementById('inicioObjetivo');
+    if(objBox){
+      const yearStr = String((typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.year) || new Date().getFullYear());
+      const teamScores = new Map();
+      for(const race of (history||[])){
+        const ry = ((typeof _parseSpanishDate==='function' ? _parseSpanishDate(race.raceDate) : '') || '').slice(0,4);
+        if(ry !== yearStr) continue;
+        const byTeam = {};
+        for(const r of (race.riders||[])){
+          const t = (r.team||'').trim(); if(!t) continue;
+          if(!byTeam[t]) byTeam[t] = [];
+          byTeam[t].push(r.pos||999);
+        }
+        for(const t in byTeam){
+          const sorted = byTeam[t].slice().sort((a,b)=>a-b);
+          if(sorted.length < 3) continue;
+          const top3 = sorted.slice(0,3);
+          const points = top3.reduce((s,p)=>s+p,0);
+          if(!teamScores.has(t)) teamScores.set(t, {team:t, total:0, races:0});
+          const e = teamScores.get(t); e.total += points; e.races++;
+        }
+      }
+      const ranking = [...teamScores.values()]
+        .filter(e => e.races >= 1)
+        .sort((a,b) => a.total - b.total);
+      const myKey = team ? (typeof teamKey==='function' ? teamKey(team) : team.toLowerCase().trim()) : '';
+      let myIdx = -1;
+      if(team){
+        myIdx = ranking.findIndex(e => (typeof teamKey==='function' ? teamKey(e.team) : (e.team||'').toLowerCase().trim()) === myKey);
+      }
+      if(!ranking.length){
+        objBox.innerHTML = `<div class="inicio-empty"><div style="font-size:32px;margin-bottom:8px">🎯</div><div style="font-weight:700;color:#374151">Sin ranking aún para ${escapeHtml(yearStr)}</div><div style="font-size:12px;margin-top:4px;color:#6b7280">Se necesitan equipos con al menos 3 finishers en una prueba.</div></div>`;
+      } else if(!team){
+        const top3 = ranking.slice(0,3);
+        objBox.innerHTML = `
+          <div onclick="document.getElementById('gfMyTeam')?.focus()" style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:10px;cursor:pointer">⚙️ <span style="text-decoration:underline">Configura tu equipo</span> para ver tu objetivo</div>
+          <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Top 3 del año ${escapeHtml(yearStr)}</div>
+          ${top3.map((e,i) => `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:${i===0?'#fef3c7':'#f9fafb'};border-radius:8px;margin-bottom:5px">
+            <div style="background:${i===0?'#f59e0b':'#cbd5e1'};color:#fff;font-weight:900;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px">${i+1}</div>
+            <div style="flex:1;font-weight:700;color:#0b2f6b;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.team)}</div>
+            <div style="font-size:11px;color:#475569;font-weight:700">${e.total} pts</div>
+          </div>`).join('')}`;
+      } else if(myIdx < 0){
+        objBox.innerHTML = `<div class="inicio-empty"><div style="font-size:32px;margin-bottom:8px">🎯</div><div style="font-weight:700;color:#374151">Sin datos de tu equipo en ${escapeHtml(yearStr)}</div><div style="font-size:12px;margin-top:4px;color:#6b7280">Tu equipo aún no tiene pruebas con 3 finishers este año.</div></div>`;
+      } else if(myIdx === 0){
+        const myEntry = ranking[0];
+        const second = ranking[1];
+        const advantage = second ? (second.total - myEntry.total) : 0;
+        objBox.innerHTML = `
+          <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:14px;text-align:center">
+            <div style="font-size:32px;margin-bottom:4px">🥇</div>
+            <div style="font-size:16px;font-weight:900;color:#78350f">¡Eres LÍDER de ${escapeHtml(yearStr)}!</div>
+            <div style="font-size:13px;color:#92400e;margin-top:6px"><strong>${escapeHtml(myEntry.team)}</strong> · ${myEntry.total} pts</div>
+            ${second ? `<div style="margin-top:10px;font-size:12px;color:#78350f">Ventaja sobre el 2º: <strong>+${advantage} pts</strong></div>` : ''}
+          </div>`;
+      } else {
+        const myEntry = ranking[myIdx];
+        const rival = ranking[myIdx-1];
+        const diff = myEntry.total - rival.total;
+        objBox.innerHTML = `
+          <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:14px">
+            <div style="font-size:11px;color:#1d4ed8;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Año ${escapeHtml(yearStr)} · Posición ${myIdx+1}º de ${ranking.length}</div>
+            <div style="font-size:14px;color:#0b2f6b;line-height:1.5">Para subir al puesto <strong>${myIdx}º</strong> tienes que adelantar a:</div>
+            <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px;margin-top:8px">
+              <div style="font-size:16px;font-weight:900;color:#0b2f6b">🎯 ${escapeHtml(rival.team)}</div>
+              <div style="font-size:12px;color:#475569;margin-top:3px">${rival.total} pts · ${rival.races} prueba${rival.races!==1?'s':''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+              <div style="flex:1;background:#fee2e2;border-radius:8px;padding:8px 10px;text-align:center">
+                <div style="font-size:11px;color:#991b1b;font-weight:700">Diferencia</div>
+                <div style="font-size:18px;color:#991b1b;font-weight:900">${diff} pts</div>
+              </div>
+              <button onclick="showView('view-powerranking')" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-weight:800;font-size:12px;cursor:pointer">Ver ranking →</button>
+            </div>
+          </div>`;
+      }
+    }
+  }catch(err){
+    console.error('[Inicio Objetivo] error:', err);
+    const objBox = document.getElementById('inicioObjetivo');
+    if(objBox) objBox.innerHTML = `<div class="inicio-empty" style="color:#dc2626"><div style="font-weight:700">Error en el objetivo (revisar consola)</div></div>`;
+  }
+
+  // ─── 8. Últimas 5 carreras del historial ────────────────────────────
   const recBox = document.getElementById('inicioRecentRaces');
   if(recBox){
     if(!history.length){
