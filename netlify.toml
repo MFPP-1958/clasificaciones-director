@@ -5,6 +5,7 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# ─── Seguridad ─────────────────────────────────────────────────────────────
 # Headers de seguridad para todos los recursos
 [[headers]]
   for = "/*"
@@ -13,16 +14,36 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy        = "strict-origin-when-cross-origin"
 
-# Forzar revalidación del HTML en cada visita
-# (evita que Safari iOS sirva versiones antiguas cacheadas en iPad/iPhone)
+# ─── HTML: NUNCA cachear ───────────────────────────────────────────────────
+# El HTML contiene las URLs versionadas (?v=hash) de los assets. Si el HTML
+# se cachea el navegador no se entera de que el hash ha cambiado, y por
+# tanto seguiría sirviendo los assets viejos. Forzamos revalidación SIEMPRE.
 [[headers]]
   for = "/*.html"
   [headers.values]
-    Cache-Control    = "public, max-age=0, must-revalidate"
+    Cache-Control    = "no-cache, no-store, must-revalidate"
+    Pragma           = "no-cache"
+    Expires          = "0"
     Content-Type     = "text/html; charset=utf-8"
 
 [[headers]]
   for = "/"
   [headers.values]
-    Cache-Control    = "public, max-age=0, must-revalidate"
+    Cache-Control    = "no-cache, no-store, must-revalidate"
+    Pragma           = "no-cache"
+    Expires          = "0"
     Content-Type     = "text/html; charset=utf-8"
+
+# ─── Assets con cache busting: cachear MUY largo (1 año) ──────────────────
+# Como las URLs llevan ?v=HASH del contenido, cuando cambia el archivo
+# cambia el hash → es una URL "nueva" → se descarga inevitablemente.
+# Por tanto es seguro cachearlos durante 1 año (immutable).
+[[headers]]
+  for = "/assets/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
