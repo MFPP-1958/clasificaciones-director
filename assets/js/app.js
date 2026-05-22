@@ -10332,20 +10332,45 @@ async function renderInicio(){
 
       // 3) Pruebas FCCV próximas en 7 días no añadidas al calendario propio
       const fccvScrape = (typeof _fccvLastAllRaces !== 'undefined' && Array.isArray(_fccvLastAllRaces)) ? _fccvLastAllRaces : [];
-      const plannedNames = new Set();
+      // Lista de planificadas con su fecha ISO + nombre normalizado, para
+      // emparejar de forma TOLERANTE (la FCCV tiene erratas: "Milgro" vs
+      // "Milagro"). Una prueba se considera "ya planificada" si comparte
+      // FECHA y al menos 2 palabras significativas con una planificada.
+      const _normName = (s)=>(s||'').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+      const plannedList = [];
       try{
         if(typeof _calPlanned!=='undefined' && Array.isArray(_calPlanned)){
-          _calPlanned.forEach(p => plannedNames.add(normalizeRiderName(p.name||'').toLowerCase()));
+          _calPlanned.forEach(p => {
+            const iso = p.dateStr || (p.date instanceof Date
+              ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}-${String(p.date.getDate()).padStart(2,'0')}`
+              : '');
+            plannedList.push({ iso, norm:_normName(p.name) });
+          });
         }
       }catch(_){}
+      const _yaPlanificada = (fccvRace)=>{
+        const fNorm = _normName(fccvRace.name);
+        const fDate = fccvRace.date || '';
+        const fTok = fNorm.split(' ').filter(t=>t.length>=4);
+        for(const p of plannedList){
+          if(p.iso !== fDate) continue;          // distinta fecha → no es la misma
+          if(p.norm === fNorm) return true;       // nombre idéntico
+          if(p.norm.includes(fNorm) || fNorm.includes(p.norm)) return true;
+          const pTok = p.norm.split(' ').filter(t=>t.length>=4);
+          const shared = fTok.filter(t=>pTok.includes(t)).length;
+          if(shared >= 2) return true;            // misma fecha + 2 palabras → es la misma
+        }
+        return false;
+      };
       const upcomingNotPlanned = fccvScrape.filter(r => {
         if(!r.date) return false;
         const todayIso = new Date().toISOString().slice(0,10);
         if(r.date < todayIso) return false;
         const t7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
         if(r.date > t7) return false;
-        const nm = normalizeRiderName(r.name||'').toLowerCase();
-        if(plannedNames.has(nm)) return false;
+        if(_yaPlanificada(r)) return false;       // ya está en tu calendario
         // Aplicar filtros globales. Blob combinado (categoría + modalidad +
         // nombre) para que el detector pille el marcador esté donde esté —
         // la FCCV a veces mete datos de categoría en el campo modalidad.
