@@ -129,6 +129,23 @@ function _gfDefaultsApplyToSelects(){
   if(gen && [...gen.options].some(o=>o.value===_globalFilters.gender)) gen.value = _globalFilters.gender;
 }
 
+// Fase B: aplica los filtros globales (cat/modality/gender) a los selectores
+// LOCALES de las vistas que los usan. De momento sincroniza el panel FCCV
+// del Calendario, cuyos valores coinciden 1:1 con los del filtro global.
+function _gfApplyDefaultsToView(viewId){
+  try{
+    const {cat, modality, gender} = _globalFilters;
+    if(viewId === 'view-calendario'){
+      const c = document.getElementById('fccvCat');
+      const m = document.getElementById('fccvMod');
+      const g = document.getElementById('fccvGen');
+      if(c && [...c.options].some(o=>o.value===cat))      c.value = cat;
+      if(m && [...m.options].some(o=>o.value===modality)) m.value = modality;
+      if(g && [...g.options].some(o=>o.value===gender))   g.value = gender;
+    }
+  }catch(e){ console.warn('[gf] aplicar defaults a vista falló:', e); }
+}
+
 // Al cambiar Categoría / Modalidad / Género: persistir y disparar cascada
 async function _gfDefaultsOnChange(){
   _globalFilters.cat      = document.getElementById('gfCat')?.value || '';
@@ -150,6 +167,11 @@ async function _gfDefaultsOnChange(){
     }catch(_){}
   }
   _gfUpdateStatus();
+  // Sincronizar los selectores locales de la vista activa (si procede)
+  try{
+    const activeView = document.querySelector('.spa-view.active');
+    if(activeView) _gfApplyDefaultsToView(activeView.id);
+  }catch(_){}
   _gfTriggerCurrentViewRerender();
   // Notificar al resto de la app
   try{ window.dispatchEvent(new CustomEvent('myfilters:changed', {detail:{..._globalFilters}})); }catch(_){}
@@ -522,7 +544,7 @@ function showView(viewId){
       // su estado vacío amable (Fase 2 no-bloqueo).
       if(viewId==='view-tactica') renderTactica();
       if(viewId==='view-inicio') renderInicio();
-      if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); }
+      if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); if(typeof _gfApplyDefaultsToView==='function') _gfApplyDefaultsToView('view-calendario'); }
       if(viewId==='view-informe-plantilla') { if(typeof _ipInit==='function') _ipInit(); }
       if(viewId==='view-equipos-ccaa') { if(typeof _eqCcaaInit==='function') _eqCcaaInit(); }
       if(viewId==='view-ciclistas-cat') { if(typeof _riderCatInit==='function') _riderCatInit(); }
