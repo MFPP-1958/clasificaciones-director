@@ -10642,9 +10642,12 @@ async function renderInicio(){
         const sorted = [...m.entries()].sort((a,b)=>b[1]-a[1]);
         if(sorted.length) teamRegion[t] = sorted[0][0];
       }
+      // Media de puntos por prueba: comparación JUSTA independientemente del
+      // nº de pruebas que haya disputado cada equipo. Menos media = mejor.
+      teamScores.forEach(e => { e.avg = e.races ? (e.total / e.races) : Infinity; });
       let ranking = [...teamScores.values()]
         .filter(e => e.races >= 1)
-        .sort((a,b) => a.total - b.total);
+        .sort((a,b) => a.avg - b.avg);
       // Filtro por CCAA del filtro global (si el usuario lo ha fijado)
       if(regionFilter){
         ranking = ranking.filter(e => {
@@ -10665,50 +10668,52 @@ async function renderInicio(){
         const top3 = ranking.slice(0,3);
         objBox.innerHTML = `
           <div onclick="document.getElementById('gfMyTeam')?.focus()" style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;margin-bottom:10px;cursor:pointer">⚙️ <span style="text-decoration:underline">Configura tu equipo</span> para ver tu objetivo</div>
-          <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Top 3 del año ${escapeHtml(yearStr)}</div>
+          <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Top 3 del año ${escapeHtml(yearStr)} · media pts/prueba</div>
           ${top3.map((e,i) => `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:${i===0?'#fef3c7':'#f9fafb'};border-radius:8px;margin-bottom:5px">
             <div style="background:${i===0?'#f59e0b':'#cbd5e1'};color:#fff;font-weight:900;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px">${i+1}</div>
             <div style="flex:1;font-weight:700;color:#0b2f6b;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.team)}</div>
-            <div style="font-size:11px;color:#475569;font-weight:700">${e.total} pts</div>
+            <div style="font-size:11px;color:#475569;font-weight:700;text-align:right">${e.avg.toFixed(1)} <span style="font-size:9px;color:#9ca3af">/prueba</span><br><span style="font-size:9px;color:#9ca3af">${e.races} prueba${e.races!==1?'s':''}</span></div>
           </div>`).join('')}`;
       } else if(myIdx < 0){
         objBox.innerHTML = `<div class="inicio-empty"><div style="font-size:32px;margin-bottom:8px">🎯</div><div style="font-weight:700;color:#374151">Sin datos de tu equipo en ${escapeHtml(yearStr)}</div><div style="font-size:12px;margin-top:4px;color:#6b7280">Tu equipo aún no tiene pruebas con 3 finishers este año.</div></div>`;
       } else if(myIdx === 0){
         const myEntry = ranking[0];
         const second = ranking[1];
-        const advantage = second ? (second.total - myEntry.total) : 0;
+        const advantage = second ? (second.avg - myEntry.avg) : 0;
         objBox.innerHTML = `
           <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:14px;text-align:center">
             <div style="font-size:32px;margin-bottom:4px">🥇</div>
             <div style="font-size:16px;font-weight:900;color:#78350f">¡Eres LÍDER de ${escapeHtml(yearStr)}${regionFilter?` en ${escapeHtml(regionFilter)}`:''}!</div>
-            <div style="font-size:13px;color:#92400e;margin-top:6px"><strong>${escapeHtml(myEntry.team)}</strong> · <strong style="font-size:15px">${myEntry.total} pts</strong> en ${myEntry.races} prueba${myEntry.races!==1?'s':''}</div>
-            ${second ? `<div style="margin-top:10px;font-size:12px;color:#78350f">2º: ${escapeHtml(second.team)} (${second.total} pts) · Ventaja: <strong>+${advantage} pts</strong></div>` : ''}
+            <div style="font-size:13px;color:#92400e;margin-top:6px"><strong>${escapeHtml(myEntry.team)}</strong> · <strong style="font-size:15px">${myEntry.avg.toFixed(1)} pts/prueba</strong></div>
+            <div style="font-size:11px;color:#92400e;margin-top:2px">${myEntry.total} pts totales en ${myEntry.races} prueba${myEntry.races!==1?'s':''}</div>
+            ${second ? `<div style="margin-top:10px;font-size:12px;color:#78350f">2º: ${escapeHtml(second.team)} (${second.avg.toFixed(1)} /prueba) · Ventaja: <strong>${advantage.toFixed(1)} pts/prueba</strong></div>` : ''}
           </div>`;
       } else {
         const myEntry = ranking[myIdx];
         const rival = ranking[myIdx-1];
-        const diff = myEntry.total - rival.total;
+        const diff = myEntry.avg - rival.avg;  // diferencia en media pts/prueba
         objBox.innerHTML = `
           <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:14px">
             <div style="font-size:11px;color:#1d4ed8;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Año ${escapeHtml(yearStr)}${regionFilter?` · CCAA: ${escapeHtml(regionFilter)}`:''} · Posición ${myIdx+1}º de ${ranking.length}</div>
-            <!-- Caja con MIS puntos -->
+            <div style="font-size:10.5px;color:#475569;background:#fff;border-radius:6px;padding:5px 8px;margin-bottom:8px">📊 Ranking por <b>media de puntos por prueba</b> (justo aunque cada equipo haya corrido distinto nº de pruebas). Menos media = mejor.</div>
+            <!-- Caja con MIS datos -->
             <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:8px 12px;margin-bottom:8px">
               <div style="font-size:11px;color:#1d4ed8;font-weight:700;text-transform:uppercase">Tu equipo (${myIdx+1}º)</div>
               <div style="font-size:15px;font-weight:900;color:#0b2f6b;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(myEntry.team)}</div>
-              <div style="font-size:12px;color:#475569;margin-top:2px"><strong style="font-size:14px;color:#1d4ed8">${myEntry.total} pts</strong> · ${myEntry.races} prueba${myEntry.races!==1?'s':''}</div>
+              <div style="font-size:12px;color:#475569;margin-top:2px"><strong style="font-size:14px;color:#1d4ed8">${myEntry.avg.toFixed(1)} pts/prueba</strong> · ${myEntry.total} tot · ${myEntry.races} prueba${myEntry.races!==1?'s':''}</div>
             </div>
             <div style="font-size:13px;color:#0b2f6b;line-height:1.4;margin-bottom:6px">Para subir al puesto <strong>${myIdx}º</strong> debes adelantar a:</div>
             <!-- Caja con el RIVAL a batir -->
             <div style="background:#fff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px">
               <div style="font-size:11px;color:#92400e;font-weight:700;text-transform:uppercase">Rival (${myIdx}º)</div>
               <div style="font-size:15px;font-weight:900;color:#0b2f6b;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🎯 ${escapeHtml(rival.team)}</div>
-              <div style="font-size:12px;color:#475569;margin-top:2px"><strong style="font-size:14px;color:#1d4ed8">${rival.total} pts</strong> · ${rival.races} prueba${rival.races!==1?'s':''}</div>
+              <div style="font-size:12px;color:#475569;margin-top:2px"><strong style="font-size:14px;color:#1d4ed8">${rival.avg.toFixed(1)} pts/prueba</strong> · ${rival.total} tot · ${rival.races} prueba${rival.races!==1?'s':''}</div>
             </div>
             <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
               <div style="flex:1;background:#fee2e2;border-radius:8px;padding:8px 10px;text-align:center">
                 <div style="font-size:11px;color:#991b1b;font-weight:700">Te faltan</div>
-                <div style="font-size:18px;color:#991b1b;font-weight:900">${diff} pts</div>
-                <div style="font-size:10px;color:#991b1b;margin-top:1px">para subir al ${myIdx}º</div>
+                <div style="font-size:18px;color:#991b1b;font-weight:900">${diff.toFixed(1)}</div>
+                <div style="font-size:10px;color:#991b1b;margin-top:1px">pts/prueba para el ${myIdx}º</div>
               </div>
               <button onclick="showView('view-powerranking')" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-weight:800;font-size:12px;cursor:pointer">Ver ranking →</button>
             </div>
