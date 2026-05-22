@@ -134,7 +134,9 @@ const _GF_CAT_TOKENS = {
   femenino: /\bfemenin|\bfem\b|\bfem\./i
 };
 const _GF_MOD_TOKENS = {
-  carretera:    /\bcarretera\b|\bruta\b/i,
+  // OJO: NO incluir "ruta" en carretera — aparece en nombres de pruebas que
+  // no son de carretera (ej. "MARCHA CICLOTURISTA RUTA 99").
+  carretera:    /\bcarretera\b/i,
   btt:          /\bbtt\b|\bmtb\b|monta[ñn]a/i,
   cx:           /ciclo.?cross|cyclo.?cross|\bcx\b/i,
   pista:        /\bpista\b/i,
@@ -10245,7 +10247,7 @@ async function renderInicio(){
       .sort((a,b) => a.iso.localeCompare(b.iso));
     const upcoming = allUpcoming
       .filter(p => {
-        if(!_gfMatchesGlobalMod(p.modality||'')) return false;
+        if(!_gfMatchesGlobalMod(`${p.modality||''} ${p.name||''}`)) return false;
         return _gfMatchesCatGender(p.cat||'', p.name||'');
       })
       .slice(0, 5);
@@ -10406,9 +10408,9 @@ async function renderInicio(){
         // en el calendario propio y que encajen con los filtros globales.
         if(r.date < todayIso) return false;
         if(_yaPlanificada(r)) return false;       // ya está en tu calendario
-        // Modalidad: SOLO el campo modalidad (el nombre tiene ruido tipo
-        // "RUTA 99"). Categoría+género: combinados sobre la lista de cat.
-        if(!_gfMatchesGlobalMod(r.modality||'')) return false;
+        // Modalidad: campo modalidad + NOMBRE (la FCCV a veces deja el campo
+        // vacío, pero el nombre suele decir "BMX", "CICLOCROSS"...).
+        if(!_gfMatchesGlobalMod(`${r.modality||''} ${r.name||''}`)) return false;
         return _gfMatchesCatGender(r.category||'', r.name||'');
       }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
       if(upcomingNotPlanned.length>0){
