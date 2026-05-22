@@ -10717,6 +10717,23 @@ async function renderInicio(){
               </div>
               <button onclick="showView('view-powerranking')" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-weight:800;font-size:12px;cursor:pointer">Ver ranking →</button>
             </div>
+            ${(()=>{
+              // Equipos por DEBAJO (te persiguen). Mostramos hasta 3.
+              const persiguen = ranking.slice(myIdx+1, myIdx+4);
+              if(!persiguen.length) return `<div style="margin-top:10px;font-size:11px;color:#15803d;font-weight:700;background:#dcfce7;border-radius:8px;padding:6px 10px;text-align:center">🛡️ Eres el último — nadie te persigue por debajo.</div>`;
+              return `<div style="margin-top:10px;border-top:1px dashed #bfdbfe;padding-top:8px">
+                <div style="font-size:11px;color:#92400e;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px">🛡️ Vigila tu retaguardia</div>
+                ${persiguen.map((e,i)=>{
+                  const gap = e.avg - myEntry.avg; // cuánto peor es su media → tu colchón
+                  const danger = gap < 5;
+                  return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;background:${danger?'#fef2f2':'#f9fafb'};border:1px solid ${danger?'#fca5a5':'#e5e7eb'};margin-bottom:4px">
+                    <div style="font-weight:900;color:#92400e;font-size:11px;min-width:24px">${myIdx+2+i}º</div>
+                    <div style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0b2f6b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.team)}</div>
+                    <div style="font-size:11px;color:#475569;text-align:right;white-space:nowrap">${e.avg.toFixed(1)} <span style="font-size:9px;color:#9ca3af">/pr</span><br><span style="font-size:9.5px;color:${danger?'#dc2626':'#16a34a'};font-weight:700">colchón ${gap.toFixed(1)}</span></div>
+                  </div>`;
+                }).join('')}
+              </div>`;
+            })()}
           </div>`;
       }
     }
