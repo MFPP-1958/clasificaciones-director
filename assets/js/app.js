@@ -134,11 +134,17 @@ const _GF_CAT_TOKENS = {
   femenino: /\bfemenin|\bfem\b|\bfem\./i
 };
 const _GF_MOD_TOKENS = {
-  carretera: /\bcarretera\b|\bruta\b/i,
-  btt:       /\bbtt\b|\bmtb\b|monta[ñn]a/i,
-  cx:        /ciclo.?cross|cyclo.?cross|\bcx\b/i,
-  pista:     /\bpista\b/i,
-  trial:     /\btrial\b/i
+  carretera:    /\bcarretera\b|\bruta\b/i,
+  btt:          /\bbtt\b|\bmtb\b|monta[ñn]a/i,
+  cx:           /ciclo.?cross|cyclo.?cross|\bcx\b/i,
+  pista:        /\bpista\b/i,
+  trial:        /\btrial\b/i,
+  // Las 3 siguientes NO están en el desplegable del filtro pero las
+  // incluimos para que el detector reconozca esas pruebas como "otra
+  // modalidad" y las EXCLUYA cuando el filtro es Carretera/BTT/etc.
+  bmx:          /\bbmx\b/i,
+  cicloturismo: /cicloturism|ciclodeportiv|ciclismo\s+para\s+todos|ciclodep|\bmarcha\b/i,
+  escuelas:     /\bescuela|\bescola/i
 };
 function _gfMatchesGlobalCat(blob){
   const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
@@ -177,8 +183,12 @@ function _gfMatchesGlobalGender(catField, nameField){
   if(!g || g==='mixto') return true;
   const cat = String(catField||'');
   const name = String(nameField||'');
-  // Estrategia 1: lista de categorías (lo más fiable)
-  const tokens = cat.split(/[,;]/).map(s=>s.trim()).filter(Boolean);
+  // Estrategia 1: lista de categorías (lo más fiable).
+  // Filtramos tokens basura: "..." de truncado, vacíos, o sin letras —
+  // antes "..." se contaba como categoría masculina y colaba pruebas fem.
+  const tokens = cat.split(/[,;]/)
+    .map(s=>s.trim())
+    .filter(s=> s.length>=2 && /[a-záéíóúñ]/i.test(s));
   if(tokens.length){
     const femTokens  = tokens.filter(tk=>_GF_FEM_RE.test(tk));
     const maleTokens = tokens.filter(tk=>!_GF_FEM_RE.test(tk));
