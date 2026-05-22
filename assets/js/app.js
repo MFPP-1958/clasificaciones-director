@@ -143,13 +143,21 @@ const _GF_MOD_TOKENS = {
   // incluimos para que el detector reconozca esas pruebas como "otra
   // modalidad" y las EXCLUYA cuando el filtro es Carretera/BTT/etc.
   bmx:          /\bbmx\b/i,
-  cicloturismo: /cicloturism|ciclodeportiv|ciclismo\s+para\s+todos|ciclodep|\bmarcha\b/i,
+  cicloturismo: /cicloturis|ciclodeportiv|ciclismo\s+para\s+todos|ciclodep|a\s+partir\s+de\s+\d+\s*a[ñn]?o?s?|gran\s+fondo|\bmarcha\b/i,
   escuelas:     /\bescuela|\bescola/i
 };
+// Categorías "menores" que NO deben mezclarse con las adultas competitivas
+// (regla de negocio: una prueba de Cadete mezclada con Escuela/Infantil/
+// Alevín NO es una prueba de cadete "pura" y debe descartarse).
+const _GF_MENOR_RE = /\bescuela|\bescola|\binfantil|\balev[ií]n|\bprincipiant|\bpromesa|\bbenjam[ií]n|\bpre.?infantil|\bpre.?benjam|\bprincipiant/i;
 function _gfMatchesGlobalCat(blob){
   const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
   if(!gfCat) return true;
   const t = String(blob||'');
+  // Exclusión: si el filtro es una categoría adulta competitiva, descartar
+  // pruebas que mezclen escuela/infantil/alevín/principiantes/promesas.
+  const adultas = ['cadete','junior','sub23','elite','master'];
+  if(adultas.includes(gfCat) && _GF_MENOR_RE.test(t)) return false;
   const myRe = _GF_CAT_TOKENS[gfCat];
   if(myRe && myRe.test(t)) return true;          // contiene MI categoría
   for(const k in _GF_CAT_TOKENS){                 // ¿contiene OTRA exclusiva?
@@ -10201,10 +10209,9 @@ async function renderInicio(){
       .sort((a,b) => a.iso.localeCompare(b.iso));
     const upcoming = allUpcoming
       .filter(p => {
-        const catBlob = `${p.cat||''} ${p.name||''}`;
-        const modBlob = `${p.modality||''} ${p.name||''}`;
-        return _gfMatchesGlobalCat(catBlob)
-            && _gfMatchesGlobalMod(modBlob)
+        const fullBlob = `${p.cat||''} ${p.modality||''} ${p.name||''}`;
+        return _gfMatchesGlobalCat(fullBlob)
+            && _gfMatchesGlobalMod(fullBlob)
             && _gfMatchesGlobalGender(p.cat||'', p.name||'');
       })
       .slice(0, 5);
@@ -10339,11 +10346,12 @@ async function renderInicio(){
         if(r.date > t7) return false;
         const nm = normalizeRiderName(r.name||'').toLowerCase();
         if(plannedNames.has(nm)) return false;
-        // Aplicar filtros globales Categoría/Modalidad/Género
-        const catBlob = `${r.category||''} ${r.name||''}`;
-        const modBlob = `${r.modality||''} ${r.name||''}`;
-        return _gfMatchesGlobalCat(catBlob)
-            && _gfMatchesGlobalMod(modBlob)
+        // Aplicar filtros globales. Blob combinado (categoría + modalidad +
+        // nombre) para que el detector pille el marcador esté donde esté —
+        // la FCCV a veces mete datos de categoría en el campo modalidad.
+        const fullBlob = `${r.category||''} ${r.modality||''} ${r.name||''}`;
+        return _gfMatchesGlobalCat(fullBlob)
+            && _gfMatchesGlobalMod(fullBlob)
             && _gfMatchesGlobalGender(r.category||'', r.name||'');
       });
       if(upcomingNotPlanned.length>0){
