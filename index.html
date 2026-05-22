@@ -220,22 +220,7 @@
         </div>
       </section>
 
-      <!-- Accesos directos — botones grandes táctiles (sobre todo para iPad) -->
-      <section class="panel" style="padding:16px 18px">
-        <div class="section-title" style="margin-bottom:12px"><h2 style="margin:0">🚀 Accesos directos</h2></div>
-        <div class="inicio-accesos">
-          <button class="acceso-btn" onclick="showView('view-carga')"><span class="acceso-ic">📤</span>Cargar prueba</button>
-          <button class="acceso-btn" onclick="showView('view-historial')"><span class="acceso-ic">📁</span>Historial</button>
-          <button class="acceso-btn" onclick="showView('view-calendario')"><span class="acceso-ic">📅</span>Calendario</button>
-          <button class="acceso-btn" onclick="showView('view-tabla')"><span class="acceso-ic">📋</span>Tabla y filtros</button>
-          <button class="acceso-btn" onclick="showView('view-tactica')"><span class="acceso-ic">🧠</span>Estrategia</button>
-          <button class="acceso-btn" onclick="showView('view-seleccion')"><span class="acceso-ic">🏆</span>Convocatorias</button>
-          <button class="acceso-btn" onclick="showView('view-powerranking')"><span class="acceso-ic">⭐</span>Power Ranking</button>
-          <button class="acceso-btn" onclick="showView('view-informe-plantilla')"><span class="acceso-ic">📄</span>Informe Plantilla</button>
-        </div>
-      </section>
-
-      <!-- KPIs principales -->
+      <!-- KPIs principales (ancho completo) -->
       <section class="panel">
         <div class="section-title" style="margin-bottom:14px">
           <h2 style="margin:0">📊 Resumen general</h2>
@@ -244,46 +229,57 @@
         <div id="inicioKpis" class="evol-kpis"></div>
       </section>
 
-      <!-- 2 columnas: próximas pruebas FCCV + centro de pendientes -->
-      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px" class="inicio-grid-2col">
-        <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🚴 Próximas pruebas</h2></div>
-          <div id="inicioLastRace"></div>
-        </section>
-        <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🎯 Centro de pendientes</h2></div>
-          <div id="inicioActions" style="display:flex;flex-direction:column;gap:8px"></div>
-        </section>
-      </div>
-
-      <!-- 2 columnas: Pulso del equipo + Próximo objetivo (Tier 2 con guards) -->
-      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px;margin-bottom:18px" class="inicio-grid-2col">
-        <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px">
-            <h2 style="margin:0">💓 Pulso del equipo</h2>
-            <button class="help-btn" data-help="&lt;strong&gt;💓 Pulso del equipo&lt;/strong&gt;Muestra cómo evoluciona el rendimiento de tu equipo en las últimas pruebas del histórico.&lt;ul&gt;&lt;li&gt;Para cada prueba se toman los &lt;b&gt;3 mejores corredores de tu equipo&lt;/b&gt; (los que entraron en mejor posición).&lt;/li&gt;&lt;li&gt;Se calcula su &lt;b&gt;posición media&lt;/b&gt;: por ejemplo, si tus 3 mejores entraron 1º, 5º y 9º, la media es (1+5+9)/3 = 5,0.&lt;/li&gt;&lt;li&gt;Cada punto azul del gráfico es una prueba. Cuanto más abajo el punto, mejor el resultado.&lt;/li&gt;&lt;li&gt;Pasa el cursor sobre cualquier punto para ver la prueba concreta, fecha y posición media.&lt;/li&gt;&lt;li&gt;El badge de tendencia compara la primera mitad de pruebas con la segunda: &lt;b&gt;🟢 En forma&lt;/b&gt; si mejora más de 1 posición, &lt;b&gt;🔴 Bajando&lt;/b&gt; si empeora más de 1, &lt;b&gt;🟡 Estable&lt;/b&gt; entre medio.&lt;/li&gt;&lt;li&gt;Si no tienes equipo configurado, muestra el pulso del top 3 GLOBAL de cada prueba como referencia.&lt;/li&gt;&lt;/ul&gt;">?</button>
-          </div>
-          <div id="inicioPulso"></div>
-        </section>
-        <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px">
-            <h2 style="margin:0">🎯 Tu próximo objetivo</h2>
-            <button class="help-btn" data-help="&lt;strong&gt;🎯 Tu próximo objetivo&lt;/strong&gt;Te dice qué equipo tienes que adelantar en el ranking del año para subir un puesto.&lt;ul&gt;&lt;li&gt;&lt;b&gt;Puntos por prueba:&lt;/b&gt; en cada prueba se suman las posiciones de los &lt;b&gt;3 mejores corredores&lt;/b&gt; del equipo. Ej: si entraron 2º + 5º + 9º → 16 puntos en esa prueba.&lt;/li&gt;&lt;li&gt;&lt;b&gt;El ranking usa la MEDIA de puntos por prueba&lt;/b&gt; (no el total). Así la comparación es JUSTA: un equipo que ha corrido 13 pruebas no queda penalizado frente a uno que solo ha corrido 10. Se divide el total de puntos entre el nº de pruebas.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Menos media = mejor.&lt;/b&gt; El equipo con menor media de puntos por prueba lidera.&lt;/li&gt;&lt;li&gt;Solo cuentan las pruebas donde el equipo tuvo al menos 3 corredores en meta.&lt;/li&gt;&lt;li&gt;Los filtros globales (CCAA, categoría, modalidad, género) acotan el ranking.&lt;/li&gt;&lt;li&gt;Pulsa &lt;b&gt;Ver ranking&lt;/b&gt; para el desglose completo en Power Ranking.&lt;/li&gt;&lt;/ul&gt;">?</button>
-          </div>
-          <div id="inicioObjetivo"></div>
-        </section>
-      </div>
-
-      <!-- 2 columnas: top corredores + últimas carreras -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" class="inicio-grid-2col">
-        <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🏆 Top corredores de mi equipo</h2></div>
-          <div id="inicioTopRiders"></div>
-        </section>
-        <section class="panel" style="margin-bottom:0">
-          <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">📅 Últimas carreras del historial</h2></div>
-          <div id="inicioRecentRaces"></div>
-        </section>
+      <!-- Cuerpo en 2 columnas independientes -->
+      <div class="inicio-2col-wrap">
+        <!-- ── Columna izquierda ── -->
+        <div class="inicio-col">
+          <section class="panel" style="margin-bottom:0">
+            <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🚴 Próximas pruebas</h2></div>
+            <div id="inicioLastRace"></div>
+          </section>
+          <section class="panel" style="margin-bottom:0;padding:16px 18px">
+            <div class="section-title" style="margin-bottom:12px"><h2 style="margin:0">🚀 Accesos directos</h2></div>
+            <div class="inicio-accesos">
+              <button class="acceso-btn" onclick="showView('view-carga')"><span class="acceso-ic">📤</span>Cargar prueba</button>
+              <button class="acceso-btn" onclick="showView('view-historial')"><span class="acceso-ic">📁</span>Historial</button>
+              <button class="acceso-btn" onclick="showView('view-calendario')"><span class="acceso-ic">📅</span>Calendario</button>
+              <button class="acceso-btn" onclick="showView('view-tabla')"><span class="acceso-ic">📋</span>Tabla y filtros</button>
+              <button class="acceso-btn" onclick="showView('view-tactica')"><span class="acceso-ic">🧠</span>Estrategia</button>
+              <button class="acceso-btn" onclick="showView('view-seleccion')"><span class="acceso-ic">🏆</span>Convocatorias</button>
+              <button class="acceso-btn" onclick="showView('view-powerranking')"><span class="acceso-ic">⭐</span>Power Ranking</button>
+              <button class="acceso-btn" onclick="showView('view-informe-plantilla')"><span class="acceso-ic">📄</span>Informe Plantilla</button>
+            </div>
+          </section>
+          <section class="panel" style="margin-bottom:0">
+            <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🏆 Top corredores de mi equipo</h2></div>
+            <div id="inicioTopRiders"></div>
+          </section>
+        </div>
+        <!-- ── Columna derecha ── -->
+        <div class="inicio-col">
+          <section class="panel" style="margin-bottom:0">
+            <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🎯 Centro de pendientes</h2></div>
+            <div id="inicioActions" style="display:flex;flex-direction:column;gap:8px"></div>
+          </section>
+          <section class="panel" style="margin-bottom:0">
+            <div class="section-title" style="margin-bottom:10px">
+              <h2 style="margin:0">💓 Pulso del equipo</h2>
+              <button class="help-btn" data-help="&lt;strong&gt;💓 Pulso del equipo&lt;/strong&gt;Muestra cómo evoluciona el rendimiento de tu equipo en las últimas pruebas del histórico.&lt;ul&gt;&lt;li&gt;Para cada prueba se toman los &lt;b&gt;3 mejores corredores de tu equipo&lt;/b&gt; (los que entraron en mejor posición).&lt;/li&gt;&lt;li&gt;Se calcula su &lt;b&gt;posición media&lt;/b&gt;: por ejemplo, si tus 3 mejores entraron 1º, 5º y 9º, la media es (1+5+9)/3 = 5,0.&lt;/li&gt;&lt;li&gt;Cada punto azul del gráfico es una prueba. Cuanto más abajo el punto, mejor el resultado.&lt;/li&gt;&lt;li&gt;Pasa el cursor sobre cualquier punto para ver la prueba concreta, fecha y posición media.&lt;/li&gt;&lt;li&gt;El badge de tendencia compara la primera mitad de pruebas con la segunda: &lt;b&gt;🟢 En forma&lt;/b&gt; si mejora más de 1 posición, &lt;b&gt;🔴 Bajando&lt;/b&gt; si empeora más de 1, &lt;b&gt;🟡 Estable&lt;/b&gt; entre medio.&lt;/li&gt;&lt;li&gt;Si no tienes equipo configurado, muestra el pulso del top 3 GLOBAL de cada prueba como referencia.&lt;/li&gt;&lt;/ul&gt;">?</button>
+            </div>
+            <div id="inicioPulso"></div>
+          </section>
+          <section class="panel" style="margin-bottom:0">
+            <div class="section-title" style="margin-bottom:10px">
+              <h2 style="margin:0">🎯 Tu próximo objetivo</h2>
+              <button class="help-btn" data-help="&lt;strong&gt;🎯 Tu próximo objetivo&lt;/strong&gt;Te dice qué equipo tienes que adelantar en el ranking del año para subir un puesto.&lt;ul&gt;&lt;li&gt;&lt;b&gt;Puntos por prueba:&lt;/b&gt; en cada prueba se suman las posiciones de los &lt;b&gt;3 mejores corredores&lt;/b&gt; del equipo. Ej: si entraron 2º + 5º + 9º → 16 puntos en esa prueba.&lt;/li&gt;&lt;li&gt;&lt;b&gt;El ranking usa la MEDIA de puntos por prueba&lt;/b&gt; (no el total). Así la comparación es JUSTA: un equipo que ha corrido 13 pruebas no queda penalizado frente a uno que solo ha corrido 10. Se divide el total de puntos entre el nº de pruebas.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Menos media = mejor.&lt;/b&gt; El equipo con menor media de puntos por prueba lidera.&lt;/li&gt;&lt;li&gt;Solo cuentan las pruebas donde el equipo tuvo al menos 3 corredores en meta.&lt;/li&gt;&lt;li&gt;Los filtros globales (CCAA, categoría, modalidad, género) acotan el ranking.&lt;/li&gt;&lt;li&gt;Pulsa &lt;b&gt;Ver ranking&lt;/b&gt; para el desglose completo en Power Ranking.&lt;/li&gt;&lt;/ul&gt;">?</button>
+            </div>
+            <div id="inicioObjetivo"></div>
+          </section>
+          <section class="panel" style="margin-bottom:0">
+            <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">📅 Últimas carreras del historial</h2></div>
+            <div id="inicioRecentRaces"></div>
+          </section>
+        </div>
       </div>
 
 
