@@ -951,10 +951,14 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
         .inicio-race-row:hover{background:#f9fafb}
         .inicio-race-row:last-child{border-bottom:none}
         .inicio-chip{background:rgba(255,255,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700}
-        /* Cuerpo de Inicio en 2 columnas independientes */
-        .inicio-2col-wrap{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
-        .inicio-col{display:flex;flex-direction:column;gap:18px;min-width:0}
-        @media(max-width:900px){.inicio-2col-wrap{grid-template-columns:1fr}}
+        /* Cuerpo de Inicio en rejilla 2×2. Cada fila de la rejilla iguala la
+           altura de su celda izquierda y derecha (align-items:stretch por
+           defecto). Dentro de cada celda, el panel con .inicio-grow absorbe
+           el espacio sobrante para que los bloques cuadren por abajo. */
+        .inicio-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+        .inicio-cell{display:flex;flex-direction:column;gap:18px;min-width:0}
+        .inicio-grow{flex:1 1 auto}
+        @media(max-width:900px){.inicio-grid{grid-template-columns:1fr}}
         /* Accesos directos — botones grandes táctiles para iPad.
            auto-fill: se adaptan al ancho de la columna que los contiene. */
         .inicio-accesos{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:10px}

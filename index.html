@@ -229,34 +229,38 @@
         <div id="inicioKpis" class="evol-kpis"></div>
       </section>
 
-      <!-- Cuerpo en 2 columnas independientes -->
-      <div class="inicio-2col-wrap">
-        <!-- ── Columna izquierda ── -->
-        <div class="inicio-col">
+      <!-- Cuerpo en rejilla 2×2 — cada fila iguala alturas izquierda/derecha -->
+      <div class="inicio-grid">
+        <!-- Fila 1 · IZQUIERDA: Próximas pruebas + Accesos directos -->
+        <div class="inicio-cell">
           <section class="panel" style="margin-bottom:0">
             <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🚴 Próximas pruebas</h2></div>
             <div id="inicioLastRace"></div>
           </section>
-          <section class="panel" style="margin-bottom:0;padding:16px 18px">
+          <section class="panel inicio-grow" style="margin-bottom:0;padding:16px 18px">
             <div class="section-title" style="margin-bottom:12px"><h2 style="margin:0">🚀 Accesos directos</h2></div>
             <div class="inicio-accesos">
               <button class="acceso-btn" onclick="showView('view-carga')"><span class="acceso-ic">📤</span>Cargar prueba</button>
               <button class="acceso-btn" onclick="showView('view-historial')"><span class="acceso-ic">📁</span>Historial</button>
               <button class="acceso-btn" onclick="showView('view-calendario')"><span class="acceso-ic">📅</span>Calendario</button>
               <button class="acceso-btn" onclick="showView('view-tabla')"><span class="acceso-ic">📋</span>Tabla y filtros</button>
+              <button class="acceso-btn" onclick="showView('view-analisis')"><span class="acceso-ic">👤</span>Análisis individual</button>
+              <button class="acceso-btn" onclick="showView('view-comparativo')"><span class="acceso-ic">⚔️</span>Comparativo</button>
+              <button class="acceso-btn" onclick="showView('view-equipos')"><span class="acceso-ic">🚴</span>Equipos</button>
               <button class="acceso-btn" onclick="showView('view-tactica')"><span class="acceso-ic">🧠</span>Estrategia</button>
-              <button class="acceso-btn" onclick="showView('view-seleccion')"><span class="acceso-ic">🏆</span>Convocatorias</button>
+              <button class="acceso-btn" onclick="showView('view-graficos')"><span class="acceso-ic">📊</span>Gráficos</button>
+              <button class="acceso-btn" onclick="showView('view-top10')"><span class="acceso-ic">🏁</span>Top 10</button>
+              <button class="acceso-btn" onclick="showView('view-evolucion')"><span class="acceso-ic">📈</span>Evolución</button>
               <button class="acceso-btn" onclick="showView('view-powerranking')"><span class="acceso-ic">⭐</span>Power Ranking</button>
+              <button class="acceso-btn" onclick="showView('view-tendencias')"><span class="acceso-ic">📉</span>Tendencias</button>
+              <button class="acceso-btn" onclick="showView('view-seleccion')"><span class="acceso-ic">🏆</span>Convocatorias</button>
               <button class="acceso-btn" onclick="showView('view-informe-plantilla')"><span class="acceso-ic">📄</span>Informe Plantilla</button>
+              <button class="acceso-btn" onclick="showView('view-resumen')"><span class="acceso-ic">🏅</span>Resumen Temporada</button>
             </div>
           </section>
-          <section class="panel" style="margin-bottom:0">
-            <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🏆 Top corredores de mi equipo</h2></div>
-            <div id="inicioTopRiders"></div>
-          </section>
         </div>
-        <!-- ── Columna derecha ── -->
-        <div class="inicio-col">
+        <!-- Fila 1 · DERECHA: Centro de pendientes + Pulso + Objetivo -->
+        <div class="inicio-cell">
           <section class="panel" style="margin-bottom:0">
             <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🎯 Centro de pendientes</h2></div>
             <div id="inicioActions" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -268,14 +272,24 @@
             </div>
             <div id="inicioPulso"></div>
           </section>
-          <section class="panel" style="margin-bottom:0">
+          <section class="panel inicio-grow" style="margin-bottom:0">
             <div class="section-title" style="margin-bottom:10px">
               <h2 style="margin:0">🎯 Tu próximo objetivo</h2>
               <button class="help-btn" data-help="&lt;strong&gt;🎯 Tu próximo objetivo&lt;/strong&gt;Te dice qué equipo tienes que adelantar en el ranking del año para subir un puesto.&lt;ul&gt;&lt;li&gt;&lt;b&gt;Puntos por prueba:&lt;/b&gt; en cada prueba se suman las posiciones de los &lt;b&gt;3 mejores corredores&lt;/b&gt; del equipo. Ej: si entraron 2º + 5º + 9º → 16 puntos en esa prueba.&lt;/li&gt;&lt;li&gt;&lt;b&gt;El ranking usa la MEDIA de puntos por prueba&lt;/b&gt; (no el total). Así la comparación es JUSTA: un equipo que ha corrido 13 pruebas no queda penalizado frente a uno que solo ha corrido 10. Se divide el total de puntos entre el nº de pruebas.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Menos media = mejor.&lt;/b&gt; El equipo con menor media de puntos por prueba lidera.&lt;/li&gt;&lt;li&gt;Solo cuentan las pruebas donde el equipo tuvo al menos 3 corredores en meta.&lt;/li&gt;&lt;li&gt;Los filtros globales (CCAA, categoría, modalidad, género) acotan el ranking.&lt;/li&gt;&lt;li&gt;Pulsa &lt;b&gt;Ver ranking&lt;/b&gt; para el desglose completo en Power Ranking.&lt;/li&gt;&lt;/ul&gt;">?</button>
             </div>
             <div id="inicioObjetivo"></div>
           </section>
-          <section class="panel" style="margin-bottom:0">
+        </div>
+        <!-- Fila 2 · IZQUIERDA: Top corredores -->
+        <div class="inicio-cell">
+          <section class="panel inicio-grow" style="margin-bottom:0">
+            <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">🏆 Top corredores de mi equipo</h2></div>
+            <div id="inicioTopRiders"></div>
+          </section>
+        </div>
+        <!-- Fila 2 · DERECHA: Últimas carreras -->
+        <div class="inicio-cell">
+          <section class="panel inicio-grow" style="margin-bottom:0">
             <div class="section-title" style="margin-bottom:10px"><h2 style="margin:0">📅 Últimas carreras del historial</h2></div>
             <div id="inicioRecentRaces"></div>
           </section>
