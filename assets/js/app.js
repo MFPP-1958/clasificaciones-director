@@ -10103,15 +10103,44 @@ async function renderInicio(){
       }
     }
     const planned = (typeof _calPlanned !== 'undefined' && Array.isArray(_calPlanned)) ? _calPlanned : [];
-    // Filtrar próximas (dateStr o date >= hoy) y ordenar
+    // Filtros globales activos (Categoría / Modalidad)
+    const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
+    const gfMod = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.modality) || '';
+    // Helpers de coincidencia. Si la prueba NO tiene el campo guardado,
+    // la dejamos pasar (no la escondemos por falta de dato).
+    const catMatch = (raceCat) => {
+      if(!gfCat) return true;
+      if(!raceCat) return true; // sin categoría guardada → no filtramos
+      const c = String(raceCat).toLowerCase();
+      const tokens = {
+        cadete:/cadet/, junior:/j[uú]nior|\bjun\b/, sub23:/sub.?23/,
+        elite:/[eé]lite/, master:/master/, femenino:/fem/
+      };
+      const re = tokens[gfCat];
+      return re ? re.test(c) : true;
+    };
+    const modMatch = (raceMod) => {
+      if(!gfMod) return true;
+      if(!raceMod) return true; // sin modalidad guardada → no filtramos
+      const m = String(raceMod).toLowerCase();
+      const tokens = {
+        carretera:/carretera|ruta/, btt:/btt|mtb|monta/, cx:/cross|ciclocross|cx/,
+        pista:/pista/, trial:/trial/
+      };
+      const re = tokens[gfMod];
+      return re ? re.test(m) : true;
+    };
+    // Filtrar próximas (dateStr o date >= hoy), aplicar filtros globales y ordenar
     const todayIso = new Date().toISOString().slice(0,10);
-    const upcoming = planned
+    const allUpcoming = planned
       .map(p => ({
         ...p,
         iso: p.dateStr || (p.date instanceof Date ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}-${String(p.date.getDate()).padStart(2,'0')}` : '')
       }))
       .filter(p => p.iso && p.iso >= todayIso)
-      .sort((a,b) => a.iso.localeCompare(b.iso))
+      .sort((a,b) => a.iso.localeCompare(b.iso));
+    const upcoming = allUpcoming
+      .filter(p => catMatch(p.cat) && modMatch(p.modality))
       .slice(0, 5);
 
     if(upcoming.length){
@@ -10153,14 +10182,29 @@ async function renderInicio(){
         ` : ''}
         <div style="margin-top:10px"><button class="btn light" onclick="showView('view-calendario')" style="font-size:12px">📅 Ver calendario completo</button></div>`;
     } else {
-      // Sin pruebas planificadas: invitar a añadirlas desde el Calendario
-      lastBox.innerHTML = `
-        <div class="inicio-empty">
-          <div style="font-size:32px;margin-bottom:8px">📅</div>
-          <div style="font-weight:700;color:#374151;margin-bottom:4px">No tienes pruebas planificadas próximas</div>
-          <div style="font-size:13px;margin-bottom:12px">Añade tus próximas carreras desde el Calendario.<br>Si tienes Mi Equipo + Categoría + Modalidad configurados, el FCCV te ayudará a localizarlas.</div>
-          <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-calendario')">📅 Ir al calendario</button>
-        </div>`;
+      // Distinguir 2 casos: (a) no hay NINGUNA planificada próxima, o
+      // (b) sí las hay pero ninguna coincide con los filtros globales.
+      const hayFiltro = !!(gfCat || gfMod);
+      const filtroTxt = [gfCat, gfMod].filter(Boolean).join(' · ');
+      if(allUpcoming.length && hayFiltro){
+        // Caso (b): hay planificadas pero ninguna del filtro actual
+        lastBox.innerHTML = `
+          <div class="inicio-empty">
+            <div style="font-size:32px;margin-bottom:8px">🔍</div>
+            <div style="font-weight:700;color:#374151;margin-bottom:4px">Sin pruebas próximas de <span style="color:#1d4ed8">${escapeHtml(filtroTxt)}</span></div>
+            <div style="font-size:13px;margin-bottom:12px">Tienes ${allUpcoming.length} prueba${allUpcoming.length!==1?'s':''} planificada${allUpcoming.length!==1?'s':''}, pero ninguna coincide con la categoría/modalidad seleccionada en los Filtros Globales.<br>Cambia el filtro arriba o añade pruebas de esta categoría.</div>
+            <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-calendario')">📅 Ir al calendario</button>
+          </div>`;
+      } else {
+        // Caso (a): no hay ninguna planificada próxima
+        lastBox.innerHTML = `
+          <div class="inicio-empty">
+            <div style="font-size:32px;margin-bottom:8px">📅</div>
+            <div style="font-weight:700;color:#374151;margin-bottom:4px">No tienes pruebas planificadas próximas</div>
+            <div style="font-size:13px;margin-bottom:12px">Añade tus próximas carreras desde el Calendario.<br>Si tienes Mi Equipo + Categoría + Modalidad configurados, el FCCV te ayudará a localizarlas.</div>
+            <button class="btn" style="background:#0b2f6b;color:#fff;font-weight:700" onclick="showView('view-calendario')">📅 Ir al calendario</button>
+          </div>`;
+      }
     }
   }
 
