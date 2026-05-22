@@ -119,6 +119,52 @@ let _globalFilters = {
   gender:   localStorage.getItem('gf_gender')   || 'masculino'
 };
 
+// ── Detectores de coincidencia con los filtros globales ──────────────────
+// Reciben un "blob" de texto (categoría guardada + nombre de la prueba, etc.)
+// y deciden si esa prueba/corredor encaja con la Categoría/Modalidad globales.
+// Lógica: si aparece MI categoría → SÍ. Si aparece OTRA categoría exclusiva y
+// NO la mía → NO. Si no se detecta nada → SÍ (permisivo, no escondemos por
+// falta de dato).
+const _GF_CAT_TOKENS = {
+  cadete:   /\bcadet|\bcad[-\s.]?\d|\bcad\b/i,
+  junior:   /\bj[uú]nior|\bjuvenil|\bjun[-\s.]?\d|\bjun\b/i,
+  sub23:    /\bsub.?23\b|\bs23\b/i,
+  elite:    /\b[eé]lite\b|\bel\b/i,
+  master:   /\bmaster\b|\bm[-\s]?\d{2}/i,
+  femenino: /\bfemenin|\bfem\b|\bfem\./i
+};
+const _GF_MOD_TOKENS = {
+  carretera: /\bcarretera\b|\bruta\b/i,
+  btt:       /\bbtt\b|\bmtb\b|monta[ñn]a/i,
+  cx:        /ciclo.?cross|cyclo.?cross|\bcx\b/i,
+  pista:     /\bpista\b/i,
+  trial:     /\btrial\b/i
+};
+function _gfMatchesGlobalCat(blob){
+  const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
+  if(!gfCat) return true;
+  const t = String(blob||'');
+  const myRe = _GF_CAT_TOKENS[gfCat];
+  if(myRe && myRe.test(t)) return true;          // contiene MI categoría
+  for(const k in _GF_CAT_TOKENS){                 // ¿contiene OTRA exclusiva?
+    if(k===gfCat) continue;
+    if(_GF_CAT_TOKENS[k].test(t)) return false;
+  }
+  return true;                                    // nada claro → permisivo
+}
+function _gfMatchesGlobalMod(blob){
+  const gfMod = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.modality) || '';
+  if(!gfMod) return true;
+  const t = String(blob||'');
+  const myRe = _GF_MOD_TOKENS[gfMod];
+  if(myRe && myRe.test(t)) return true;
+  for(const k in _GF_MOD_TOKENS){
+    if(k===gfMod) continue;
+    if(_GF_MOD_TOKENS[k].test(t)) return false;
+  }
+  return true;
+}
+
 // Restaurar valores de los 3 nuevos filtros en los selects al iniciar
 function _gfDefaultsApplyToSelects(){
   const cat = document.getElementById('gfCat');
@@ -10103,34 +10149,11 @@ async function renderInicio(){
       }
     }
     const planned = (typeof _calPlanned !== 'undefined' && Array.isArray(_calPlanned)) ? _calPlanned : [];
-    // Filtros globales activos (Categoría / Modalidad)
     const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
     const gfMod = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.modality) || '';
-    // Helpers de coincidencia. Si la prueba NO tiene el campo guardado,
-    // la dejamos pasar (no la escondemos por falta de dato).
-    const catMatch = (raceCat) => {
-      if(!gfCat) return true;
-      if(!raceCat) return true; // sin categoría guardada → no filtramos
-      const c = String(raceCat).toLowerCase();
-      const tokens = {
-        cadete:/cadet/, junior:/j[uú]nior|\bjun\b/, sub23:/sub.?23/,
-        elite:/[eé]lite/, master:/master/, femenino:/fem/
-      };
-      const re = tokens[gfCat];
-      return re ? re.test(c) : true;
-    };
-    const modMatch = (raceMod) => {
-      if(!gfMod) return true;
-      if(!raceMod) return true; // sin modalidad guardada → no filtramos
-      const m = String(raceMod).toLowerCase();
-      const tokens = {
-        carretera:/carretera|ruta/, btt:/btt|mtb|monta/, cx:/cross|ciclocross|cx/,
-        pista:/pista/, trial:/trial/
-      };
-      const re = tokens[gfMod];
-      return re ? re.test(m) : true;
-    };
-    // Filtrar próximas (dateStr o date >= hoy), aplicar filtros globales y ordenar
+    // Filtrar próximas (dateStr o date >= hoy), aplicar filtros globales y ordenar.
+    // El "blob" combina categoría guardada + modalidad + NOMBRE de la prueba,
+    // así detectamos "CHALLENGE CADETES" aunque el campo cat esté vacío.
     const todayIso = new Date().toISOString().slice(0,10);
     const allUpcoming = planned
       .map(p => ({
@@ -10140,7 +10163,11 @@ async function renderInicio(){
       .filter(p => p.iso && p.iso >= todayIso)
       .sort((a,b) => a.iso.localeCompare(b.iso));
     const upcoming = allUpcoming
-      .filter(p => catMatch(p.cat) && modMatch(p.modality))
+      .filter(p => {
+        const catBlob = `${p.cat||''} ${p.name||''}`;
+        const modBlob = `${p.modality||''} ${p.name||''}`;
+        return _gfMatchesGlobalCat(catBlob) && _gfMatchesGlobalMod(modBlob);
+      })
       .slice(0, 5);
 
     if(upcoming.length){
@@ -10272,7 +10299,11 @@ async function renderInicio(){
         const t7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
         if(r.date > t7) return false;
         const nm = normalizeRiderName(r.name||'').toLowerCase();
-        return !plannedNames.has(nm);
+        if(plannedNames.has(nm)) return false;
+        // Aplicar filtros globales Categoría/Modalidad (blob = campos + nombre)
+        const catBlob = `${r.category||''} ${r.name||''}`;
+        const modBlob = `${r.modality||''} ${r.name||''}`;
+        return _gfMatchesGlobalCat(catBlob) && _gfMatchesGlobalMod(modBlob);
       });
       if(upcomingNotPlanned.length>0){
         // Guardar la lista en una global para que el modal la lea sin recalcular
@@ -10322,6 +10353,9 @@ async function renderInicio(){
           const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
           if(tk !== myTeamKey) return;
         }
+        // Filtro global de categoría: blob = categoría del corredor + nombre prueba
+        if(!_gfMatchesGlobalCat(`${r.cat||''} ${race.raceName||''}`)) return;
+        if(!_gfMatchesGlobalMod(`${race.raceName||''}`)) return;
         const nm = normalizeRiderName(r.name||'').trim();
         if(!nm) return;
         if(!riderStats.has(nm)) riderStats.set(nm, {name:nm, displayName:r.name||nm, team:r.team||'', positions:[], raceHistory:[]});
@@ -10374,17 +10408,21 @@ async function renderInicio(){
       const myTeamKeyForPulso = hasTeam ? (typeof teamKey==='function' ? teamKey(team) : team.toLowerCase().trim()) : '';
       const pulsoPoints = [];
       for(const race of sortedByDateAsc){
+        // Filtro global de modalidad por nombre de prueba
+        if(!_gfMatchesGlobalMod(`${race.raceName||''}`)) continue;
         let myRiders;
         if(hasTeam){
           myRiders = (race.riders||[]).filter(r => {
             const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
             return tk === myTeamKeyForPulso;
           });
-          if(!myRiders.length) continue;
         } else {
           myRiders = race.riders||[];
-          if(myRiders.length < 3) continue;
         }
+        // Filtro global de categoría a nivel corredor
+        myRiders = myRiders.filter(r => _gfMatchesGlobalCat(`${r.cat||''} ${race.raceName||''}`));
+        if(hasTeam){ if(!myRiders.length) continue; }
+        else { if(myRiders.length < 3) continue; }
         const top3 = myRiders.slice().sort((a,b)=>(a.pos||999)-(b.pos||999)).slice(0,3);
         if(!top3.length) continue;
         const avg = top3.reduce((s,r)=>s+(r.pos||0),0) / top3.length;
@@ -10469,9 +10507,13 @@ async function renderInicio(){
       for(const race of (history||[])){
         const ry = ((typeof _parseSpanishDate==='function' ? _parseSpanishDate(race.raceDate) : '') || '').slice(0,4);
         if(ry !== yearStr) continue;
+        // Filtro global de modalidad por nombre de prueba
+        if(!_gfMatchesGlobalMod(`${race.raceName||''}`)) continue;
         const byTeam = {};
         for(const r of (race.riders||[])){
           const t = (r.team||'').trim(); if(!t) continue;
+          // Filtro global de categoría a nivel corredor
+          if(!_gfMatchesGlobalCat(`${r.cat||''} ${race.raceName||''}`)) continue;
           if(!byTeam[t]) byTeam[t] = [];
           byTeam[t].push(r.pos||999);
           if(r.region){
@@ -10575,23 +10617,45 @@ async function renderInicio(){
     if(objBox) objBox.innerHTML = `<div class="inicio-empty" style="color:#dc2626"><div style="font-weight:700">Error en el objetivo (revisar consola)</div></div>`;
   }
 
-  // ─── 8. Últimas 5 carreras del historial ────────────────────────────
+  // ─── 8. Últimas 5 carreras del historial (filtradas por filtros globales) ──
   const recBox = document.getElementById('inicioRecentRaces');
   if(recBox){
     if(!history.length){
       recBox.innerHTML = `<div class="inicio-empty">Aún no hay carreras guardadas en el historial.</div>`;
     } else {
-      const last5 = sortedByDate.slice(0,5);
-      recBox.innerHTML = last5.map(race=>{
-        const nRiders = (race.riders||[]).length;
-        return `<div class="inicio-race-row" onclick="showView('view-historial')">
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;color:#0b2f6b">${escapeHtml((race.raceName||'').slice(0,50))}</div>
-            <div style="font-size:12px;color:#6b7280">${race.raceDate||'—'}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''} · ${nRiders} corredores</div>
-          </div>
-          <span style="color:#9ca3af">›</span>
-        </div>`;
-      }).join('');
+      // Una carrera "es de" la categoría si su nombre lo indica O si tiene
+      // corredores de esa categoría. Modalidad: por nombre de prueba.
+      const raceMatchesFilters = (race) => {
+        if(!_gfMatchesGlobalMod(`${race.raceName||''}`)) return false;
+        // Categoría: nombre de prueba o algún corredor de la categoría
+        if(_gfMatchesGlobalCat(`${race.raceName||''}`)){
+          // Si el nombre ya lo indica (o no indica nada), comprobamos riders
+          const anyRider = (race.riders||[]).some(r => _gfMatchesGlobalCat(`${r.cat||''}`));
+          // Si hay riders con categoría detectable, exige al menos uno; si
+          // ninguno tiene categoría detectable, dejamos pasar (permisivo).
+          const anyHasCat = (race.riders||[]).some(r => {
+            const c = (r.cat||'');
+            return Object.values(_GF_CAT_TOKENS).some(re=>re.test(c));
+          });
+          return anyHasCat ? anyRider : true;
+        }
+        return false;
+      };
+      const filtered5 = sortedByDate.filter(raceMatchesFilters).slice(0,5);
+      if(!filtered5.length){
+        recBox.innerHTML = `<div class="inicio-empty">No hay carreras del filtro actual en el historial.</div>`;
+      } else {
+        recBox.innerHTML = filtered5.map(race=>{
+          const nRiders = (race.riders||[]).length;
+          return `<div class="inicio-race-row" onclick="showView('view-historial')">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;color:#0b2f6b">${escapeHtml((race.raceName||'').slice(0,50))}</div>
+              <div style="font-size:12px;color:#6b7280">${race.raceDate||'—'}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''} · ${nRiders} corredores</div>
+            </div>
+            <span style="color:#9ca3af">›</span>
+          </div>`;
+        }).join('');
+      }
     }
   }
 }
