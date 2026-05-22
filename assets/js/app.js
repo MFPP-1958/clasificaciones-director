@@ -165,6 +165,33 @@ function _gfMatchesGlobalMod(blob){
   return true;
 }
 
+// Detector de género. catField = lista de categorías (ej: "Cadete, Cadete
+// Fem."), nameField = nombre de la prueba.
+//  - masculino: pasa si hay al menos UNA categoría NO femenina (un equipo
+//    masculino puede correr una prueba mixta que también tenga cat. femenina).
+//  - femenino: pasa solo si hay al menos una categoría femenina.
+//  - mixto / "" : no filtra.
+const _GF_FEM_RE = /\bfem(en[ií]n[oa]?)?\b|\bfem\.|femeni|\bmujer|\bdona\b|\bdones\b/i;
+function _gfMatchesGlobalGender(catField, nameField){
+  const g = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.gender) || '';
+  if(!g || g==='mixto') return true;
+  const cat = String(catField||'');
+  const name = String(nameField||'');
+  // Estrategia 1: lista de categorías (lo más fiable)
+  const tokens = cat.split(/[,;]/).map(s=>s.trim()).filter(Boolean);
+  if(tokens.length){
+    const femTokens  = tokens.filter(tk=>_GF_FEM_RE.test(tk));
+    const maleTokens = tokens.filter(tk=>!_GF_FEM_RE.test(tk));
+    if(g==='masculino') return maleTokens.length>0;
+    if(g==='femenino')  return femTokens.length>0;
+  }
+  // Estrategia 2: nombre de la prueba
+  const nameFem = _GF_FEM_RE.test(name);
+  if(g==='masculino') return !nameFem;
+  if(g==='femenino')  return nameFem;
+  return true;
+}
+
 // Restaurar valores de los 3 nuevos filtros en los selects al iniciar
 function _gfDefaultsApplyToSelects(){
   const cat = document.getElementById('gfCat');
@@ -10166,7 +10193,9 @@ async function renderInicio(){
       .filter(p => {
         const catBlob = `${p.cat||''} ${p.name||''}`;
         const modBlob = `${p.modality||''} ${p.name||''}`;
-        return _gfMatchesGlobalCat(catBlob) && _gfMatchesGlobalMod(modBlob);
+        return _gfMatchesGlobalCat(catBlob)
+            && _gfMatchesGlobalMod(modBlob)
+            && _gfMatchesGlobalGender(p.cat||'', p.name||'');
       })
       .slice(0, 5);
 
@@ -10300,10 +10329,12 @@ async function renderInicio(){
         if(r.date > t7) return false;
         const nm = normalizeRiderName(r.name||'').toLowerCase();
         if(plannedNames.has(nm)) return false;
-        // Aplicar filtros globales Categoría/Modalidad (blob = campos + nombre)
+        // Aplicar filtros globales Categoría/Modalidad/Género
         const catBlob = `${r.category||''} ${r.name||''}`;
         const modBlob = `${r.modality||''} ${r.name||''}`;
-        return _gfMatchesGlobalCat(catBlob) && _gfMatchesGlobalMod(modBlob);
+        return _gfMatchesGlobalCat(catBlob)
+            && _gfMatchesGlobalMod(modBlob)
+            && _gfMatchesGlobalGender(r.category||'', r.name||'');
       });
       if(upcomingNotPlanned.length>0){
         // Guardar la lista en una global para que el modal la lea sin recalcular
@@ -10353,9 +10384,10 @@ async function renderInicio(){
           const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
           if(tk !== myTeamKey) return;
         }
-        // Filtro global de categoría: blob = categoría del corredor + nombre prueba
+        // Filtros globales: categoría, modalidad y género (a nivel corredor)
         if(!_gfMatchesGlobalCat(`${r.cat||''} ${race.raceName||''}`)) return;
         if(!_gfMatchesGlobalMod(`${race.raceName||''}`)) return;
+        if(!_gfMatchesGlobalGender(r.cat||'', race.raceName||'')) return;
         const nm = normalizeRiderName(r.name||'').trim();
         if(!nm) return;
         if(!riderStats.has(nm)) riderStats.set(nm, {name:nm, displayName:r.name||nm, team:r.team||'', positions:[], raceHistory:[]});
@@ -10419,8 +10451,11 @@ async function renderInicio(){
         } else {
           myRiders = race.riders||[];
         }
-        // Filtro global de categoría a nivel corredor
-        myRiders = myRiders.filter(r => _gfMatchesGlobalCat(`${r.cat||''} ${race.raceName||''}`));
+        // Filtros globales de categoría y género a nivel corredor
+        myRiders = myRiders.filter(r =>
+          _gfMatchesGlobalCat(`${r.cat||''} ${race.raceName||''}`) &&
+          _gfMatchesGlobalGender(r.cat||'', race.raceName||'')
+        );
         if(hasTeam){ if(!myRiders.length) continue; }
         else { if(myRiders.length < 3) continue; }
         const top3 = myRiders.slice().sort((a,b)=>(a.pos||999)-(b.pos||999)).slice(0,3);
@@ -10512,8 +10547,9 @@ async function renderInicio(){
         const byTeam = {};
         for(const r of (race.riders||[])){
           const t = (r.team||'').trim(); if(!t) continue;
-          // Filtro global de categoría a nivel corredor
+          // Filtros globales de categoría y género a nivel corredor
           if(!_gfMatchesGlobalCat(`${r.cat||''} ${race.raceName||''}`)) continue;
+          if(!_gfMatchesGlobalGender(r.cat||'', race.raceName||'')) continue;
           if(!byTeam[t]) byTeam[t] = [];
           byTeam[t].push(r.pos||999);
           if(r.region){
@@ -10627,19 +10663,19 @@ async function renderInicio(){
       // corredores de esa categoría. Modalidad: por nombre de prueba.
       const raceMatchesFilters = (race) => {
         if(!_gfMatchesGlobalMod(`${race.raceName||''}`)) return false;
-        // Categoría: nombre de prueba o algún corredor de la categoría
-        if(_gfMatchesGlobalCat(`${race.raceName||''}`)){
-          // Si el nombre ya lo indica (o no indica nada), comprobamos riders
-          const anyRider = (race.riders||[]).some(r => _gfMatchesGlobalCat(`${r.cat||''}`));
-          // Si hay riders con categoría detectable, exige al menos uno; si
-          // ninguno tiene categoría detectable, dejamos pasar (permisivo).
-          const anyHasCat = (race.riders||[]).some(r => {
-            const c = (r.cat||'');
-            return Object.values(_GF_CAT_TOKENS).some(re=>re.test(c));
-          });
-          return anyHasCat ? anyRider : true;
-        }
-        return false;
+        if(!_gfMatchesGlobalCat(`${race.raceName||''}`)) return false;
+        // Comprobamos corredores: la carrera vale si tiene al menos un
+        // corredor que cumpla categoría Y género del filtro global.
+        const riders = race.riders||[];
+        const anyHasCat = riders.some(r => {
+          const c = (r.cat||'');
+          return Object.values(_GF_CAT_TOKENS).some(re=>re.test(c));
+        });
+        if(!anyHasCat) return true; // ningún dato de categoría → permisivo
+        return riders.some(r =>
+          _gfMatchesGlobalCat(`${r.cat||''}`) &&
+          _gfMatchesGlobalGender(r.cat||'', race.raceName||'')
+        );
       };
       const filtered5 = sortedByDate.filter(raceMatchesFilters).slice(0,5);
       if(!filtered5.length){
