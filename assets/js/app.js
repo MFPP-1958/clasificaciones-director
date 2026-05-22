@@ -9975,9 +9975,9 @@ function _inicioShowUpcomingFCCVModal(){
     <div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
       <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">Pruebas FCCV próximas (7 días)</div>
+          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">Pruebas FCCV pendientes (todo el año)</div>
           <div style="font-size:17px;font-weight:900;margin-top:2px">${races.length} prueba${races.length!==1?'s':''} sin añadir al calendario</div>
-          <div style="font-size:11px;opacity:.85;margin-top:3px">Pruebas que están en el scrape FCCV y que aún NO tienes en tu calendario planificado</div>
+          <div style="font-size:11px;opacity:.85;margin-top:3px">Pruebas del calendario FCCV que coinciden con tus filtros (categoría/modalidad/género) y que aún NO tienes en tu calendario planificado</div>
         </div>
         <button onclick="document.getElementById('_inicioUpcomingDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer">✕</button>
       </div>
@@ -10364,12 +10364,13 @@ async function renderInicio(){
         }
         return false;
       };
+      const todayIso = new Date().toISOString().slice(0,10);
       const upcomingNotPlanned = fccvScrape.filter(r => {
         if(!r.date) return false;
-        const todayIso = new Date().toISOString().slice(0,10);
+        // TODO el año por delante (de hoy en adelante, sin límite de 7 días):
+        // queremos ver TODAS las pruebas del calendario FCCV que aún no estén
+        // en el calendario propio y que encajen con los filtros globales.
         if(r.date < todayIso) return false;
-        const t7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
-        if(r.date > t7) return false;
         if(_yaPlanificada(r)) return false;       // ya está en tu calendario
         // Aplicar filtros globales. Blob combinado (categoría + modalidad +
         // nombre) para que el detector pille el marcador esté donde esté —
@@ -10378,11 +10379,11 @@ async function renderInicio(){
         return _gfMatchesGlobalCat(fullBlob)
             && _gfMatchesGlobalMod(fullBlob)
             && _gfMatchesGlobalGender(r.category||'', r.name||'');
-      });
+      }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
       if(upcomingNotPlanned.length>0){
         // Guardar la lista en una global para que el modal la lea sin recalcular
         window._inicioUpcomingFCCV = upcomingNotPlanned;
-        pendings.push({icon:'📅', color:'#1d4ed8', bg:'#eff6ff', border:'#bfdbfe', label:`${upcomingNotPlanned.length} prueba${upcomingNotPlanned.length!==1?'s':''} FCCV próxima${upcomingNotPlanned.length!==1?'s':''} sin añadir al calendario`, action:"_inicioShowUpcomingFCCVModal()"});
+        pendings.push({icon:'📅', color:'#1d4ed8', bg:'#eff6ff', border:'#bfdbfe', label:`${upcomingNotPlanned.length} prueba${upcomingNotPlanned.length!==1?'s':''} FCCV sin añadir al calendario`, action:"_inicioShowUpcomingFCCVModal()"});
       }
 
       // 4) Si no hay prueba cargada actualmente y existe historial → sugerir cargar
