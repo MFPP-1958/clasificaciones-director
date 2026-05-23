@@ -10820,6 +10820,29 @@ async function renderInicio(){
   }
 }
 
+// ── Favoritas del histórico (almacenadas en localStorage) ───────────────
+const _HIST_FAVS_KEY = 'histFavs_v1';
+function _histLoadFavs(){
+  try{ return new Set(JSON.parse(localStorage.getItem(_HIST_FAVS_KEY)||'[]')); }
+  catch(_){ return new Set(); }
+}
+function _histSaveFavs(set){
+  try{ localStorage.setItem(_HIST_FAVS_KEY, JSON.stringify([...set])); }catch(_){}
+}
+function _histIsFav(id){
+  if(!window._histFavSet) window._histFavSet = _histLoadFavs();
+  return window._histFavSet.has(String(id));
+}
+function _histToggleFav(id, ev){
+  if(ev) ev.stopPropagation();
+  if(!window._histFavSet) window._histFavSet = _histLoadFavs();
+  const s = String(id);
+  if(window._histFavSet.has(s)) window._histFavSet.delete(s);
+  else                          window._histFavSet.add(s);
+  _histSaveFavs(window._histFavSet);
+  _histRender();
+}
+
 async function renderHistory(){
   const box=$('historyBox');
   if(!box) return;
@@ -10912,6 +10935,90 @@ async function renderHistory(){
     ${kpiCard('📏 Kilómetros', Math.round(_kpiKm)||'—', 'recorridos')}
   </div>`;
 
+  // ── HEATMAP de actividad por mes (K) ──
+  // Cuenta cuántas pruebas hay cada mes. Usamos las 12 columnas (Ene-Dic).
+  // Si hay varios años, se agregan TODOS los años filtrados (en la misma fila).
+  const _mesesAbbr = ['E','F','M','A','M','J','J','A','S','O','N','D'];
+  const _mesesFull = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const monthCounts = new Array(12).fill(0);
+  sorted.forEach(h=>{
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    if(iso){ const m = parseInt(iso.slice(5,7),10)-1; if(m>=0 && m<12) monthCounts[m]++; }
+  });
+  const maxMonth = Math.max(...monthCounts, 1);
+  const heatmapCells = monthCounts.map((n,i)=>{
+    const intensity = n/maxMonth;
+    const bg = n===0 ? '#f3f4f6' : `rgba(31,111,235,${0.18 + intensity*0.72})`;
+    const fg = intensity>0.5 ? '#fff' : '#0b2f6b';
+    return `<div title="${_mesesFull[i]}: ${n} prueba${n!==1?'s':''}" style="flex:1;min-width:0;background:${bg};color:${fg};border-radius:6px;padding:8px 2px;text-align:center;font-weight:800">
+      <div style="font-size:11px;opacity:.85">${_mesesAbbr[i]}</div>
+      <div style="font-size:15px;margin-top:2px">${n||''}</div>
+    </div>`;
+  }).join('');
+  const heatmapHtml = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px">
+    <div style="font-size:11px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📅 Actividad por mes</div>
+    <div style="display:flex;gap:4px">${heatmapCells}</div>
+    <div style="font-size:10.5px;color:#9ca3af;margin-top:6px">Total: ${sorted.length} prueba${sorted.length!==1?'s':''} · Pasa el cursor sobre cada mes para el detalle</div>
+  </div>`;
+
+  // ── MI RÉCORD HISTÓRICO (L) ──
+  // Calcula: mejor prueba (ya en KPIs), localidad favorita (donde mejor rinde
+  // el equipo), racha de podios consecutiva, y participación más alta.
+  let recordHtml = '';
+  if(myTeam){
+    // 1) Mejor posición ya en KPI. 2) Localidad favorita: media de posición.
+    const byLoc = new Map();
+    sorted.forEach(h=>{
+      if(!h.localidad) return;
+      const my = (h.riders||[]).filter(r=>{
+        const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+        const mk = typeof teamKey==='function' ? teamKey(myTeam) : myTeam.toLowerCase().trim();
+        return tk===mk;
+      });
+      if(!my.length) return;
+      const best = Math.min(...my.map(r=>r.pos||999));
+      if(!byLoc.has(h.localidad)) byLoc.set(h.localidad,{loc:h.localidad,sum:0,count:0,bestSeen:Infinity});
+      const e = byLoc.get(h.localidad); e.sum += best; e.count++; if(best<e.bestSeen) e.bestSeen = best;
+    });
+    let bestLoc = null;
+    for(const e of byLoc.values()){
+      if(e.count < 2) continue;
+      const avg = e.sum/e.count;
+      if(!bestLoc || avg < bestLoc.avg) bestLoc = {loc:e.loc, avg, count:e.count, bestSeen:e.bestSeen};
+    }
+    // 3) Racha actual de podios (consecutivas más recientes)
+    const recientes = sorted.slice().sort((a,b)=>{
+      const da=_parseSpanishDate(a.raceDate)||'0000-00-00';
+      const db=_parseSpanishDate(b.raceDate)||'0000-00-00';
+      return db.localeCompare(da);
+    });
+    let racha = 0;
+    for(const h of recientes){
+      const my = (h.riders||[]).filter(r=>{
+        const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+        const mk = typeof teamKey==='function' ? teamKey(myTeam) : myTeam.toLowerCase().trim();
+        return tk===mk;
+      });
+      if(!my.length) continue; // no participó: no rompe ni suma
+      const hasPod = my.some(r=>(r.pos||999)<=3);
+      if(hasPod) racha++; else break;
+    }
+    // 4) Mejor relación podios/participaciones del equipo
+    const podRatio = _kpiMine>0 ? (_kpiPod/_kpiMine*100) : 0;
+    recordHtml = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px">
+      <div style="font-size:11px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">🏅 Mi récord histórico</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+        <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed #f3f4f6"><span style="color:#475569">🎯 Mejor posición</span><strong style="color:#0b2f6b">${_kpiBestLbl}${_kpiBestSub?` · ${_kpiBestSub}`:''}</strong></div>
+        ${bestLoc?`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed #f3f4f6"><span style="color:#475569">📍 Localidad favorita</span><strong style="color:#0b2f6b">${escapeHtml(bestLoc.loc)} <span style="color:#6b7280;font-weight:600">(media ${bestLoc.avg.toFixed(1)}º · ${bestLoc.count} pruebas)</span></strong></div>`:''}
+        <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed #f3f4f6"><span style="color:#475569">🔥 Racha de podios</span><strong style="color:${racha>=3?'#16a34a':'#0b2f6b'}">${racha} consecutiva${racha!==1?'s':''}</strong></div>
+        <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0"><span style="color:#475569">📊 % podios / participaciones</span><strong style="color:#0b2f6b">${podRatio.toFixed(0)}%</strong></div>
+      </div>
+    </div>`;
+  } else {
+    recordHtml = `<div style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:12px;padding:12px 14px;font-size:12.5px;font-weight:600">⚙️ Configura tu equipo en los filtros globales para ver tu récord histórico (mejor posición, localidad favorita, racha de podios...)</div>`;
+  }
+  const heatmapAndRecord = `<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px" class="hist-extra-row">${heatmapHtml}${recordHtml}</div>`;
+
   // Chip indicando filtros globales activos
   const _gfActive = [gfYear, gfCat, gfMod, gfGen, gfRegion].filter(Boolean);
   const gfChip = _gfActive.length ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:700;margin-bottom:10px">🎛️ Filtros globales activos: ${_gfActive.map(v=>escapeHtml(v)).join(' · ')} · <span style="font-weight:500">Cambia arriba para ampliar/cerrar.</span></div>` : '';
@@ -10969,8 +11076,16 @@ async function renderHistory(){
     const _cardYear=_parseSpanishDate(h.raceDate)?.slice(0,4)||'';
     const _cardCats=[...new Set((h.riders||[]).map(r=>r.cat).filter(Boolean)
       .map(c=>getCanonicalCat(c,_cardYear)))].map(c=>c.toLowerCase()).join(' ');
-    const cardBorder = myInPodium ? '2px solid #f59e0b' : '1.5px solid #e5e7eb';
-    const cardShadow = myInPodium ? 'box-shadow:0 4px 12px rgba(245,158,11,.15);' : '';
+    // Foco visual progresivo:
+    //  · Podio del equipo → borde dorado + sombra
+    //  · Mi equipo participó (sin podio) → borde azul claro
+    //  · Favorita marcada → borde + sombra rosa/oro
+    const isFav = _histIsFav(h.id);
+    let cardBorder = '1.5px solid #e5e7eb', cardShadow = '';
+    if(myInPodium){ cardBorder='2px solid #f59e0b'; cardShadow='box-shadow:0 4px 12px rgba(245,158,11,.15);'; }
+    else if(isMyTeamIn){ cardBorder='2px solid #bfdbfe'; }
+    if(isFav){ cardBorder='2px solid #ec4899'; cardShadow='box-shadow:0 4px 14px rgba(236,72,153,.18);'; }
+    const favBtn = `<button onclick="_histToggleFav('${h.id}',event)" title="${isFav?'Quitar de favoritas':'Marcar como favorita'}" style="background:${isFav?'#fce7f3':'#fff'};color:${isFav?'#ec4899':'#9ca3af'};border:1.5px solid ${isFav?'#f9a8d4':'#e5e7eb'};border-radius:10px;padding:8px 11px;font-weight:800;font-size:14px;cursor:pointer;line-height:1">${isFav?'⭐':'☆'}</button>`;
     return `<div data-racename="${escapeAttr(_searchIndex)}" data-circuittype="${escapeAttr(h.circuitType||'')}" data-year="${escapeAttr(_cardYear)}" data-cats="${escapeAttr(_cardCats)}" style="border:${cardBorder};${cardShadow}border-radius:16px;margin-bottom:14px;overflow:hidden;background:#fff">
       <div style="background:linear-gradient(135deg,#f8fbff,#eff8ff);padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:0">
@@ -10989,6 +11104,7 @@ async function renderHistory(){
           ${isMyTeamIn?`<div style="margin-top:6px"><span style="background:#eff8ff;color:#0b2f6b;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px">🔵 ${escapeHtml(myTeam)}: ${myRiders.length} corredor${myRiders.length!==1?'es':''}</span></div>`:''}
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${favBtn}
           ${fccvBtn}
           <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer">📂 Cargar</button>
           <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1.5px solid #fecdd3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
@@ -11060,6 +11176,8 @@ async function renderHistory(){
   box.innerHTML=`
     <!-- KPIs del histórico (resumen general) -->
     ${kpisHtml}
+    <!-- Heatmap mensual + Mi récord histórico -->
+    ${heatmapAndRecord}
     ${gfChip}
     <!-- PESTAÑAS -->
     <div class="hist-tabs">
@@ -11087,6 +11205,7 @@ async function renderHistory(){
           <option value="">🏷️ Todas las cats</option>${catOpts}
         </select>
         <button onclick="clearHistoryFilters()" style="padding:9px 13px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;background:#f9fafb;cursor:pointer;white-space:nowrap">✕ Limpiar</button>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#374151;font-weight:700;cursor:pointer;background:#fff;border:1.5px solid #f9a8d4;border-radius:10px;padding:7px 12px"><input type="checkbox" id="histOnlyFavs" onchange="filterHistoryCards()"> ⭐ Solo favoritas</label>
       </div>
       <!-- Fila 2 — Controles de presentación -->
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;font-size:12.5px">
@@ -11221,6 +11340,8 @@ function _histGetFiltered(){
         .map(c=>getCanonicalCat(c,yr2)))].map(c=>c.toLowerCase());
       if(!cats.includes(catFilter)) return false;
     }
+    // Solo favoritas
+    if(($('histOnlyFavs')?.checked) && !_histIsFav(h.id)) return false;
     return true;
   });
   return filtered;
@@ -11316,6 +11437,7 @@ function _histBuildTable(list){
       <td style="padding:7px 10px;font-size:12px;color:#475569">${winner?escapeHtml((winner.name||'').slice(0,22)):'\u2014'}</td>
       <td style="padding:7px 10px;text-align:center;color:#475569;font-size:12px">${riders.length}</td>
       <td style="padding:7px 10px;text-align:right;white-space:nowrap">
+        <button onclick="_histToggleFav('${h.id}',event)" title="${_histIsFav(h.id)?'Quitar favorita':'Marcar favorita'}" style="background:${_histIsFav(h.id)?'#fce7f3':'#fff'};color:${_histIsFav(h.id)?'#ec4899':'#9ca3af'};border:1px solid ${_histIsFav(h.id)?'#f9a8d4':'#e5e7eb'};border-radius:6px;padding:2px 6px;font-size:13px;cursor:pointer;line-height:1">${_histIsFav(h.id)?'\u2b50':'\u2606'}</button>
         ${fccvBtn}
         <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;padding:3px 9px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\udcc2</button>
         <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\uddd1\ufe0f</button>
@@ -11341,7 +11463,7 @@ function _histBuildTable(list){
   </div>`;
 }
 
-// Render principal \u2014 combina filtros + sort + group + view mode
+// Render principal \u2014 combina filtros + sort + group + view mode + paginaci\u00f3n
 function _histRender(){
   const st = window._histState||{};
   if(!st.sorted) return;
@@ -11362,9 +11484,38 @@ function _histRender(){
     return;
   }
   const renderGroupBody = (items) => view==='table' ? _histBuildTable(items) : st.buildCards(items);
-  if(groupMode==='none'){
+  // \u2500\u2500 PAGINACI\u00d3N (N) \u2500\u2500
+  // Solo cuando NO hay agrupaci\u00f3n y la lista es larga (>50). Por defecto 25/p\u00e1g.
+  const PAGE_SIZE = window._histPageSize || 25;
+  const totalItems = sortedList.length;
+  const pagedMode = groupMode==='none' && totalItems > 50;
+  if(pagedMode){
+    if(!window._histPage) window._histPage = 1;
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    if(window._histPage > totalPages) window._histPage = totalPages;
+    const start = (window._histPage - 1) * PAGE_SIZE;
+    const slice = sortedList.slice(start, start + PAGE_SIZE);
+    const pager = `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;margin:10px 0;font-size:12.5px;flex-wrap:wrap">
+      <div style="color:#475569;font-weight:700">Mostrando ${start+1}\u2013${Math.min(start+PAGE_SIZE,totalItems)} de ${totalItems}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button onclick="_histPageGo(1)" ${window._histPage===1?'disabled':''} style="background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:5px 9px;cursor:pointer;font-weight:700;${window._histPage===1?'opacity:.4;cursor:not-allowed':''}">\u00ab</button>
+        <button onclick="_histPageGo(${window._histPage-1})" ${window._histPage===1?'disabled':''} style="background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:5px 9px;cursor:pointer;font-weight:700;${window._histPage===1?'opacity:.4;cursor:not-allowed':''}">\u2039</button>
+        <span style="padding:0 6px;font-weight:800;color:#0b2f6b">P\u00e1gina ${window._histPage} / ${totalPages}</span>
+        <button onclick="_histPageGo(${window._histPage+1})" ${window._histPage>=totalPages?'disabled':''} style="background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:5px 9px;cursor:pointer;font-weight:700;${window._histPage>=totalPages?'opacity:.4;cursor:not-allowed':''}">\u203a</button>
+        <button onclick="_histPageGo(${totalPages})" ${window._histPage>=totalPages?'disabled':''} style="background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:5px 9px;cursor:pointer;font-weight:700;${window._histPage>=totalPages?'opacity:.4;cursor:not-allowed':''}">\u00bb</button>
+        <select onchange="_histSetPageSize(this.value)" style="margin-left:6px;border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;background:#fff">
+          <option value="25" ${PAGE_SIZE===25?'selected':''}>25/p\u00e1g</option>
+          <option value="50" ${PAGE_SIZE===50?'selected':''}>50/p\u00e1g</option>
+          <option value="100" ${PAGE_SIZE===100?'selected':''}>100/p\u00e1g</option>
+        </select>
+      </div>
+    </div>`;
+    area.innerHTML = pager + renderGroupBody(slice) + pager;
+  } else if(groupMode==='none'){
+    window._histPage = 1;
     area.innerHTML = renderGroupBody(groups[0].items);
   } else {
+    window._histPage = 1;
     area.innerHTML = groups.map(g => `
       <details open style="margin-bottom:14px">
         <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#0b2f6b;padding:8px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;list-style:none;display:flex;align-items:center;gap:8px">
@@ -11375,6 +11526,18 @@ function _histRender(){
       </details>
     `).join('');
   }
+}
+
+// Helpers de paginaci\u00f3n
+function _histPageGo(n){
+  window._histPage = Math.max(1, parseInt(n,10)||1);
+  _histRender();
+  document.getElementById('histRenderArea')?.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function _histSetPageSize(n){
+  window._histPageSize = parseInt(n,10)||25;
+  window._histPage = 1;
+  _histRender();
 }
 
 // Cambiar vista (tarjetas/tabla)

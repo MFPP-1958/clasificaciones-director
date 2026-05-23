@@ -959,6 +959,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
         .inicio-cell{display:flex;flex-direction:column;gap:18px;min-width:0}
         .inicio-grow{flex:1 1 auto}
         @media(max-width:900px){.inicio-grid{grid-template-columns:1fr}}
+        @media(max-width:900px){.hist-extra-row{grid-template-columns:1fr !important}}
         /* Accesos directos — botones grandes táctiles para iPad.
            auto-fill: se adaptan al ancho de la columna que los contiene. */
         .inicio-accesos{display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:10px}
