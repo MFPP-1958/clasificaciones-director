@@ -9462,6 +9462,42 @@ async function deleteHistoryEntry(id){
   _cachedHistory=null; _prFiltersReady=false; _trendFiltersReady=false;
   await renderHistory();
 }
+
+// Borrado SEGURO de UNA prueba: modal con el nombre completo de la prueba
+// para que el usuario confirme sin riesgo de equivocarse de fila.
+function _histConfirmDelete(id, raceName){
+  const old = document.getElementById('_histDelDialog');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = '_histDelDialog';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:480px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="background:linear-gradient(135deg,#b91c1c,#7f1d1d);color:#fff;padding:14px 18px">
+        <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">Eliminar prueba del histórico</div>
+        <div style="font-size:16px;font-weight:900;margin-top:2px">¿Borrar definitivamente esta prueba?</div>
+      </div>
+      <div style="padding:18px;font-size:13.5px;color:#374151;line-height:1.55">
+        Vas a eliminar:
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;margin-top:8px;font-weight:800;color:#0b2f6b;word-break:break-word">${escapeHtml(raceName)||'(sin nombre)'}</div>
+        <div style="margin-top:10px;color:#b91c1c;font-weight:700;font-size:12px">⚠️ Esta acción NO se puede deshacer. Se eliminarán también todos los resultados de los corredores asociados.</div>
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding:12px 18px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb">
+        <button onclick="document.getElementById('_histDelDialog').remove()" style="background:#fff;color:#374151;border:1.5px solid #d1d5db;border-radius:8px;padding:9px 16px;font-weight:700;font-size:13px;cursor:pointer">Cancelar</button>
+        <button onclick="document.getElementById('_histDelDialog').remove();_histDoDelete('${escapeAttr(id)}')" style="background:#b91c1c;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:800;font-size:13px;cursor:pointer">🗑️ Sí, eliminar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function _histDoDelete(id){
+  if(!_sb){alert('Supabase no disponible.');return;}
+  const {error}=await _sb.from('races').delete().eq('id',id).eq('race_type','clasificacion');
+  if(error){alert('Error: '+error.message);return;}
+  _cachedHistory=null; _prFiltersReady=false; _trendFiltersReady=false;
+  await renderHistory();
+}
 async function loadHistoryEntry(id){
   const hist = _cachedHistory || await _sbLoadHistory();
   const h = hist.find(x=>x.id===id);
@@ -10797,11 +10833,88 @@ async function renderHistory(){
   }
 
   // Ordenar por fecha descendente — comparar en ISO para que DD/MM/YYYY no dé orden erróneo
-  const sorted=hist.slice().sort((a,b)=>{
+  const sortedFull=hist.slice().sort((a,b)=>{
     const da=_parseSpanishDate(a.raceDate)||'0000-00-00';
     const db=_parseSpanishDate(b.raceDate)||'0000-00-00';
     return db.localeCompare(da);
   });
+
+  // ── Aplicar FILTROS GLOBALES (Año/CCAA/Cat/Mod/Gen) ──
+  const gfYear   = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.year)   || '';
+  const gfRegion = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
+  const gfCat    = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat)    || '';
+  const gfMod    = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.modality)|| '';
+  const gfGen    = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.gender) || '';
+
+  const sorted = sortedFull.filter(h => {
+    // Año
+    if(gfYear){
+      const yr = (_parseSpanishDate(h.raceDate)||'').slice(0,4);
+      if(yr !== gfYear) return false;
+    }
+    // Modalidad por nombre de prueba
+    if(typeof _gfMatchesGlobalMod==='function' && !_gfMatchesGlobalMod(h.raceName||'')) return false;
+    // Categoría + género (a nivel de corredores)
+    if(gfCat || gfGen){
+      const riders = h.riders||[];
+      if(typeof _gfMatchesCatGender==='function'){
+        const any = riders.some(r => _gfMatchesCatGender(r.cat||'', h.raceName||''));
+        if(!any) return false;
+      }
+    }
+    // CCAA: si tenemos región global, exigir al menos 1 corredor de esa región
+    if(gfRegion){
+      const riders = h.riders||[];
+      const anyHasRegion = riders.some(r => r.region);
+      if(anyHasRegion){
+        const anyMatch = riders.some(r => r.region === gfRegion);
+        if(!anyMatch) return false;
+      }
+    }
+    return true;
+  });
+
+  // ── KPIs del histórico (con filtros globales aplicados) ──
+  const myTeam = localStorage.getItem('myTeam') || '';
+  let _kpiVic=0, _kpiPod=0, _kpiTop10=0, _kpiMine=0, _kpiKm=0, _kpiBestPos=Infinity, _kpiBestRace='';
+  sorted.forEach(h=>{
+    _kpiKm += parseFloat(h.km)||0;
+    if(!myTeam) return;
+    const myRiders = (h.riders||[]).filter(r => {
+      const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+      const mk = typeof teamKey==='function' ? teamKey(myTeam) : myTeam.toLowerCase().trim();
+      return tk === mk;
+    });
+    if(myRiders.length){
+      _kpiMine++;
+      myRiders.forEach(r=>{
+        const p = r.pos||999;
+        if(p===1) _kpiVic++;
+        if(p<=3)  _kpiPod++;
+        if(p<=10) _kpiTop10++;
+        if(p < _kpiBestPos){ _kpiBestPos = p; _kpiBestRace = h.raceName||''; }
+      });
+    }
+  });
+  const kpiCard=(label,val,sub)=>`<div style="background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:10px 12px;flex:1;min-width:130px">
+    <div style="font-size:10.5px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.4px">${label}</div>
+    <div style="font-size:22px;font-weight:900;color:#0b2f6b;margin-top:2px">${val}</div>
+    ${sub?`<div style="font-size:10.5px;color:#6b7280;margin-top:2px">${sub}</div>`:''}
+  </div>`;
+  const _kpiBestLbl = _kpiBestPos<Infinity ? `${_kpiBestPos}º` : '—';
+  const _kpiBestSub = _kpiBestRace ? escapeHtml(_kpiBestRace.slice(0,28)) : '';
+  const kpisHtml = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    ${kpiCard('📁 Total', sorted.length, sortedFull.length>sorted.length?`de ${sortedFull.length} totales`:'pruebas guardadas')}
+    ${myTeam?kpiCard('🚴 Mi Equipo', _kpiMine, `${escapeHtml(myTeam)}`):''}
+    ${myTeam?kpiCard('🏆 Victorias', _kpiVic, 'de mi equipo'):''}
+    ${myTeam?kpiCard('🥉 Podios', _kpiPod, '1º-3º de mi equipo'):''}
+    ${myTeam?kpiCard('🎯 Mejor', _kpiBestLbl, _kpiBestSub):''}
+    ${kpiCard('📏 Kilómetros', Math.round(_kpiKm)||'—', 'recorridos')}
+  </div>`;
+
+  // Chip indicando filtros globales activos
+  const _gfActive = [gfYear, gfCat, gfMod, gfGen, gfRegion].filter(Boolean);
+  const gfChip = _gfActive.length ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:700;margin-bottom:10px">🎛️ Filtros globales activos: ${_gfActive.map(v=>escapeHtml(v)).join(' · ')} · <span style="font-weight:500">Cambia arriba para ampliar/cerrar.</span></div>` : '';
 
   const buildCards=(list)=>list.map(h=>{
     const riders=h.riders||[];
@@ -10818,7 +10931,36 @@ async function renderHistory(){
       </div>`).join('');
 
     const myTeam=localStorage.getItem('myTeam')||'';
-    const isMyTeamIn=riders.some(r=>r.team===myTeam);
+    // Top 3 de MI EQUIPO en esta prueba (para mostrarlo destacado en la tarjeta)
+    const myRiders = myTeam ? riders.filter(r => {
+      const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+      const mk = typeof teamKey==='function' ? teamKey(myTeam) : myTeam.toLowerCase().trim();
+      return tk === mk;
+    }).sort((a,b)=>(a.pos||999)-(b.pos||999)).slice(0,3) : [];
+    const isMyTeamIn = myRiders.length > 0;
+    const myInPodium = myRiders.some(r => r.pos<=3);
+    const myTeamRows = isMyTeamIn ? myRiders.map((r,i)=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;${i<myRiders.length-1?'border-bottom:1px solid #e0e7ff':''}">
+        <span style="font-size:12px;font-weight:900;color:#1d4ed8;min-width:30px;text-align:center">${r.pos||'—'}º</span>
+        <div style="flex:1;min-width:0;overflow:hidden">
+          <b style="font-size:13px;color:#0b2f6b">${escapeHtml(r.name||'—')}</b>
+          ${r.cat?`<span style="font-size:10px;color:#475569;margin-left:4px">${escapeHtml(r.cat)}</span>`:''}
+        </div>
+        <span style="font-size:12px;color:#475569;font-weight:700;white-space:nowrap">${escapeHtml(r.time||'—')}</span>
+      </div>`).join('') : '';
+    // Buscar match en FCCV para botón "Info"
+    let fccvIdMatch = '';
+    try{
+      if(typeof _calFindFccvForRace==='function'){
+        const isoDate = _parseSpanishDate(h.raceDate)||'';
+        const fakeRace = {name: h.raceName||'', date: isoDate ? new Date(isoDate+'T12:00:00') : null, cat:'', modality:'', fccvId:''};
+        const m = _calFindFccvForRace(fakeRace);
+        if(m && m.fccvId) fccvIdMatch = m.fccvId;
+      }
+    }catch(_){}
+    const fccvBtn = fccvIdMatch
+      ? `<button onclick="event.stopPropagation();_fccvShowRaceDetails('${escapeAttr(fccvIdMatch)}')" title="Ver ficha oficial FCCV" style="background:#fff;color:#1e40af;border:1.5px solid #93c5fd;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">ℹ️ FCCV</button>`
+      : '';
 
     const _norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     const _searchIndex=_norm(h.raceName)+' '+_norm(h.raceDate||'')+' '+_norm(h.localidad||'')+' '+_norm(h.circuitType||'');
@@ -10827,12 +10969,15 @@ async function renderHistory(){
     const _cardYear=_parseSpanishDate(h.raceDate)?.slice(0,4)||'';
     const _cardCats=[...new Set((h.riders||[]).map(r=>r.cat).filter(Boolean)
       .map(c=>getCanonicalCat(c,_cardYear)))].map(c=>c.toLowerCase()).join(' ');
-    return `<div data-racename="${escapeAttr(_searchIndex)}" data-circuittype="${escapeAttr(h.circuitType||'')}" data-year="${escapeAttr(_cardYear)}" data-cats="${escapeAttr(_cardCats)}" style="border:1.5px solid #e5e7eb;border-radius:16px;margin-bottom:14px;overflow:hidden;background:#fff">
+    const cardBorder = myInPodium ? '2px solid #f59e0b' : '1.5px solid #e5e7eb';
+    const cardShadow = myInPodium ? 'box-shadow:0 4px 12px rgba(245,158,11,.15);' : '';
+    return `<div data-racename="${escapeAttr(_searchIndex)}" data-circuittype="${escapeAttr(h.circuitType||'')}" data-year="${escapeAttr(_cardYear)}" data-cats="${escapeAttr(_cardCats)}" style="border:${cardBorder};${cardShadow}border-radius:16px;margin-bottom:14px;overflow:hidden;background:#fff">
       <div style="background:linear-gradient(135deg,#f8fbff,#eff8ff);padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
+        <div style="flex:1;min-width:0">
           <div style="font-size:16px;font-weight:900;color:#0b2f6b;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span onclick="loadHistoryEntry('${h.id}')" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#84caff" title="Clic para cargar esta prueba">${escapeHtml(h.raceName)}</span>
             ${ctypeBadge}
+            ${myInPodium?`<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px">🏆 Podio del equipo</span>`:''}
           </div>
           <div style="font-size:12px;color:#667085;margin-top:3px">
             📅 ${escapeHtml(h.raceDate||'Sin fecha')}
@@ -10841,22 +10986,24 @@ async function renderHistory(){
             ${h.avg?` · ⚡ ${h.avg}`:''}
             · 👥 ${riders.length} corredores
           </div>
-          ${isMyTeamIn?`<div style="margin-top:6px"><span style="background:#eff8ff;color:#0b2f6b;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px">🔵 ${escapeHtml(myTeam)} participó</span></div>`:''}
+          ${isMyTeamIn?`<div style="margin-top:6px"><span style="background:#eff8ff;color:#0b2f6b;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px">🔵 ${escapeHtml(myTeam)}: ${myRiders.length} corredor${myRiders.length!==1?'es':''}</span></div>`:''}
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${fccvBtn}
           <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer">📂 Cargar</button>
-          <button onclick="deleteHistoryEntry('${h.id}')" style="background:#fff;color:#b42318;border:1.5px solid #fecdd3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
+          <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1.5px solid #fecdd3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
         </div>
       </div>
-      <div style="padding:6px 18px">
-        <details>
-          <summary style="font-size:11px;font-weight:800;text-transform:uppercase;color:#9ca3af;cursor:pointer;padding:6px 0;list-style:none;display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;color:#b2c9e0">▶</span> Podio
-          </summary>
-          <div style="padding:4px 0 8px">
-            ${podiumRows||'<p style="color:#9ca3af;font-size:12px;margin:0">Sin datos de clasificación</p>'}
-          </div>
-        </details>
+      <!-- Cuerpo: Podio general + (si procede) Top 3 de mi equipo -->
+      <div style="padding:12px 18px;display:grid;grid-template-columns:${isMyTeamIn?'1fr 1fr':'1fr'};gap:14px">
+        <div>
+          <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;color:#9ca3af;letter-spacing:.3px;margin-bottom:4px">🏆 Podio</div>
+          ${podiumRows||'<p style="color:#9ca3af;font-size:12px;margin:0">Sin datos</p>'}
+        </div>
+        ${isMyTeamIn?`<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:8px 10px">
+          <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;color:#1d4ed8;letter-spacing:.3px;margin-bottom:4px">🔵 Tu equipo (top 3)</div>
+          ${myTeamRows}
+        </div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -10911,6 +11058,9 @@ async function renderHistory(){
   }
 
   box.innerHTML=`
+    <!-- KPIs del histórico (resumen general) -->
+    ${kpisHtml}
+    ${gfChip}
     <!-- PESTAÑAS -->
     <div class="hist-tabs">
       <button class="hist-tab-btn active" id="histTabCarreras" onclick="showHistTab('carreras')">🏁 Por Carrera</button>
@@ -10979,6 +11129,11 @@ async function renderHistory(){
   if (defaultRider) {
     const inp = $('histCiclistaInput');
     if (inp) inp.value = defaultRider;
+  }
+  // Pre-rellenar selectores locales con los filtros globales (si están)
+  if(gfYear){
+    const yEl = $('histYearFilter'); if(yEl && [...yEl.options].some(o=>o.value===gfYear)) yEl.value = gfYear;
+    const yEl2= $('histCiclistaYear'); if(yEl2 && [...yEl2.options].some(o=>o.value===gfYear)) yEl2.value = gfYear;
   }
   // Ejecutar búsqueda inicial (con mi equipo + mejor ciclista ya prefijados)
   searchHistorialCiclista();
@@ -11230,16 +11385,55 @@ function searchHistorialCiclista(){
     ${html}`;
 }
 async function clearHistory(){
-  if(!confirm('¿Seguro que quieres borrar todo el histórico de clasificaciones?')) return;
+  // Borrar TODO el histórico es destructivo. Modal con confirmación
+  // explícita: el usuario debe escribir "BORRAR" para proceder.
   if(!_sb){alert('Supabase no disponible.');return;}
-  const {data,error}=await _sb.from('races').select('id').eq('race_type','clasificacion');
-  if(error){alert('Error: '+error.message);return;}
-  if(!data||!data.length){alert('No hay nada que borrar.');return;}
-  const ids=data.map(r=>r.id);
-  const {error:delErr}=await _sb.from('races').delete().in('id',ids);
-  if(delErr){alert('Error al borrar: '+delErr.message);return;}
-  _cachedHistory=[];
-  await renderHistory();
+  const {data:countData}=await _sb.from('races').select('id').eq('race_type','clasificacion');
+  if(!countData||!countData.length){alert('No hay nada que borrar.');return;}
+  const n = countData.length;
+  const old = document.getElementById('_histClearDialog');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = '_histClearDialog';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);border:3px solid #b91c1c">
+      <div style="background:linear-gradient(135deg,#7f1d1d,#450a0a);color:#fff;padding:16px 20px">
+        <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">⚠️ Acción IRREVERSIBLE</div>
+        <div style="font-size:18px;font-weight:900;margin-top:2px">Borrar TODO el histórico</div>
+      </div>
+      <div style="padding:18px 20px;font-size:13.5px;color:#374151;line-height:1.6">
+        Vas a eliminar <strong style="color:#b91c1c;font-size:16px">${n}</strong> prueba${n!==1?'s':''} del histórico, incluidos todos sus resultados de corredores.
+        <div style="margin-top:10px;font-weight:700;color:#b91c1c">⚠️ Esta acción NO se puede deshacer.</div>
+        <div style="margin-top:14px;font-size:12.5px;color:#374151">Para confirmar, escribe <code style="background:#fee2e2;color:#b91c1c;padding:2px 6px;border-radius:4px;font-weight:900">BORRAR</code> abajo:</div>
+        <input id="_histClearConfirmInput" type="text" autocomplete="off" placeholder="Escribe BORRAR"
+          style="width:100%;box-sizing:border-box;margin-top:10px;border:2px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:800;text-transform:uppercase;outline:none">
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding:12px 20px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb">
+        <button onclick="document.getElementById('_histClearDialog').remove()" style="background:#fff;color:#374151;border:1.5px solid #d1d5db;border-radius:8px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer">Cancelar</button>
+        <button id="_histClearGoBtn" disabled style="background:#fca5a5;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-weight:800;font-size:13px;cursor:not-allowed">🗑️ Borrar histórico</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const inp = document.getElementById('_histClearConfirmInput');
+  const btn = document.getElementById('_histClearGoBtn');
+  inp.focus();
+  inp.addEventListener('input', ()=>{
+    const ok = inp.value.trim().toUpperCase() === 'BORRAR';
+    btn.disabled = !ok;
+    btn.style.background = ok ? '#b91c1c' : '#fca5a5';
+    btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+  });
+  btn.onclick = async ()=>{
+    btn.disabled = true; btn.textContent = '⏳ Borrando…';
+    const ids = countData.map(r=>r.id);
+    const {error:delErr}=await _sb.from('races').delete().in('id',ids);
+    if(delErr){alert('Error al borrar: '+delErr.message);overlay.remove();return;}
+    _cachedHistory=[];
+    overlay.remove();
+    await renderHistory();
+  };
 }
 
 function getAppliedFiltersLabel(){
