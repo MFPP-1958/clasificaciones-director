@@ -10950,7 +10950,9 @@ async function renderHistory(){
     const intensity = n/maxMonth;
     const bg = n===0 ? '#f3f4f6' : `rgba(31,111,235,${0.18 + intensity*0.72})`;
     const fg = intensity>0.5 ? '#fff' : '#0b2f6b';
-    return `<div title="${_mesesFull[i]}: ${n} prueba${n!==1?'s':''}" style="flex:1;min-width:0;background:${bg};color:${fg};border-radius:6px;padding:8px 2px;text-align:center;font-weight:800">
+    const cursor = n>0 ? 'cursor:pointer;' : '';
+    const onclick = n>0 ? `onclick="_histShowMonthRaces(${i})"` : '';
+    return `<div ${onclick} title="${_mesesFull[i]}: ${n} prueba${n!==1?'s':''}${n>0?' (clic para ver lista)':''}" style="flex:1;min-width:0;background:${bg};color:${fg};border-radius:6px;padding:8px 2px;text-align:center;font-weight:800;${cursor}transition:transform .12s">
       <div style="font-size:11px;opacity:.85">${_mesesAbbr[i]}</div>
       <div style="font-size:15px;margin-top:2px">${n||''}</div>
     </div>`;
@@ -10958,7 +10960,7 @@ async function renderHistory(){
   const heatmapHtml = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px">
     <div style="font-size:11px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📅 Actividad por mes</div>
     <div style="display:flex;gap:4px">${heatmapCells}</div>
-    <div style="font-size:10.5px;color:#9ca3af;margin-top:6px">Total: ${sorted.length} prueba${sorted.length!==1?'s':''} · Pasa el cursor sobre cada mes para el detalle</div>
+    <div style="font-size:10.5px;color:#9ca3af;margin-top:6px">Total: ${sorted.length} prueba${sorted.length!==1?'s':''} · Haz clic en un mes para ver la lista de pruebas</div>
   </div>`;
 
   // ── MI RÉCORD HISTÓRICO (L) ──
@@ -11526,6 +11528,74 @@ function _histRender(){
       </details>
     `).join('');
   }
+}
+
+// Modal con las pruebas de un mes concreto (clic en celda del heatmap).
+// Usa _histState.sorted (ya filtrado por filtros globales).
+function _histShowMonthRaces(monthIdx){
+  const st = window._histState||{};
+  const list = (st.sorted||[]).filter(h=>{
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    return iso && parseInt(iso.slice(5,7),10)-1 === monthIdx;
+  }).sort((a,b)=>{
+    const da=_parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db=_parseSpanishDate(b.raceDate)||'0000-00-00';
+    return da.localeCompare(db);
+  });
+  const _MES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const myTeam = st.myTeam || '';
+
+  const old = document.getElementById('_histMonthDialog');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = '_histMonthDialog';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+
+  const rows = list.map(h => {
+    const riders = h.riders||[];
+    const winner = riders.find(r=>r.pos===1) || riders.sort((a,b)=>(a.pos||999)-(b.pos||999))[0];
+    let myBestLabel = '';
+    if(myTeam){
+      const my = riders.filter(r=>{
+        const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+        const mk = typeof teamKey==='function' ? teamKey(myTeam) : myTeam.toLowerCase().trim();
+        return tk===mk;
+      });
+      if(my.length){
+        const best = my.reduce((m,r)=>((r.pos||999)<(m.pos||999)?r:m));
+        const podio = best.pos<=3 ? '\ud83c\udfc6 ' : '';
+        myBestLabel = `<div style="font-size:11px;color:#1d4ed8;font-weight:700;margin-top:2px">${podio}\ud83d\udd35 Mi equipo: ${best.pos||'\u2014'}\u00ba ${escapeHtml((best.name||'').slice(0,28))}</div>`;
+      }
+    }
+    return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:6px;background:#fff;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="document.getElementById('_histMonthDialog').remove();loadHistoryEntry('${h.id}')" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#fff'">
+      <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:4px 9px;border-radius:6px;min-width:56px;text-align:center">${escapeHtml((h.raceDate||'').slice(0,10))}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800;color:#0b2f6b;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.raceName||'')}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px">${h.localidad?'\ud83d\udccd '+escapeHtml(h.localidad)+' \u00b7 ':''}\ud83d\udc65 ${riders.length} corredores ${winner?'\u00b7 \ud83e\udd47 '+escapeHtml((winner.name||'').slice(0,20)):''}</div>
+        ${myBestLabel}
+      </div>
+      <div style="color:#9ca3af;font-size:18px">\u203a</div>
+    </div>`;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;opacity:.85;letter-spacing:.6px;text-transform:uppercase">${list.length} prueba${list.length!==1?'s':''} \u00b7 ${_MES[monthIdx]}</div>
+          <div style="font-size:17px;font-weight:900;margin-top:2px">Pruebas de ${_MES[monthIdx]}</div>
+        </div>
+        <button onclick="document.getElementById('_histMonthDialog').remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:8px;width:32px;height:32px;font-size:18px;font-weight:800;cursor:pointer">\u2715</button>
+      </div>
+      <div style="padding:14px 18px;overflow-y:auto;flex:1">
+        ${list.length ? rows : '<p style="color:#9ca3af;text-align:center;padding:20px">No hay pruebas en este mes.</p>'}
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding:10px 18px;display:flex;justify-content:flex-end;gap:8px;background:#f9fafb;font-size:12px;color:#6b7280">
+        Clic en una prueba para abrirla
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 // Helpers de paginaci\u00f3n
