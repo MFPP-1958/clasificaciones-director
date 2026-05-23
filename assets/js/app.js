@@ -11069,9 +11069,13 @@ async function renderHistory(){
 
     <!-- PANEL: Por Carrera -->
     <div id="histPanelCarreras">
-      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <!-- Fila 1 — Filtros de búsqueda -->
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
         <input id="histSearch" placeholder="🔍 Buscar por nombre, localidad…"
           style="flex:1;min-width:180px;box-sizing:border-box;padding:9px 13px;border:1.5px solid #d0d5dd;border-radius:10px;font-size:14px;outline:none"
+          oninput="filterHistoryCards()" />
+        <input id="histRiderFilter" list="histRiderDatalist" placeholder="👤 Donde corrió…"
+          style="min-width:170px;box-sizing:border-box;padding:9px 13px;border:1.5px solid #d0d5dd;border-radius:10px;font-size:13px;outline:none"
           oninput="filterHistoryCards()" />
         <select id="histYearFilter" style="${selStyle}" onchange="filterHistoryCards()">
           <option value="">📅 Todos los años</option>${yearOpts}
@@ -11084,8 +11088,33 @@ async function renderHistory(){
         </select>
         <button onclick="clearHistoryFilters()" style="padding:9px 13px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;background:#f9fafb;cursor:pointer;white-space:nowrap">✕ Limpiar</button>
       </div>
+      <!-- Fila 2 — Controles de presentación -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;font-size:12.5px">
+        <span style="color:#475569;font-weight:700">📐 Vista:</span>
+        <div style="display:inline-flex;border:1.5px solid #d0d5dd;border-radius:10px;overflow:hidden">
+          <button id="histViewCards" onclick="_histSetView('cards')" style="padding:7px 12px;border:none;background:#1f6feb;color:#fff;font-weight:800;font-size:12px;cursor:pointer">🃏 Tarjetas</button>
+          <button id="histViewTable" onclick="_histSetView('table')" style="padding:7px 12px;border:none;background:#fff;color:#475569;font-weight:700;font-size:12px;cursor:pointer">📋 Tabla</button>
+        </div>
+        <span style="color:#475569;font-weight:700;margin-left:8px">🗂️ Agrupar:</span>
+        <select id="histGroup" style="${selStyle};padding:6px 9px;font-size:12px" onchange="_histRender()">
+          <option value="none">Sin agrupar</option>
+          <option value="month">Por mes</option>
+          <option value="year">Por año</option>
+        </select>
+        <span style="color:#475569;font-weight:700;margin-left:8px">↕️ Orden:</span>
+        <select id="histSort" style="${selStyle};padding:6px 9px;font-size:12px" onchange="_histRender()">
+          <option value="date-desc">📅 Fecha más reciente</option>
+          <option value="date-asc">📅 Fecha más antigua</option>
+          <option value="best">🎯 Mi mejor posición</option>
+          <option value="riders">👥 + corredores</option>
+          <option value="name">🔤 Nombre A-Z</option>
+        </select>
+        <button onclick="_histExportFiltered()" style="margin-left:auto;background:#10b981;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap">📥 Exportar CSV (filtrado)</button>
+      </div>
       <div id="histResultCount" style="font-size:12px;color:#9ca3af;margin-bottom:10px">${sorted.length} carreras</div>
-      <div id="histCards">${buildCards(sorted)}</div>
+      <div id="histRenderArea">${buildCards(sorted)}</div>
+      <!-- Datos crudos para el render dinámico (cards/table/grupos) -->
+      <div id="histCards" style="display:none"></div>
     </div>
 
     <!-- PANEL: Por Ciclista -->
@@ -11135,48 +11164,267 @@ async function renderHistory(){
     const yEl = $('histYearFilter'); if(yEl && [...yEl.options].some(o=>o.value===gfYear)) yEl.value = gfYear;
     const yEl2= $('histCiclistaYear'); if(yEl2 && [...yEl2.options].some(o=>o.value===gfYear)) yEl2.value = gfYear;
   }
+  // Guardar estado para el renderizado dinámico (vista/orden/grupo/export)
+  window._histState = {
+    sorted,                       // lista filtrada por filtros globales
+    buildCards,                   // función que crea HTML de un array de pruebas
+    myTeam,
+    viewMode: (window._histState?.viewMode) || 'cards',  // 'cards' | 'table'
+  };
+  // Aplicar el filtro inicial (también dispara la nueva vista/orden/grupo)
+  filterHistoryCards();
   // Ejecutar búsqueda inicial (con mi equipo + mejor ciclista ya prefijados)
   searchHistorialCiclista();
 }
 
+// Nueva versi\u00f3n: aplica todos los filtros locales + el filtro extra de
+// "donde corri\u00f3 X" y delega el renderizado a _histRender (que decide
+// cards/tabla, agrupa y ordena).
 function filterHistoryCards(){
-  const q=($('histSearch')?.value||'');
-  const typeFilter=($('histTypeFilter')?.value||'');
-  const yearFilter=($('histYearFilter')?.value||'');
-  const catFilter=($('histCatFilter')?.value||'').toLowerCase();
-  const cards=document.querySelectorAll('#histCards>[data-racename]');
-  const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const term=norm(q.trim());
-  let visible=0;
-  cards.forEach(card=>{
-    const textMatch=!term||card.dataset.racename.includes(term);
-    const typeMatch=!typeFilter||(card.dataset.circuittype||'')===typeFilter;
-    const yearMatch=!yearFilter||(card.dataset.year||'')===yearFilter;
-    const catMatch=!catFilter||(card.dataset.cats||'').split(' ').includes(catFilter);
-    const match=textMatch&&typeMatch&&yearMatch&&catMatch;
-    card.style.display=match?'':'none';
-    if(match) visible++;
-  });
-  const countEl=$('histResultCount');
-  if(countEl) countEl.textContent=visible+' carrera'+(visible===1?'':'s');
-  let noResult=document.getElementById('histNoResult');
-  if(!visible){
-    if(!noResult){
-      noResult=document.createElement('p');
-      noResult.id='histNoResult';
-      noResult.style.cssText='color:#9ca3af;text-align:center;padding:20px';
-      document.getElementById('histCards').after(noResult);
+  _histRender();
+}
+
+// \u2500\u2500 Lista filtrada actual + render (cards o tabla, con grupo y orden) \u2500\u2500
+function _histGetFiltered(){
+  const st = window._histState||{};
+  const sorted = st.sorted||[];
+  const q = ($('histSearch')?.value||'').trim();
+  const rider = ($('histRiderFilter')?.value||'').trim();
+  const typeFilter = ($('histTypeFilter')?.value||'');
+  const yearFilter = ($('histYearFilter')?.value||'');
+  const catFilter  = ($('histCatFilter')?.value||'').toLowerCase();
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const term = norm(q);
+  const riderTerm = norm(rider);
+  const filtered = sorted.filter(h => {
+    // Texto general (nombre prueba, fecha, localidad, tipo)
+    if(term){
+      const idx = norm(h.raceName)+' '+norm(h.raceDate||'')+' '+norm(h.localidad||'')+' '+norm(h.circuitType||'');
+      if(!idx.includes(term)) return false;
     }
-    noResult.textContent=term?`No hay carreras que coincidan con "${q}"`:'No hay carreras con esos filtros.';
-  } else if(noResult){
-    noResult.remove();
+    // Buscar "donde corri\u00f3 X" (corredor que aparezca entre los riders)
+    if(riderTerm){
+      const any = (h.riders||[]).some(r => norm(r.name||'').includes(riderTerm));
+      if(!any) return false;
+    }
+    // Tipo de circuito
+    if(typeFilter && (h.circuitType||'') !== typeFilter) return false;
+    // A\u00f1o
+    if(yearFilter){
+      const yr = (_parseSpanishDate(h.raceDate)||'').slice(0,4);
+      if(yr !== yearFilter) return false;
+    }
+    // Categor\u00eda
+    if(catFilter){
+      const yr2 = (_parseSpanishDate(h.raceDate)||'').slice(0,4);
+      const cats = [...new Set((h.riders||[]).map(r=>r.cat).filter(Boolean)
+        .map(c=>getCanonicalCat(c,yr2)))].map(c=>c.toLowerCase());
+      if(!cats.includes(catFilter)) return false;
+    }
+    return true;
+  });
+  return filtered;
+}
+
+function _histSortList(list, mode){
+  const myTeam = (window._histState?.myTeam)||'';
+  const bestPosOf = (h)=>{
+    if(!myTeam) return Infinity;
+    const my = (h.riders||[]).filter(r=>{
+      const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+      const mk = typeof teamKey==='function' ? teamKey(myTeam) : myTeam.toLowerCase().trim();
+      return tk===mk;
+    });
+    if(!my.length) return Infinity;
+    return Math.min(...my.map(r=>r.pos||999));
+  };
+  const dateOf = (h)=> _parseSpanishDate(h.raceDate)||'0000-00-00';
+  const arr = list.slice();
+  switch(mode){
+    case 'date-asc':  arr.sort((a,b)=>dateOf(a).localeCompare(dateOf(b))); break;
+    case 'best':      arr.sort((a,b)=>bestPosOf(a)-bestPosOf(b) || dateOf(b).localeCompare(dateOf(a))); break;
+    case 'riders':    arr.sort((a,b)=>((b.riders||[]).length - (a.riders||[]).length)); break;
+    case 'name':      arr.sort((a,b)=>(a.raceName||'').localeCompare(b.raceName||'')); break;
+    case 'date-desc':
+    default:          arr.sort((a,b)=>dateOf(b).localeCompare(dateOf(a))); break;
+  }
+  return arr;
+}
+
+function _histGroupList(list, mode){
+  if(mode==='none' || !mode) return [{label:null, items:list}];
+  const groups = new Map();
+  const MES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  list.forEach(h => {
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    let key='Sin fecha', label='Sin fecha';
+    if(iso){
+      const yr = iso.slice(0,4);
+      if(mode==='year'){ key=yr; label=yr; }
+      else { // mes
+        const mo = parseInt(iso.slice(5,7),10)-1;
+        key = `${yr}-${String(mo+1).padStart(2,'0')}`;
+        label = `${MES[mo]||''} ${yr}`;
+      }
+    }
+    if(!groups.has(key)) groups.set(key,{label, items:[]});
+    groups.get(key).items.push(h);
+  });
+  // Ordenar grupos por clave descendente (m\u00e1s reciente primero)
+  return [...groups.entries()].sort((a,b)=>b[0].localeCompare(a[0])).map(([_,v])=>v);
+}
+
+function _histBuildTable(list){
+  const myTeam = (window._histState?.myTeam)||'';
+  const norm = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const rows = list.map(h => {
+    const riders = h.riders||[];
+    const winner = riders.find(r=>r.pos===1) || riders.sort((a,b)=>(a.pos||999)-(b.pos||999))[0];
+    let myBest = '';
+    if(myTeam){
+      const my = riders.filter(r=>{
+        const tk = typeof teamKey==='function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+        const mk = typeof teamKey==='function' ? teamKey(myTeam) : myTeam.toLowerCase().trim();
+        return tk===mk;
+      });
+      if(my.length){
+        const best = my.reduce((m,r)=>((r.pos||999)<(m.pos||999)?r:m));
+        myBest = `${best.pos||'\u2014'}\u00ba <span style="color:#475569;font-size:11px">${escapeHtml((best.name||'').slice(0,18))}</span>`;
+      }
+    }
+    const yr = (_parseSpanishDate(h.raceDate)||'').slice(0,4);
+    const cats = [...new Set(riders.map(r=>r.cat).filter(Boolean).map(c=>getCanonicalCat(c,yr)))].slice(0,3).join(', ') || '\u2014';
+    // FCCV match
+    let fccvIdMatch = '';
+    try{
+      if(typeof _calFindFccvForRace==='function'){
+        const isoDate = _parseSpanishDate(h.raceDate)||'';
+        const fakeRace = {name:h.raceName||'', date:isoDate?new Date(isoDate+'T12:00:00'):null};
+        const m = _calFindFccvForRace(fakeRace);
+        if(m && m.fccvId) fccvIdMatch = m.fccvId;
+      }
+    }catch(_){}
+    const fccvBtn = fccvIdMatch
+      ? `<button onclick="event.stopPropagation();_fccvShowRaceDetails('${escapeAttr(fccvIdMatch)}')" title="Info FCCV" style="background:#fff;color:#1e40af;border:1px solid #93c5fd;border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer">\u2139\ufe0f</button>`
+      : '';
+    return `<tr style="border-top:1px solid #f3f4f6">
+      <td style="padding:7px 10px;font-size:12px;color:#475569;white-space:nowrap">${escapeHtml(h.raceDate||'\u2014')}</td>
+      <td style="padding:7px 10px;font-size:13px;font-weight:700;color:#0b2f6b;cursor:pointer" onclick="loadHistoryEntry('${h.id}')">${escapeHtml(h.raceName||'')}</td>
+      <td style="padding:7px 10px;font-size:12px;color:#475569">${escapeHtml(h.localidad||'\u2014')}</td>
+      <td style="padding:7px 10px;font-size:11px;color:#475569">${escapeHtml(cats)}</td>
+      <td style="padding:7px 10px;font-size:12px;color:#1d4ed8;font-weight:700">${myBest||'<span style="color:#9ca3af">\u2014</span>'}</td>
+      <td style="padding:7px 10px;font-size:12px;color:#475569">${winner?escapeHtml((winner.name||'').slice(0,22)):'\u2014'}</td>
+      <td style="padding:7px 10px;text-align:center;color:#475569;font-size:12px">${riders.length}</td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap">
+        ${fccvBtn}
+        <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;padding:3px 9px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\udcc2</button>
+        <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\uddd1\ufe0f</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#f8fafc">
+        <tr>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">Fecha</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">Prueba</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">Localidad</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">Cat.</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">\ud83d\udd35 Mi mejor</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;color:#475569">\ud83e\udd47 Ganador</th>
+          <th style="padding:9px 10px;text-align:center;font-size:11px;color:#475569">\ud83d\udc65</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;color:#475569">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+// Render principal \u2014 combina filtros + sort + group + view mode
+function _histRender(){
+  const st = window._histState||{};
+  if(!st.sorted) return;
+  const view = st.viewMode || 'cards';
+  const groupMode = $('histGroup')?.value || 'none';
+  const sortMode  = $('histSort')?.value  || 'date-desc';
+  const filtered  = _histGetFiltered();
+  const sortedList= _histSortList(filtered, sortMode);
+  const groups    = _histGroupList(sortedList, groupMode);
+  // Contador
+  const countEl = $('histResultCount');
+  if(countEl) countEl.textContent = filtered.length + ' carrera' + (filtered.length===1?'':'s');
+  // Render
+  const area = $('histRenderArea');
+  if(!area) return;
+  if(!filtered.length){
+    area.innerHTML = `<p style="color:#9ca3af;text-align:center;padding:30px">No hay carreras con esos filtros.</p>`;
+    return;
+  }
+  const renderGroupBody = (items) => view==='table' ? _histBuildTable(items) : st.buildCards(items);
+  if(groupMode==='none'){
+    area.innerHTML = renderGroupBody(groups[0].items);
+  } else {
+    area.innerHTML = groups.map(g => `
+      <details open style="margin-bottom:14px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#0b2f6b;padding:8px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;list-style:none;display:flex;align-items:center;gap:8px">
+          <span style="color:#1d4ed8">\u25be</span> ${escapeHtml(g.label||'\u2014')}
+          <span style="background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:800;padding:2px 8px;border-radius:99px;margin-left:auto">${g.items.length}</span>
+        </summary>
+        <div style="margin-top:10px">${renderGroupBody(g.items)}</div>
+      </details>
+    `).join('');
   }
 }
+
+// Cambiar vista (tarjetas/tabla)
+function _histSetView(mode){
+  if(!window._histState) window._histState = {};
+  window._histState.viewMode = mode;
+  // Estilo de los botones
+  const bC = $('histViewCards'), bT = $('histViewTable');
+  if(bC && bT){
+    const on = {background:'#1f6feb',color:'#fff',fontWeight:'800'};
+    const off= {background:'#fff',color:'#475569',fontWeight:'700'};
+    const active = mode==='cards' ? bC : bT;
+    const idle   = mode==='cards' ? bT : bC;
+    Object.assign(active.style, on); Object.assign(idle.style, off);
+  }
+  _histRender();
+}
+
+// Exportar a CSV la lista FILTRADA actual
+function _histExportFiltered(){
+  const list = _histGetFiltered();
+  if(!list.length){ alert('No hay carreras filtradas para exportar.'); return; }
+  const rows = [['Fecha','Prueba','Localidad','Tipo','Km','Pos','Dorsal','Corredor','Equipo','Categor\u00eda','Tiempo','Diferencia']];
+  list.forEach(h => {
+    (h.riders||[]).forEach(r => {
+      rows.push([
+        h.raceDate||'', h.raceName||'', h.localidad||'', h.circuitType||'', h.km||'',
+        r.pos||'', r.bib||'', r.name||'', r.team||'', r.cat||'', r.time||'',
+        (typeof formatSeconds==='function'?formatSeconds(r.gapSeconds):'')||''
+      ]);
+    });
+  });
+  const csv = rows.map(row => row.map(c => {
+    const s = String(c==null?'':c);
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(';')).join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `historial-filtrado-${ts}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
 function clearHistoryFilters(){
-  if($('histSearch'))     $('histSearch').value='';
-  if($('histTypeFilter')) $('histTypeFilter').value='';
-  if($('histYearFilter')) $('histYearFilter').value='';
-  if($('histCatFilter'))  $('histCatFilter').value='';
+  if($('histSearch'))      $('histSearch').value='';
+  if($('histRiderFilter')) $('histRiderFilter').value='';
+  if($('histTypeFilter'))  $('histTypeFilter').value='';
+  if($('histYearFilter'))  $('histYearFilter').value='';
+  if($('histCatFilter'))   $('histCatFilter').value='';
   filterHistoryCards();
 }
 
