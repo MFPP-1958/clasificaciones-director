@@ -17574,7 +17574,7 @@ function _selPrintDetail(slotIdx){
     .banda{display:inline-block;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:800;color:#fff!important}
     @media print{@page{margin:1.2cm}}
     </style></head><body>
-    <div class="hdr"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">${label} · Selección Autonómica VLC</div>
+    <div class="hdr"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">${label} · ${_convoMode==='myteam' ? (escapeHtml(myTeam||'Mi Equipo')+' · Convocados próxima prueba') : 'Selección Autonómica VLC'}</div>
     <h1>${escapeHtml(_evolNormName(rider.displayName))}</h1><h2 style="color:rgba(255,255,255,.8)">${escapeHtml(rider.team)}</h2>
     <div class="kpis">
       <div class="kpi"><div class="kpi-v">${rider.bestPos}º</div><div class="kpi-l">Mejor puesto</div></div>
@@ -17747,8 +17747,8 @@ async function _selExportInforme(){
   hdr.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:2.5px;opacity:.65;text-transform:uppercase;margin-bottom:4px">📄 Informe de Convocatoria</div>
-        <div style="font-size:22px;font-weight:900;line-height:1.1">Selección Autonómica VLC</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:2.5px;opacity:.65;text-transform:uppercase;margin-bottom:4px">📄 ${_convoMode==='myteam' ? 'Convocatoria del Equipo' : 'Informe de Convocatoria'}</div>
+        <div style="font-size:22px;font-weight:900;line-height:1.1">${_convoMode==='myteam' ? (escapeHtml(myTeam||'Mi Equipo')+' · Convocados próxima prueba') : 'Selección Autonómica VLC'}</div>
         <div style="font-size:13px;opacity:.8;margin-top:4px">${escapeHtml(cat)} · ${escapeHtml(String(year))} · ${escapeHtml(region)}</div>
       </div>
       <div style="opacity:.6;font-size:11px;padding-top:2px">${dateStr}</div>
