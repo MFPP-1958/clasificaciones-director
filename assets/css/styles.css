@@ -967,3 +967,49 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
         .acceso-btn:hover{border-color:#1286c7;background:#f0f9ff;transform:translateY(-2px);box-shadow:0 6px 16px rgba(18,134,199,.18)}
         .acceso-btn:active{transform:translateY(0)}
         .acceso-btn .acceso-ic{font-size:28px;line-height:1}
+
+/* ===== INSCRITOS / STARTLIST (Tier 1) ===== */
+.inscritos-card{margin-top:14px;border:1px dashed #b6c2d6;border-radius:12px;background:#fafbff;overflow:hidden}
+.inscritos-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;background:#f3f6fb;transition:background .15s}
+.inscritos-header:hover{background:#eaf0fa}
+.inscritos-title{display:flex;align-items:center;gap:8px;font-weight:800;color:#0b2f6b;font-size:14px}
+.inscritos-tag{font-size:10px;font-weight:700;text-transform:uppercase;background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:999px;letter-spacing:.5px}
+.inscritos-counter{font-size:12px;font-weight:700;color:#475467}
+.inscritos-body{padding:14px}
+.upload-inscritos{padding:14px;border:2px dashed #cbd5e1;border-radius:10px;background:#fff;text-align:center;transition:all .15s}
+.upload-inscritos.drop-active{border-color:#1286c7;background:#eff6ff}
+.inscritos-status{margin-top:10px;padding:10px 12px;border-radius:10px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-size:13px;font-weight:600}
+.inscritos-banner{margin:10px 0 0;padding:12px 16px;border-radius:12px;background:linear-gradient(135deg,#f0f9ff,#eef2ff);border:1px solid #c7d2fe;display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#0b2f6b}
+.inscritos-banner .ib-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:#fff;border:1px solid #d0d7e8}
+.inscritos-banner .ib-chip.ok{color:#065f46;border-color:#a7f3d0;background:#ecfdf5}
+.inscritos-banner .ib-chip.dnf{color:#9a3412;border-color:#fed7aa;background:#fff7ed}
+.inscritos-banner .ib-chip.total{color:#1e40af;border-color:#c7d2fe;background:#eef2ff}
+/* Modal inscritos */
+.inscritos-modal-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.inscritos-modal-tbl th{background:#f3f6fb;text-align:left;padding:8px 10px;border-bottom:2px solid #e5e7eb;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:#475467}
+.inscritos-modal-tbl td{padding:7px 10px;border-bottom:1px solid #f1f3f7}
+.badge-status{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.3px}
+.badge-status.ok{background:#dcfce7;color:#166534}
+.badge-status.dnf{background:#ffedd5;color:#9a3412}
+
+/* ===== TABLA Y FILTROS — TIER 2 ===== */
+/* Mini-gráfico distribución por categoría */
+.cat-distrib-bar{display:flex;width:100%;height:24px;border-radius:6px;overflow:hidden;border:1px solid #e5e7eb;box-shadow:inset 0 1px 2px rgba(0,0,0,.05)}
+.cat-distrib-bar > div{flex:1 1 auto;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;cursor:pointer;transition:filter .15s;min-width:28px;text-shadow:0 0 3px rgba(0,0,0,.35)}
+.cat-distrib-bar > div:hover{filter:brightness(1.1)}
+.cat-distrib-bar > div.dim{opacity:.35}
+/* Fila agrupada por equipo */
+.team-group-header{background:#f3f6fb !important;font-weight:800;color:#0b2f6b;border-top:2px solid #d1d5db}
+.team-group-header.my-team-row{background:#dbeafe !important;color:#1e3a8a;border-top:2px solid #93c5fd}
+.team-group-header td{padding:8px 10px !important;font-size:13px}
+/* Columna estado vs media */
+.stat-vs-mean{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;font-weight:800;padding:2px 7px;border-radius:99px;white-space:nowrap}
+.stat-vs-mean.better{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+.stat-vs-mean.equal {background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe}
+.stat-vs-mean.worse {background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.stat-vs-mean.new   {background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
+.stat-vs-mean.much-better{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;box-shadow:0 0 0 2px rgba(110,231,183,.3)}
+.stat-vs-mean.much-worse {background:#fed7aa;color:#9a3412;border:1px solid #fb923c}
+/* Checkbox comparador inline en filas */
+.compare-cell{width:28px;text-align:center}
+.compare-cell input{cursor:pointer;width:16px;height:16px}

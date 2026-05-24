@@ -394,11 +394,47 @@
     </div>
     <div class="mi-equipo-right">
       <button class="btn-save-equipo" id="btnSaveEquipo" onclick="saveMyTeam()">💾 Guardar equipo</button>
+      <button class="btn-historial-load" onclick="openPlannedRacesModal()" style="background:#0369a1;border-color:#0369a1;color:#fff">📅 Traer datos de prueba planificada</button>
       <button class="btn-historial-load" onclick="openHistoryModal()">📁 Cargar desde histórico</button>
     </div>
   </div>
 
   <p class="help" style="margin-top:10px">💡 Campos <b style="color:#b42318">*</b> son obligatorios para el histórico. El análisis es 100% local.</p>
+
+  <!-- ── INSCRITOS / STARTLIST (Tier 1) ──────────────────────────────────── -->
+  <div id="inscritosCard" class="inscritos-card">
+    <div class="inscritos-header" onclick="toggleInscritosPanel()">
+      <span class="inscritos-title">
+        <span id="inscritosChevron" class="load-chevron">▶</span>
+        📋 Inscritos / Startlist <span class="inscritos-tag">opcional</span>
+      </span>
+      <span id="inscritosCounter" class="inscritos-counter">0 inscritos cargados</span>
+    </div>
+    <div id="inscritosBody" class="inscritos-body" style="display:none">
+      <p class="help" style="margin:0 0 10px">
+        Sube la lista de <b>inscritos</b> (startlist) para detectar automáticamente quién terminó (Acabó) y quién no (DNF).
+        Acepta PDF, CSV, XLS, XLSX o texto pegado. Necesita al menos <b>dorsal + nombre</b>.
+      </p>
+      <div class="upload upload-inscritos" id="dropZoneInscritos">
+        <label class="btn light" for="fileInputInscritos">📂 Seleccionar archivo de inscritos</label>
+        <input id="fileInputInscritos" type="file" accept=".pdf,.csv,.xls,.xlsx" style="display:none" />
+        <div id="fileNameInscritos" class="small" style="margin-top:8px"></div>
+      </div>
+      <div class="paste-box" style="margin-top:10px">
+        <h4 style="margin:0 0 6px;font-size:13px">O pegar lista de inscritos como texto</h4>
+        <textarea id="pastedInscritos" placeholder="Pega aquí la lista de inscritos (dorsal, nombre, equipo, categoría)..." style="min-height:90px"></textarea>
+        <div class="paste-actions" style="margin-top:6px">
+          <button class="btn light" onclick="processPastedInscritos()">Procesar inscritos pegados</button>
+          <button class="btn secondary" onclick="document.getElementById('pastedInscritos').value=''">Limpiar texto</button>
+          <button class="btn secondary" onclick="clearInscritos()" id="btnClearInscritos" style="display:none">🗑️ Borrar inscritos</button>
+          <button class="btn" id="btnSaveInscritos" onclick="saveInscritosOnly()" style="display:none;background:#0369a1;border-color:#0369a1">💾 Guardar inscritos (sin clasificación)</button>
+          <button class="btn light" id="btnExportInscritosPDF" onclick="exportInscritosPDF()" style="display:none">🖨️ Imprimir PDF</button>
+        </div>
+      </div>
+      <div id="inscritosStatus" class="inscritos-status" style="display:none"></div>
+      <div id="inscritosListWrap" style="display:none"></div>
+    </div>
+  </div>
 </section>
   </div><!-- fin loadPanelBody -->
 </div><!-- fin loadCollapsibleWrap -->
@@ -410,6 +446,8 @@
   <div class="card"><div class="label">Categorías</div><div class="value" id="totalCats">0</div></div>
   <div class="card"><div class="label">🏆 Ganador</div><div class="value" id="winner" style="font-size:16px">—</div></div>
 </section>
+<!-- Banner Inscritos / DNF (visible cuando hay inscritos cargados) -->
+<div id="inscritosBanner" class="inscritos-banner" style="display:none"></div>
 <!-- KPIs Mi Equipo (visibles cuando myTeam está definido) -->
 <section class="grid-extended always-visible" id="myTeamKpis" style="display:none">
   <div class="card card-myteam"><div class="label">🟢 Mejor puesto (mi equipo)</div><div class="value" id="kpiMyBest">—</div></div>
@@ -440,11 +478,59 @@
     <button id="toggleMyTeam" class="btn light btn-toggle-team" onclick="toggleMyTeamFilter()">
       <span id="toggleIcon">⚪</span> Solo mi equipo
     </button>
+    <button id="toggleDnf" class="btn light btn-toggle-team" onclick="toggleDnfView()" style="display:none" title="Ver inscritos que no aparecen en clasificación (DNF/DNS)">
+      <span id="dnfIcon">⚪</span> Ver DNF
+    </button>
+    <button id="toggleTeamRanking" class="btn light btn-toggle-team" onclick="toggleTeamRankingPanel()" title="Mostrar/ocultar ranking compacto por equipos">
+      <span id="trIcon">⚪</span> Ranking equipos
+    </button>
+    <button id="toggleGroupByTeam" class="btn light btn-toggle-team" onclick="toggleGroupByTeam()" title="Agrupar filas por equipo en la tabla">
+      <span id="gbtIcon">⚪</span> Agrupar por equipo
+    </button>
+    <button id="toggleHistoryMode" class="btn light btn-toggle-team" onclick="toggleHistoryMode()" title="Mostrar columna Δ vs media histórica del corredor">
+      <span id="hmIcon">⚪</span> Modo histórico
+    </button>
     <select id="teamFilter" onchange="_onTeamFilterChange()"><option value="">Todos los equipos</option></select>
     <select id="regionFilter"><option value="">Todas las CCAA</option></select>
     <select id="topFilter"><option value="">Toda la clasificación</option><option value="10">Top 10</option><option value="20">Top 20</option><option value="50">Top 50</option></select>
+    <select id="topCatFilter"><option value="">Toda la cat.</option><option value="3">Top 3 por cat.</option><option value="5">Top 5 por cat.</option><option value="10">Top 10 por cat.</option></select>
   </div>
   <div id="catFilterChips" class="cat-filter-chips"></div>
+  <!-- Comparador inline persistente (L) -->
+  <div id="inlineCompareBar" style="display:none;margin-top:10px;padding:8px 12px;background:linear-gradient(135deg,#eef2ff,#dbeafe);border:1.5px solid #93c5fd;border-radius:10px;font-size:13px;font-weight:700;color:#1e3a8a;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span id="inlineCompareInfo">0 ciclistas seleccionados</span>
+    <span>
+      <button class="btn" id="inlineCompareGo" onclick="goToCompare()" style="background:#1e40af;border-color:#1e40af;padding:6px 12px;font-size:12px" disabled>⚔️ Comparar</button>
+      <button class="btn secondary" onclick="clearInlineCompare()" style="padding:6px 10px;font-size:12px">✕ Limpiar</button>
+    </span>
+  </div>
+</section>
+
+<!-- Vista PRE-CARRERA (G): visible solo cuando hay inscritos sin clasificación -->
+<section id="preRacePanel" class="panel" style="display:none;margin-top:14px;border-left:4px solid #6366f1">
+  <div class="section-title">
+    <h2 style="margin:0;color:#3730a3">🎯 Vista pre-carrera · Análisis de inscritos</h2>
+    <span class="small" id="preRaceHint">Aún no hay clasificación cargada. Mostramos análisis de los inscritos.</span>
+  </div>
+  <div id="preRaceBody"></div>
+</section>
+
+<!-- Panel: Ranking compacto por equipo (Tier 1 D) -->
+<section id="teamRankingMini" class="panel" style="display:none;margin-top:14px">
+  <div class="section-title">
+    <h2 style="margin:0">🏆 Ranking compacto por equipos</h2>
+    <span class="small" id="trMiniHint">Resumen rápido del rendimiento por equipo en esta prueba</span>
+  </div>
+  <div id="teamRankingMiniBody"></div>
+</section>
+
+<!-- Panel: Lista de DNF (Tier 1 B) -->
+<section id="dnfPanel" class="panel" style="display:none;margin-top:14px;border-left:4px solid #f97316">
+  <div class="section-title">
+    <h2 style="margin:0;color:#9a3412">⛔ No clasificados (DNF / DNS)</h2>
+    <span class="small" id="dnfPanelHint">Inscritos en la startlist que no aparecen en la clasificación oficial</span>
+  </div>
+  <div id="dnfPanelBody"></div>
 </section>
       <section class="panel classification-panel">
   <div class="section-title">
@@ -453,6 +539,8 @@
       <span class="small" id="shownCount">0 corredores mostrados · Tip: pulsa una fila para abrir el análisis individual</span>
       <button class="btn light" onclick="enrichFromHistory()" title="Busca en el historial datos de categoría y comunidad autónoma que falten">🔍 Completar datos con historial</button>
       <button class="btn light" onclick="showTeamRegionsDialog()" title="Equipos sin CCAA conocida en el historial">📋 Equipos sin CCAA</button>
+      <button class="btn light" id="btnShowInscritos" onclick="showInscritosModal()" style="display:none" title="Ver inscritos, clasificados y DNF">📋 Inscritos & DNF</button>
+      <button class="btn light" onclick="showGlobalFinishStatsModal()" title="Estadísticas de finalización del histórico (equipos, categorías y corredores)">📊 Stats finalización</button>
       <button class="btn" style="background:#059669;border-color:#059669" onclick="saveHistory()" title="Guarda los datos actuales (incluidos los completados desde historial) en Supabase">💾 Guardar cambios</button>
       <button class="btn light" onclick="exportFilteredClassificationPDF()">Descargar PDF</button>
     </div>

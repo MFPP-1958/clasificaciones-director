@@ -38,10 +38,14 @@ function _collapseLoadPanel(){
 
 function openLoadPanelForNew(){
   // Limpiar todos los campos del formulario
-  ['raceName','raceDate','raceKm','raceAvg','raceLocalidad','raceCircuitType','pastedText'].forEach(id=>{
+  ['raceName','raceDate','raceKm','raceAvg','raceLocalidad','raceCircuitType','pastedText','pastedInscritos'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
   const fn=$('fileName'); if(fn) fn.textContent='';
+  const fnI=$('fileNameInscritos'); if(fnI) fnI.textContent='';
+  // Reset inscritos (Tier 1)
+  if(typeof inscritos !== 'undefined') inscritos = [];
+  if(typeof _updateInscritosUI === 'function') _updateInscritosUI();
   const badge=$('avgCalcBadge'); if(badge) badge.style.display='none';
   const hint=$('raceDateHint'); if(hint) hint.textContent='';
   const sb=$('successBanner'); if(sb) sb.style.display='none';
@@ -4608,6 +4612,7 @@ async function _sbLoadHistory(){
       avg: extra.avg || '',
       localidad: extra.localidad || '',
       circuitType: extra.circuitType || '',
+      inscritos: Array.isArray(extra.inscritos) ? extra.inscritos : [],
       riders: (race.race_results||[]).sort((a,b)=>a.pos-b.pos).map(r=>{
         const normName=normalizeRiderName(r.name);
         return {
@@ -4627,7 +4632,7 @@ async function _ensureHistory(){
   return _cachedHistory;
 }
 
-if(_sb){ _sbLoadHistory().then(h=>{ _cachedHistory = h; if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB(); if(typeof _gfPopulateYears==='function'){ _gfPopulateYears(); _gfPopulateRegions(); } }); }
+if(_sb){ _sbLoadHistory().then(h=>{ _cachedHistory = h; if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB(); if(typeof _gfPopulateYears==='function'){ _gfPopulateYears(); _gfPopulateRegions(); } if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; } if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; } }); }
 
 // Sincronización bidireccional: si el usuario cambia un filtro LOCAL,
 // actualizamos el global para que persista al cambiar de vista.
@@ -5002,6 +5007,8 @@ function parseText(text){
   // ===== BLOQUE 1: Banner de éxito y datalist equipo =====
   showSuccessBanner();
   updateMyTeamSuggestions();
+  // Refrescar UI de inscritos (banner + DNF) si ya había una lista cargada
+  if(typeof _updateInscritosUI === 'function') _updateInscritosUI();
   // Calcular velocidad media automáticamente si hay km y ganador con tiempo
   setTimeout(_calcAvgSpeed, 50);
   // Preguntar si hay columnas sin mapear que podrían ser CCAA
@@ -5855,6 +5862,38 @@ function normalizeForMatching(name){
     nm=parts[0]; ap=parts[1];
   }
   return (ap+', '+nm).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
+
+// ── Matcher tolerante al orden (Tier 1.5 fix) ─────────────────────────────
+// Devuelve un Set de tokens significativos (≥3 chars) sin acentos / puntuación.
+// Útil para comparar "GARCIA PEREZ JUAN" con "Juan Garcia, Perez" → ambas
+// producen {garcia, perez, juan}.
+function _nameTokenSet(name){
+  if(!name) return new Set();
+  return new Set(
+    String(name).toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[.,;]/g,' ')
+      .split(/\s+/)
+      .map(t=>t.trim())
+      .filter(t=>t.length>=3)
+  );
+}
+// Cuenta cuántos tokens significativos comparten dos nombres.
+function _nameSharedTokens(a,b){
+  const A = _nameTokenSet(a), B = _nameTokenSet(b);
+  let n = 0;
+  A.forEach(t=>{ if(B.has(t)) n++; });
+  return n;
+}
+// Match flexible: si ambos nombres tienen ≥2 palabras significativas en común
+// → consideramos que es el mismo corredor. (Apellido + nombre suele bastar.)
+function namesMatchFlexible(a,b){
+  if(!a || !b) return false;
+  // Match exacto por normalizeForMatching (rápido)
+  if(normalizeForMatching(a) === normalizeForMatching(b)) return true;
+  // Match por intersección de tokens
+  return _nameSharedTokens(a,b) >= 2;
 }
 /* Actualiza el datalist del buscador de ciclistas según los filtros activos */
 function _updateSearchDatalist(){
@@ -8857,6 +8896,7 @@ function analyseSelectedRider(){
         <div class="stat-sub">% carreras dentro de su media</div>
       </div>`;
     })():''}
+    ${typeof renderFinishRateStatCard==='function'?renderFinishRateStatCard(r):''}
   </div>
 
   <!-- Percentil + Compañeros -->
@@ -8894,6 +8934,7 @@ function analyseSelectedRider(){
       <div class="rider-block-title">🏆 Referencia de Podio · ${escapeHtml(r.cat)}</div>
       ${podiumHtml}
     </div>
+    ${typeof renderFinishRateBlockForRider==='function'?renderFinishRateBlockForRider(r):''}
     <div class="rider-block block-simulator">
       <div class="rider-block-title">🎯 Simulador de Objetivos · ¿Qué pasaría si...?</div>
       <div class="small" style="margin-bottom:4px">¿Cuánto habrías subido si mejoraras X segundos por kilómetro?</div>
@@ -9503,7 +9544,12 @@ async function loadHistoryEntry(id){
   const h = hist.find(x=>x.id===id);
   if(!h){alert('No se encontró la carrera seleccionada.');return;}
   riders = h.riders||[];
-  if(riders.length<3){alert('Esta entrada del histórico no tiene suficientes datos.');return;}
+  const hasInscritosOnly = Array.isArray(h.inscritos) && h.inscritos.length > 0;
+  // Pre-inscripción (sin clasificación todavía): permitimos cargar para editar inscritos
+  if(riders.length<3 && !hasInscritosOnly){
+    alert('Esta entrada del histórico no tiene suficientes datos.');
+    return;
+  }
   // Restaurar metadatos primero para que enrichRiders tenga acceso a km
   if($('raceName')) $('raceName').value = h.raceName||'';
   if($('raceDate')) $('raceDate').value = formatDateDisplay(_parseSpanishDate(h.raceDate||''))||h.raceDate||'';
@@ -9516,6 +9562,36 @@ async function loadHistoryEntry(id){
   }
   if($('raceLocalidad')) $('raceLocalidad').value = h.localidad||'';
   if($('raceCircuitType')) $('raceCircuitType').value = h.circuitType||'';
+  // Restaurar inscritos (Tier 1)
+  try{ inscritos = Array.isArray(h.inscritos) ? h.inscritos.slice() : []; }catch(e){ inscritos = []; }
+  if(typeof _updateInscritosUI === 'function') _updateInscritosUI();
+  // Si solo hay pre-inscripción (sin clasificación), navegamos a Carga y desplegamos
+  // el panel de inscritos para que el usuario pueda editar/añadir/eliminar.
+  if(riders.length < 3 && hasInscritosOnly){
+    if($('fileName')) $('fileName').textContent = 'Pre-inscripción cargada (sin clasificación todavía): '+escapeHtml(h.raceName||'');
+    hasValidData = false;
+    selectedCompare = [];
+    setTimeout(()=>{
+      showView('view-carga');
+      const body = document.getElementById('loadPanelBody');
+      const chev = document.getElementById('loadChevron');
+      const bar  = document.getElementById('loadBar');
+      if(body && body.classList.contains('collapsed')){
+        body.classList.remove('collapsed');
+        if(chev) chev.classList.remove('closed');
+        if(bar)  bar.classList.add('load-bar-open');
+      }
+      const insBody = document.getElementById('inscritosBody');
+      const insChev = document.getElementById('inscritosChevron');
+      if(insBody && insBody.style.display === 'none'){
+        insBody.style.display = 'block';
+        if(insChev) insChev.textContent = '▼';
+      }
+      setTimeout(()=>{ document.getElementById('inscritosCard')?.scrollIntoView({behavior:'smooth',block:'center'}); }, 80);
+    }, 80);
+    closeHistoryModal();
+    return;
+  }
   if($('fileName')) $('fileName').textContent = 'Cargado desde histórico: '+escapeHtml(h.raceName||'');
   riders = enrichRiders(riders);
   hasValidData = true;
@@ -9802,7 +9878,9 @@ async function saveHistory(){
   const isoDate=parsedDate||new Date().toISOString().split('T')[0];
   const regionMap={};
   riders.forEach(r=>{if(r.region)regionMap[r.name]=r.region;});
-  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap});
+  // Inscritos / startlist (Tier 1)
+  const inscritosToSave = (typeof inscritos !== 'undefined' && Array.isArray(inscritos) && inscritos.length) ? inscritos : [];
+  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave});
 
   // ── Buscar duplicados por fecha ──────────────────────────────────────────
   const {data:existing,error:dupErr}=await _sb
@@ -10870,28 +10948,52 @@ async function renderHistory(){
   const gfGen    = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.gender) || '';
 
   const sorted = sortedFull.filter(h => {
+    // ── Detección de PRE-INSCRIPCIÓN (riders<3 con inscritos guardados) ──
+    const _ridersN = (h.riders||[]).length;
+    const _insN    = Array.isArray(h.inscritos) ? h.inscritos.length : 0;
+    const isPreInsc = _ridersN < 3 && _insN > 0;
+    // Las pre-inscripciones BYPASS la mayoría de filtros globales:
+    // no tienen CCAA, no tienen clasificados con cat, y la fecha puede ser
+    // de un año distinto al filtrado. Aún así respetamos categoría si el
+    // inscrito la trae explícita (cuando coincida bien).
+
     // Año
-    if(gfYear){
+    if(gfYear && !isPreInsc){
       const yr = (_parseSpanishDate(h.raceDate)||'').slice(0,4);
       if(yr !== gfYear) return false;
     }
-    // Modalidad por nombre de prueba
-    if(typeof _gfMatchesGlobalMod==='function' && !_gfMatchesGlobalMod(h.raceName||'')) return false;
+    // Modalidad por nombre de prueba (también bypass para pre-inscritos)
+    if(!isPreInsc && typeof _gfMatchesGlobalMod==='function' && !_gfMatchesGlobalMod(h.raceName||'')) return false;
     // Categoría + género (a nivel de corredores)
+    // Para PRE-INSCRIPCIONES (sin clasificación todavía) evaluamos contra los inscritos
     if(gfCat || gfGen){
       const riders = h.riders||[];
+      const insArr = Array.isArray(h.inscritos) ? h.inscritos : [];
       if(typeof _gfMatchesCatGender==='function'){
-        const any = riders.some(r => _gfMatchesCatGender(r.cat||'', h.raceName||''));
-        if(!any) return false;
+        if(isPreInsc){
+          // Si la pre-inscripción no tiene cat en ningún inscrito, dejamos pasar
+          // (mejor mostrar de más que ocultar la pre-inscripción que el usuario busca)
+          const anyHasCat = insArr.some(i => (i.cat||'').trim());
+          if(anyHasCat){
+            const anyMatch = insArr.some(i => _gfMatchesCatGender(i.cat||'', h.raceName||''));
+            if(!anyMatch) return false;
+          }
+        } else {
+          const any = riders.some(r => _gfMatchesCatGender(r.cat||'', h.raceName||''));
+          if(!any) return false;
+        }
       }
     }
     // CCAA: si tenemos región global, exigir al menos 1 corredor de esa región
-    if(gfRegion){
+    // (Pre-inscripción sin riders → no se evalúa CCAA, se deja pasar)
+    if(gfRegion && !isPreInsc){
       const riders = h.riders||[];
-      const anyHasRegion = riders.some(r => r.region);
-      if(anyHasRegion){
-        const anyMatch = riders.some(r => r.region === gfRegion);
-        if(!anyMatch) return false;
+      if(riders.length){
+        const anyHasRegion = riders.some(r => r.region);
+        if(anyHasRegion){
+          const anyMatch = riders.some(r => r.region === gfRegion);
+          if(!anyMatch) return false;
+        }
       }
     }
     return true;
@@ -11070,6 +11172,28 @@ async function renderHistory(){
     const fccvBtn = fccvIdMatch
       ? `<button onclick="event.stopPropagation();_fccvShowRaceDetails('${escapeAttr(fccvIdMatch)}')" title="Ver ficha oficial FCCV" style="background:#fff;color:#1e40af;border:1.5px solid #93c5fd;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">ℹ️ FCCV</button>`
       : '';
+    // ── Tier 3: badge + botón startlist ─────────────────────────────────
+    const insN = Array.isArray(h.inscritos) ? h.inscritos.length : 0;
+    const isPreInsc = insN > 0 && riders.length < 3; // pre-inscripción (sin clasificación)
+    let insAcabaron = 0, insDnf = 0;
+    if(insN && !isPreInsc){
+      const byBib = new Set(riders.map(r=>String(r.bib||'')).filter(Boolean));
+      const byName = new Set(riders.map(r=>normalizeForMatching(r.name||'')));
+      h.inscritos.forEach(i=>{
+        const ok = (i.bib && byBib.has(String(i.bib))) || byName.has(normalizeForMatching(i.name||''));
+        if(ok) insAcabaron++; else insDnf++;
+      });
+    }
+    let insBadge;
+    if(isPreInsc){
+      insBadge = `<span title="Pre-inscripción guardada (${insN} inscritos). La prueba aún no se ha disputado o no se ha subido la clasificación." style="display:inline-flex;align-items:center;gap:4px;background:#eef2ff;color:#1e3a8a;border:1.5px solid #c7d2fe;border-radius:999px;font-size:11px;font-weight:800;padding:2px 9px">📋 ${insN} pre-inscritos</span>`;
+    } else if(insN){
+      insBadge = `<span title="Esta prueba tiene startlist (${insN} inscritos · ${insDnf} DNF)" style="display:inline-flex;align-items:center;gap:4px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:999px;font-size:11px;font-weight:800;padding:2px 9px">📋 ${insN} ins · ${insDnf} DNF</span>`;
+    } else {
+      insBadge = `<span title="Sin startlist. Cárgala desde el botón ✏️ Añadir startlist" style="display:inline-flex;align-items:center;gap:4px;background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:999px;font-size:11px;font-weight:700;padding:2px 9px">❌ Sin startlist</span>`;
+    }
+    const insBtnLbl = isPreInsc ? '👁️ Ver / Editar inscritos' : (insN ? '✏️ Editar startlist' : '➕ Añadir startlist');
+    const insBtn = `<button onclick="event.stopPropagation();_histAddStartlist('${h.id}')" title="${isPreInsc?'Abre la pre-inscripción para revisarla y editarla antes de la prueba':(insN?'Editar startlist existente':'Añadir startlist a esta prueba')}" style="background:#fff;color:${isPreInsc?'#1e3a8a':'#065f46'};border:1.5px solid ${isPreInsc?'#c7d2fe':'#a7f3d0'};border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">${insBtnLbl}</button>`;
 
     const _norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     const _searchIndex=_norm(h.raceName)+' '+_norm(h.raceDate||'')+' '+_norm(h.localidad||'')+' '+_norm(h.circuitType||'');
@@ -11094,6 +11218,7 @@ async function renderHistory(){
           <div style="font-size:16px;font-weight:900;color:#0b2f6b;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span onclick="loadHistoryEntry('${h.id}')" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#84caff" title="Clic para cargar esta prueba">${escapeHtml(h.raceName)}</span>
             ${ctypeBadge}
+            ${insBadge}
             ${myInPodium?`<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px">🏆 Podio del equipo</span>`:''}
           </div>
           <div style="font-size:12px;color:#667085;margin-top:3px">
@@ -11108,6 +11233,7 @@ async function renderHistory(){
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${favBtn}
           ${fccvBtn}
+          ${insBtn}
           <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer">📂 Cargar</button>
           <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1.5px solid #fecdd3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
         </div>
@@ -11208,6 +11334,7 @@ async function renderHistory(){
         </select>
         <button onclick="clearHistoryFilters()" style="padding:9px 13px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;background:#f9fafb;cursor:pointer;white-space:nowrap">✕ Limpiar</button>
         <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#374151;font-weight:700;cursor:pointer;background:#fff;border:1.5px solid #f9a8d4;border-radius:10px;padding:7px 12px"><input type="checkbox" id="histOnlyFavs" onchange="filterHistoryCards()"> ⭐ Solo favoritas</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#1e3a8a;font-weight:700;cursor:pointer;background:#fff;border:1.5px solid #c7d2fe;border-radius:10px;padding:7px 12px" title="Mostrar solo pruebas con pre-inscripción guardada (sin clasificación todavía)"><input type="checkbox" id="histOnlyPreInsc" onchange="filterHistoryCards()"> 📋 Solo pre-inscripciones</label>
       </div>
       <!-- Fila 2 — Controles de presentación -->
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;font-size:12.5px">
@@ -11344,6 +11471,12 @@ function _histGetFiltered(){
     }
     // Solo favoritas
     if(($('histOnlyFavs')?.checked) && !_histIsFav(h.id)) return false;
+    // Solo pre-inscripciones (inscritos sin clasificación)
+    if($('histOnlyPreInsc')?.checked){
+      const insN = Array.isArray(h.inscritos) ? h.inscritos.length : 0;
+      const isPre = insN>0 && (h.riders||[]).length<3;
+      if(!isPre) return false;
+    }
     return true;
   });
   return filtered;
@@ -11430,6 +11563,18 @@ function _histBuildTable(list){
     const fccvBtn = fccvIdMatch
       ? `<button onclick="event.stopPropagation();_fccvShowRaceDetails('${escapeAttr(fccvIdMatch)}')" title="Info FCCV" style="background:#fff;color:#1e40af;border:1px solid #93c5fd;border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer">\u2139\ufe0f</button>`
       : '';
+    // Tier 3: badge mini + bot\u00f3n startlist
+    const insN = Array.isArray(h.inscritos) ? h.inscritos.length : 0;
+    const isPreInsc = insN > 0 && riders.length < 3;
+    const insMini = isPreInsc
+      ? `<span title="${insN} pre-inscritos (prueba pendiente)" style="background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:6px;padding:2px 6px;font-size:10.5px;font-weight:800">\ud83d\udccb ${insN} pre</span>`
+      : insN
+        ? `<span title="${insN} inscritos en startlist" style="background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:6px;padding:2px 6px;font-size:10.5px;font-weight:800">\ud83d\udccb ${insN}</span>`
+        : `<span title="Sin startlist" style="background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:6px;padding:2px 6px;font-size:10.5px;font-weight:700">\u274c</span>`;
+    const insBtnIcon = isPreInsc ? '\ud83d\udc41\ufe0f' : (insN ? '\u270f\ufe0f' : '\u2795');
+    const insBtnColor = isPreInsc ? '#1e3a8a' : '#065f46';
+    const insBtnBorder = isPreInsc ? '#c7d2fe' : '#a7f3d0';
+    const insBtn = `<button onclick="event.stopPropagation();_histAddStartlist('${h.id}')" title="${isPreInsc?'Ver/Editar pre-inscritos':(insN?'Editar startlist':'A\u00f1adir startlist')}" style="background:#fff;color:${insBtnColor};border:1px solid ${insBtnBorder};border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">${insBtnIcon}</button>`;
     return `<tr style="border-top:1px solid #f3f4f6">
       <td style="padding:7px 10px;font-size:12px;color:#475569;white-space:nowrap">${escapeHtml(h.raceDate||'\u2014')}</td>
       <td style="padding:7px 10px;font-size:13px;font-weight:700;color:#0b2f6b;cursor:pointer" onclick="loadHistoryEntry('${h.id}')">${escapeHtml(h.raceName||'')}</td>
@@ -11437,10 +11582,11 @@ function _histBuildTable(list){
       <td style="padding:7px 10px;font-size:11px;color:#475569">${escapeHtml(cats)}</td>
       <td style="padding:7px 10px;font-size:12px;color:#1d4ed8;font-weight:700">${myBest||'<span style="color:#9ca3af">\u2014</span>'}</td>
       <td style="padding:7px 10px;font-size:12px;color:#475569">${winner?escapeHtml((winner.name||'').slice(0,22)):'\u2014'}</td>
-      <td style="padding:7px 10px;text-align:center;color:#475569;font-size:12px">${riders.length}</td>
+      <td style="padding:7px 10px;text-align:center;color:#475569;font-size:12px">${riders.length} ${insMini}</td>
       <td style="padding:7px 10px;text-align:right;white-space:nowrap">
         <button onclick="_histToggleFav('${h.id}',event)" title="${_histIsFav(h.id)?'Quitar favorita':'Marcar favorita'}" style="background:${_histIsFav(h.id)?'#fce7f3':'#fff'};color:${_histIsFav(h.id)?'#ec4899':'#9ca3af'};border:1px solid ${_histIsFav(h.id)?'#f9a8d4':'#e5e7eb'};border-radius:6px;padding:2px 6px;font-size:13px;cursor:pointer;line-height:1">${_histIsFav(h.id)?'\u2b50':'\u2606'}</button>
         ${fccvBtn}
+        ${insBtn}
         <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;padding:3px 9px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\udcc2</button>
         <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\uddd1\ufe0f</button>
       </td>
@@ -11482,7 +11628,26 @@ function _histRender(){
   const area = $('histRenderArea');
   if(!area) return;
   if(!filtered.length){
-    area.innerHTML = `<p style="color:#9ca3af;text-align:center;padding:30px">No hay carreras con esos filtros.</p>`;
+    // Diagnóstico: si está activo "Solo pre-inscripciones" y no hay resultados, mostramos detalle
+    let diagHtml = '';
+    if(document.getElementById('histOnlyPreInsc')?.checked){
+      const hist = window._histState?.sorted || _cachedHistory || [];
+      const all  = (_cachedHistory||[]);
+      const withIns = all.filter(h => Array.isArray(h.inscritos) && h.inscritos.length>0);
+      const preInsc = all.filter(h => Array.isArray(h.inscritos) && h.inscritos.length>0 && (h.riders||[]).length<3);
+      const lines = preInsc.slice(0,10).map(h => `  • ${h.raceName||'(sin nombre)'} · ${h.raceDate||'?'} · riders=${(h.riders||[]).length}, inscritos=${(h.inscritos||[]).length}`).join('<br>');
+      diagHtml = `
+        <div style="margin-top:18px;padding:14px;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;text-align:left;font-size:12.5px;color:#9a3412">
+          <b>🔍 Diagnóstico:</b><br>
+          • Total carreras en histórico: <b>${all.length}</b><br>
+          • Carreras con algún inscrito guardado: <b>${withIns.length}</b><br>
+          • Pre-inscripciones detectadas (riders &lt; 3 e inscritos &gt; 0): <b>${preInsc.length}</b><br>
+          • Carreras tras filtros globales (en st.sorted): <b>${hist.length}</b><br>
+          ${preInsc.length ? '<br><b>Pre-inscripciones encontradas en la base:</b><br>'+lines : '<br><b>⚠️ No hay ninguna prueba guardada como pre-inscripción.</b> Verifica que pulsaste "💾 Guardar inscritos (sin clasificación)" después de pegar la lista.'}
+          <br><br><span style="font-size:11px;color:#7c2d12">Si ves carreras aquí pero el filtro las oculta, es por los filtros globales o de año. Pulsa "✕ Limpiar" arriba para reiniciar todos los filtros.</span>
+        </div>`;
+    }
+    area.innerHTML = `<p style="color:#9ca3af;text-align:center;padding:30px">No hay carreras con esos filtros.</p>${diagHtml}`;
     return;
   }
   const renderGroupBody = (items) => view==='table' ? _histBuildTable(items) : st.buildCards(items);
@@ -11658,6 +11823,8 @@ function clearHistoryFilters(){
   if($('histTypeFilter'))  $('histTypeFilter').value='';
   if($('histYearFilter'))  $('histYearFilter').value='';
   if($('histCatFilter'))   $('histCatFilter').value='';
+  if($('histOnlyFavs'))    $('histOnlyFavs').checked = false;
+  if($('histOnlyPreInsc')) $('histOnlyPreInsc').checked = false;
   filterHistoryCards();
 }
 
@@ -17983,3 +18150,2432 @@ const valueLabelsPlugin = {
     if(btn && !_pop.contains(e.relatedTarget)){ _hideHelp(); }
   });
 })();
+
+// ===== INSCRITOS / STARTLIST (Tier 1) =====
+// Estado global: lista de inscritos (independiente de riders[] = clasificados).
+// Cada inscrito: {bib, name, team, cat}
+let inscritos = [];
+
+function toggleInscritosPanel(){
+  const body = document.getElementById('inscritosBody');
+  const chev = document.getElementById('inscritosChevron');
+  if(!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if(chev) chev.textContent = open ? '▶' : '▼';
+}
+
+// Parser específico para listas de inscritos.
+// Más permisivo que parseRiders: NO requiere posición ni tiempo.
+// Solo dorsal + nombre (equipo y categoría opcionales).
+// Detecta si una columna "parece" una categoría (cadete, junior, elite, master…)
+function _looksLikeCat(s){
+  return /^(cadete|cad|juvenil|junior|jun|elite|sub-?23|master|m-?\d+|f-?(cad|jun)|fem|cad-?\d|jun-?\d|open)\b/i.test(String(s||'').trim());
+}
+
+function parseInscritos(text){
+  if(!text) return [];
+  // 1) Intentar parser tipo CSV/Excel (más robusto con columnas)
+  let arr = parseInscritosCSVLike(text);
+  if(arr.length >= 3) return _dedupeInscritos(_postProcessInscritos(arr));
+  // 2) Fallback: línea a línea — el DORSAL es OPCIONAL.
+  // Aceptamos: "Nombre Apellido  Equipo  Categoría" o "12  Nombre…  Equipo  Cat"
+  const lines = text.split(/\n+/).map(l=>l.replace(/\t/g,'    ')).filter(l=>l.trim());
+  arr = [];
+  for(const rawLine of lines){
+    const line = rawLine.trim();
+    if(!line || line.length < 3) continue;
+    // Filtrar cabeceras y totales
+    if(/^(dorsal|n[ºo°]\.?|num\b|pos|puesto|nombre|apellido|ciclista|corredor|equipo|club|categor|total)/i.test(line)) continue;
+
+    // Dorsal opcional al inicio (1-4 dígitos seguidos de espacio)
+    let bib = '', rest = line;
+    const dorsalMatch = line.match(/^(\d{1,4})\s+(.+)$/);
+    if(dorsalMatch){ bib = dorsalMatch[1]; rest = dorsalMatch[2]; }
+
+    // Separar por 2+ espacios, tabs, ; o |
+    const cols = rest.split(/\s{2,}|\t+|[;|]/).map(c=>c.trim()).filter(Boolean);
+    let name='', team='', cat='';
+    if(cols.length >= 3){
+      name = cols[0];
+      // Si la última columna parece categoría, separamos
+      if(_looksLikeCat(cols[cols.length-1])){
+        cat  = cols[cols.length-1];
+        team = cols.slice(1, -1).join(' ');
+      } else {
+        team = cols[1];
+        cat  = cols.slice(2).join(' ');
+      }
+    } else if(cols.length === 2){
+      name = cols[0];
+      if(_looksLikeCat(cols[1])) cat = cols[1]; else team = cols[1];
+    } else {
+      name = cols[0] || rest;
+    }
+    if(!name || name.length < 3) continue;
+    // Descartar si el "nombre" parece numérico o categoría suelta
+    if(/^\d+$/.test(name) || _looksLikeCat(name)) continue;
+    arr.push({
+      bib,
+      name: normalizeRiderName(name),
+      team: team||'',
+      cat: (cat||'').replace(/\s+/g,'')
+    });
+  }
+  return _dedupeInscritos(_postProcessInscritos(arr));
+}
+
+function parseInscritosCSVLike(text){
+  const rawLines = text.split(/\n/).map(l=>l.trim()).filter(Boolean);
+  if(!rawLines.length) return [];
+  const seps = [',',';','\t','|'];
+  let bestSep=';', bestScore=-1;
+  seps.forEach(sep=>{
+    const counts = rawLines.slice(0,25).map(l=>l.split(sep).length).filter(n=>n>1);
+    if(!counts.length) return;
+    const avg = counts.reduce((s,n)=>s+n,0)/counts.length;
+    const consistent = counts.filter(n=>Math.abs(n-avg)<=1).length;
+    const score = avg*consistent;
+    if(score>bestScore){bestScore=score; bestSep=sep;}
+  });
+  let rows = rawLines.map(l=>l.split(bestSep).map(c=>c.trim()));
+  if(bestScore<4){
+    rows = rawLines.map(l=>l.split(/\s{2,}/).map(c=>c.trim()));
+  }
+  const normH = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  // Buscar fila de cabecera (basta con encontrar "nombre"|"apellido"|"ciclista"; el dorsal es OPCIONAL)
+  let headerIdx = rows.findIndex(r=>{
+    const h = r.map(normH).join(' ');
+    return /(nombre|apellido|ciclista|corredor|nom)/.test(h);
+  });
+  let map = {bib:null, name:1, surname:null, team:2, cat:null};
+  if(headerIdx>=0){
+    const h = rows[headerIdx].map(normH);
+    const find = (regs, def=null)=>{const i=h.findIndex(c=>regs.some(re=>re.test(c))); return i>=0?i:def};
+    map.bib = find([/dorsal/,/^dor\b/,/num/],null);
+    map.name = find([/^nombre$/,/^nom$/,/nombre(?!.*equipo)/,/ciclista|corredor/,/apellido.*nombre/],1);
+    map.surname = find([/^apellido/,/surname/],null);
+    map.team = find([/club.*equipo/,/equipo/,/club/,/^team$/],2);
+    map.cat = find([/^categoria$/,/^cat$/,/category/],null);
+  }
+  const startRow = headerIdx>=0 ? headerIdx+1 : 0;
+  const out = [];
+  rows.slice(startRow).forEach(parts=>{
+    if(parts.length<1) return;
+    const bibVal = map.bib!=null ? (parts[map.bib]||'').trim() : '';
+    // El dorsal YA NO es obligatorio; si la columna existe pero no es numérica, ignoramos el valor
+    const bibFinal = /^\d+$/.test(bibVal) ? bibVal : '';
+    let namePart = (parts[map.name]||'').trim();
+    let surnamePart = map.surname!=null ? (parts[map.surname]||'').trim() : '';
+    let fullName = surnamePart ? `${namePart} ${surnamePart}` : namePart;
+    if(!fullName || fullName.length<3) return;
+    if(/^(dorsal|nombre|apellido|ciclista|equipo|categor|total)/i.test(fullName)) return; // cabecera repetida
+    out.push({
+      bib: bibFinal,
+      name: surnamePart ? normalizeRiderName(null,namePart,surnamePart,null) : normalizeRiderName(fullName),
+      team: (parts[map.team]||'').trim(),
+      cat: map.cat!=null ? (parts[map.cat]||'').replace(/\s+/g,'') : ''
+    });
+  });
+  return out;
+}
+
+// ===== ENRIQUECIMIENTO DESDE HISTÓRICO (Tier 1.5) =====
+// Para cada inscrito, busca en el histórico del MISMO AÑO al corredor por nombre.
+// Si lo encuentra, asigna:
+//   - bib    → el dorsal más reciente que tuvo ese año
+//   - cat    → la categoría más frecuente que usó ese año (CAD-1, CAD-2…)
+//   - team   → el equipo más reciente
+// La categoría que venía en la startlist (p.ej. "CADETE" genérico) se SOBREESCRIBE
+// si encontramos una más específica con dígito (CAD-1, CAD-2, JUN-1…).
+function _postProcessInscritos(arr){
+  const year = (typeof _getRaceYear==='function') ? _getRaceYear() : new Date().getFullYear();
+  // Index: nameKey → {bibs:Map<bib,count>, cats:Map<cat,count>, team, lastDate}
+  const idx = _buildYearRiderIndex(year);
+  return arr.map(ins=>{
+    const nk = normalizeForMatching(ins.name||'');
+    const hit = idx.get(nk);
+    if(!hit){
+      // No encontrado: dejamos lo que venía
+      return {...ins, _enriched:false, _newRider: true};
+    }
+    // Categoría más específica (con dígito) prevalece sobre la genérica de la startlist
+    let bestCat = '';
+    const catsSorted = [...hit.cats.entries()].sort((a,b)=>b[1]-a[1]);
+    const specific = catsSorted.find(([c])=>/\d/.test(c));
+    bestCat = (specific ? specific[0] : (catsSorted[0]?.[0]||'')) || (ins.cat||'');
+    // Dorsal más reciente
+    const bestBib = hit.lastBib || ins.bib || '';
+    // Equipo: el guardado en histórico tiene prioridad si el de la startlist está vacío
+    const bestTeam = ins.team || hit.lastTeam || '';
+    return {
+      bib: bestBib,
+      name: ins.name,
+      team: bestTeam,
+      cat: bestCat.replace(/\s+/g,''),
+      _enriched: true
+    };
+  });
+}
+
+// Construye índice de corredores del año (cacheado por año + tamaño de historial)
+let _yearRiderIdxCache = null;
+let _yearRiderIdxKey = null;
+function _buildYearRiderIndex(year){
+  const hist = _cachedHistory || [];
+  const key = String(year)+'|'+hist.length;
+  if(_yearRiderIdxKey === key && _yearRiderIdxCache) return _yearRiderIdxCache;
+
+  const idx = new Map(); // nameKey → {bibs, cats, lastBib, lastTeam, lastDate}
+  const yStr = String(year);
+  hist.forEach(h=>{
+    const ry = (_parseSpanishDate(h.raceDate)||'').slice(0,4);
+    if(ry !== yStr) return;
+    (h.riders||[]).forEach(r=>{
+      const nk = normalizeForMatching(r.name||'');
+      if(!nk) return;
+      let entry = idx.get(nk);
+      if(!entry){
+        entry = { bibs:new Map(), cats:new Map(), lastBib:'', lastTeam:'', lastDate:'0000-00-00' };
+        idx.set(nk, entry);
+      }
+      if(r.bib){ entry.bibs.set(String(r.bib), (entry.bibs.get(String(r.bib))||0)+1); }
+      if(r.cat){ entry.cats.set(r.cat, (entry.cats.get(r.cat)||0)+1); }
+      const iso = _parseSpanishDate(h.raceDate)||'';
+      if(iso && iso > entry.lastDate){
+        entry.lastDate = iso;
+        if(r.bib) entry.lastBib = String(r.bib);
+        if(r.team) entry.lastTeam = r.team;
+      }
+    });
+  });
+  _yearRiderIdxCache = idx;
+  _yearRiderIdxKey = key;
+  return idx;
+}
+
+function _dedupeInscritos(arr){
+  const seen = new Set();
+  const out = [];
+  for(const i of arr){
+    const key = (i.bib||'') + '|' + normalizeForMatching(i.name||'');
+    if(seen.has(key)) continue;
+    seen.add(key);
+    out.push(i);
+  }
+  return out;
+}
+
+function processPastedInscritos(){
+  const text = document.getElementById('pastedInscritos')?.value || '';
+  if(!text.trim()){ alert('Pega primero la lista de inscritos.'); return; }
+  const arr = parseInscritos(text);
+  if(arr.length < 1){
+    alert('No se ha podido reconocer ningún inscrito en el texto pegado.\n\nFormato aceptado (flexible):\n  • Nombre Apellido    Equipo    Categoría\n  • [dorsal opcional] Nombre…  Equipo  Cat\n  • CSV/TSV con cabecera "Nombre", "Equipo", "Categoría"…');
+    return;
+  }
+  inscritos = arr;
+  _updateInscritosUI();
+  _showInscritosEnrichmentReport(arr, 'texto pegado');
+}
+
+function _showInscritosEnrichmentReport(arr, source){
+  const enriched = arr.filter(i=>i._enriched).length;
+  const newRiders = arr.filter(i=>i._newRider).length;
+  const withBib = arr.filter(i=>i.bib).length;
+  const msg = `✅ ${arr.length} inscritos cargados desde ${source}.\n\n`+
+              `🔍 Enriquecidos desde el histórico del año: ${enriched}\n`+
+              `🆕 Sin coincidencia (probablemente nuevos corredores): ${newRiders}\n`+
+              `🏷️ Con dorsal asignado: ${withBib} / ${arr.length}`;
+  alert(msg);
+}
+
+async function handleFileInscritos(file){
+  if(!file) return;
+  const el = document.getElementById('fileNameInscritos');
+  if(el) el.textContent = 'Archivo inscritos: ' + file.name;
+  const ext = file.name.split('.').pop().toLowerCase();
+  showLoading('Procesando inscritos: ' + file.name, 'Leyendo lista de inscritos…');
+  try{
+    let text = '';
+    if(ext === 'pdf') text = await readPDF(file);
+    else if(ext === 'csv') text = await file.text();
+    else text = await readExcel(file);
+    const arr = parseInscritos(text);
+    if(arr.length < 1){ alert('No se ha podido reconocer ningún inscrito en el archivo.'); return; }
+    inscritos = arr;
+    _updateInscritosUI();
+    _showInscritosEnrichmentReport(arr, `"${file.name}"`);
+  }catch(err){
+    alert('No he podido leer el archivo de inscritos. Error: ' + err.message);
+  }finally{
+    hideLoading();
+  }
+}
+
+function clearInscritos(){
+  if(!confirm('¿Borrar la lista de inscritos cargada?')) return;
+  inscritos = [];
+  const pasted = document.getElementById('pastedInscritos');
+  if(pasted) pasted.value = '';
+  const fn = document.getElementById('fileNameInscritos');
+  if(fn) fn.textContent = '';
+  const fi = document.getElementById('fileInputInscritos');
+  if(fi) fi.value = '';
+  _updateInscritosUI();
+}
+
+// Cruce inscritos × clasificados: devuelve {acabaron, dnf, total}
+// dnf = inscritos que NO aparecen en riders[] (por dorsal o nombre normalizado).
+function computeInscritosStatus(){
+  const result = { total: inscritos.length, acabaron: 0, dnf: [] };
+  if(!inscritos.length) return result;
+  // Index riders por dorsal, nombre y tokens (matcher flexible)
+  const ridersByBib = new Map();
+  const ridersByName = new Set();
+  const ridersTokens = [];
+  (riders || []).forEach(r=>{
+    if(r.bib) ridersByBib.set(String(r.bib), r);
+    if(r.name){
+      ridersByName.add(normalizeForMatching(r.name));
+      ridersTokens.push(_nameTokenSet(r.name));
+    }
+  });
+  const _matchByTokens = (insName)=>{
+    const tokSet = _nameTokenSet(insName||'');
+    if(tokSet.size < 2) return false;
+    for(const ent of ridersTokens){
+      let common = 0;
+      ent.forEach(t=>{ if(tokSet.has(t)) common++; });
+      if(common >= 2) return true;
+    }
+    return false;
+  };
+  for(const ins of inscritos){
+    const byBib = ins.bib ? ridersByBib.get(String(ins.bib)) : null;
+    const byName = ridersByName.has(normalizeForMatching(ins.name||''));
+    if(byBib || byName || _matchByTokens(ins.name)){ result.acabaron++; }
+    else { result.dnf.push(ins); }
+  }
+  return result;
+}
+
+function _updateInscritosUI(){
+  const counter = document.getElementById('inscritosCounter');
+  const status = document.getElementById('inscritosStatus');
+  const btnClear = document.getElementById('btnClearInscritos');
+  const banner = document.getElementById('inscritosBanner');
+  const btnShow = document.getElementById('btnShowInscritos');
+  const listWrap = document.getElementById('inscritosListWrap');
+  const n = inscritos.length;
+  if(counter) counter.textContent = n ? `${n} inscritos cargados` : '0 inscritos cargados';
+  if(btnClear) btnClear.style.display = n ? 'inline-block' : 'none';
+  const btnSave = document.getElementById('btnSaveInscritos');
+  if(btnSave) btnSave.style.display = n ? 'inline-block' : 'none';
+  const btnPdf = document.getElementById('btnExportInscritosPDF');
+  if(btnPdf) btnPdf.style.display = n ? 'inline-block' : 'none';
+  if(!n){
+    if(status) status.style.display = 'none';
+    if(banner) banner.style.display = 'none';
+    if(btnShow) btnShow.style.display = 'none';
+    if(listWrap){ listWrap.innerHTML = ''; listWrap.style.display = 'none'; }
+    return;
+  }
+  const st = computeInscritosStatus();
+  const pctDnf = st.total ? Math.round((st.dnf.length/st.total)*100) : 0;
+  if(status){
+    status.style.display = 'block';
+    if(riders && riders.length){
+      status.innerHTML = `✅ <b>${st.total}</b> inscritos · <b>${st.acabaron}</b> clasificados · <b style="color:#9a3412">${st.dnf.length}</b> DNF (${pctDnf}%)`;
+    } else {
+      status.innerHTML = `📋 <b>${st.total}</b> inscritos cargados. Carga la clasificación para calcular DNF.`;
+    }
+  }
+  if(banner){
+    if(riders && riders.length){
+      banner.style.display = 'flex';
+      banner.innerHTML = `
+        <span class="ib-chip total">📋 ${st.total} inscritos</span>
+        <span class="ib-chip ok">✅ ${st.acabaron} clasificados</span>
+        <span class="ib-chip dnf">⛔ ${st.dnf.length} DNF (${pctDnf}%)</span>
+      `;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+  if(btnShow) btnShow.style.display = (riders && riders.length) ? 'inline-block' : 'none';
+  // Lista visible/editable de inscritos
+  if(listWrap){
+    listWrap.style.display = 'block';
+    listWrap.innerHTML = _renderInscritosEditableList();
+  }
+}
+
+// Lista editable agrupada por equipo, con tu equipo arriba y botón 🗑️ por fila
+function _renderInscritosEditableList(){
+  const myTeam = (localStorage.getItem('myTeam')||'').trim();
+  const mk = myTeam.toLowerCase();
+  // Agrupar por equipo
+  const byTeam = new Map();
+  inscritos.forEach((ins, idx)=>{
+    const t = (ins.team||'(sin equipo)').trim();
+    if(!byTeam.has(t)) byTeam.set(t, []);
+    byTeam.get(t).push({...ins, _idx: idx});
+  });
+  // Ordenar: mi equipo primero, resto alfabético
+  const teams = [...byTeam.keys()].sort((a,b)=>{
+    if(mk){
+      if(a.toLowerCase()===mk) return -1;
+      if(b.toLowerCase()===mk) return 1;
+    }
+    return a.localeCompare(b);
+  });
+  // Si el histórico tiene clasificados (riders), preparamos sets para marcar DNF/Acabó
+  const ridersByBib = new Map();
+  const ridersByName = new Set();
+  (riders||[]).forEach(r=>{
+    if(r.bib) ridersByBib.set(String(r.bib), r);
+    if(r.name) ridersByName.add(normalizeForMatching(r.name));
+  });
+  const hasClasif = (riders||[]).length > 0;
+
+  const collapsedKey = '_inscritosListCollapsed';
+  const collapsed = localStorage.getItem(collapsedKey) === '1';
+  const filterStr = (window._inscritosFilter||'').toLowerCase();
+
+  const teamBlocks = teams.map(team=>{
+    const list = byTeam.get(team);
+    const isMy = mk && team.toLowerCase()===mk;
+    const filtered = filterStr
+      ? list.filter(i=>(i.name||'').toLowerCase().includes(filterStr) || (i.bib||'').includes(filterStr) || (i.cat||'').toLowerCase().includes(filterStr))
+      : list;
+    if(!filtered.length) return '';
+    const rows = filtered.map(i=>{
+      let statusBadge = '';
+      if(hasClasif){
+        const ok = (i.bib && ridersByBib.has(String(i.bib))) || ridersByName.has(normalizeForMatching(i.name||''));
+        statusBadge = ok
+          ? '<span class="badge-status ok">Acabó</span>'
+          : '<span class="badge-status dnf">DNF</span>';
+      }
+      const enriched = i._enriched ? '<span title="Dorsal/categoría completados desde histórico" style="color:#0369a1;font-size:11px;font-weight:700">🔍</span>' : '';
+      const newR = i._newRider ? '<span title="No encontrado en histórico del año (¿nuevo corredor?)" style="color:#d97706;font-size:11px;font-weight:700">🆕</span>' : '';
+      return `<tr data-idx="${i._idx}">
+        <td style="padding:5px 8px;font-size:12px;color:#475569;width:46px">${escapeHtml(i.bib||'—')}</td>
+        <td style="padding:5px 8px;font-size:13px;font-weight:700;color:#0b2f6b">${escapeHtml(i.name||'')} ${enriched}${newR}</td>
+        <td style="padding:5px 8px;font-size:11px;color:#6b7280">${escapeHtml(i.cat||'—')}</td>
+        <td style="padding:5px 8px;text-align:center">${statusBadge}</td>
+        <td style="padding:5px 8px;text-align:right">
+          <button onclick="_inscritoRemove(${i._idx})" title="Quitar este inscrito" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:2px 8px;font-size:13px;font-weight:800;cursor:pointer;line-height:1">×</button>
+        </td>
+      </tr>`;
+    }).join('');
+    const teamHeader = isMy
+      ? `<div style="background:#dbeafe;color:#1e3a8a;border:1.5px solid #93c5fd;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:800;font-size:12.5px;display:flex;justify-content:space-between;align-items:center"><span>🔵 ${escapeHtml(team)} <span style="font-weight:600;color:#475569">(${filtered.length})</span></span><span style="font-size:11px;font-weight:700">MI EQUIPO</span></div>`
+      : `<div style="background:#f3f6fb;color:#0b2f6b;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:700;font-size:12.5px;display:flex;justify-content:space-between"><span>${escapeHtml(team)}</span><span style="color:#6b7280;font-weight:600">${filtered.length} inscrito${filtered.length===1?'':'s'}</span></div>`;
+    return `<div style="margin-bottom:8px">
+      ${teamHeader}
+      <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 6px 6px;overflow:hidden">
+        ${rows}
+      </table>
+    </div>`;
+  }).join('');
+
+  return `
+    <div style="margin-top:14px;border:1px solid #e5e7eb;border-radius:10px;background:#f9fafb">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border-bottom:1px solid #e5e7eb;border-radius:10px 10px 0 0;cursor:pointer" onclick="_toggleInscritosList()">
+        <div style="font-weight:800;color:#0b2f6b;font-size:13px;display:flex;align-items:center;gap:8px">
+          <span id="inscritosListChevron">${collapsed?'▶':'▼'}</span>
+          📋 Lista de inscritos (${inscritos.length})
+          <span style="font-size:11px;font-weight:600;color:#6b7280">— pulsa la × para quitar antes de guardar</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
+          <input id="inscritosFilterInput" type="text" placeholder="Filtrar nombre, dorsal o cat." value="${escapeAttr(window._inscritosFilter||'')}" oninput="_inscritosOnFilter(this.value)" style="padding:5px 9px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;width:200px" />
+        </div>
+      </div>
+      <div id="inscritosListContent" style="padding:10px;${collapsed?'display:none':''}">
+        ${teamBlocks || '<div class="small" style="text-align:center;padding:12px;color:#9ca3af">Sin resultados con ese filtro.</div>'}
+      </div>
+    </div>`;
+}
+
+function _toggleInscritosList(){
+  const cont = document.getElementById('inscritosListContent');
+  const chev = document.getElementById('inscritosListChevron');
+  if(!cont) return;
+  const isHidden = cont.style.display === 'none';
+  cont.style.display = isHidden ? 'block' : 'none';
+  if(chev) chev.textContent = isHidden ? '▼' : '▶';
+  localStorage.setItem('_inscritosListCollapsed', isHidden ? '0' : '1');
+}
+
+function _inscritosOnFilter(val){
+  window._inscritosFilter = val||'';
+  // Re-render preservando foco en el input
+  const cont = document.getElementById('inscritosListContent');
+  if(cont){
+    cont.innerHTML = _renderInscritosEditableList().match(/<div id="inscritosListContent"[^>]*>([\s\S]*?)<\/div>\s*<\/div>$/)?.[1] || cont.innerHTML;
+  }
+  // Más simple y robusto: re-render completo y mantener foco
+  const listWrap = document.getElementById('inscritosListWrap');
+  if(listWrap) listWrap.innerHTML = _renderInscritosEditableList();
+  const inp = document.getElementById('inscritosFilterInput');
+  if(inp){ inp.focus(); inp.setSelectionRange(val.length, val.length); }
+}
+
+function _inscritoRemove(idx){
+  if(!Number.isInteger(idx) || idx<0 || idx>=inscritos.length) return;
+  const r = inscritos[idx];
+  if(!confirm(`¿Quitar a "${r.name||'?'}" de la lista de inscritos?\n\nSe eliminará solo de esta lista, no del histórico.`)) return;
+  inscritos.splice(idx,1);
+  _updateInscritosUI();
+}
+
+// Modal con lista de inscritos y estado (Acabó / DNF)
+function showInscritosModal(){
+  if(!inscritos.length){ alert('No hay inscritos cargados para esta prueba.'); return; }
+  const st = computeInscritosStatus();
+  const dnfKeys = new Set(st.dnf.map(i=>(i.bib||'')+'|'+normalizeForMatching(i.name||'')));
+  // Construir lista combinada con estado
+  const rows = inscritos.map(i=>{
+    const key = (i.bib||'')+'|'+normalizeForMatching(i.name||'');
+    const isDnf = dnfKeys.has(key);
+    // Si acabó: localizar pos en riders
+    let pos = '—';
+    if(!isDnf){
+      const r = (riders||[]).find(x=>String(x.bib)===String(i.bib)) ||
+                (riders||[]).find(x=>normalizeForMatching(x.name)===normalizeForMatching(i.name||''));
+      if(r) pos = r.pos;
+    }
+    return {...i, status: isDnf ? 'DNF' : 'OK', pos};
+  });
+  // Ordenar: primero clasificados por pos, luego DNF alfabéticamente
+  rows.sort((a,b)=>{
+    if(a.status !== b.status) return a.status==='OK' ? -1 : 1;
+    if(a.status==='OK') return (+a.pos||999) - (+b.pos||999);
+    return (a.name||'').localeCompare(b.name||'');
+  });
+  const tbl = `
+    <table class="inscritos-modal-tbl">
+      <thead><tr>
+        <th>Estado</th><th>Pos.</th><th>Dorsal</th><th>Nombre</th><th>Equipo</th><th>Cat.</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr>
+            <td><span class="badge-status ${r.status==='OK'?'ok':'dnf'}">${r.status==='OK'?'Acabó':'DNF'}</span></td>
+            <td>${r.pos}</td>
+            <td>${escapeHtml(r.bib||'')}</td>
+            <td>${escapeHtml(r.name||'')}</td>
+            <td>${escapeHtml(r.team||'')}</td>
+            <td>${escapeHtml(r.cat||'')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+  const pctDnf = st.total ? Math.round((st.dnf.length/st.total)*100) : 0;
+  const header = `
+    <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+      <span class="ib-chip total">📋 ${st.total} inscritos</span>
+      <span class="ib-chip ok">✅ ${st.acabaron} clasificados</span>
+      <span class="ib-chip dnf">⛔ ${st.dnf.length} DNF (${pctDnf}%)</span>
+    </div>`;
+  // Usar modal genérico si existe; si no, ventana simple
+  const html = `<h2 style="margin-top:0">📋 Inscritos & DNF</h2>${header}${tbl}`;
+  _showSimpleModal(html);
+}
+
+function _showSimpleModal(html){
+  // Si ya existe un modal genérico, sobrescribirlo
+  let m = document.getElementById('inscritosGenericModal');
+  if(!m){
+    m = document.createElement('div');
+    m.id = 'inscritosGenericModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    m.addEventListener('click', e=>{ if(e.target===m) m.remove(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `<div style="background:#fff;border-radius:14px;padding:22px;max-width:900px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:-8px"><button onclick="document.getElementById('inscritosGenericModal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#667085">✕</button></div>
+    ${html}
+  </div>`;
+}
+
+// Inicialización de los listeners de inscritos
+(function initInscritos(){
+  const fi = document.getElementById('fileInputInscritos');
+  if(fi){
+    fi.addEventListener('change', e=>{
+      const f = e.target.files && e.target.files[0];
+      if(f) handleFileInscritos(f);
+    });
+  }
+  const dz = document.getElementById('dropZoneInscritos');
+  if(dz){
+    ['dragenter','dragover'].forEach(ev=>{
+      dz.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.add('drop-active'); });
+    });
+    ['dragleave','drop'].forEach(ev=>{
+      dz.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.remove('drop-active'); });
+    });
+    dz.addEventListener('drop', e=>{
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if(f) handleFileInscritos(f);
+    });
+  }
+})();
+// ===== FIN INSCRITOS / STARTLIST =====
+
+// ===== INSCRITOS - TIER 2: STATS PREDICTIVOS =====
+// Construye estadísticas de finalización a partir del histórico:
+//   - byRider:  Map<normName, {name, inscrito, acabo, dnf, rate, races[]}>
+//   - byTeam:   Map<team, {team, inscrito, acabo, dnf, rate, riders:Set}>
+//   - byCat:    Map<catNorm, {cat, inscrito, acabo, dnf, rate}>
+//   - global:   {inscrito, acabo, dnf, rate}
+//
+// "inscrito" = nº de pruebas donde aparece en la lista de startlist.
+// "acabo"    = nº de pruebas donde, estando inscrito, también aparece clasificado.
+// Solo se contabilizan carreras del histórico que TIENEN lista de inscritos cargada.
+
+let _finishStatsCache = null;
+let _finishStatsCacheKey = null;
+
+function _normCat(c){
+  if(!c) return '';
+  return String(c).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[\s_-]/g,'');
+}
+
+function buildFinishStats(history){
+  // Clave de caché: nº de carreras + suma de inscritos (rápido y suficiente para invalidar)
+  const key = (history||[]).reduce((acc,h)=>acc+'|'+h.id+':'+((h.inscritos||[]).length)+'r'+(h.riders||[]).length, '');
+  if(_finishStatsCacheKey === key && _finishStatsCache) return _finishStatsCache;
+
+  const byRider = new Map(); // normName → stat
+  const byTeam = new Map();
+  const byCat = new Map();
+  const global = { inscrito:0, acabo:0, dnf:0, rate:0, racesWithInscritos:0 };
+
+  (history||[]).forEach(h=>{
+    const ins = Array.isArray(h.inscritos) ? h.inscritos : [];
+    if(!ins.length) return;
+    // ── EXCLUIR pre-inscripciones (sin clasificación todavía) ──────────
+    // Una prueba con inscritos pero <3 clasificados aún no se ha disputado;
+    // contabilizarla sesga la tasa de finalización a 0% para todos.
+    const _ridersN = (h.riders||[]).length;
+    if(_ridersN < 3) return;
+    global.racesWithInscritos++;
+    // Index clasificados de esta carrera (con tokens para matcher flexible)
+    const ridersByBib = new Map();
+    const ridersList = (h.riders||[]);
+    const ridersTokens = ridersList.map(r=>({name:r.name, tokens:_nameTokenSet(r.name||'')}));
+    const ridersByName = new Set();
+    ridersList.forEach(r=>{
+      if(r.bib) ridersByBib.set(String(r.bib), r);
+      if(r.name) ridersByName.add(normalizeForMatching(r.name));
+    });
+    const _matchByTokens = (inscritoName)=>{
+      const tokSet = _nameTokenSet(inscritoName||'');
+      if(tokSet.size < 2) return false;
+      // Buscar un rider con ≥2 tokens en común
+      for(const ent of ridersTokens){
+        let common = 0;
+        ent.tokens.forEach(t=>{ if(tokSet.has(t)) common++; });
+        if(common >= 2) return true;
+      }
+      return false;
+    };
+    ins.forEach(i=>{
+      const nk = normalizeForMatching(i.name||'');
+      if(!nk) return;
+      const byBib = i.bib ? ridersByBib.get(String(i.bib)) : null;
+      const acabo = !!(byBib || ridersByName.has(nk) || _matchByTokens(i.name));
+      // Rider
+      let rs = byRider.get(nk);
+      if(!rs){ rs = {name:i.name, inscrito:0, acabo:0, dnf:0, rate:0, races:[]}; byRider.set(nk, rs); }
+      rs.inscrito++;
+      if(acabo) rs.acabo++; else rs.dnf++;
+      rs.races.push({raceId:h.id, raceName:h.raceName, raceDate:h.raceDate, acabo});
+      // Team (clave normalizada simple)
+      const team = (i.team||'').trim() || (byBib?.team||'').trim();
+      if(team){
+        const tk = team.toLowerCase();
+        let ts = byTeam.get(tk);
+        if(!ts){ ts = {team, inscrito:0, acabo:0, dnf:0, rate:0, riders:new Set()}; byTeam.set(tk, ts); }
+        ts.inscrito++;
+        if(acabo) ts.acabo++; else ts.dnf++;
+        ts.riders.add(nk);
+      }
+      // Cat (de inscrito o, si vacío, del clasificado)
+      const catRaw = (i.cat || byBib?.cat || '').trim();
+      if(catRaw){
+        const ck = _normCat(catRaw);
+        let cs = byCat.get(ck);
+        if(!cs){ cs = {cat:catRaw, inscrito:0, acabo:0, dnf:0, rate:0}; byCat.set(ck, cs); }
+        cs.inscrito++;
+        if(acabo) cs.acabo++; else cs.dnf++;
+      }
+      // Global
+      global.inscrito++;
+      if(acabo) global.acabo++; else global.dnf++;
+    });
+  });
+
+  // Calcular rate (%)
+  const calcRate = o => { o.rate = o.inscrito ? Math.round((o.acabo/o.inscrito)*1000)/10 : 0; };
+  byRider.forEach(calcRate);
+  byTeam.forEach(calcRate);
+  byCat.forEach(calcRate);
+  calcRate(global);
+
+  _finishStatsCache = {byRider, byTeam, byCat, global};
+  _finishStatsCacheKey = key;
+  return _finishStatsCache;
+}
+
+// Devuelve la tasa de finalización de un corredor (objeto stat) y null si no hay datos.
+function getRiderFinishStat(name){
+  const hist = _cachedHistory || [];
+  const stats = buildFinishStats(hist);
+  return stats.byRider.get(normalizeForMatching(name||'')) || null;
+}
+
+// Predictor: estima la probabilidad de que un corredor acabe la próxima prueba.
+// Combina ponderado: corredor (si hay muestra) + equipo + categoría + global.
+// Devuelve {prob (0-100), confianza ('alta'|'media'|'baja'), basadoEn:[...]} o null.
+function predictFinishProbability({name, team, cat}){
+  const hist = _cachedHistory || [];
+  const stats = buildFinishStats(hist);
+  if(!stats.global.inscrito) return null;
+
+  const rs = name ? stats.byRider.get(normalizeForMatching(name)) : null;
+  const ts = team ? stats.byTeam.get(team.toLowerCase()) : null;
+  const cs = cat  ? stats.byCat.get(_normCat(cat)) : null;
+  const gs = stats.global;
+
+  const sources = [];
+  let prob = 0, weight = 0, conf = 'baja';
+
+  if(rs && rs.inscrito >= 3){
+    prob += rs.rate * 0.7; weight += 0.7;
+    if(ts){ prob += ts.rate * 0.2; weight += 0.2; sources.push(`equipo ${ts.rate}%`); }
+    if(cs){ prob += cs.rate * 0.1; weight += 0.1; sources.push(`categoría ${cs.rate}%`); }
+    sources.unshift(`corredor ${rs.rate}% (${rs.acabo}/${rs.inscrito})`);
+    conf = 'alta';
+  } else if(rs && rs.inscrito >= 1){
+    prob += rs.rate * 0.5; weight += 0.5;
+    if(ts){ prob += ts.rate * 0.3; weight += 0.3; sources.push(`equipo ${ts.rate}%`); }
+    if(cs){ prob += cs.rate * 0.2; weight += 0.2; sources.push(`categoría ${cs.rate}%`); }
+    sources.unshift(`corredor ${rs.rate}% (${rs.acabo}/${rs.inscrito})`);
+    conf = 'media';
+  } else if(ts && ts.inscrito >= 5){
+    prob += ts.rate * 0.6; weight += 0.6;
+    if(cs){ prob += cs.rate * 0.4; weight += 0.4; sources.push(`categoría ${cs.rate}%`); }
+    sources.unshift(`equipo ${ts.rate}% (${ts.acabo}/${ts.inscrito})`);
+    conf = 'media';
+  } else if(cs && cs.inscrito >= 5){
+    prob = cs.rate; weight = 1;
+    sources.push(`categoría ${cs.rate}% (${cs.acabo}/${cs.inscrito})`);
+    conf = 'baja';
+  } else {
+    prob = gs.rate; weight = 1;
+    sources.push(`media global ${gs.rate}% (${gs.acabo}/${gs.inscrito})`);
+    conf = 'baja';
+  }
+
+  // Normalizar por peso (por si algún elemento faltase)
+  if(weight > 0 && weight !== 1) prob = prob / weight;
+  return { prob: Math.round(prob*10)/10, confianza: conf, basadoEn: sources };
+}
+
+// Render HTML para inyectar dentro del análisis individual (Tier 2 F + H)
+function renderFinishRateBlockForRider(rider){
+  if(!rider) return '';
+  const rs = getRiderFinishStat(rider.name);
+  const pred = predictFinishProbability({name:rider.name, team:rider.team, cat:rider.cat});
+  if(!rs && !pred) return ''; // sin datos
+  const color = v => v>=85?'#12b76a':v>=70?'#84cc16':v>=50?'#f59e0b':'#dc2626';
+  const personal = rs ? `
+    <div style="font-size:14px;line-height:1.6">
+      <b>Tasa personal:</b> <span style="color:${color(rs.rate)};font-weight:800">${rs.rate}%</span>
+      <span class="small">(${rs.acabo} de ${rs.inscrito} pruebas inscritas · ${rs.dnf} DNF)</span>
+    </div>
+    <div class="small" style="margin-top:4px;color:#667085">Solo se contabilizan pruebas con startlist registrada.</div>
+  ` : `<div class="small">No hay registros de este corredor en startlist del histórico.</div>`;
+  const predHtml = pred ? `
+    <div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#f0f9ff;border:1px solid #bae6fd">
+      <div style="font-weight:800;color:#0b2f6b;font-size:13px;margin-bottom:4px">
+        🎲 Probabilidad estimada de acabar próxima prueba
+      </div>
+      <div style="font-size:22px;font-weight:900;color:${color(pred.prob)}">${pred.prob}%
+        <span class="small" style="font-weight:600;color:#475467">· confianza ${pred.confianza}</span>
+      </div>
+      <div class="small" style="margin-top:4px;color:#475467">Basado en: ${pred.basadoEn.join(' · ')}</div>
+    </div>` : '';
+  return `
+    <div class="rider-block">
+      <div class="rider-block-title">📊 Tasa de finalización
+        <button class="help-btn" data-help="&lt;strong&gt;📊 Tasa de finalización&lt;/strong&gt;Mide cuántas veces el corredor ha acabado una prueba en la que estaba inscrito (según la startlist subida).&lt;ul&gt;&lt;li&gt;&lt;b&gt;Tasa personal:&lt;/b&gt; % de pruebas acabadas (acabó / inscritas).&lt;/li&gt;&lt;li&gt;&lt;b&gt;Predictor:&lt;/b&gt; combina la tasa personal con la del equipo y la categoría para estimar la probabilidad de acabar la próxima prueba.&lt;/li&gt;&lt;li&gt;Cuantas más pruebas con startlist subida, más fiable es el cálculo.&lt;/li&gt;&lt;/ul&gt;">?</button>
+      </div>
+      ${personal}
+      ${predHtml}
+    </div>`;
+}
+
+// Render HTML stat card pequeña para `rider-stats-grid`
+function renderFinishRateStatCard(rider){
+  const rs = getRiderFinishStat(rider?.name);
+  if(!rs || rs.inscrito < 1) return '';
+  const c = rs.rate>=85?'#12b76a':rs.rate>=70?'#84cc16':rs.rate>=50?'#f59e0b':'#dc2626';
+  return `<div class="rider-stat">
+    <div class="stat-label">Tasa de finalización</div>
+    <div class="stat-value" style="font-size:22px;color:${c}">${rs.rate}%</div>
+    <div class="stat-sub">${rs.acabo} de ${rs.inscrito} pruebas inscritas</div>
+  </div>`;
+}
+
+// ===== MODAL ESTADÍSTICAS GLOBALES (equipos + categorías) =====
+function showGlobalFinishStatsModal(){
+  const hist = _cachedHistory || [];
+  const stats = buildFinishStats(hist);
+  if(!stats.global.inscrito){
+    alert('Aún no hay pruebas con lista de inscritos en el histórico.\n\nSube la startlist al cargar una prueba para empezar a generar estadísticas.');
+    return;
+  }
+  const teams = [...stats.byTeam.values()]
+    .filter(t=>t.inscrito>=3)
+    .sort((a,b)=>b.rate-a.rate || b.inscrito-a.inscrito);
+  const cats = [...stats.byCat.values()]
+    .filter(c=>c.inscrito>=3)
+    .sort((a,b)=>b.rate-a.rate || b.inscrito-a.inscrito);
+  const riders = [...stats.byRider.values()]
+    .filter(r=>r.inscrito>=2)
+    .sort((a,b)=>b.rate-a.rate || b.inscrito-a.inscrito)
+    .slice(0,30);
+
+  const color = v => v>=85?'#12b76a':v>=70?'#84cc16':v>=50?'#f59e0b':'#dc2626';
+  const bar = (rate)=>`
+    <div style="display:inline-block;width:60px;height:8px;background:#e5e7eb;border-radius:4px;vertical-align:middle;margin-left:6px">
+      <div style="width:${Math.max(2,rate)}%;height:100%;background:${color(rate)};border-radius:4px"></div>
+    </div>`;
+  const teamRows = teams.length ? teams.map(t=>`
+    <tr>
+      <td>${escapeHtml(t.team)}</td>
+      <td style="font-weight:800;color:${color(t.rate)}">${t.rate}%${bar(t.rate)}</td>
+      <td>${t.acabo}</td><td>${t.dnf}</td><td>${t.inscrito}</td>
+      <td>${t.riders.size}</td>
+    </tr>`).join('') : `<tr><td colspan="6" class="small">Sin equipos con ≥3 inscripciones.</td></tr>`;
+  const catRows = cats.length ? cats.map(c=>`
+    <tr>
+      <td>${escapeHtml(c.cat)}</td>
+      <td style="font-weight:800;color:${color(c.rate)}">${c.rate}%${bar(c.rate)}</td>
+      <td>${c.acabo}</td><td>${c.dnf}</td><td>${c.inscrito}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="small">Sin categorías con ≥3 inscripciones.</td></tr>`;
+  const riderRows = riders.length ? riders.map(r=>`
+    <tr>
+      <td>${escapeHtml(r.name)}</td>
+      <td style="font-weight:800;color:${color(r.rate)}">${r.rate}%${bar(r.rate)}</td>
+      <td>${r.acabo}</td><td>${r.dnf}</td><td>${r.inscrito}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="small">Sin corredores con ≥2 inscripciones.</td></tr>`;
+
+  const html = `
+    <h2 style="margin-top:0">📊 Estadísticas de finalización (histórico)</h2>
+    <div class="inscritos-banner" style="margin:0 0 16px">
+      <span class="ib-chip total">📋 ${stats.global.inscrito} inscripciones</span>
+      <span class="ib-chip ok">✅ ${stats.global.acabo} acabaron (${stats.global.rate}%)</span>
+      <span class="ib-chip dnf">⛔ ${stats.global.dnf} DNF</span>
+      <span class="ib-chip total">🏁 ${stats.global.racesWithInscritos} pruebas con startlist</span>
+    </div>
+
+    <h3 style="margin:14px 0 6px;font-size:15px">🏆 Equipos (≥3 inscripciones)</h3>
+    <table class="inscritos-modal-tbl">
+      <thead><tr><th>Equipo</th><th>Tasa</th><th>Acabó</th><th>DNF</th><th>Inscritos</th><th>Corredores únicos</th></tr></thead>
+      <tbody>${teamRows}</tbody>
+    </table>
+
+    <h3 style="margin:18px 0 6px;font-size:15px">🚴 Categorías (≥3 inscripciones)</h3>
+    <table class="inscritos-modal-tbl">
+      <thead><tr><th>Categoría</th><th>Tasa</th><th>Acabó</th><th>DNF</th><th>Inscritos</th></tr></thead>
+      <tbody>${catRows}</tbody>
+    </table>
+
+    <h3 style="margin:18px 0 6px;font-size:15px">👤 Top corredores por fiabilidad (≥2 inscripciones, top 30)</h3>
+    <table class="inscritos-modal-tbl">
+      <thead><tr><th>Corredor</th><th>Tasa</th><th>Acabó</th><th>DNF</th><th>Inscritos</th></tr></thead>
+      <tbody>${riderRows}</tbody>
+    </table>
+  `;
+  _showSimpleModal(html);
+}
+// ===== FIN INSCRITOS - TIER 2 =====
+
+// ===== INSCRITOS - TIER 3: Añadir startlist desde Historial =====
+// Carga la prueba, navega a view-carga, abre el panel de carga y despliega
+// la sección "📋 Inscritos / Startlist" para que el usuario pueda subirla.
+async function _histAddStartlist(raceId){
+  try{
+    await loadHistoryEntry(raceId);
+  }catch(e){
+    alert('No se ha podido cargar la prueba: '+ (e?.message||e));
+    return;
+  }
+  // Ir a view-carga (loadHistoryEntry navega a view-tabla, lo cambiamos)
+  setTimeout(()=>{
+    showView('view-carga');
+    // Desplegar el panel de carga si está colapsado
+    const body = document.getElementById('loadPanelBody');
+    const chev = document.getElementById('loadChevron');
+    const bar  = document.getElementById('loadBar');
+    if(body && body.classList.contains('collapsed')){
+      body.classList.remove('collapsed');
+      if(chev) chev.classList.remove('closed');
+      if(bar)  bar.classList.add('load-bar-open');
+    }
+    // Desplegar la sub-sección de inscritos
+    const insBody = document.getElementById('inscritosBody');
+    const insChev = document.getElementById('inscritosChevron');
+    if(insBody && insBody.style.display === 'none'){
+      insBody.style.display = 'block';
+      if(insChev) insChev.textContent = '▼';
+    }
+    // Scroll hasta la sección
+    setTimeout(()=>{
+      const card = document.getElementById('inscritosCard');
+      if(card) card.scrollIntoView({behavior:'smooth', block:'center'});
+    }, 100);
+  }, 120);
+}
+// ===== FIN TIER 3 =====
+
+// ===== GUARDAR SOLO INSCRITOS (pre-inscripción sin clasificación) =====
+// Persiste la startlist en Supabase sin necesidad de tener clasificación cargada.
+// - Si ya existe una carrera con esa fecha y race_type='clasificacion': actualiza
+//   ÚNICAMENTE el campo notes.inscritos (sin tocar race_results ni otros campos).
+// - Si no existe: crea una entrada nueva con riders vacíos y notes.inscritos.
+async function saveInscritosOnly(){
+  console.log('[saveInscritosOnly] iniciando…');
+  if(!Array.isArray(inscritos) || !inscritos.length){
+    alert('No hay inscritos cargados. Pega o sube primero la lista de inscritos.');
+    return;
+  }
+  if(!_sb){ alert('Supabase no disponible. Verifica la conexión y las políticas RLS.'); return; }
+
+  const raceName = ($('raceName')?.value||'').trim() || 'Pre-inscripción sin nombre';
+  const raceDateStr = ($('raceDate')?.value||'').trim();
+  if(!raceDateStr){
+    alert('⚠️ Antes de guardar la pre-inscripción debes indicar la FECHA de la carrera.\n\nEs imprescindible para enriquecer dorsales/categorías y para cruzar con la clasificación cuando la subas.');
+    $('raceDate')?.focus();
+    return;
+  }
+  const parsedDate = _parseSpanishDate(raceDateStr);
+  if(!parsedDate){
+    alert(`Fecha "${raceDateStr}" no reconocida. Formatos: DD/MM/AAAA · D-M-AA · D-M-AAAA`);
+    return;
+  }
+  const km = ($('raceKm')?.value||'').trim();
+  const avg = ($('raceAvg')?.value||'').trim();
+  const localidad = ($('raceLocalidad')?.value||'').trim();
+  const circuitType = ($('raceCircuitType')?.value||'').trim();
+
+  console.log('[saveInscritosOnly] datos:', {raceName, raceDateStr, parsedDate, inscritosCount: inscritos.length});
+
+  // ── Comprobar si ya hay una carrera con esa fecha (cualquier tipo)
+  const {data:existing, error:dupErr} = await _sb
+    .from('races')
+    .select('id, name, notes, race_type, race_results(count)')
+    .eq('date', parsedDate);
+  if(dupErr){
+    console.error('[saveInscritosOnly] dupErr:', dupErr);
+    alert('❌ Error comprobando duplicados en Supabase:\n\n'+dupErr.message+'\n\nRevisa la consola del navegador (F12) para más detalle.');
+    return;
+  }
+  console.log('[saveInscritosOnly] existing en esa fecha:', existing);
+
+  // Priorizar clasificación; si solo hay planificada, ofrecer convertirla
+  const dupClasif = (existing||[]).find(r=>r.race_type==='clasificacion');
+  const dupPlanif = (existing||[]).find(r=>r.race_type==='planificada');
+
+  if(dupClasif){
+    const nClasif = dupClasif.race_results?.[0]?.count ?? 0;
+    const cont = confirm(
+      `Ya existe una carrera CLASIFICACIÓN en esa fecha:\n\n📅 ${raceDateStr}\n🏁 ${dupClasif.name}\n👥 ${nClasif} corredores clasificados\n\n¿Actualizar SOLO la lista de inscritos? (no se toca la clasificación)`
+    );
+    if(!cont){ console.log('[saveInscritosOnly] usuario canceló actualización clasif'); return; }
+    let extra = {};
+    try{ extra = JSON.parse(dupClasif.notes||'{}'); }catch(e){}
+    extra.inscritos = inscritos;
+    if(raceDateStr) extra.raceDate = raceDateStr;
+    if(km) extra.km = km;
+    if(avg) extra.avg = avg;
+    if(localidad) extra.localidad = localidad;
+    if(circuitType) extra.circuitType = circuitType;
+    const {error:updErr,data:updData} = await _sb.from('races')
+      .update({notes: JSON.stringify(extra)})
+      .eq('id', dupClasif.id)
+      .select();
+    if(updErr){
+      console.error('[saveInscritosOnly] updErr:', updErr);
+      alert('❌ Error actualizando inscritos:\n\n'+updErr.message+'\n\nProbable causa: políticas RLS de Supabase.');
+      return;
+    }
+    console.log('[saveInscritosOnly] update OK:', updData);
+    _cachedHistory = null;
+    if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
+    if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+    await renderHistory();
+    alert(`✅ Lista de inscritos actualizada en "${dupClasif.name}" (${inscritos.length} inscritos).`);
+    return;
+  }
+
+  if(dupPlanif){
+    const cont = confirm(
+      `Hay una PRUEBA PLANIFICADA en esa fecha:\n\n📅 ${raceDateStr}\n🏁 ${dupPlanif.name}\n\n¿Convertirla a "clasificación" añadiéndole la lista de inscritos?\n(La prueba dejará de aparecer en el calendario de planificadas y pasará al Historial como pre-inscripción)`
+    );
+    if(!cont){ console.log('[saveInscritosOnly] usuario canceló conversión planif'); return; }
+    let extra = {};
+    try{ extra = JSON.parse(dupPlanif.notes||'{}'); }catch(e){}
+    extra.inscritos = inscritos;
+    if(raceDateStr) extra.raceDate = raceDateStr;
+    if(km) extra.km = km;
+    if(avg) extra.avg = avg;
+    if(localidad) extra.localidad = localidad;
+    if(circuitType) extra.circuitType = circuitType;
+    const {error:convErr,data:convData} = await _sb.from('races')
+      .update({race_type:'clasificacion', notes: JSON.stringify(extra)})
+      .eq('id', dupPlanif.id)
+      .select();
+    if(convErr){
+      console.error('[saveInscritosOnly] convErr:', convErr);
+      alert('❌ Error convirtiendo prueba planificada:\n\n'+convErr.message);
+      return;
+    }
+    console.log('[saveInscritosOnly] conversión OK:', convData);
+    _cachedHistory = null;
+    if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
+    if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+    // Quitar de _calPlanned para que desaparezca del calendario
+    if(Array.isArray(_calPlanned)) _calPlanned = _calPlanned.filter(p=>p.id!==dupPlanif.id);
+    await renderHistory();
+    alert(`✅ Prueba convertida y pre-inscripción guardada:\n\n"${dupPlanif.name}" (${inscritos.length} inscritos).\n\nYa aparece en el Historial con el badge "📋 ${inscritos.length} pre-inscritos".`);
+    return;
+  }
+
+  // ── No existe nada en esa fecha → crear entrada nueva
+  const extra = {
+    raceDate:raceDateStr, km, avg, localidad, circuitType,
+    regions:{}, inscritos
+  };
+  const payload = {
+    name: raceName, date: parsedDate, race_type:'clasificacion',
+    notes: JSON.stringify(extra)
+  };
+  console.log('[saveInscritosOnly] insertando nueva fila:', payload);
+  const {data:raceRow, error:raceErr} = await _sb.from('races').insert(payload).select('id').single();
+  if(raceErr){
+    console.error('[saveInscritosOnly] raceErr:', raceErr);
+    alert('❌ Error al crear la pre-inscripción:\n\n'+raceErr.message+'\n\nProbable causa: políticas RLS de Supabase (INSERT no permitido para este usuario).\n\nAbre la consola (F12) para ver el detalle.');
+    return;
+  }
+  console.log('[saveInscritosOnly] insert OK, id:', raceRow?.id);
+
+  _cachedHistory = null;
+  if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
+  if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+  await renderHistory();
+  alert(
+    `✅ Pre-inscripción creada: "${raceName}" (${inscritos.length} inscritos).\n\n`+
+    `ID en Supabase: ${raceRow?.id||'?'}\n\n`+
+    `📌 Ya aparece en el Historial con el badge "📋 ${inscritos.length} pre-inscritos".`
+  );
+}
+// ===== FIN GUARDAR SOLO INSCRITOS =====
+
+// ===== TRAER DATOS DESDE PRUEBA PLANIFICADA =====
+// Muestra un modal con las pruebas planificadas (calendario) y, al seleccionar
+// una, rellena automáticamente los campos: nombre, fecha, localidad y tipo de
+// circuito (si la prueba planificada los tiene). Los kilómetros y la velocidad
+// media se dejan en blanco — se rellenan al cargar la clasificación real.
+function openPlannedRacesModal(){
+  if(typeof _calPlanned === 'undefined' || !Array.isArray(_calPlanned) || !_calPlanned.length){
+    alert('No hay pruebas planificadas en tu calendario.\n\nAñádelas desde el menú Calendario o impórtalas desde la FCCV.');
+    return;
+  }
+  // Filtrar y ordenar: primero las futuras (próximas arriba), luego últimas 30 días
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const limite = new Date(hoy.getTime() - 30*24*3600*1000); // 30 días atrás
+  const lista = _calPlanned
+    .filter(p => p.date && new Date(p.date) >= limite)
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+  if(!lista.length){
+    alert('No hay pruebas planificadas próximas (futuras o de los últimos 30 días).');
+    return;
+  }
+  // Separar futuras vs pasadas recientes
+  const futuras = lista.filter(p => new Date(p.date) >= hoy);
+  const pasadas = lista.filter(p => new Date(p.date) < hoy);
+  const fmtDate = d => {
+    const dt = new Date(d);
+    return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+  };
+  const diasDesde = d => {
+    const ms = new Date(d) - hoy;
+    const dias = Math.round(ms / (24*3600*1000));
+    if(dias === 0) return '<span style="color:#dc2626;font-weight:800">HOY</span>';
+    if(dias > 0) return `<span style="color:#0369a1;font-weight:700">en ${dias} día${dias===1?'':'s'}</span>`;
+    return `<span style="color:#6b7280">hace ${Math.abs(dias)} día${Math.abs(dias)===1?'':'s'}</span>`;
+  };
+  const rowHtml = (p) => {
+    const extras = [];
+    if(p.localidad) extras.push(`📍 ${escapeHtml(p.localidad)}`);
+    if(p.cat) extras.push(`🚴 ${escapeHtml(p.cat)}`);
+    if(p.modality) extras.push(`🏁 ${escapeHtml(p.modality)}`);
+    return `<div onclick="_fillFromPlanned('${escapeAttr(p.id||'')}');document.getElementById('_plannedModal').remove()"
+      style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 13px;margin-bottom:6px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .12s"
+      onmouseenter="this.style.background='#eff6ff';this.style.borderColor='#93c5fd'"
+      onmouseleave="this.style.background='#fff';this.style.borderColor='#e5e7eb'">
+      <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:5px 10px;border-radius:8px;min-width:88px;text-align:center;line-height:1.3">
+        ${fmtDate(p.date)}<br>
+        <span style="font-size:10px;font-weight:600">${diasDesde(p.date)}</span>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800;color:#0b2f6b;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.name||'(sin nombre)')}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">${extras.join(' · ')||'—'}</div>
+      </div>
+      <div style="color:#9ca3af;font-size:20px">›</div>
+    </div>`;
+  };
+  const futurasHtml = futuras.length
+    ? `<h3 style="margin:0 0 8px;font-size:14px;color:#0369a1">📆 Próximas (${futuras.length})</h3>
+       ${futuras.map(rowHtml).join('')}`
+    : '<p class="small" style="color:#9ca3af;text-align:center;padding:8px">No hay pruebas futuras planificadas.</p>';
+  const pasadasHtml = pasadas.length
+    ? `<h3 style="margin:16px 0 8px;font-size:14px;color:#6b7280">📜 Últimas 30 días (${pasadas.length})</h3>
+       ${pasadas.map(rowHtml).join('')}`
+    : '';
+  const html = `
+    <h2 style="margin:0 0 6px;color:#0b2f6b">📅 Pruebas planificadas</h2>
+    <p class="small" style="margin:0 0 14px;color:#6b7280">
+      Selecciona una prueba para auto-rellenar nombre, fecha, localidad y tipo de circuito.
+      Los kilómetros y velocidad media se rellenan después al cargar la clasificación.
+    </p>
+    ${futurasHtml}
+    ${pasadasHtml}
+  `;
+  // Modal específico (reutilizamos el patrón de _showSimpleModal pero con id propio)
+  let m = document.getElementById('_plannedModal');
+  if(!m){
+    m = document.createElement('div');
+    m.id = '_plannedModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    m.addEventListener('click', e=>{ if(e.target===m) m.remove(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = `<div style="background:#fff;border-radius:14px;padding:22px;max-width:700px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:-8px">
+      <button onclick="document.getElementById('_plannedModal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#667085">✕</button>
+    </div>
+    ${html}
+  </div>`;
+}
+
+function _fillFromPlanned(id){
+  const p = (_calPlanned||[]).find(x => String(x.id) === String(id));
+  if(!p){ alert('Prueba no encontrada.'); return; }
+  // Rellenar campos del formulario solo si la prueba planificada los tiene
+  if(p.name && $('raceName')) $('raceName').value = p.name;
+  if(p.date && $('raceDate')){
+    const dt = new Date(p.date);
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    $('raceDate').value = `${dd}/${mm}/${dt.getFullYear()}`;
+  }
+  if(p.localidad && $('raceLocalidad')) $('raceLocalidad').value = p.localidad;
+  // Tipo de circuito: mapear modality → tipo si encaja
+  if(p.modality && $('raceCircuitType') && !$('raceCircuitType').value){
+    const mod = (p.modality||'').toLowerCase();
+    let ct = '';
+    if(/circuito/i.test(mod)) ct = 'Circuito';
+    else if(/criter/i.test(mod)) ct = 'Criterium';
+    else if(/contrareloj|crono|crl/i.test(mod)) ct = 'Contrarreloj';
+    else if(/línea|linea|ruta|carretera/i.test(mod)) ct = 'En línea';
+    if(ct) $('raceCircuitType').value = ct;
+  }
+  // Pista visual: banner discreto debajo del nombre
+  const rdHint = $('raceDateHint');
+  if(rdHint) rdHint.innerHTML = `<span style="color:#0369a1;font-weight:700">📅 Datos importados de prueba planificada: ${escapeHtml(p.name||'')}</span>`;
+  // Si hay inscritos cargados, recalcula porque el año puede haber cambiado
+  if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+  // Scroll al nombre
+  setTimeout(()=>{ $('raceName')?.scrollIntoView({behavior:'smooth', block:'center'}); }, 50);
+}
+// ===== FIN TRAER DATOS DESDE PRUEBA PLANIFICADA =====
+
+// ===== EXPORTAR LISTA DE INSCRITOS A PDF =====
+// Abre una ventana imprimible (A4) con la lista de inscritos agrupada por equipo,
+// encabezado de marca, metadatos de la prueba y resumen de DNF si hay clasificación.
+function exportInscritosPDF(){
+  if(!Array.isArray(inscritos) || !inscritos.length){
+    alert('No hay inscritos cargados para imprimir.');
+    return;
+  }
+  const raceName = ($('raceName')?.value||'').trim() || 'Pre-inscripción sin nombre';
+  const raceDate = ($('raceDate')?.value||'').trim() || '—';
+  const localidad = ($('raceLocalidad')?.value||'').trim() || '';
+  const circuitType = ($('raceCircuitType')?.value||'').trim() || '';
+  const km = ($('raceKm')?.value||'').trim() || '';
+  const myTeam = (localStorage.getItem('myTeam')||'').trim();
+  const mkLower = myTeam.toLowerCase();
+  const now = new Date();
+  const generated = now.toLocaleString('es-ES');
+  // Logo desde el DOM (mismo base64 que usa el resto de la app)
+  const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
+
+  // Estadísticas
+  const st = (typeof computeInscritosStatus==='function') ? computeInscritosStatus() : null;
+  const hasClasif = (riders||[]).length > 0;
+  const pctDnf = (st && st.total) ? Math.round((st.dnf.length/st.total)*100) : 0;
+
+  // Pre-cálculo: para cada inscrito, status (Acabó/DNF) si hay clasificación
+  const ridersByBib = new Map();
+  const ridersByName = new Set();
+  (riders||[]).forEach(r=>{
+    if(r.bib) ridersByBib.set(String(r.bib), r);
+    if(r.name) ridersByName.add(normalizeForMatching(r.name));
+  });
+  const inscritosFlag = inscritos.map(i=>{
+    const ok = hasClasif && ((i.bib && ridersByBib.has(String(i.bib))) || ridersByName.has(normalizeForMatching(i.name||'')));
+    return {...i, _ok: hasClasif ? ok : null};
+  });
+
+  // Agrupar por equipo (mi equipo primero)
+  const byTeam = new Map();
+  inscritosFlag.forEach(i=>{
+    const t = (i.team||'(Sin equipo)').trim();
+    if(!byTeam.has(t)) byTeam.set(t, []);
+    byTeam.get(t).push(i);
+  });
+  const teams = [...byTeam.keys()].sort((a,b)=>{
+    if(mkLower){
+      if(a.toLowerCase()===mkLower) return -1;
+      if(b.toLowerCase()===mkLower) return 1;
+    }
+    return a.localeCompare(b);
+  });
+
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Construir bloques por equipo
+  const teamBlocks = teams.map(team=>{
+    const list = byTeam.get(team).sort((a,b)=>{
+      // dorsal numérico asc; sin dorsal al final
+      const ba = parseInt(a.bib||'',10), bb = parseInt(b.bib||'',10);
+      if(isNaN(ba) && isNaN(bb)) return (a.name||'').localeCompare(b.name||'');
+      if(isNaN(ba)) return 1;
+      if(isNaN(bb)) return -1;
+      return ba - bb;
+    });
+    const isMy = mkLower && team.toLowerCase()===mkLower;
+    const rows = list.map(i=>{
+      let statusCell = '';
+      if(hasClasif){
+        statusCell = i._ok
+          ? '<td class="status ok">Acabó</td>'
+          : '<td class="status dnf">DNF</td>';
+      }
+      return `<tr>
+        <td class="bib">${esc(i.bib||'—')}</td>
+        <td class="name">${esc(i.name||'')}</td>
+        <td class="cat">${esc(i.cat||'—')}</td>
+        ${statusCell}
+      </tr>`;
+    }).join('');
+    const teamHead = `<div class="team-head${isMy?' my-team':''}">
+      <span class="team-name">${isMy?'🔵 ':''}${esc(team)}</span>
+      <span class="team-count">${list.length} corredor${list.length===1?'':'es'}</span>
+    </div>`;
+    return `<div class="team-block">
+      ${teamHead}
+      <table class="riders-table">
+        <thead><tr>
+          <th class="bib">Dorsal</th>
+          <th class="name">Nombre</th>
+          <th class="cat">Categoría</th>
+          ${hasClasif?'<th class="status">Estado</th>':''}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+
+  // Resumen
+  const metaPills = [
+    `<div><span class="label">Fecha</span><span class="value">${esc(raceDate)}</span></div>`,
+    localidad ? `<div><span class="label">Localidad</span><span class="value">${esc(localidad)}</span></div>` : '',
+    circuitType ? `<div><span class="label">Tipo</span><span class="value">${esc(circuitType)}</span></div>` : '',
+    km ? `<div><span class="label">Kilómetros</span><span class="value">${esc(km)} km</span></div>` : '',
+    `<div><span class="label">Equipos</span><span class="value">${teams.length}</span></div>`,
+    `<div><span class="label">Inscritos</span><span class="value">${inscritos.length}</span></div>`
+  ].filter(Boolean).join('');
+
+  const dnfBox = hasClasif ? `
+    <div class="dnf-summary">
+      <div class="chip total">📋 ${st.total} inscritos</div>
+      <div class="chip ok">✅ ${st.acabaron} acabaron</div>
+      <div class="chip dnf">⛔ ${st.dnf.length} DNF (${pctDnf}%)</div>
+    </div>` : `
+    <div class="dnf-summary note">
+      📌 Pre-inscripción · al cargar la clasificación oficial se calculará automáticamente quién acabó y quién no
+    </div>`;
+
+  const htmlDoc = `<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="UTF-8">
+<title>Inscritos · ${esc(raceName)}</title>
+<style>
+  @page { size: A4; margin: 0; }
+  html, body { margin:0; padding:0; background:#e2e8f0; font-family: 'Helvetica Neue', Arial, sans-serif; color:#0f172a; }
+  .page { box-sizing:border-box; width:210mm; min-height:297mm; padding:14mm 14mm 18mm; background:#fff; margin:0 auto 8mm; page-break-after:always; box-shadow:0 4px 14px rgba(0,0,0,.08); position:relative; }
+  .page:last-child { page-break-after:auto; margin-bottom:0; }
+  /* Header */
+  .header { display:flex; align-items:center; gap:8mm; border-bottom:3px solid #1f6feb; padding-bottom:6mm; margin-bottom:6mm; }
+  .header img { width:32mm; max-height:18mm; object-fit:contain; }
+  .header .title-block h1 { margin:0 0 1mm; font-size:20px; color:#0b2f6b; line-height:1.15; }
+  .header .title-block .race { margin:0; font-size:13px; color:#1f6feb; font-weight:800; }
+  .header .title-block .sub { margin:1mm 0 0; font-size:11px; color:#64748b; }
+  /* Meta */
+  .meta { display:grid; grid-template-columns:repeat(3,1fr); gap:2mm; margin:0 0 4mm; }
+  .meta > div { border:1px solid #cbd5e1; border-radius:2mm; padding:2mm 3mm; background:#f8fafc; }
+  .meta .label { display:block; font-size:8px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; font-weight:700; margin-bottom:.5mm; }
+  .meta .value { display:block; font-size:11px; font-weight:800; color:#0f172a; }
+  /* DNF box */
+  .dnf-summary { display:flex; gap:3mm; flex-wrap:wrap; padding:3mm 4mm; border-radius:3mm; background:linear-gradient(135deg,#eff6ff,#eef2ff); border:1px solid #c7d2fe; margin-bottom:5mm; font-size:11px; font-weight:800; color:#0b2f6b; align-items:center; }
+  .dnf-summary.note { color:#475569; font-weight:600; background:#fff7ed; border-color:#fdba74; }
+  .dnf-summary .chip { display:inline-flex; align-items:center; gap:1mm; padding:1.2mm 3mm; border-radius:999px; background:#fff; border:1px solid #cbd5e1; }
+  .dnf-summary .chip.ok { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+  .dnf-summary .chip.dnf { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+  .dnf-summary .chip.total { background:#eef2ff; border-color:#c7d2fe; color:#1e40af; }
+  /* Equipos */
+  .team-block { margin-bottom:4mm; border:1px solid #e2e8f0; border-radius:3mm; overflow:hidden; break-inside:avoid; page-break-inside:avoid; }
+  .team-head { display:flex; justify-content:space-between; align-items:center; padding:2mm 4mm; background:#f1f5f9; color:#0f172a; font-weight:800; font-size:11.5px; }
+  .team-head.my-team { background:#dbeafe; color:#1e3a8a; border-bottom:2px solid #93c5fd; }
+  .team-head .team-name { letter-spacing:.2px; }
+  .team-head .team-count { font-size:10px; color:#64748b; font-weight:700; }
+  .team-head.my-team .team-count { color:#1e3a8a; }
+  table.riders-table { width:100%; border-collapse:collapse; font-size:10.5px; }
+  table.riders-table th { background:#f8fafc; text-align:left; padding:2mm 3mm; font-size:8.5px; text-transform:uppercase; letter-spacing:.4px; color:#475569; border-bottom:1px solid #e2e8f0; }
+  table.riders-table td { padding:1.8mm 3mm; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+  table.riders-table tr:nth-child(even) td { background:#fafbfc; }
+  table.riders-table td.bib { font-weight:800; color:#1e40af; width:18mm; }
+  table.riders-table td.name { font-weight:600; color:#0f172a; }
+  table.riders-table td.cat { color:#475569; width:32mm; font-size:10px; }
+  table.riders-table td.status { width:22mm; text-align:center; font-weight:800; font-size:9.5px; text-transform:uppercase; letter-spacing:.4px; }
+  table.riders-table td.status.ok { color:#065f46; background:#ecfdf5; }
+  table.riders-table td.status.dnf { color:#9a3412; background:#fff7ed; }
+  /* Footer */
+  .footer { position:absolute; left:14mm; right:14mm; bottom:9mm; display:flex; justify-content:space-between; align-items:center; padding-top:2mm; border-top:1px solid #e2e8f0; font-size:9px; color:#64748b; }
+  .footer .gen { font-weight:600; }
+  /* Print */
+  @media print {
+    html, body { background:#fff; }
+    .page { box-shadow:none; margin:0; }
+    .toolbar { display:none !important; }
+  }
+  .toolbar { position:fixed; top:0; left:0; right:0; padding:10px 14px; background:#0b2f6b; color:#fff; display:flex; justify-content:space-between; align-items:center; font-family:Helvetica, Arial, sans-serif; z-index:9999; }
+  .toolbar button { background:#fff; color:#0b2f6b; border:none; border-radius:6px; padding:7px 14px; font-weight:800; cursor:pointer; font-size:13px; }
+  .toolbar button:hover { background:#dbeafe; }
+  body.has-toolbar { padding-top:48px; }
+</style>
+</head>
+<body class="has-toolbar">
+  <div class="toolbar">
+    <span>📋 Lista de Inscritos · ${esc(raceName)}</span>
+    <span>
+      <button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+      <button onclick="window.close()" style="margin-left:6px;background:#dbeafe">✕ Cerrar</button>
+    </span>
+  </div>
+  <div class="page">
+    <div class="header">
+      ${logoSrc?`<img src="${logoSrc}" alt="Logo">`:''}
+      <div class="title-block">
+        <h1>📋 Lista de Inscritos</h1>
+        <p class="race">${esc(raceName)}</p>
+        <p class="sub">Documento generado por MFPP Cycling Specialist</p>
+      </div>
+    </div>
+    <div class="meta">${metaPills}</div>
+    ${dnfBox}
+    ${teamBlocks}
+    <div class="footer">
+      <span class="gen">Generado: ${esc(generated)}</span>
+      <span>Total: ${inscritos.length} inscritos · ${teams.length} equipos${myTeam?' · Mi equipo: '+esc(myTeam):''}</span>
+    </div>
+  </div>
+  <script>
+    // Auto-abrir diálogo de impresión a los 400ms para que el navegador renderice
+    setTimeout(function(){ try{ window.focus(); }catch(e){} }, 100);
+  <\/script>
+</body></html>`;
+
+  const w = window.open('','_blank','width=1000,height=850');
+  if(!w){ alert('Permite ventanas emergentes para imprimir el PDF.'); return; }
+  w.document.write(htmlDoc);
+  w.document.close();
+}
+// ===== FIN EXPORTAR INSCRITOS PDF =====
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLA Y FILTROS — TIER 1
+// A) Persistir filtros y sort en localStorage
+// B) Toggle "Ver DNF"
+// C) Doble-clic en celda → editar fila
+// D) Ranking compacto por equipos (panel toggle)
+// E) KPIs ampliados con inscritos
+// F) Mini-botones inline para completar CCAA
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── A) PERSISTENCIA DE FILTROS Y SORT ─────────────────────────────────────
+const _TABLA_LS_KEY = 'tablaFiltersV1';
+
+function _tablaSaveFilters(){
+  try{
+    const payload = {
+      team: $('teamFilter')?.value || '',
+      region: $('regionFilter')?.value || '',
+      top: $('topFilter')?.value || '',
+      cats: [...selectedCatChips],
+      onlyMyTeam: !!onlyMyTeam,
+      sort: {...sortState},
+      teamRankingOpen: document.getElementById('teamRankingMini')?.style.display !== 'none',
+      dnfOpen: document.getElementById('dnfPanel')?.style.display !== 'none'
+    };
+    localStorage.setItem(_TABLA_LS_KEY, JSON.stringify(payload));
+  }catch(e){ /* ignore */ }
+}
+
+function _tablaRestoreFilters(){
+  try{
+    const raw = localStorage.getItem(_TABLA_LS_KEY);
+    if(!raw) return;
+    const p = JSON.parse(raw);
+    if(!p) return;
+    // Team filter (solo si la opción existe en el select)
+    if(p.team && $('teamFilter') && [...$('teamFilter').options].some(o=>o.value===p.team)){
+      $('teamFilter').value = p.team;
+    }
+    // Region filter
+    if(p.region && $('regionFilter') && [...$('regionFilter').options].some(o=>o.value===p.region)){
+      $('regionFilter').value = p.region;
+    }
+    // Top filter
+    if(p.top && $('topFilter')){ $('topFilter').value = p.top; }
+    // Cats (solo las que existen en los riders actuales)
+    if(Array.isArray(p.cats) && p.cats.length){
+      const availableCats = new Set(riders.map(r=>r.cat).filter(Boolean));
+      selectedCatChips = new Set(p.cats.filter(c=>availableCats.has(c)));
+    }
+    // OnlyMyTeam (solo si hay equipo configurado)
+    if(p.onlyMyTeam && myTeam){
+      onlyMyTeam = true;
+      const btn = $('toggleMyTeam');
+      if(btn){ btn.classList.add('active'); $('toggleIcon').textContent = '🟢'; }
+    }
+    // Sort
+    if(p.sort && p.sort.key){
+      sortState = {key: p.sort.key, dir: p.sort.dir==='desc' ? 'desc' : 'asc'};
+    }
+    // Paneles
+    if(p.teamRankingOpen){
+      const sec = document.getElementById('teamRankingMini');
+      if(sec){ sec.style.display = 'block'; const ic = document.getElementById('trIcon'); if(ic) ic.textContent = '🟢'; }
+    }
+    if(p.dnfOpen){
+      const sec = document.getElementById('dnfPanel');
+      if(sec){ sec.style.display = 'block'; const ic = document.getElementById('dnfIcon'); if(ic) ic.textContent = '🟢'; }
+    }
+  }catch(e){ /* ignore */ }
+}
+
+// Hook a los listeners — disparamos save tras cualquier cambio relevante
+(function _tablaWireSavers(){
+  document.addEventListener('change', e=>{
+    const id = e.target?.id;
+    if(['teamFilter','regionFilter','topFilter'].includes(id)) _tablaSaveFilters();
+  }, true);
+})();
+
+// Override de funciones existentes para guardar tras cada acción
+const _origSelectCatChip = (typeof selectCatChip==='function') ? selectCatChip : null;
+if(_origSelectCatChip){
+  window.selectCatChip = function(cat){
+    _origSelectCatChip(cat);
+    _tablaSaveFilters();
+  };
+}
+const _origToggleMyTeam = (typeof toggleMyTeamFilter==='function') ? toggleMyTeamFilter : null;
+if(_origToggleMyTeam){
+  window.toggleMyTeamFilter = function(){
+    _origToggleMyTeam();
+    _tablaSaveFilters();
+  };
+}
+const _origSetSort = (typeof setSort==='function') ? setSort : null;
+if(_origSetSort){
+  window.setSort = function(key){
+    _origSetSort(key);
+    _tablaSaveFilters();
+  };
+}
+const _origClearAllFilters = (typeof clearAllFilters==='function') ? clearAllFilters : null;
+if(_origClearAllFilters){
+  window.clearAllFilters = function(){
+    _origClearAllFilters();
+    localStorage.removeItem(_TABLA_LS_KEY);
+  };
+}
+
+// Restaurar tras populateFilters (que rellena selects con opciones)
+const _origPopulateFilters = (typeof populateFilters==='function') ? populateFilters : null;
+if(_origPopulateFilters){
+  window.populateFilters = function(){
+    _origPopulateFilters();
+    _tablaRestoreFilters();
+  };
+}
+
+// ── B) TOGGLE "VER DNF" ─────────────────────────────────────────────────
+function toggleDnfView(){
+  const sec = document.getElementById('dnfPanel');
+  const ic  = document.getElementById('dnfIcon');
+  if(!sec) return;
+  const open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  if(ic) ic.textContent = open ? '⚪' : '🟢';
+  if(!open) _renderDnfPanel();
+  _tablaSaveFilters();
+}
+
+function _renderDnfPanel(){
+  const body = document.getElementById('dnfPanelBody');
+  if(!body) return;
+  if(!Array.isArray(inscritos) || !inscritos.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:16px;color:#9ca3af">No hay lista de inscritos cargada para esta prueba.<br>Sube la startlist desde el panel de carga para detectar DNF.</p>';
+    return;
+  }
+  if(!riders || !riders.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:16px;color:#9ca3af">No hay clasificación cargada. DNF no se puede calcular.</p>';
+    return;
+  }
+  // Cruzar inscritos vs riders (con matcher flexible)
+  const byBib = new Set(riders.map(r=>String(r.bib||'')).filter(Boolean));
+  const byName = new Set(riders.map(r=>normalizeForMatching(r.name||'')));
+  const ridersTokens = riders.map(r=>_nameTokenSet(r.name||''));
+  const _matchTokens = (insName)=>{
+    const tokSet = _nameTokenSet(insName||'');
+    if(tokSet.size < 2) return false;
+    for(const ent of ridersTokens){
+      let common = 0;
+      ent.forEach(t=>{ if(tokSet.has(t)) common++; });
+      if(common >= 2) return true;
+    }
+    return false;
+  };
+  const dnf = inscritos.filter(i=>{
+    const ok = (i.bib && byBib.has(String(i.bib))) || byName.has(normalizeForMatching(i.name||'')) || _matchTokens(i.name);
+    return !ok;
+  });
+  if(!dnf.length){
+    body.innerHTML = '<p style="text-align:center;padding:16px;color:#065f46;font-weight:700">🎉 ¡Todos los inscritos han terminado! Sin DNF en esta prueba.</p>';
+    return;
+  }
+  // Agrupar por equipo (mi equipo primero)
+  const mk = (myTeam||'').toLowerCase();
+  const byTeam = new Map();
+  dnf.forEach(i=>{
+    const t = (i.team||'(Sin equipo)').trim();
+    if(!byTeam.has(t)) byTeam.set(t, []);
+    byTeam.get(t).push(i);
+  });
+  const teams = [...byTeam.keys()].sort((a,b)=>{
+    if(mk){
+      if(a.toLowerCase()===mk) return -1;
+      if(b.toLowerCase()===mk) return 1;
+    }
+    return a.localeCompare(b);
+  });
+  const totalIns = inscritos.length;
+  const pct = Math.round((dnf.length/totalIns)*100);
+  const header = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <span class="ib-chip dnf">⛔ ${dnf.length} DNF de ${totalIns} (${pct}%)</span>
+    <span class="ib-chip total">📋 ${riders.length} clasificados</span>
+  </div>`;
+  const teamRows = teams.map(team=>{
+    const list = byTeam.get(team);
+    const isMy = mk && team.toLowerCase()===mk;
+    const rows = list.map(i=>`
+      <tr>
+        <td style="padding:5px 8px;font-size:12px;color:#475569">${escapeHtml(i.bib||'—')}</td>
+        <td style="padding:5px 8px;font-size:13px;font-weight:700;color:#0b2f6b">${escapeHtml(i.name||'')}</td>
+        <td style="padding:5px 8px;font-size:11px;color:#6b7280">${escapeHtml(i.cat||'—')}</td>
+      </tr>`).join('');
+    const head = isMy
+      ? `<div style="background:#dbeafe;color:#1e3a8a;border:1.5px solid #93c5fd;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:800;font-size:12.5px;display:flex;justify-content:space-between"><span>🔵 ${escapeHtml(team)} (MI EQUIPO)</span><span>${list.length} DNF</span></div>`
+      : `<div style="background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:700;font-size:12.5px;display:flex;justify-content:space-between"><span>${escapeHtml(team)}</span><span style="color:#9a3412;font-weight:600">${list.length} DNF</span></div>`;
+    return `<div style="margin-bottom:8px">
+      ${head}
+      <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #fed7aa;border-top:0;border-radius:0 0 6px 6px">
+        ${rows}
+      </table>
+    </div>`;
+  }).join('');
+  body.innerHTML = header + teamRows;
+}
+
+// ── C) DOBLE-CLIC EN CELDA → EDITAR FILA ─────────────────────────────────
+// Lo añadimos como evento delegado en #resultsBody
+(function _wireDblClickEdit(){
+  const tbody = document.getElementById('resultsBody');
+  if(!tbody) return;
+  tbody.addEventListener('dblclick', e=>{
+    const tr = e.target.closest('tr');
+    if(!tr) return;
+    const key = tr.getAttribute('data-rkey');
+    if(!key) return;
+    if(typeof editTableRow === 'function') editTableRow(key);
+  });
+})();
+// Re-anclar tras cada render (renderTable recrea el tbody)
+const _origRenderTable = (typeof renderTable==='function') ? renderTable : null;
+if(_origRenderTable){
+  window.renderTable = function(){
+    _origRenderTable();
+    // Re-anclar dblclick
+    const tbody = document.getElementById('resultsBody');
+    if(tbody && !tbody._dblWired){
+      tbody.addEventListener('dblclick', e=>{
+        const tr = e.target.closest('tr');
+        if(!tr) return;
+        const key = tr.getAttribute('data-rkey');
+        if(!key) return;
+        if(typeof editTableRow === 'function') editTableRow(key);
+      });
+      tbody._dblWired = true;
+    }
+  };
+}
+
+// ── D) RANKING COMPACTO POR EQUIPOS (TOGGLE) ─────────────────────────────
+function toggleTeamRankingPanel(){
+  const sec = document.getElementById('teamRankingMini');
+  const ic  = document.getElementById('trIcon');
+  if(!sec) return;
+  const open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  if(ic) ic.textContent = open ? '⚪' : '🟢';
+  if(!open) _renderTeamRankingMini();
+  _tablaSaveFilters();
+}
+
+function _renderTeamRankingMini(){
+  const body = document.getElementById('teamRankingMiniBody');
+  if(!body) return;
+  if(!riders || !riders.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:16px;color:#9ca3af">Sin clasificación cargada.</p>';
+    return;
+  }
+  // Agrupar por equipo (sobre los riders filtrados → respeta los chips de cat, etc.)
+  const base = filtered && filtered.length ? filtered : riders;
+  const map = {};
+  base.forEach(r=>{
+    if(!r.team) return;
+    if(!map[r.team]) map[r.team] = [];
+    map[r.team].push(r);
+  });
+  const mk = (myTeam||'').toLowerCase();
+  const rows = Object.entries(map).map(([team, rs])=>{
+    const sorted = rs.slice().sort((a,b)=>a.pos-b.pos);
+    const best = sorted[0].pos;
+    const top3 = sorted.slice(0,3);
+    const sumTop3 = top3.length===3 ? top3.reduce((s,r)=>s+r.pos,0) : null;
+    const avg = (rs.reduce((s,r)=>s+r.pos,0)/rs.length).toFixed(1);
+    const spread = sorted.length>=3 ? sorted[2].pos-sorted[0].pos : (sorted.length>1 ? sorted[sorted.length-1].pos-sorted[0].pos : null);
+    // % de cat = todos los chicos en una sola categoría?
+    const cats = [...new Set(rs.map(r=>r.cat).filter(Boolean))];
+    const catSummary = cats.length===1 ? cats[0] : `${cats.length} cats`;
+    const isMy = mk && team.toLowerCase()===mk;
+    return {team, isMy, count: rs.length, best, sumTop3, avg, spread, catSummary};
+  })
+  .sort((a,b)=>{
+    // Mi equipo siempre arriba
+    if(a.isMy && !b.isMy) return -1;
+    if(b.isMy && !a.isMy) return 1;
+    // Después por suma top 3 (los que tienen) y luego por best
+    if(a.sumTop3!=null && b.sumTop3!=null) return a.sumTop3 - b.sumTop3;
+    if(a.sumTop3!=null) return -1;
+    if(b.sumTop3!=null) return 1;
+    return a.best - b.best;
+  });
+  const trRows = rows.map((r,i)=>{
+    const spreadClr = r.spread==null ? '#9ca3af' : (r.spread<=8 ? '#12b76a' : r.spread<=20 ? '#f59e0b' : '#dc2626');
+    return `<tr style="${r.isMy?'background:#dbeafe;font-weight:700':''}">
+      <td style="padding:6px 9px;font-weight:800;color:#0b2f6b">${i+1}º</td>
+      <td style="padding:6px 9px;${r.isMy?'color:#1e3a8a;font-weight:800':''}">${r.isMy?'🔵 ':''}${escapeHtml(r.team)}</td>
+      <td style="padding:6px 9px;text-align:center">${r.count}</td>
+      <td style="padding:6px 9px;text-align:center;font-weight:700;color:#1d4ed8">${r.best}º</td>
+      <td style="padding:6px 9px;text-align:center">${r.sumTop3==null?'—':r.sumTop3}</td>
+      <td style="padding:6px 9px;text-align:center">${r.avg}</td>
+      <td style="padding:6px 9px;text-align:center;color:${spreadClr};font-weight:700">${r.spread==null?'—':r.spread}</td>
+      <td style="padding:6px 9px;color:#6b7280;font-size:11.5px">${escapeHtml(r.catSummary)}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="table-wrap" style="max-height:360px;overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead style="background:#f3f6fb;position:sticky;top:0;z-index:1">
+          <tr>
+            <th style="padding:8px 9px;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px">Pos.</th>
+            <th style="padding:8px 9px;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px">Equipo</th>
+            <th style="padding:8px 9px;text-align:center;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px" title="Nº de corredores clasificados">N.º</th>
+            <th style="padding:8px 9px;text-align:center;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px" title="Mejor posición del equipo">Mejor</th>
+            <th style="padding:8px 9px;text-align:center;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px" title="Suma posiciones top 3 — menor es mejor">Σ Top 3</th>
+            <th style="padding:8px 9px;text-align:center;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px" title="Posición media de todos los corredores del equipo">Media</th>
+            <th style="padding:8px 9px;text-align:center;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px" title="Dispersión: rango entre mejor y 3º mejor del equipo">Spread</th>
+            <th style="padding:8px 9px;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:.4px">Cat.</th>
+          </tr>
+        </thead>
+        <tbody>${trRows||'<tr><td colspan="8" class="empty">Sin datos.</td></tr>'}</tbody>
+      </table>
+    </div>
+    <p class="small" style="margin-top:8px;color:#6b7280">Ordenado por Σ Top 3 (menor = mejor); tu equipo siempre arriba. Filtrado por los filtros activos.</p>`;
+}
+
+// ── E) KPIs AMPLIADOS CON INSCRITOS ───────────────────────────────────────
+// Renderizamos un mini-banner SOLO si hay inscritos + clasificación
+function _renderInscritosExtraKpis(){
+  const old = document.getElementById('inscritosExtraKpis');
+  if(old) old.remove();
+  if(!Array.isArray(inscritos) || !inscritos.length || !riders || !riders.length) return;
+  const mk = (myTeam||'').toLowerCase();
+  const byBib = new Map();
+  const byName = new Set();
+  riders.forEach(r=>{
+    if(r.bib) byBib.set(String(r.bib), r);
+    if(r.name) byName.add(normalizeForMatching(r.name));
+  });
+  // Tokens flexibles
+  const ridersTokens = riders.map(r=>_nameTokenSet(r.name||''));
+  const _matchTok = (insName)=>{
+    const tok = _nameTokenSet(insName||'');
+    if(tok.size<2) return false;
+    for(const ent of ridersTokens){
+      let n=0; ent.forEach(t=>{ if(tok.has(t)) n++; });
+      if(n>=2) return true;
+    }
+    return false;
+  };
+  // Mi equipo: cuántos inscritos vs cuántos acabaron
+  let myInsTotal=0, myInsFinished=0;
+  inscritos.forEach(i=>{
+    const tk = (i.team||'').toLowerCase();
+    if(mk && tk===mk){
+      myInsTotal++;
+      const ok = (i.bib && byBib.has(String(i.bib))) || byName.has(normalizeForMatching(i.name||'')) || _matchTok(i.name);
+      if(ok) myInsFinished++;
+    }
+  });
+  // Rivales DNF en Top 10: equipos cuyo mejor inscrito esperado era top 10 pero acabó DNF
+  // Simplificación: contamos cuántos equipos rivales tienen DNF
+  const rivalsTeamsWithDnf = new Set();
+  inscritos.forEach(i=>{
+    const tk = (i.team||'').toLowerCase();
+    if(!tk || tk===mk) return;
+    const ok = (i.bib && byBib.has(String(i.bib))) || byName.has(normalizeForMatching(i.name||'')) || _matchTok(i.name);
+    if(!ok) rivalsTeamsWithDnf.add(tk);
+  });
+  const kpiSection = document.getElementById('myTeamKpis');
+  if(!kpiSection) return;
+  const extra = document.createElement('div');
+  extra.id = 'inscritosExtraKpis';
+  extra.style.cssText = 'grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:6px';
+  const myCard = (mk && myInsTotal>0) ? `
+    <div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:10px;padding:10px 12px">
+      <div style="font-size:10.5px;text-transform:uppercase;color:#1e40af;font-weight:800;letter-spacing:.4px">🟢 Finalización mi equipo</div>
+      <div style="font-size:20px;font-weight:900;color:#0b2f6b">${myInsFinished} <span style="font-size:13px;color:#475569;font-weight:700">/ ${myInsTotal} inscritos</span></div>
+      <div style="font-size:11px;color:#475569">${Math.round((myInsFinished/myInsTotal)*100)}% acabaron</div>
+    </div>` : '';
+  const rivalCard = rivalsTeamsWithDnf.size ? `
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 12px">
+      <div style="font-size:10.5px;text-transform:uppercase;color:#9a3412;font-weight:800;letter-spacing:.4px">⚠️ Equipos rivales con DNF</div>
+      <div style="font-size:20px;font-weight:900;color:#9a3412">${rivalsTeamsWithDnf.size}</div>
+      <div style="font-size:11px;color:#6b7280">equipos perdieron al menos 1 corredor</div>
+    </div>` : '';
+  extra.innerHTML = myCard + rivalCard;
+  if(extra.innerHTML.trim()) kpiSection.appendChild(extra);
+}
+
+// Hook a renderStats para añadir los KPIs extra de inscritos
+const _origRenderStats = (typeof renderStats==='function') ? renderStats : null;
+if(_origRenderStats){
+  window.renderStats = function(){
+    _origRenderStats();
+    try{ _renderInscritosExtraKpis(); }catch(e){ /* ignore */ }
+    // Si los paneles toggle están abiertos, refrescarlos
+    if(document.getElementById('teamRankingMini')?.style.display !== 'none') _renderTeamRankingMini();
+    if(document.getElementById('dnfPanel')?.style.display !== 'none') _renderDnfPanel();
+    // Mostrar/ocultar el botón "Ver DNF" según haya inscritos
+    const dnfBtn = document.getElementById('toggleDnf');
+    if(dnfBtn) dnfBtn.style.display = (Array.isArray(inscritos) && inscritos.length) ? 'inline-flex' : 'none';
+  };
+}
+
+// ── F) MINI-BOTÓN INLINE PARA COMPLETAR CCAA ─────────────────────────────
+// Lista de CCAA canónicas conocidas
+const _CCAA_KNOWN = [
+  'Andalucía','Aragón','Asturias','Cantabria','Castilla-La Mancha','Castilla y León',
+  'Cataluña','Ceuta','Comunitat Valenciana','Extremadura','Galicia','Islas Baleares',
+  'Islas Canarias','La Rioja','Madrid','Melilla','Murcia','Navarra','País Vasco'
+];
+
+// Reemplaza el renderTable de columna CCAA para inyectar el botón + cuando esté vacío
+const _origRenderTable2 = window.renderTable;
+window.renderTable = function(){
+  _origRenderTable2();
+  // Post-procesamos las celdas CCAA "—" para añadir el botón +
+  const tbody = document.getElementById('resultsBody');
+  if(!tbody) return;
+  const rows = tbody.querySelectorAll('tr[data-rkey]');
+  rows.forEach(tr=>{
+    const tds = tr.querySelectorAll('td');
+    // CCAA está en el índice 9 según renderTable (0=edit, 1=pos, 2=bib, 3=name, 4=time, 5=gap, 6=secPerKm, 7=cat, 8=catPos, 9=region, 10=team)
+    const td = tds[9];
+    if(!td) return;
+    const txt = td.textContent.trim();
+    if(txt === '—' || txt === ''){
+      const key = tr.getAttribute('data-rkey');
+      td.innerHTML = `<button onclick="event.stopPropagation();_assignRegionInline('${key}',event)" title="Asignar CCAA" style="background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;cursor:pointer">➕ CCAA</button>`;
+    }
+  });
+};
+
+function _assignRegionInline(key, evt){
+  const r = riders.find(x=>getRiderKey(x)===key);
+  if(!r){ alert('Corredor no encontrado.'); return; }
+  // Crear popover con dropdown
+  const existing = document.getElementById('_regionInlinePopover');
+  if(existing) existing.remove();
+  const pop = document.createElement('div');
+  pop.id = '_regionInlinePopover';
+  pop.style.cssText = 'position:absolute;background:#fff;border:1.5px solid #1d4ed8;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px;z-index:9999;min-width:260px;font-size:13px';
+  const opts = _CCAA_KNOWN.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+  pop.innerHTML = `
+    <div style="font-weight:800;color:#0b2f6b;margin-bottom:6px">Asignar CCAA a:</div>
+    <div style="font-size:12px;color:#475569;margin-bottom:8px">👤 ${escapeHtml(r.name)} · 🚴 ${escapeHtml(r.team||'')}</div>
+    <select id="_inlineRegionSel" style="width:100%;padding:7px 9px;border:1px solid #d0d5dd;border-radius:6px;font-size:13px;margin-bottom:8px">
+      <option value="">— Seleccionar —</option>
+      ${opts}
+    </select>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;margin-bottom:10px;cursor:pointer">
+      <input type="checkbox" id="_inlineRegionTeam" checked> Aplicar a todo el equipo "${escapeHtml(r.team||'')}"
+    </label>
+    <div style="display:flex;gap:6px;justify-content:flex-end">
+      <button onclick="document.getElementById('_regionInlinePopover').remove()" style="background:#fff;border:1px solid #d0d5dd;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">Cancelar</button>
+      <button onclick="_applyInlineRegion('${escapeAttr(key)}')" style="background:#1d4ed8;color:#fff;border:0;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">✓ Aplicar</button>
+    </div>`;
+  // Posicionar junto al botón
+  const btn = evt?.target?.closest('button');
+  if(btn){
+    const rect = btn.getBoundingClientRect();
+    pop.style.left = (rect.left + window.scrollX) + 'px';
+    pop.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  } else {
+    pop.style.left = '40%'; pop.style.top = '40%';
+  }
+  document.body.appendChild(pop);
+  setTimeout(()=>document.getElementById('_inlineRegionSel')?.focus(), 50);
+  // Cerrar al hacer clic fuera
+  setTimeout(()=>{
+    document.addEventListener('click', function _off(e){
+      if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('click', _off, true); }
+    }, true);
+  }, 100);
+}
+
+function _applyInlineRegion(key){
+  const sel = document.getElementById('_inlineRegionSel');
+  const chk = document.getElementById('_inlineRegionTeam');
+  if(!sel || !sel.value){ alert('Selecciona una CCAA.'); return; }
+  const newRegion = sel.value;
+  const r = riders.find(x=>getRiderKey(x)===key);
+  if(!r){ alert('Corredor no encontrado.'); return; }
+  if(chk?.checked && r.team){
+    // Aplicar a todos los del mismo equipo (que no tuvieran CCAA o tuvieran la misma)
+    let count = 0;
+    riders.forEach(x=>{
+      if(x.team === r.team && (!x.region || x.region === r.region)){
+        x.region = newRegion;
+        count++;
+      }
+    });
+    document.getElementById('_regionInlinePopover')?.remove();
+    applyFilters();
+    alert(`✅ CCAA "${newRegion}" asignada a ${count} corredor${count===1?'':'es'} del equipo "${r.team}".\n\nRecuerda pulsar "💾 Guardar cambios" para persistir.`);
+  } else {
+    r.region = newRegion;
+    document.getElementById('_regionInlinePopover')?.remove();
+    applyFilters();
+  }
+}
+
+// ── INICIALIZACIÓN ────────────────────────────────────────────────────────
+// Cuando se navega a view-tabla, asegurar que el ranking se refresca si está abierto
+(function _tablaInitHooks(){
+  document.addEventListener('click', e=>{
+    const btn = e.target?.closest('[data-view="view-tabla"]');
+    if(btn){
+      setTimeout(()=>{
+        if(document.getElementById('teamRankingMini')?.style.display !== 'none') _renderTeamRankingMini();
+        if(document.getElementById('dnfPanel')?.style.display !== 'none') _renderDnfPanel();
+      }, 100);
+    }
+  });
+})();
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN TIER 1 TABLA Y FILTROS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLA Y FILTROS — TIER 2
+// G) Vista pre-carrera con solo inscritos cargados
+// H) Modo histórico (Δ vs media histórica del corredor)
+// I) Agrupación visual por equipo
+// J) Mini-gráfico de barras por categoría
+// K) Buscador inteligente con sugerencias categorizadas
+// L) Comparador inline (2-3 ciclistas con checkbox)
+// M) Estado de cada corredor (icono vs media)
+// N) Filtro "Top X por categoría"
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Estados Tier 2 persistidos en localStorage (junto con los Tier 1)
+let _groupByTeam = localStorage.getItem('tabla_groupByTeam') === '1';
+let _historyMode = localStorage.getItem('tabla_historyMode') === '1';
+
+// ── J) MINI-GRÁFICO DE DISTRIBUCIÓN POR CATEGORÍA ────────────────────────
+// Barra de distribución por categoría DESACTIVADA (clic intermitente por
+// posibles interferencias de extensiones de navegador). Los chips de
+// categoría inferiores siguen funcionando perfectamente para filtrar.
+function _renderCatDistribBar(){
+  const bar = document.getElementById('catDistribBar');
+  if(bar){ bar.style.display = 'none'; bar.innerHTML = ''; }
+}
+function _toggleCatFromBar(){ /* desactivado */ }
+function _showDebugToast(){ /* desactivado */ }
+// Debug visible para diagnóstico (se muestra en pantalla, no en consola)
+function _showDebugToast(msg, bg='#0b2f6b'){
+  let el = document.getElementById('_catBarDebug');
+  if(!el){
+    el = document.createElement('div');
+    el.id = '_catBarDebug';
+    el.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#0b2f6b;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:700;z-index:99999;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:380px;line-height:1.4';
+    document.body.appendChild(el);
+  }
+  el.style.background = bg;
+  el.textContent = msg;
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.remove(); }, 3500);
+}
+
+function _toggleCatFromBar(cat){
+  if(typeof selectedCatChips === 'undefined'){
+    _showDebugToast('❌ ERROR: selectedCatChips no existe', '#b42318');
+    return;
+  }
+  const before = [...selectedCatChips];
+  const isOnlySelected = selectedCatChips.size === 1 && selectedCatChips.has(cat);
+  selectedCatChips.clear();
+  if(!isOnlySelected) selectedCatChips.add(cat);
+  const after = [...selectedCatChips];
+  _showDebugToast(`✅ Clic en "${cat}". Antes: [${before.join(',')||'vacío'}] → Ahora: [${after.join(',')||'vacío'}]`);
+  if(typeof populateFilters === 'function') populateFilters();
+  if(typeof applyFilters === 'function') applyFilters();
+  if(typeof _tablaSaveFilters === 'function') _tablaSaveFilters();
+}
+
+// ── N) FILTRO TOP X POR CATEGORÍA ─────────────────────────────────────────
+// Lo aplicamos en applyFilters via override
+const _origApplyFilters = (typeof applyFilters==='function') ? applyFilters : null;
+if(_origApplyFilters){
+  window.applyFilters = function(){
+    _origApplyFilters();
+    // Filtro adicional: Top X por categoría
+    const topCat = parseInt($('topCatFilter')?.value || '0', 10) || 0;
+    if(topCat > 0){
+      // Para cada categoría, dejamos solo los X mejores
+      const byCat = new Map();
+      filtered.forEach(r=>{
+        const c = r.cat || '';
+        if(!byCat.has(c)) byCat.set(c, []);
+        byCat.get(c).push(r);
+      });
+      const keep = new Set();
+      byCat.forEach((list)=>{
+        list.sort((a,b)=>a.pos-b.pos).slice(0, topCat).forEach(r=>keep.add(getRiderKey(r)));
+      });
+      filtered = filtered.filter(r=>keep.has(getRiderKey(r)));
+    }
+    // Re-render porque _origApplyFilters ya hizo renderAll antes
+    if(typeof renderTable==='function') renderTable();
+    _renderCatDistribBar();
+    _updateInlineCompareBar();
+    _renderPreRacePanel();
+  };
+  // Hook al change del nuevo filtro
+  document.addEventListener('change', e=>{
+    if(e.target?.id === 'topCatFilter'){ window.applyFilters(); _tablaSaveFilters?.(); }
+  });
+}
+
+// ── H) MODO HISTÓRICO (Δ vs media) ────────────────────────────────────────
+function toggleHistoryMode(){
+  _historyMode = !_historyMode;
+  localStorage.setItem('tabla_historyMode', _historyMode?'1':'0');
+  const ic = document.getElementById('hmIcon');
+  if(ic) ic.textContent = _historyMode ? '🟢' : '⚪';
+  if(typeof renderTable==='function') renderTable();
+}
+// Cache de medias históricas por nombre normalizado
+let _riderMeanCache = null;
+let _riderMeanCacheKey = null;
+function _getRiderHistoricalMean(name){
+  if(!name) return null;
+  const hist = _cachedHistory || [];
+  const cacheKey = hist.length+''+hist.slice(0,3).map(h=>h.id).join(',');
+  if(_riderMeanCacheKey !== cacheKey){
+    _riderMeanCache = new Map();
+    _riderMeanCacheKey = cacheKey;
+  }
+  const nk = normalizeForMatching(name);
+  if(_riderMeanCache.has(nk)) return _riderMeanCache.get(nk);
+  const positions = [];
+  for(const h of hist){
+    const r = (h.riders||[]).find(x=>normalizeForMatching(x.name)===nk);
+    if(r && r.pos) positions.push(r.pos);
+  }
+  const result = positions.length>=2 ? {mean: positions.reduce((s,n)=>s+n,0)/positions.length, count: positions.length} : null;
+  _riderMeanCache.set(nk, result);
+  return result;
+}
+function _renderHistoricalDelta(r){
+  const stat = _getRiderHistoricalMean(r.name);
+  if(!stat) return `<span class="stat-vs-mean new" title="Sin histórico previo">🆕 Nuevo</span>`;
+  const delta = r.pos - stat.mean;
+  const absDelta = Math.abs(delta);
+  let cls, icon, label;
+  if(absDelta < 2)            { cls='equal';       icon='≈'; label='Igual'; }
+  else if(delta < -8)         { cls='much-better'; icon='🚀'; label=`-${absDelta.toFixed(1)}`; }
+  else if(delta < 0)          { cls='better';      icon='▲'; label=`-${absDelta.toFixed(1)}`; }
+  else if(delta > 8)          { cls='much-worse';  icon='⚠'; label=`+${absDelta.toFixed(1)}`; }
+  else                        { cls='worse';       icon='▼'; label=`+${delta.toFixed(1)}`; }
+  return `<span class="stat-vs-mean ${cls}" title="Media histórica: ${stat.mean.toFixed(1)}º (${stat.count} carreras)">${icon} ${label}</span>`;
+}
+
+// ── M) ESTADO POR CORREDOR (icono vs media) ──────────────────────────────
+// Reutiliza _getRiderHistoricalMean: si Δ<0 → 🟢 mejor que media, etc.
+function _renderRiderStateBadge(r){
+  const stat = _getRiderHistoricalMean(r.name);
+  if(!stat) return `<span title="Sin histórico previo" style="font-size:14px">🟠</span>`;
+  const delta = r.pos - stat.mean;
+  const absDelta = Math.abs(delta);
+  const tooltip = `Pos actual: ${r.pos}º · Media histórica: ${stat.mean.toFixed(1)}º (${stat.count} carreras) · Δ=${delta>=0?'+':''}${delta.toFixed(1)}`;
+  if(absDelta < 2)   return `<span title="${tooltip}" style="font-size:14px">🟢</span>`;
+  if(delta < 0)      return `<span title="${tooltip}" style="font-size:14px">🔵</span>`;
+  return `<span title="${tooltip}" style="font-size:14px">🟡</span>`;
+}
+
+// ── I) AGRUPACIÓN POR EQUIPO ─────────────────────────────────────────────
+function toggleGroupByTeam(){
+  _groupByTeam = !_groupByTeam;
+  localStorage.setItem('tabla_groupByTeam', _groupByTeam?'1':'0');
+  const ic = document.getElementById('gbtIcon');
+  if(ic) ic.textContent = _groupByTeam ? '🟢' : '⚪';
+  if(typeof renderTable==='function') renderTable();
+}
+
+// Override de renderTable para incluir: grupo por equipo + columnas Estado + Δ histórica + checkbox compare
+const _origRenderTable3 = window.renderTable;
+window.renderTable = function(){
+  // Mantener llamada original (que recoloca tbody)
+  _origRenderTable3();
+  // Si está activado el modo histórico o grupo o ya hay selectedCompare, retocamos
+  const tbody = document.getElementById('resultsBody');
+  if(!tbody) return;
+  // 1) Insertar columna checkbox al principio si no existe
+  const theadRow = document.querySelector('#captureTable thead tr');
+  if(theadRow && !document.getElementById('th-compare')){
+    const th = document.createElement('th');
+    th.id = 'th-compare';
+    th.style.cssText = 'width:30px;text-align:center';
+    th.title = 'Selecciona hasta 3 para comparar';
+    th.innerHTML = '⚔️';
+    theadRow.insertBefore(th, theadRow.firstChild);
+  }
+  // Insertar columna Estado y Δ tras la columna Nombre si no existen
+  if(theadRow && _historyMode && !document.getElementById('th-state')){
+    const ths = theadRow.querySelectorAll('th');
+    // posición Nombre = índice 4 (compare + ✏️ + Pos + Dorsal + Nombre)
+    const nameTh = [...ths].find(t=>(t.textContent||'').trim().startsWith('Nombre'));
+    if(nameTh){
+      const thState = document.createElement('th');
+      thState.id = 'th-state';
+      thState.style.cssText = 'width:48px;text-align:center';
+      thState.innerHTML = 'Estado';
+      const thDelta = document.createElement('th');
+      thDelta.id = 'th-delta';
+      thDelta.style.cssText = 'width:90px;text-align:center';
+      thDelta.title = 'Δ posición respecto a la media histórica del corredor';
+      thDelta.innerHTML = 'Δ Hist.';
+      nameTh.parentNode.insertBefore(thState, nameTh.nextSibling);
+      nameTh.parentNode.insertBefore(thDelta, thState.nextSibling);
+    }
+  }
+  // Si el modo histórico está OFF, eliminar columnas Estado/Δ si están
+  if(!_historyMode){
+    document.getElementById('th-state')?.remove();
+    document.getElementById('th-delta')?.remove();
+  }
+  // 2) Reescribir filas con checkbox + columnas extra + agrupado
+  const baseRows = tbody.querySelectorAll('tr[data-rkey]');
+  if(!baseRows.length) return;
+
+  // Si hay agrupación: re-renderizamos del todo usando filtered (que ya está aplicado)
+  if(_groupByTeam){
+    const mk = (myTeam||'').toLowerCase();
+    const byTeam = new Map();
+    filtered.forEach(r=>{
+      const t = r.team || '(Sin equipo)';
+      if(!byTeam.has(t)) byTeam.set(t, []);
+      byTeam.get(t).push(r);
+    });
+    // Orden: mi equipo primero, resto por mejor posición del equipo
+    const teamArr = [...byTeam.entries()].sort((a,b)=>{
+      const aIsMy = mk && a[0].toLowerCase()===mk;
+      const bIsMy = mk && b[0].toLowerCase()===mk;
+      if(aIsMy && !bIsMy) return -1;
+      if(bIsMy && !aIsMy) return 1;
+      const aBest = Math.min(...a[1].map(r=>r.pos));
+      const bBest = Math.min(...b[1].map(r=>r.pos));
+      return aBest - bBest;
+    });
+    const newRows = [];
+    teamArr.forEach(([team, list])=>{
+      const isMy = mk && team.toLowerCase()===mk;
+      const colspan = _historyMode ? 13 : 11;
+      newRows.push(`<tr class="team-group-header ${isMy?'my-team-row':''}"><td colspan="${colspan}">${isMy?'🔵 ':''}${escapeHtml(team)} <span style="font-weight:600;color:#6b7280">(${list.length} corredor${list.length===1?'':'es'} · mejor: ${Math.min(...list.map(r=>r.pos))}º)</span></td></tr>`);
+      list.sort((a,b)=>a.pos-b.pos).forEach(r=>{
+        newRows.push(_buildRiderRow(r));
+      });
+    });
+    tbody.innerHTML = newRows.join('');
+  } else {
+    // Reemplazar filas existentes una por una añadiendo celdas
+    const newHtml = filtered.map(_buildRiderRow).join('');
+    tbody.innerHTML = newHtml;
+  }
+  // Recolocar listener dblclick
+  if(!tbody._dblWired){
+    tbody.addEventListener('dblclick', e=>{
+      const tr = e.target.closest('tr[data-rkey]');
+      if(!tr) return;
+      const key = tr.getAttribute('data-rkey');
+      if(!key) return;
+      if(typeof editTableRow === 'function') editTableRow(key);
+    });
+    tbody._dblWired = true;
+  }
+  _updateInlineCompareBar();
+};
+
+function _buildRiderRow(r){
+  const checked = selectedCompare.some(x=>x.pos===r.pos&&x.bib===r.bib&&x.name===r.name)?'checked':'';
+  const isOwnTeam = isMyTeam(r);
+  const rkey = escapeAttr(getRiderKey(r));
+  let medal='';
+  if(r.pos===1) medal='🥇'; else if(r.pos===2) medal='🥈'; else if(r.pos===3) medal='🥉';
+  else if(r.catPos===1) medal='🥇'; else if(r.catPos===2) medal='🥈'; else if(r.catPos===3) medal='🥉';
+  const stateCell = _historyMode ? `<td style="text-align:center">${_renderRiderStateBadge(r)}</td>` : '';
+  const deltaCell = _historyMode ? `<td style="text-align:center">${_renderHistoricalDelta(r)}</td>` : '';
+  const regionCell = (r.region||'').trim()
+    ? `<td>${escapeHtml(r.region)}</td>`
+    : `<td><button onclick="event.stopPropagation();_assignRegionInline('${rkey}',event)" title="Asignar CCAA" style="background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;cursor:pointer">➕ CCAA</button></td>`;
+  return `<tr data-rkey="${rkey}" onclick="selectAndAnalyzeRiderByKey('${rkey}')" class="${isOwnTeam?'my-team-row':''}" style="cursor:pointer">
+    <td class="compare-cell" onclick="event.stopPropagation()"><input type="checkbox" ${checked} onchange="toggleCompare(${r.pos},${r.bib},'${escapeAttr(r.name)}',this.checked)" title="Marca para comparar (máx 3)"></td>
+    <td onclick="event.stopPropagation()" style="text-align:center;padding:4px">
+      <button class="edit-btn" onclick="editTableRow('${rkey}')" title="Editar fila">✏️</button>
+    </td>
+    <td><b>${medal}${r.pos}º</b></td>
+    <td>${r.bib}</td>
+    <td>${escapeHtml(r.name)}${isOwnTeam?' <small>(Mi Equipo)</small>':''}</td>
+    ${stateCell}${deltaCell}
+    <td>${formatHMS(r.totalSeconds)}</td>
+    <td>${formatSeconds(r.gapSeconds)}</td>
+    <td>${r.secPerKm!=null?r.secPerKm.toFixed(1):'—'}</td>
+    <td><span class="pill"><span class="cat-dot" style="background:${getColorForCategory(r.cat)}"></span>${escapeHtml(r.cat)}</span></td>
+    <td class="pos-cat-val">${r.catPos}º</td>
+    ${regionCell}
+    <td>${escapeHtml(r.team)}</td>
+  </tr>`;
+}
+
+// ── L) COMPARADOR INLINE ─────────────────────────────────────────────────
+function _updateInlineCompareBar(){
+  const bar = document.getElementById('inlineCompareBar');
+  const info = document.getElementById('inlineCompareInfo');
+  const btn = document.getElementById('inlineCompareGo');
+  if(!bar) return;
+  const n = selectedCompare.length;
+  if(n>0){
+    bar.style.display='flex';
+    if(info) info.textContent = `${n} ciclista${n===1?'':'s'} seleccionado${n===1?'':'s'}: ` + selectedCompare.map(r=>r.name).join(' · ');
+    if(btn) btn.disabled = (n<2);
+  } else {
+    bar.style.display='none';
+  }
+}
+// Interceptamos _autoFillComparativo para saltarlo cuando venimos del inline compare.
+// Esto se monta UNA vez, en el primer click de goToCompare.
+function _wrapAutoFillComparativoOnce(){
+  if(window._autoFillWrapped) return;
+  if(typeof _autoFillComparativo !== 'function') return;
+  const orig = _autoFillComparativo;
+  window._autoFillComparativo = function(){
+    if(window._suppressAutoFill){
+      // No tocar comparativoRiders — los pone goToCompare.
+      return;
+    }
+    return orig.apply(this, arguments);
+  };
+  window._autoFillWrapped = true;
+}
+
+function goToCompare(){
+  if(selectedCompare.length<2){ alert('Selecciona al menos 2 ciclistas (máx 3).'); return; }
+  _wrapAutoFillComparativoOnce();
+  const sel = selectedCompare.slice(0, 6);
+  // 1) Bloqueamos el auto-fill que dispara initComparativo
+  window._suppressAutoFill = true;
+  // 2) Volcamos los seleccionados en comparativoRiders ANTES de cambiar de vista
+  if(typeof comparativoRiders !== 'undefined' && Array.isArray(comparativoRiders)){
+    for(let i=0; i<comparativoRiders.length; i++) comparativoRiders[i] = sel[i] || null;
+  }
+  // 3) Cambiamos de vista (initComparativo se ejecutará pero el auto-fill está suprimido)
+  if(typeof showView==='function') showView('view-comparativo');
+  // 4) Forzamos un render extra y desbloqueamos
+  setTimeout(()=>{
+    if(typeof renderComparativo === 'function') renderComparativo();
+    window._suppressAutoFill = false;
+  }, 80);
+}
+function clearInlineCompare(){
+  selectedCompare = [];
+  if(typeof renderCompare==='function') renderCompare();
+  if(typeof renderTable==='function') renderTable();
+  _updateInlineCompareBar();
+}
+
+// ── G) VISTA PRE-CARRERA ─────────────────────────────────────────────────
+// Se muestra cuando: hay inscritos cargados, pero NO hay clasificación (riders<3).
+function _renderPreRacePanel(){
+  const sec = document.getElementById('preRacePanel');
+  const body = document.getElementById('preRaceBody');
+  if(!sec || !body) return;
+  const hasInscritos = Array.isArray(inscritos) && inscritos.length>0;
+  const hasRiders = riders && riders.length>=3;
+  if(!hasInscritos || hasRiders){ sec.style.display='none'; body.innerHTML=''; return; }
+  sec.style.display='block';
+  // Cargar histórico
+  const stats = (typeof buildFinishStats==='function') ? buildFinishStats(_cachedHistory||[]) : null;
+  const mk = (myTeam||'').toLowerCase();
+  // Para cada inscrito, calcular: mejor pos histórica, tasa finalización, predicción
+  const ridersIdx = (typeof _buildYearRiderIndex==='function') ? _buildYearRiderIndex((typeof _getRaceYear==='function')?_getRaceYear():new Date().getFullYear()) : null;
+  // También necesitamos histórico completo (no solo del año actual)
+  const histAll = _cachedHistory || [];
+  const _bestPosOf = (insName)=>{
+    const nk = normalizeForMatching(insName||'');
+    let best=null, count=0, lastDate='';
+    for(const h of histAll){
+      const _ridersN = (h.riders||[]).length;
+      if(_ridersN<3) continue;
+      const r = (h.riders||[]).find(x=>normalizeForMatching(x.name)===nk);
+      if(r && r.pos){
+        if(best===null || r.pos<best) best = r.pos;
+        count++;
+        if(!lastDate || h.raceDate>lastDate) lastDate = h.raceDate;
+      }
+    }
+    return {best, count};
+  };
+  // Construir filas
+  const enriched = inscritos.map(i=>{
+    const bp = _bestPosOf(i.name);
+    const rs = stats?.byRider?.get(normalizeForMatching(i.name||''));
+    const pred = (typeof predictFinishProbability==='function') ? predictFinishProbability({name:i.name, team:i.team, cat:i.cat}) : null;
+    const isMy = mk && (i.team||'').toLowerCase()===mk;
+    return {...i, _bestPos:bp.best, _count:bp.count, _rs:rs, _pred:pred, _isMy:isMy};
+  });
+  // Agrupar por equipo, mi equipo primero
+  const byTeam = new Map();
+  enriched.forEach(i=>{
+    const t = i.team || '(Sin equipo)';
+    if(!byTeam.has(t)) byTeam.set(t, []);
+    byTeam.get(t).push(i);
+  });
+  const teams = [...byTeam.keys()].sort((a,b)=>{
+    if(mk){
+      if(a.toLowerCase()===mk) return -1;
+      if(b.toLowerCase()===mk) return 1;
+    }
+    return a.localeCompare(b);
+  });
+  // Estadísticas globales del pre-carrera
+  const totalIns = inscritos.length;
+  const knownRiders = enriched.filter(x=>x._count>0).length;
+  const myEnriched = enriched.filter(x=>x._isMy);
+  const avgFinishRate = (() => {
+    const withRate = enriched.filter(x=>x._rs && x._rs.inscrito>=1);
+    if(!withRate.length) return null;
+    return Math.round(withRate.reduce((s,x)=>s+x._rs.rate,0)/withRate.length);
+  })();
+  const banner = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <span class="ib-chip total">📋 ${totalIns} inscritos</span>
+      <span class="ib-chip ok">🔍 ${knownRiders} con histórico (${Math.round((knownRiders/totalIns)*100)}%)</span>
+      ${mk && myEnriched.length ? `<span class="ib-chip" style="background:#dbeafe;border-color:#93c5fd;color:#1e3a8a">🔵 Mi equipo: ${myEnriched.length}</span>` : ''}
+      ${avgFinishRate!=null ? `<span class="ib-chip" style="background:#eef2ff;border-color:#c7d2fe;color:#3730a3">📊 Tasa media de finalización: ${avgFinishRate}%</span>` : ''}
+      <span class="ib-chip" style="background:#fff7ed;border-color:#fed7aa;color:#9a3412">🏁 ${teams.length} equipos</span>
+    </div>`;
+  // Top 10 candidatos al podio (basado en mejor posición histórica)
+  const candidates = enriched
+    .filter(x=>x._bestPos!=null)
+    .sort((a,b)=>a._bestPos-b._bestPos)
+    .slice(0,10);
+  const candidatesHtml = candidates.length>=3 ? `
+    <h3 style="font-size:15px;margin:6px 0 8px;color:#3730a3">🎯 Top 10 candidatos (por mejor posición histórica)</h3>
+    <table class="inscritos-modal-tbl" style="margin-bottom:16px">
+      <thead><tr><th>#</th><th>Dorsal</th><th>Nombre</th><th>Equipo</th><th>Cat.</th><th>Mejor hist.</th><th>Carreras</th><th>Tasa fin.</th><th>Predicción</th></tr></thead>
+      <tbody>
+      ${candidates.map((x,i)=>{
+        const predTxt = x._pred ? `<b style="color:${x._pred.prob>=80?'#065f46':x._pred.prob>=60?'#92400e':'#9a3412'}">${x._pred.prob}%</b>` : '<span class="small">—</span>';
+        return `<tr ${x._isMy?'style="background:#dbeafe"':''}>
+          <td><b>${i+1}</b></td>
+          <td>${escapeHtml(x.bib||'—')}</td>
+          <td>${x._isMy?'🔵 ':''}<b>${escapeHtml(x.name)}</b></td>
+          <td>${escapeHtml(x.team||'')}</td>
+          <td>${escapeHtml(x.cat||'')}</td>
+          <td><b style="color:#1d4ed8">${x._bestPos}º</b></td>
+          <td>${x._count}</td>
+          <td>${x._rs ? x._rs.rate+'%' : '—'}</td>
+          <td>${predTxt}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>` : '';
+  // Tabla resumida por equipo (solo si hay >1 equipo)
+  const teamSummaryHtml = teams.length>1 ? `
+    <h3 style="font-size:15px;margin:14px 0 8px;color:#3730a3">🏆 Resumen por equipo</h3>
+    <table class="inscritos-modal-tbl">
+      <thead><tr><th>Equipo</th><th>Inscritos</th><th>Con histórico</th><th>Mejor candidato</th><th>Mejor pos. hist.</th></tr></thead>
+      <tbody>
+      ${teams.map(team=>{
+        const list = byTeam.get(team);
+        const isMy = mk && team.toLowerCase()===mk;
+        const known = list.filter(x=>x._bestPos!=null);
+        known.sort((a,b)=>a._bestPos-b._bestPos);
+        const top = known[0];
+        return `<tr ${isMy?'style="background:#dbeafe;font-weight:700"':''}>
+          <td>${isMy?'🔵 ':''}<b>${escapeHtml(team)}</b></td>
+          <td>${list.length}</td>
+          <td>${known.length}</td>
+          <td>${top ? escapeHtml(top.name) : '<span class="small">— sin datos</span>'}</td>
+          <td>${top ? `<b style="color:#1d4ed8">${top._bestPos}º</b>` : '—'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>` : '';
+  body.innerHTML = banner + candidatesHtml + teamSummaryHtml;
+}
+
+// ── K) BUSCADOR INTELIGENTE ───────────────────────────────────────────────
+// Actualiza datalist con sugerencias categorizadas (corredores, equipos, CCAA, categorías).
+const _origUpdateSearchDatalist = (typeof _updateSearchDatalist==='function') ? _updateSearchDatalist : null;
+if(_origUpdateSearchDatalist){
+  window._updateSearchDatalist = function(){
+    const dl = $('searchSuggestions');
+    if(!dl){ _origUpdateSearchDatalist(); return; }
+    if(!riders || !riders.length){ dl.innerHTML=''; return; }
+    const set = new Set();
+    const opts = [];
+    // Corredores
+    riders.forEach(r=>{
+      const k = '👤 '+r.name;
+      if(!set.has(k)){ set.add(k); opts.push(`<option value="${escapeAttr(r.name)}" label="👤 ${escapeHtml(r.name)} · ${escapeHtml(r.team||'')}">${escapeHtml(r.name)}</option>`); }
+    });
+    // Equipos
+    [...new Set(riders.map(r=>r.team).filter(Boolean))].forEach(t=>{
+      const k = '🚴 '+t;
+      if(!set.has(k)){ set.add(k); opts.push(`<option value="${escapeAttr(t)}" label="🚴 ${escapeHtml(t)} (equipo)">${escapeHtml(t)}</option>`); }
+    });
+    // CCAA
+    [...new Set(riders.map(r=>r.region).filter(Boolean))].forEach(c=>{
+      const k = '📍 '+c;
+      if(!set.has(k)){ set.add(k); opts.push(`<option value="${escapeAttr(c)}" label="📍 ${escapeHtml(c)} (CCAA)">${escapeHtml(c)}</option>`); }
+    });
+    // Categorías
+    [...new Set(riders.map(r=>r.cat).filter(Boolean))].forEach(c=>{
+      const k = '🏷️ '+c;
+      if(!set.has(k)){ set.add(k); opts.push(`<option value="${escapeAttr(c)}" label="🏷️ ${escapeHtml(c)} (categoría)">${escapeHtml(c)}</option>`); }
+    });
+    dl.innerHTML = opts.join('');
+  };
+}
+
+// ── HOOK GLOBAL: actualizar todos los Tier 2 tras renderAll ──────────────
+const _origRenderAll = (typeof renderAll==='function') ? renderAll : null;
+if(_origRenderAll){
+  window.renderAll = function(){
+    _origRenderAll();
+    _renderCatDistribBar();
+    _renderPreRacePanel();
+    _updateInlineCompareBar();
+    // Restaurar estado de iconos toggle
+    const gbtIc = document.getElementById('gbtIcon'); if(gbtIc) gbtIc.textContent = _groupByTeam?'🟢':'⚪';
+    const hmIc  = document.getElementById('hmIcon');  if(hmIc)  hmIc.textContent  = _historyMode?'🟢':'⚪';
+  };
+}
+
+// Persistir filtros nuevos (topCat) junto con los Tier 1
+const _origSaveFilters = (typeof _tablaSaveFilters==='function') ? _tablaSaveFilters : null;
+if(_origSaveFilters){
+  window._tablaSaveFilters = function(){
+    _origSaveFilters();
+    try{
+      const raw = localStorage.getItem(_TABLA_LS_KEY);
+      if(!raw) return;
+      const p = JSON.parse(raw);
+      p.topCat = $('topCatFilter')?.value || '';
+      localStorage.setItem(_TABLA_LS_KEY, JSON.stringify(p));
+    }catch(e){}
+  };
+}
+const _origRestoreFilters = (typeof _tablaRestoreFilters==='function') ? _tablaRestoreFilters : null;
+if(_origRestoreFilters){
+  window._tablaRestoreFilters = function(){
+    _origRestoreFilters();
+    try{
+      const raw = localStorage.getItem(_TABLA_LS_KEY);
+      if(!raw) return;
+      const p = JSON.parse(raw);
+      if(p.topCat && $('topCatFilter')) $('topCatFilter').value = p.topCat;
+    }catch(e){}
+  };
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN TIER 2 TABLA Y FILTROS
+// ═══════════════════════════════════════════════════════════════════════════
