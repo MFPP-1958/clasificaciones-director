@@ -5812,6 +5812,27 @@ function _titleCase(s){if(!s)return'';return cleanSpaces(s).toLowerCase().replac
    3. Mixed:  "Ivan Sanchez Toral"    → "Sanchez, Ivan"  (first word = nombre)
    4. AllCaps:"SANCHEZ TORAL IVAN"    → "Sanchez, Ivan"  (last word = nombre, first = apellido) */
 function normalizeRiderName(rawName, nombre, apellido1, apellido2){
+  // ── LIMPIEZA DEFENSIVA: eliminar sufijos de posición/categoría que a veces
+  // se quedan pegados al nombre cuando el CSV o PDF mezcla columnas. Patrones:
+  //   "Pastor, Mauro 1 De 30"   → "Pastor, Mauro"
+  //   "Pastor, Mauro 1/30"      → "Pastor, Mauro"
+  //   "Pastor, Mauro (1/30)"    → "Pastor, Mauro"
+  //   "Pastor, Mauro 1º"        → "Pastor, Mauro"
+  function _stripPosSuffix(s){
+    if(!s) return s;
+    let v = String(s);
+    // " N de M" o " N De M" o " N/M"
+    v = v.replace(/\s+\d+\s+[Dd][Ee]\s+\d+\s*$/u, '');
+    v = v.replace(/\s+\d+\s*\/\s*\d+\s*$/u, '');
+    v = v.replace(/\s*\(\s*\d+\s*\/\s*\d+\s*\)\s*$/u, '');
+    v = v.replace(/\s+\d+[º°]\s*$/u, '');
+    return v.trim();
+  }
+  rawName = _stripPosSuffix(rawName);
+  nombre = _stripPosSuffix(nombre);
+  apellido1 = _stripPosSuffix(apellido1);
+  apellido2 = _stripPosSuffix(apellido2);
+
   if(apellido1){
     const n=_titleCase((nombre||'').trim());
     const a1=_titleCase((apellido1||'').trim().split(/\s+/)[0]); // solo primer apellido
