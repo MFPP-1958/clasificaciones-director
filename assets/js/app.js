@@ -21305,6 +21305,69 @@ function _simExportPDF(){
     <tbody>${topRows||'<tr><td colspan="7" style="text-align:center;color:#9ca3af">Sin datos suficientes</td></tr>'}</tbody>
   </table>
 
+  ${(()=>{
+    // Predicción Mi Equipo Montecarlo
+    const mine = grid.filter(g=>g.isMyTeam && g.avgPos!=null);
+    if(!mine.length || !myTeam) return '';
+    const rowsHtml = mine.map(g=>{
+      const mc = _simMonteCarlo(g, 1000);
+      if(!mc) return '';
+      return `<tr style="background:#eff6ff">
+        <td><b>${esc(g.name)}</b><br><small style="color:#6b7280">${esc(g.cat||'')}${g.bib?' · #'+esc(g.bib):''}</small></td>
+        <td style="text-align:center;font-size:14px;font-weight:900;color:#1d4ed8">${mc.predicted}º</td>
+        <td style="text-align:center;color:#475569">${mc.lower}º – ${mc.upper}º</td>
+        <td style="text-align:center;background:#fffbeb;font-weight:800">${mc.probTop3}%</td>
+        <td style="text-align:center;background:#f0fdf4;font-weight:800">${mc.probTop5}%</td>
+        <td style="text-align:center;background:#eef2ff;font-weight:800">${mc.probTop10}%</td>
+        <td style="text-align:center;color:#475569">${g.raceCount||0}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <h2 class="section">🔵 Predicción Mi Equipo · ${esc(myTeam)}</h2>
+      <p style="font-size:10px;color:#475569;margin:0 0 2mm">Simulación Montecarlo 1000 iteraciones por corredor. Intervalo de confianza al 50%.</p>
+      <table>
+        <thead><tr><th>Corredor</th><th style="text-align:center">Puesto esperado</th><th style="text-align:center">Rango 50%</th><th style="text-align:center">P. Podio</th><th style="text-align:center">P. Top 5</th><th style="text-align:center">P. Top 10</th><th style="text-align:center">Carrs.</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+  })()}
+
+  ${(()=>{
+    // Análisis por tipo de circuito
+    const circuitType = (race.circuitType||'').trim();
+    if(!circuitType) return '';
+    const histCirc = (_cachedHistory||[]).filter(h => h.id!==race.id && (h.circuitType||'').trim()===circuitType && (h.riders||[]).length>=3);
+    if(!histCirc.length) return '';
+    const circRows = grid.filter(g=>g.hasHistory).map(g=>{
+      const nk = normalizeForMatching(g.name||'');
+      const positions = [];
+      histCirc.forEach(h=>{
+        const r = (h.riders||[]).find(x=>normalizeForMatching(x.name)===nk);
+        if(r && r.pos) positions.push(r.pos);
+      });
+      if(!positions.length) return null;
+      const avgInType = positions.reduce((s,p)=>s+p,0)/positions.length;
+      const dlt = avgInType - g.avgPos;
+      const dltLbl = Math.abs(dlt)<1?'≈':(dlt<0?'▲ '+Math.abs(dlt).toFixed(1):'▼ '+dlt.toFixed(1));
+      return {name:g.name,team:g.team,isMy:g.isMyTeam,avgInType,avgGlobal:g.avgPos,dlt,dltLbl,n:positions.length};
+    }).filter(Boolean).sort((a,b)=>a.avgInType-b.avgInType).slice(0,20);
+    if(!circRows.length) return '';
+    return `
+      <h2 class="section">🛣️ Análisis por tipo de circuito "${esc(circuitType)}"</h2>
+      <p style="font-size:10px;color:#475569;margin:0 0 2mm">${histCirc.length} pruebas previas de este tipo. Top 20 inscritos con mejor media en este tipo.</p>
+      <table>
+        <thead><tr><th>#</th><th>Corredor</th><th>Equipo</th><th style="text-align:center">Media tipo</th><th style="text-align:center">Media global</th><th style="text-align:center">Δ</th><th style="text-align:center">Carrs.</th></tr></thead>
+        <tbody>${circRows.map((r,i)=>`<tr ${r.isMy?'style="background:#dbeafe"':''}>
+          <td style="text-align:center">${i+1}</td>
+          <td>${r.isMy?'🔵 ':''}<b>${esc(r.name)}</b></td>
+          <td>${esc(r.team||'')}</td>
+          <td style="text-align:center;font-weight:800;color:#3730a3">${r.avgInType.toFixed(1)}º</td>
+          <td style="text-align:center;color:#6b7280">${r.avgGlobal.toFixed(1)}º</td>
+          <td style="text-align:center;font-weight:700;color:${r.dlt<0?'#166534':r.dlt>0?'#92400e':'#3730a3'}">${r.dltLbl}</td>
+          <td style="text-align:center;color:#6b7280">${r.n}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  })()}
+
   <h2 class="section">🚴 Parrilla completa analizada</h2>
   <table>
     <thead><tr><th>Dorsal</th><th>Corredor</th><th>Club</th><th>Cat.</th><th style="text-align:center">Historial</th><th style="text-align:center">Media</th><th style="text-align:center">Mejor</th><th style="text-align:center">Fiab.</th><th style="text-align:center">Carrs.</th></tr></thead>
@@ -21324,4 +21387,282 @@ function _simExportPDF(){
 }
 // ═══════════════════════════════════════════════════════════════════════════
 // FIN SIMULADOR
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULADOR DE CARRERAS — Fase 2
+// A) Predicción Mi Equipo con intervalo de confianza (Montecarlo)
+// B) Head-to-Head con rivales más frecuentes
+// C) Análisis por tipo de circuito
+// D) Simulación Montecarlo 1000 iteraciones
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── D) MONTECARLO ─────────────────────────────────────────────────────────
+// Para un corredor con avgPos y reliability, simula 1000 carreras
+// generando posiciones aleatorias dentro de una distribución normal centrada
+// en avgPos con sigma derivada de la fiabilidad (a menor fiabilidad, mayor sigma).
+// Devuelve {predicted, lower, upper, probTop3, probTop5, probTop10, distribution[20 bins]}
+function _simMonteCarlo(rider, iterations){
+  iterations = iterations || 1000;
+  if(rider.avgPos == null) return null;
+  // sigma: con fiabilidad 100% → sigma=2; fiabilidad 0% → sigma=20
+  const rel = rider.reliability ?? 30;
+  const sigma = Math.max(2, 2 + (100-rel)/100 * 18);
+  const positions = [];
+  // Generación con Box-Muller
+  for(let i=0; i<iterations; i++){
+    const u1 = Math.random() || 1e-9;
+    const u2 = Math.random();
+    const z = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+    const pos = Math.max(1, Math.round(rider.avgPos + z * sigma));
+    positions.push(pos);
+  }
+  positions.sort((a,b)=>a-b);
+  const predicted = Math.round(positions.reduce((s,p)=>s+p,0)/iterations);
+  // Percentiles 25 y 75 para el intervalo de confianza del 50%
+  const lower = positions[Math.floor(iterations*0.25)];
+  const upper = positions[Math.floor(iterations*0.75)];
+  // Probabilidades
+  const probTop3  = Math.round(positions.filter(p=>p<=3).length/iterations*100);
+  const probTop5  = Math.round(positions.filter(p=>p<=5).length/iterations*100);
+  const probTop10 = Math.round(positions.filter(p=>p<=10).length/iterations*100);
+  // Distribución en 20 bins (cada bin = 5 posiciones)
+  const distribution = new Array(20).fill(0);
+  positions.forEach(p=>{
+    const bin = Math.min(19, Math.floor((p-1)/5));
+    distribution[bin]++;
+  });
+  const maxBin = Math.max(...distribution);
+  const distributionNorm = distribution.map(v=>maxBin?v/maxBin:0);
+  return { predicted, lower, upper, sigma, probTop3, probTop5, probTop10, distribution, distributionNorm };
+}
+
+// ── A) PREDICCIÓN MI EQUIPO ──────────────────────────────────────────────
+function _simRenderMyTeamPanel(){
+  const panel = document.getElementById('simMyTeamPanel');
+  const body = document.getElementById('simMyTeamBody');
+  if(!panel || !body) return;
+  if(!_simCurrentData || !myTeam){ panel.style.display='none'; return; }
+  const {grid} = _simCurrentData;
+  const mine = grid.filter(g=>g.isMyTeam);
+  if(!mine.length){ panel.style.display='none'; return; }
+  panel.style.display = '';
+  // Aplicar filtro categoría (sincronizado con simCatSelect)
+  const catFilter = document.getElementById('simCatSelect')?.value || '';
+  const visible = catFilter ? mine.filter(g=>g.cat===catFilter) : mine;
+  if(!visible.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Ningún corredor de tu equipo en la categoría seleccionada.</p>';
+    return;
+  }
+  body.innerHTML = `<div class="sim-myteam-grid">${visible.map(g=>{
+    const isDebut = g.status !== 'known';
+    let mcHtml = '';
+    if(g.avgPos == null){
+      mcHtml = `<div class="sim-mt-pred-block" style="background:#fef3c7"><div style="font-weight:800;color:#92400e;font-size:13px">⚠️ Sin datos suficientes para predicción</div><div style="font-size:11px;color:#78350f;margin-top:3px">Corredor sin historial ni media de equipo disponible.</div></div>`;
+    } else {
+      const mc = _simMonteCarlo(g, 1000);
+      if(!mc){
+        mcHtml = '';
+      } else {
+        const histBars = mc.distributionNorm.map((v,i)=>`<div class="sim-mt-hist-bar" style="height:${Math.max(2,v*100)}%" title="Pos ${i*5+1}-${(i+1)*5}: ${mc.distribution[i]} sim."></div>`).join('');
+        mcHtml = `
+          <div class="sim-mt-pred-block">
+            <div class="sim-mt-pred-pos">${mc.predicted}º <small>esperado</small></div>
+            <div class="sim-mt-pred-range">📐 Intervalo de confianza 50%: entre <b>${mc.lower}º</b> y <b>${mc.upper}º</b>${isDebut?' (estimado por equipo)':''}</div>
+            <div class="sim-mt-histogram" title="Distribución de 1000 simulaciones (eje X: posiciones 1→100 en bins de 5)">${histBars}</div>
+            <div style="display:flex;justify-content:space-between;margin-top:2px"><span class="sim-mt-hist-label">Top</span><span class="sim-mt-hist-label">Resto</span></div>
+          </div>
+          <div class="sim-mt-prob-row">
+            <div class="sim-mt-prob-chip podium"><div class="pc-v">${mc.probTop3}%</div><div class="pc-l">🥇 Podio</div></div>
+            <div class="sim-mt-prob-chip top5"><div class="pc-v">${mc.probTop5}%</div><div class="pc-l">🟢 Top 5</div></div>
+            <div class="sim-mt-prob-chip top10"><div class="pc-v">${mc.probTop10}%</div><div class="pc-l">🔵 Top 10</div></div>
+          </div>`;
+      }
+    }
+    const confDot = `<span class="sim-conf ${g.confidence}" title="Confianza ${g.confidence}"></span>`;
+    return `<div class="sim-mt-card ${isDebut?'debut':''}">
+      <div class="mt-hdr">
+        <div>
+          <div class="mt-name">${confDot}${escapeHtml(g.name)}</div>
+          <div class="mt-meta">${escapeHtml(g.cat||'')}${g.bib?' · #'+escapeHtml(g.bib):''} · ${g.raceCount||0} carreras previas${isDebut?' · <b style="color:#9a3412">'+(g.status==='team-fb'?'fallback equipo':'debutante')+'</b>':''}</div>
+        </div>
+      </div>
+      ${mcHtml}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── B) HEAD-TO-HEAD ──────────────────────────────────────────────────────
+// Para cada corredor de mi equipo presente en la parrilla, buscar en el histórico
+// rivales contra los que ha competido ≥2 veces y resumir ganados/perdidos.
+function _simRenderH2HPanel(){
+  const panel = document.getElementById('simH2HPanel');
+  const body = document.getElementById('simH2HBody');
+  if(!panel || !body) return;
+  if(!_simCurrentData || !myTeam){ panel.style.display='none'; return; }
+  const {race, grid} = _simCurrentData;
+  const mine = grid.filter(g=>g.isMyTeam);
+  if(!mine.length){ panel.style.display='none'; return; }
+  // Set de inscritos de la parrilla actual (rivales potenciales) - claves normalizadas
+  const inscritosKeys = new Set(grid.filter(g=>!g.isMyTeam).map(g=>normalizeForMatching(g.name||'')).filter(Boolean));
+  // Recorrer el histórico para cada corredor mío
+  const hist = (_cachedHistory||[]).filter(h=>h.id!==race.id && (h.riders||[]).length>=3);
+  const cards = [];
+  mine.forEach(my=>{
+    const myKey = normalizeForMatching(my.name||'');
+    if(!myKey) return;
+    // Por cada carrera donde compitió mi corredor, comparar puestos con todos los demás
+    const rivalsMap = new Map(); // rivalKey → {name, team, wins, losses, draws, encounters[]}
+    hist.forEach(h=>{
+      const myEntry = (h.riders||[]).find(r=>normalizeForMatching(r.name)===myKey);
+      if(!myEntry) return;
+      (h.riders||[]).forEach(r=>{
+        const rKey = normalizeForMatching(r.name||'');
+        if(!rKey || rKey===myKey) return;
+        // Solo contamos como rival relevante si está en la parrilla actual
+        if(!inscritosKeys.has(rKey)) return;
+        let rec = rivalsMap.get(rKey);
+        if(!rec){ rec = {name:r.name, team:r.team, wins:0, losses:0, draws:0, encounters:0}; rivalsMap.set(rKey, rec); }
+        rec.encounters++;
+        if(myEntry.pos < r.pos) rec.wins++;
+        else if(myEntry.pos > r.pos) rec.losses++;
+        else rec.draws++;
+      });
+    });
+    // Filtrar rivales con ≥2 enfrentamientos, ordenar por nº encuentros DESC
+    const rivals = [...rivalsMap.values()].filter(r=>r.encounters>=2).sort((a,b)=>b.encounters-a.encounters).slice(0,8);
+    if(!rivals.length) return;
+    const rowsHtml = rivals.map(r=>{
+      const total = r.encounters;
+      const wins = r.wins, losses = r.losses, draws = r.draws;
+      const cls = wins>losses ? 'win' : losses>wins ? 'loss' : 'draw';
+      return `<div class="sim-h2h-row">
+        <div class="sim-h2h-rival">${escapeHtml(r.name)}<small>${escapeHtml(r.team||'')}</small></div>
+        <div style="font-size:11px;color:#6b7280;text-align:right;margin-right:4px">${total} carrs.</div>
+        <div class="sim-h2h-record ${cls}">${wins} - ${losses}${draws?' ('+draws+'e)':''}</div>
+      </div>`;
+    }).join('');
+    cards.push(`<div class="sim-h2h-card">
+      <div class="sim-h2h-mine">🔵 ${escapeHtml(my.name)} <span class="vs-count">vs ${rivals.length} rivales</span></div>
+      ${rowsHtml}
+    </div>`);
+  });
+  if(!cards.length){
+    panel.style.display = '';
+    body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin enfrentamientos previos suficientes entre tus corredores y los inscritos. Aparecerán datos cuando hayan competido al menos 2 veces juntos.</p>';
+    return;
+  }
+  panel.style.display = '';
+  body.innerHTML = `
+    <p class="small" style="margin:4px 0 10px;color:#475569">Récord directo de tus corredores contra los rivales más enfrentados (≥2 carreras juntas, top 8 por frecuencia). Color: verde si dominas, rojo si te dominan, gris si igualado.</p>
+    <div class="sim-h2h-grid">${cards.join('')}</div>`;
+}
+
+// ── C) ANÁLISIS POR TIPO DE CIRCUITO ─────────────────────────────────────
+function _simRenderCircuitPanel(){
+  const panel = document.getElementById('simCircuitPanel');
+  const body = document.getElementById('simCircuitBody');
+  if(!panel || !body) return;
+  if(!_simCurrentData){ panel.style.display='none'; return; }
+  const {race, grid} = _simCurrentData;
+  const circuitType = (race.circuitType||'').trim();
+  if(!circuitType){ panel.style.display='none'; return; }
+  // Filtrar histórico por mismo tipo de circuito
+  const hist = (_cachedHistory||[]).filter(h => h.id!==race.id && (h.circuitType||'').trim()===circuitType && (h.riders||[]).length>=3);
+  if(!hist.length){
+    panel.style.display = '';
+    body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#9ca3af">No hay pruebas anteriores tipo "<b>${escapeHtml(circuitType)}</b>" en el histórico para comparar.</p>`;
+    return;
+  }
+  // Para cada inscrito con histórico, calcular media en circuitos del mismo tipo
+  const rows = grid.filter(g=>g.hasHistory).map(g=>{
+    const nk = normalizeForMatching(g.name||'');
+    const positionsInType = [];
+    hist.forEach(h=>{
+      const r = (h.riders||[]).find(x=>normalizeForMatching(x.name)===nk);
+      if(r && r.pos) positionsInType.push(r.pos);
+    });
+    if(!positionsInType.length) return null;
+    const avgInType = positionsInType.reduce((s,p)=>s+p,0)/positionsInType.length;
+    const delta = avgInType - g.avgPos;
+    return {
+      name: g.name, team: g.team, cat: g.cat, isMyTeam: g.isMyTeam,
+      avgGlobal: g.avgPos, avgInType, races: positionsInType.length, delta
+    };
+  }).filter(Boolean);
+  if(!rows.length){
+    panel.style.display = '';
+    body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Ningún inscrito tiene histórico en pruebas tipo "<b>${escapeHtml(circuitType)}</b>".</p>`;
+    return;
+  }
+  // Ordenar por avgInType asc; los mejores en este tipo arriba
+  rows.sort((a,b)=>a.avgInType-b.avgInType);
+  // Resumen
+  const myInType = rows.filter(r=>r.isMyTeam);
+  let mineSummary = '';
+  if(myInType.length){
+    const myAvg = myInType.reduce((s,r)=>s+r.avgInType,0)/myInType.length;
+    const myAvgGlobal = myInType.reduce((s,r)=>s+r.avgGlobal,0)/myInType.length;
+    const dlt = myAvg - myAvgGlobal;
+    const dltCls = Math.abs(dlt)<1?'equal':dlt<0?'better':'worse';
+    const dltLabel = Math.abs(dlt)<1?'≈':(dlt<0?'▲ '+Math.abs(dlt).toFixed(1):'▼ '+dlt.toFixed(1));
+    mineSummary = `🔵 <b>Tu equipo en circuitos "${escapeHtml(circuitType)}"</b>: media ${myAvg.toFixed(1)}º vs ${myAvgGlobal.toFixed(1)}º global · <span class="sim-circ-delta ${dltCls}">${dltLabel}</span>`;
+  }
+  panel.style.display = '';
+  body.innerHTML = `
+    <div class="sim-circ-summary">
+      <span>🛣️ <b>${hist.length} pruebas previas</b> de tipo <b>"${escapeHtml(circuitType)}"</b> · <b>${rows.length} inscritos</b> con datos en este tipo</span>
+      ${mineSummary?'<span style="margin-left:auto">'+mineSummary+'</span>':''}
+    </div>
+    <div class="table-wrap" style="max-height:380px;overflow:auto">
+      <table class="sim-circ-table">
+        <thead><tr>
+          <th>#</th><th>Corredor</th><th>Equipo</th><th style="text-align:center">Media en "${escapeHtml(circuitType)}"</th><th style="text-align:center">Media global</th><th style="text-align:center">Δ</th><th style="text-align:center">Carrs. tipo</th>
+        </tr></thead>
+        <tbody>${rows.map((r,i)=>{
+          const dlt = r.delta;
+          const dltCls = Math.abs(dlt)<1?'equal':dlt<0?'better':'worse';
+          const dltLabel = Math.abs(dlt)<1?'≈':(dlt<0?'▲ '+Math.abs(dlt).toFixed(1):'▼ '+dlt.toFixed(1));
+          return `<tr class="${r.isMyTeam?'sim-my-team':''}">
+            <td style="text-align:center;font-weight:700">${i+1}</td>
+            <td>${r.isMyTeam?'🔵 ':''}<b>${escapeHtml(r.name)}</b></td>
+            <td>${escapeHtml(r.team||'')}</td>
+            <td style="text-align:center;font-weight:800;color:#3730a3">${r.avgInType.toFixed(1)}º</td>
+            <td style="text-align:center;color:#6b7280">${r.avgGlobal.toFixed(1)}º</td>
+            <td style="text-align:center"><span class="sim-circ-delta ${dltCls}">${dltLabel}</span></td>
+            <td style="text-align:center;color:#6b7280">${r.races}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <p class="small" style="margin-top:8px;color:#6b7280">
+      <span class="sim-circ-delta better">▲</span> mejor en este tipo de circuito ·
+      <span class="sim-circ-delta worse">▼</span> peor ·
+      <span class="sim-circ-delta equal">≈</span> igual (Δ&lt;1 posición)
+    </p>`;
+}
+
+// ── HOOK: integrar Fase 2 en el render principal ─────────────────────────
+const _origSimRenderCurrent = (typeof _simRenderCurrent==='function') ? _simRenderCurrent : null;
+if(_origSimRenderCurrent){
+  window._simRenderCurrent = function(){
+    _origSimRenderCurrent();
+    try{ _simRenderMyTeamPanel(); }catch(e){ console.warn('[sim][myteam]', e); }
+    try{ _simRenderH2HPanel(); }catch(e){ console.warn('[sim][h2h]', e); }
+    try{ _simRenderCircuitPanel(); }catch(e){ console.warn('[sim][circuit]', e); }
+  };
+}
+
+// Ocultar también los nuevos paneles cuando se muestra el estado vacío
+const _origSimShowEmpty = (typeof _simShowEmpty==='function') ? _simShowEmpty : null;
+if(_origSimShowEmpty){
+  window._simShowEmpty = function(customMsg){
+    _origSimShowEmpty(customMsg);
+    ['simMyTeamPanel','simH2HPanel','simCircuitPanel'].forEach(id=>{
+      const el = document.getElementById(id); if(el) el.style.display = 'none';
+    });
+  };
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN SIMULADOR FASE 2
 // ═══════════════════════════════════════════════════════════════════════════

@@ -1089,3 +1089,60 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
   .sim-grid-table{font-size:11.5px}
   .sim-grid-table th, .sim-grid-table td{padding:5px 6px}
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIMULADOR — Fase 2
+   ═══════════════════════════════════════════════════════════════════ */
+.sim-myteam-panel{border-left:5px solid #3b82f6}
+/* Predicción Mi Equipo - cards con intervalo */
+.sim-myteam-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;padding:6px 0}
+.sim-mt-card{background:#fff;border:1.5px solid #93c5fd;border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.sim-mt-card.debut{border-color:#fcd34d;background:linear-gradient(135deg,#fffbeb,#fef3c7)}
+.sim-mt-card .mt-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.sim-mt-card .mt-name{font-weight:900;color:#0b2f6b;font-size:15px;line-height:1.2}
+.sim-mt-card .mt-meta{font-size:11px;color:#475569;margin-top:2px}
+.sim-mt-card .mt-conf{flex-shrink:0}
+.sim-mt-pred-block{background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.sim-mt-pred-pos{font-size:32px;font-weight:900;color:#1d4ed8;line-height:1;display:flex;align-items:baseline;gap:8px}
+.sim-mt-pred-pos small{font-size:14px;color:#475569;font-weight:700}
+.sim-mt-pred-range{font-size:11.5px;color:#475569;margin-top:4px;font-weight:600}
+.sim-mt-prob-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.sim-mt-prob-chip{flex:1;min-width:78px;text-align:center;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:6px 4px}
+.sim-mt-prob-chip.podium{border-color:#fcd34d;background:#fffbeb}
+.sim-mt-prob-chip.top5{border-color:#86efac;background:#f0fdf4}
+.sim-mt-prob-chip.top10{border-color:#c7d2fe;background:#eef2ff}
+.sim-mt-prob-chip .pc-v{font-size:16px;font-weight:900;color:#0b2f6b}
+.sim-mt-prob-chip .pc-l{font-size:9px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.3px}
+/* Distribución histograma simple */
+.sim-mt-histogram{display:flex;align-items:flex-end;gap:1px;height:30px;margin-top:8px;background:#f8fafc;border-radius:4px;padding:2px 4px}
+.sim-mt-hist-bar{flex:1;background:linear-gradient(180deg,#60a5fa,#1d4ed8);border-radius:1px;min-height:1px;transition:opacity .2s}
+.sim-mt-hist-bar:hover{opacity:.6}
+.sim-mt-hist-label{font-size:9px;color:#9ca3af;text-align:center;margin-top:2px}
+/* Head-to-head */
+.sim-h2h-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;padding:6px 0}
+.sim-h2h-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;overflow:hidden}
+.sim-h2h-mine{font-weight:800;color:#1e3a8a;font-size:13.5px;padding-bottom:6px;border-bottom:2px solid #dbeafe;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.sim-h2h-mine .vs-count{margin-left:auto;font-size:11px;font-weight:700;color:#6b7280}
+.sim-h2h-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:12.5px}
+.sim-h2h-row:last-child{border-bottom:0}
+.sim-h2h-rival{flex:1;min-width:0;color:#0b2f6b}
+.sim-h2h-rival small{color:#9ca3af;display:block;font-size:10px}
+.sim-h2h-record{font-weight:800;font-size:13px;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.sim-h2h-record.win{background:#dcfce7;color:#166534}
+.sim-h2h-record.loss{background:#fee2e2;color:#991b1b}
+.sim-h2h-record.draw{background:#f3f4f6;color:#475569}
+/* Análisis por circuito */
+.sim-circ-summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#0b2f6b}
+.sim-circ-summary b{color:#3730a3}
+.sim-circ-table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff}
+.sim-circ-table th{background:#f3f6fb;text-align:left;padding:7px 9px;font-size:11px;text-transform:uppercase;color:#475569;border-bottom:2px solid #e5e7eb}
+.sim-circ-table td{padding:6px 9px;border-bottom:1px solid #f1f5f9}
+.sim-circ-table tr.sim-my-team{background:#dbeafe}
+.sim-circ-delta{font-weight:800;padding:1px 6px;border-radius:99px;font-size:11px}
+.sim-circ-delta.better{background:#dcfce7;color:#166534}
+.sim-circ-delta.worse{background:#fef3c7;color:#92400e}
+.sim-circ-delta.equal{background:#eef2ff;color:#3730a3}
+@media (max-width:540px){
+  .sim-myteam-grid{grid-template-columns:1fr}
+  .sim-mt-prob-chip{min-width:64px}
+}
