@@ -18999,7 +18999,10 @@ function showGlobalFinishStatsModal(){
     </tr>`).join('') : `<tr><td colspan="5" class="small">Sin corredores con ≥2 inscripciones.</td></tr>`;
 
   const html = `
-    <h2 style="margin-top:0">📊 Estadísticas de finalización (histórico)</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <h2 style="margin:0">📊 Estadísticas de finalización (histórico)</h2>
+      <button onclick="exportFinishStatsPDF()" class="btn light" style="background:#0369a1;color:#fff;border:0;font-weight:800;font-size:13px;padding:8px 14px">🖨️ Imprimir PDF</button>
+    </div>
     <div class="inscritos-banner" style="margin:0 0 16px">
       <span class="ib-chip total">📋 ${stats.global.inscrito} inscripciones</span>
       <span class="ib-chip ok">✅ ${stats.global.acabo} acabaron (${stats.global.rate}%)</span>
@@ -20600,3 +20603,172 @@ if(_origRestoreFilters){
 // ═══════════════════════════════════════════════════════════════════════════
 // FIN TIER 2 TABLA Y FILTROS
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ===== EXPORTAR STATS DE FINALIZACIÓN A PDF =====
+function exportFinishStatsPDF(){
+  const hist = _cachedHistory || [];
+  const stats = (typeof buildFinishStats==='function') ? buildFinishStats(hist) : null;
+  if(!stats || !stats.global.inscrito){
+    alert('No hay datos suficientes para exportar.');
+    return;
+  }
+  // Contexto: prueba activa (si la hay) y rango temporal
+  const raceName = ($('raceName')?.value||'').trim();
+  const raceDate = ($('raceDate')?.value||'').trim();
+  const localidad = ($('raceLocalidad')?.value||'').trim();
+  const myTeam = (localStorage.getItem('myTeam')||'').trim();
+  // Rango de fechas del histórico con startlist
+  const racesWithIns = hist.filter(h => Array.isArray(h.inscritos) && h.inscritos.length>0 && (h.riders||[]).length>=3);
+  let dateRange = '';
+  if(racesWithIns.length){
+    const sorted = racesWithIns.slice().sort((a,b)=>{
+      const da=_parseSpanishDate(a.raceDate)||'0000-00-00';
+      const db=_parseSpanishDate(b.raceDate)||'0000-00-00';
+      return da.localeCompare(db);
+    });
+    const first = sorted[0]?.raceDate || '';
+    const last  = sorted[sorted.length-1]?.raceDate || '';
+    dateRange = first===last ? first : `${first} → ${last}`;
+  }
+  const now = new Date();
+  const generated = now.toLocaleString('es-ES');
+  const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Filtros mismas reglas que el modal (≥3 y ≥2)
+  const teams = [...stats.byTeam.values()].filter(t=>t.inscrito>=3).sort((a,b)=>b.rate-a.rate||b.inscrito-a.inscrito);
+  const cats  = [...stats.byCat.values()] .filter(c=>c.inscrito>=3).sort((a,b)=>b.rate-a.rate||b.inscrito-a.inscrito);
+  const riders30 = [...stats.byRider.values()].filter(r=>r.inscrito>=2).sort((a,b)=>b.rate-a.rate||b.inscrito-a.inscrito).slice(0,30);
+
+  const colorBg = v => v>=85?'#dcfce7':v>=70?'#ecfccb':v>=50?'#fef3c7':'#fee2e2';
+  const colorFg = v => v>=85?'#065f46':v>=70?'#3f6212':v>=50?'#92400e':'#9a3412';
+  const bar = (rate)=>`<div style="display:inline-block;width:54px;height:7px;background:#e5e7eb;border-radius:4px;vertical-align:middle;margin-left:5mm"><div style="width:${Math.max(2,rate)}%;height:100%;background:${colorFg(rate)};border-radius:4px"></div></div>`;
+  const cellRate = (rate)=>`<td style="background:${colorBg(rate)};color:${colorFg(rate)};font-weight:800;text-align:center">${rate}%${bar(rate)}</td>`;
+
+  // Tablas
+  const teamsRows = teams.length ? teams.map((t,i)=>`<tr>
+    <td style="font-weight:700;text-align:center">${i+1}</td>
+    <td style="font-weight:600">${esc(t.team)}</td>
+    ${cellRate(t.rate)}
+    <td style="text-align:center;color:#065f46;font-weight:700">${t.acabo}</td>
+    <td style="text-align:center;color:#9a3412;font-weight:700">${t.dnf}</td>
+    <td style="text-align:center">${t.inscrito}</td>
+    <td style="text-align:center">${t.riders.size}</td>
+  </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;color:#9ca3af">Sin equipos con ≥3 inscripciones.</td></tr>`;
+
+  const catsRows = cats.length ? cats.map((c,i)=>`<tr>
+    <td style="font-weight:700;text-align:center">${i+1}</td>
+    <td style="font-weight:600">${esc(c.cat)}</td>
+    ${cellRate(c.rate)}
+    <td style="text-align:center;color:#065f46;font-weight:700">${c.acabo}</td>
+    <td style="text-align:center;color:#9a3412;font-weight:700">${c.dnf}</td>
+    <td style="text-align:center">${c.inscrito}</td>
+  </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:#9ca3af">Sin categorías con ≥3 inscripciones.</td></tr>`;
+
+  const ridersRows = riders30.length ? riders30.map((r,i)=>`<tr>
+    <td style="font-weight:700;text-align:center">${i+1}</td>
+    <td style="font-weight:600">${esc(r.name)}</td>
+    ${cellRate(r.rate)}
+    <td style="text-align:center;color:#065f46;font-weight:700">${r.acabo}</td>
+    <td style="text-align:center;color:#9a3412;font-weight:700">${r.dnf}</td>
+    <td style="text-align:center">${r.inscrito}</td>
+  </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:#9ca3af">Sin corredores con ≥2 inscripciones.</td></tr>`;
+
+  // Contexto: información de la prueba actual si está cargada
+  const contextHtml = (raceName || raceDate || localidad) ? `
+    <div style="margin:0 0 4mm;padding:3mm 4mm;background:#f0f9ff;border:1px solid #bae6fd;border-radius:2mm;font-size:11px;color:#0c4a6e">
+      <b>Generado en el contexto de la prueba:</b>
+      ${raceName?` <span style="font-weight:800;color:#0b2f6b">${esc(raceName)}</span>`:''}
+      ${raceDate?` · 📅 ${esc(raceDate)}`:''}
+      ${localidad?` · 📍 ${esc(localidad)}`:''}
+    </div>` : '';
+
+  const htmlDoc = `<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="UTF-8">
+<title>Stats finalización · ${esc(raceName||'Histórico')}</title>
+<style>
+  @page { size: A4; margin: 0; }
+  html, body { margin:0; padding:0; background:#e2e8f0; font-family:'Helvetica Neue',Arial,sans-serif; color:#0f172a; }
+  .page { box-sizing:border-box; width:210mm; min-height:297mm; padding:14mm 14mm 18mm; background:#fff; margin:0 auto 8mm; page-break-after:always; box-shadow:0 4px 14px rgba(0,0,0,.08); position:relative; }
+  .page:last-child { page-break-after:auto; margin-bottom:0; }
+  .header { display:flex; align-items:center; gap:8mm; border-bottom:3px solid #1f6feb; padding-bottom:6mm; margin-bottom:6mm; }
+  .header img { width:32mm; max-height:18mm; object-fit:contain; }
+  .header .title-block h1 { margin:0 0 1mm; font-size:20px; color:#0b2f6b; line-height:1.15; }
+  .header .title-block .sub { margin:0; font-size:11.5px; color:#1f6feb; font-weight:800; }
+  .header .title-block .sub2 { margin:1mm 0 0; font-size:10.5px; color:#64748b; }
+  .banner { display:flex; gap:3mm; flex-wrap:wrap; padding:3mm 4mm; border-radius:3mm; background:linear-gradient(135deg,#eff6ff,#eef2ff); border:1px solid #c7d2fe; margin-bottom:5mm; font-size:11px; font-weight:800; align-items:center; }
+  .banner .chip { display:inline-flex; gap:2mm; padding:1.5mm 3mm; border-radius:99px; background:#fff; border:1px solid #cbd5e1; color:#0b2f6b; }
+  .banner .chip.ok { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+  .banner .chip.dnf{ background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+  .banner .chip.tot{ background:#eef2ff; border-color:#c7d2fe; color:#1e40af; }
+  h2.section { font-size:13.5px; margin:6mm 0 2mm; color:#0b2f6b; display:flex; align-items:center; gap:2mm; padding-bottom:1.5mm; border-bottom:2px solid #e5e7eb }
+  table { width:100%; border-collapse:collapse; font-size:10px; margin-bottom:3mm; }
+  th { background:#f8fafc; color:#475569; padding:2mm 3mm; text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:.4px; border-bottom:2px solid #e2e8f0; }
+  td { padding:1.8mm 3mm; border-bottom:1px solid #f1f5f9; }
+  tr:nth-child(even) td { background:#fafbfc; }
+  tr { break-inside:avoid; page-break-inside:avoid; }
+  .footer { position:absolute; left:14mm; right:14mm; bottom:9mm; display:flex; justify-content:space-between; padding-top:2mm; border-top:1px solid #e2e8f0; font-size:9px; color:#64748b; }
+  @media print { html, body { background:#fff } .page { box-shadow:none; margin:0 } .toolbar { display:none !important } }
+  .toolbar { position:fixed; top:0; left:0; right:0; padding:10px 14px; background:#0b2f6b; color:#fff; display:flex; justify-content:space-between; align-items:center; z-index:9999; font-family:Helvetica,Arial,sans-serif; }
+  .toolbar button { background:#fff; color:#0b2f6b; border:0; border-radius:6px; padding:7px 14px; font-weight:800; cursor:pointer; font-size:13px; }
+  .toolbar button:hover { background:#dbeafe; }
+  body.has-toolbar { padding-top:48px; }
+</style>
+</head>
+<body class="has-toolbar">
+  <div class="toolbar">
+    <span>📊 Estadísticas de finalización · ${esc(raceName||'Histórico')}</span>
+    <span>
+      <button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+      <button onclick="window.close()" style="margin-left:6px;background:#dbeafe">✕ Cerrar</button>
+    </span>
+  </div>
+  <div class="page">
+    <div class="header">
+      ${logoSrc?`<img src="${logoSrc}" alt="Logo">`:''}
+      <div class="title-block">
+        <h1>📊 Estadísticas de finalización</h1>
+        <p class="sub">Análisis histórico de DNF · MFPP Cycling Specialist</p>
+        <p class="sub2">${racesWithIns.length} prueba${racesWithIns.length===1?'':'s'} con startlist registrada${dateRange?' · '+esc(dateRange):''}${myTeam?' · Mi equipo: '+esc(myTeam):''}</p>
+      </div>
+    </div>
+    ${contextHtml}
+    <div class="banner">
+      <span class="chip tot">📋 ${stats.global.inscrito} inscripciones</span>
+      <span class="chip ok">✅ ${stats.global.acabo} acabaron (${stats.global.rate}%)</span>
+      <span class="chip dnf">⛔ ${stats.global.dnf} DNF</span>
+      <span class="chip">🏁 ${stats.global.racesWithInscritos} pruebas con startlist</span>
+    </div>
+
+    <h2 class="section">🏆 Equipos (≥3 inscripciones)</h2>
+    <table>
+      <thead><tr><th>#</th><th>Equipo</th><th>Tasa</th><th>Acabó</th><th>DNF</th><th>Inscritos</th><th>Corredores únicos</th></tr></thead>
+      <tbody>${teamsRows}</tbody>
+    </table>
+
+    <h2 class="section">🚴 Categorías (≥3 inscripciones)</h2>
+    <table>
+      <thead><tr><th>#</th><th>Categoría</th><th>Tasa</th><th>Acabó</th><th>DNF</th><th>Inscritos</th></tr></thead>
+      <tbody>${catsRows}</tbody>
+    </table>
+
+    <h2 class="section">👤 Top corredores por fiabilidad (≥2 inscripciones, top 30)</h2>
+    <table>
+      <thead><tr><th>#</th><th>Corredor</th><th>Tasa</th><th>Acabó</th><th>DNF</th><th>Inscritos</th></tr></thead>
+      <tbody>${ridersRows}</tbody>
+    </table>
+
+    <div class="footer">
+      <span><b>Generado:</b> ${esc(generated)}</span>
+      <span>Documento confidencial · uso interno del cuerpo técnico</span>
+    </div>
+  </div>
+</body></html>`;
+
+  const w = window.open('','_blank','width=1100,height=850');
+  if(!w){ alert('Permite ventanas emergentes para imprimir el PDF.'); return; }
+  w.document.write(htmlDoc);
+  w.document.close();
+}
+// ===== FIN EXPORT STATS PDF =====
