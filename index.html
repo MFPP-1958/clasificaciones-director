@@ -92,6 +92,16 @@
       <button class="nav-btn" data-view="view-tactica" data-label="Estrategia" onclick="showView('view-tactica')"><span class="nav-icon">🧠</span><span class="nav-label"> Estrategia</span></button>
     </div>
 
+    <div class="nav-section" data-section="prediccion">
+      <div class="nav-section-header" onclick="_navToggleSection('prediccion')">
+        <span class="nav-section-title">🔮 PREDICCIÓN</span>
+        <span class="nav-section-chevron">▾</span>
+      </div>
+      <div class="nav-section-items">
+        <button class="nav-btn" data-view="view-simulador" data-label="Simulador" onclick="showView('view-simulador')"><span class="nav-icon">🔮</span><span class="nav-label"> Simulador</span></button>
+      </div>
+    </div>
+
     <div class="nav-section" data-section="temporada">
       <div class="nav-section-header" onclick="_navToggleSection('temporada')">
         <span class="nav-section-title">📈 TEMPORADA</span>
@@ -1407,6 +1417,70 @@
       </div>
     </div>
     <!-- ══════════════════════════════  FIN SELECCIÓN VLC  ═══════════ -->
+
+    <!-- ══════════════════════════════  SIMULADOR DE CARRERAS (Predicción Fase 1) ══════════════════════════════ -->
+    <div id="view-simulador" class="spa-view">
+      <section class="panel sim-header-panel">
+        <div class="section-title">
+          <h2 style="margin:0;color:#3730a3">🔮 Simulador de Carreras</h2>
+          <span class="small">Predicción de la próxima prueba basada en histórico cruzado con la startlist</span>
+        </div>
+        <div class="sim-toolbar">
+          <div class="sim-race-picker">
+            <label for="simRaceSelect" class="sim-label">📅 Prueba a simular:</label>
+            <select id="simRaceSelect" onchange="_simOnRaceChange()">
+              <option value="">— Selecciona una prueba con startlist —</option>
+            </select>
+          </div>
+          <div class="sim-cat-picker" id="simCatPickerWrap" style="display:none">
+            <label for="simCatSelect" class="sim-label">🏷️ Categoría:</label>
+            <select id="simCatSelect" onchange="_simRenderCurrent()">
+              <option value="">— Todas —</option>
+            </select>
+          </div>
+          <button class="btn light" onclick="_simExportPDF()" id="simExportBtn" style="display:none;background:#0369a1;color:#fff;border:0;font-weight:800">🖨️ Exportar predicción PDF</button>
+        </div>
+        <div id="simRaceMeta" class="sim-race-meta" style="display:none"></div>
+      </section>
+
+      <section class="panel" id="simKpiPanel" style="display:none">
+        <div class="section-title">
+          <h2 style="margin:0">📊 Nivel de la Parrilla (Strength of Field)</h2>
+        </div>
+        <div id="simKpiBody" class="sim-kpi-grid"></div>
+      </section>
+
+      <section class="panel" id="simTopPanel" style="display:none">
+        <div class="section-title">
+          <h2 style="margin:0">🏆 Top 10 esperado (predicción IA)</h2>
+          <span class="small">Pondera puesto medio + fiabilidad</span>
+        </div>
+        <div id="simTopBody"></div>
+      </section>
+
+      <section class="panel" id="simGridPanel" style="display:none">
+        <div class="section-title">
+          <h2 style="margin:0">🚴 Parrilla de salida analizada</h2>
+          <span class="small" id="simGridCount"></span>
+        </div>
+        <div class="sim-filters">
+          <input id="simSearchInput" placeholder="🔎 Buscar corredor o equipo…" oninput="_simRenderCurrent()" />
+          <label class="sim-chip-toggle"><input type="checkbox" id="simOnlyMyTeam" onchange="_simRenderCurrent()"> 🔵 Solo mi equipo</label>
+          <label class="sim-chip-toggle"><input type="checkbox" id="simOnlyKnown" onchange="_simRenderCurrent()"> 🔍 Solo con historial</label>
+        </div>
+        <div id="simGridBody"></div>
+      </section>
+
+      <section class="panel" id="simEmptyPanel">
+        <div style="text-align:center;padding:40px 20px;color:#6b7280">
+          <div style="font-size:48px;margin-bottom:14px">🔮</div>
+          <h2 style="margin:0 0 10px;color:#0b2f6b">Bienvenido al Simulador de Carreras</h2>
+          <p style="margin:0 0 6px;font-size:14px">Selecciona arriba una prueba que tenga lista de inscritos guardada para empezar el análisis.</p>
+          <p class="small" style="margin:14px 0 0">💡 Si no ves tu prueba en la lista, súbele la startlist desde el menú <b>Historial</b> → botón <b>➕ Añadir startlist</b>.</p>
+        </div>
+      </section>
+    </div>
+    <!-- ══════════════════════════════  FIN SIMULADOR  ═══════════ -->
 
     <div id="view-resumen" class="spa-view">
       <section class="panel">

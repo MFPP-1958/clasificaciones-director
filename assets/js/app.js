@@ -113,7 +113,7 @@ if(document.readyState==='loading'){
 // ═══════════════════════════════════════════════════════════════════════════
 const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
 const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
-const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica'];
+const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica','view-simulador'];
 
 let _globalFilters = {
   year:     localStorage.getItem('gf_year')     || '',
@@ -550,6 +550,7 @@ function _gfTriggerCurrentViewRerender(){
     if(id==='view-equipos-ccaa'      && typeof _eqCcaaInit==='function') _eqCcaaInit();
     if(id==='view-ciclistas-cat'     && typeof _riderCatInit==='function') _riderCatInit();
     if(id==='view-calendario'  && typeof _calRender==='function')        _calRender();
+    if(id==='view-simulador'   && typeof renderSimulador==='function')    renderSimulador();
     // Vistas que dependen de la prueba ACTIVA cargada (riders[])
     if(riders && riders.length){
       if(id==='view-tabla'      && typeof renderAll==='function')        renderAll();
@@ -676,6 +677,7 @@ function showView(viewId){
       // view-tactica: se renderiza SIEMPRE (con o sin riders) para mostrar
       // su estado vacío amable (Fase 2 no-bloqueo).
       if(viewId==='view-tactica') renderTactica();
+      if(viewId==='view-simulador' && typeof renderSimulador==='function') renderSimulador();
       if(viewId==='view-inicio') renderInicio();
       if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); if(typeof _gfApplyDefaultsToView==='function') _gfApplyDefaultsToView('view-calendario'); }
       if(viewId==='view-informe-plantilla') { if(typeof _ipInit==='function') _ipInit(); }
@@ -800,6 +802,7 @@ const ALL_VIEWS = [
   {id:'view-comparativo', icon:'⚔️', label:'Comparativo'},
   {id:'view-equipos',     icon:'🚴', label:'Equipos'},
   {id:'view-tactica',     icon:'🧠', label:'Estrategia'},
+  {id:'view-simulador',   icon:'🔮', label:'Simulador'},
   {id:'view-graficos',    icon:'📊', label:'Gráficos'},
   {id:'view-top10',       icon:'🏁', label:'Top 10'},
   {id:'view-evolucion',   icon:'📈', label:'Evolución'},
@@ -920,7 +923,7 @@ async function _rbacLoadPerms(role){
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
   if(!data || data.length === 0){
     const defaults = {
-      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa','view-ciclistas-cat'],
+      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa','view-ciclistas-cat'],
       CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos'],
       LECTOR:   ['view-carga','view-tabla']
     };
@@ -20791,3 +20794,534 @@ function exportFinishStatsPDF(){
   w.document.close();
 }
 // ===== FIN EXPORT STATS PDF =====
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULADOR DE CARRERAS — Predicción Fase 1
+// 1. Selector de prueba con startlist
+// 2. Algoritmo de cruce con histórico
+// 3. KPIs Nivel de Dificultad + Predictibilidad
+// 4. Top 10 esperado
+// 5. Manejo de debutantes (fallback equipo)
+// 6. Exportar PDF
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _simSelectedRaceId = null;
+let _simCurrentData = null; // {race, inscritos[], grid[], kpis}
+
+function renderSimulador(){
+  const sel = document.getElementById('simRaceSelect');
+  if(!sel) return;
+  // Cargar las pruebas del histórico que tienen inscritos (incluye pre-inscripciones)
+  const hist = _cachedHistory || [];
+  const racesWithIns = hist.filter(h => Array.isArray(h.inscritos) && h.inscritos.length>0);
+  if(!racesWithIns.length){
+    sel.innerHTML = '<option value="">— No hay pruebas con startlist guardada —</option>';
+    sel.disabled = true;
+    _simShowEmpty('No hay ninguna prueba con lista de inscritos guardada en el histórico. Sube una startlist desde Carga y Resumen o Historial para empezar a simular.');
+    return;
+  }
+  sel.disabled = false;
+  // Ordenar: pruebas futuras (pre-inscripciones) primero, luego más recientes
+  const today = (new Date()).toISOString().slice(0,10);
+  racesWithIns.sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+    const aFuture = da >= today;
+    const bFuture = db >= today;
+    if(aFuture && !bFuture) return -1;
+    if(bFuture && !aFuture) return 1;
+    return db.localeCompare(da);
+  });
+  const opts = racesWithIns.map(h=>{
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    const dt = formatDateDisplay(iso) || h.raceDate || '';
+    const future = iso && iso >= today;
+    const ridersN = (h.riders||[]).length;
+    const tag = future ? '🔮' : (ridersN>=3 ? '🏁' : '📋');
+    return `<option value="${escapeAttr(h.id)}">${tag} ${escapeHtml(dt)} · ${escapeHtml(h.raceName||'')} · ${h.inscritos.length} inscritos${ridersN>=3?` · ${ridersN} clasif.`:' (sin clasificar)'}</option>`;
+  }).join('');
+  sel.innerHTML = '<option value="">— Selecciona una prueba —</option>' + opts;
+  // Si tenemos uno seleccionado, mantenerlo
+  if(_simSelectedRaceId && [...sel.options].some(o=>o.value===_simSelectedRaceId)){
+    sel.value = _simSelectedRaceId;
+    _simOnRaceChange();
+  } else {
+    _simShowEmpty();
+  }
+}
+
+function _simShowEmpty(customMsg){
+  document.getElementById('simEmptyPanel').style.display = '';
+  document.getElementById('simKpiPanel').style.display = 'none';
+  document.getElementById('simTopPanel').style.display = 'none';
+  document.getElementById('simGridPanel').style.display = 'none';
+  document.getElementById('simRaceMeta').style.display = 'none';
+  document.getElementById('simCatPickerWrap').style.display = 'none';
+  document.getElementById('simExportBtn').style.display = 'none';
+  if(customMsg){
+    const empty = document.getElementById('simEmptyPanel');
+    empty.querySelector('p').textContent = customMsg;
+  }
+}
+
+function _simOnRaceChange(){
+  const sel = document.getElementById('simRaceSelect');
+  const id = sel?.value || '';
+  if(!id){ _simShowEmpty(); _simSelectedRaceId = null; return; }
+  _simSelectedRaceId = id;
+  _simBuildData(id);
+  _simRenderCurrent();
+}
+
+// Construye el grid analizado: para cada inscrito, calcula sus métricas históricas
+function _simBuildData(raceId){
+  const hist = _cachedHistory || [];
+  const race = hist.find(h => h.id === raceId);
+  if(!race){ _simCurrentData = null; return; }
+  const inscritos = race.inscritos || [];
+  // Índices del histórico (excluyendo la propia prueba si no se ha disputado, para no contaminar)
+  const historicalRaces = hist.filter(h => h.id !== raceId && (h.riders||[]).length >= 3);
+  // Index: nameKey → array de {pos, total, raceDate, cat, team}
+  const byRider = new Map();
+  // Index: teamKey → array de posiciones de cualquier corredor
+  const byTeam = new Map();
+  historicalRaces.forEach(h=>{
+    (h.riders||[]).forEach(r=>{
+      const nk = normalizeForMatching(r.name||'');
+      if(nk){
+        if(!byRider.has(nk)) byRider.set(nk, []);
+        byRider.get(nk).push({pos:r.pos, raceDate:h.raceDate, cat:r.cat, team:r.team});
+      }
+      const tk = (r.team||'').toLowerCase().trim();
+      if(tk){
+        if(!byTeam.has(tk)) byTeam.set(tk, []);
+        byTeam.get(tk).push(r.pos);
+      }
+    });
+  });
+
+  // Para cada inscrito, calcular métricas
+  const myTeamLower = (myTeam||'').toLowerCase().trim();
+  const grid = inscritos.map((ins, idx)=>{
+    const nk = normalizeForMatching(ins.name||'');
+    const hits = nk ? (byRider.get(nk)||[]) : [];
+    const tkey = (ins.team||'').toLowerCase().trim();
+    const isMyTeam = myTeamLower && tkey === myTeamLower;
+    let avgPos=null, bestPos=null, reliability=null, status='known', source='rider', confidence='nula';
+    let recentForm = []; // últimas 5 posiciones
+    if(hits.length){
+      const positions = hits.map(h=>h.pos).filter(p=>p>0);
+      if(positions.length){
+        avgPos = positions.reduce((s,p)=>s+p,0)/positions.length;
+        bestPos = Math.min(...positions);
+        // Fiabilidad: % de carreras dentro de ±30% de la media
+        const margin = Math.max(3, avgPos*0.3);
+        reliability = Math.round(positions.filter(p=>Math.abs(p-avgPos)<=margin).length / positions.length * 100);
+        // Confianza por tamaño de muestra
+        confidence = positions.length>=5 ? 'alta' : positions.length>=3 ? 'media' : 'baja';
+        // Recent form: ordenar por fecha desc y coger 5
+        const sorted = hits.slice().sort((a,b)=>{
+          const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+          const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+          return db.localeCompare(da);
+        });
+        recentForm = sorted.slice(0,5).map(h=>h.pos);
+      } else {
+        status = 'deb';
+      }
+    } else {
+      // Sin historial individual → fallback al equipo
+      status = 'deb';
+      if(tkey && byTeam.has(tkey)){
+        const teamPositions = byTeam.get(tkey);
+        if(teamPositions.length){
+          avgPos = teamPositions.reduce((s,p)=>s+p,0)/teamPositions.length;
+          bestPos = Math.min(...teamPositions);
+          reliability = 50; // valor provisional para evitar romper cálculos
+          source = 'team';
+          status = 'team-fb';
+          confidence = 'baja';
+        }
+      }
+    }
+    return {
+      idx,
+      bib: ins.bib || '',
+      name: ins.name || '',
+      team: ins.team || '',
+      cat: ins.cat || '',
+      isMyTeam,
+      hasHistory: hits.length > 0,
+      avgPos, bestPos, reliability, status, source, confidence,
+      raceCount: hits.length,
+      recentForm
+    };
+  });
+
+  // KPIs globales
+  const withMetrics = grid.filter(g=>g.avgPos!=null);
+  const strongRivals = grid.filter(g=>g.avgPos!=null && g.avgPos < 15).length;
+  const totalIns = inscritos.length;
+  const difficulty = totalIns ? Math.round((strongRivals/totalIns)*100) : 0;
+  // Predictibilidad: media de reliability solo de los conocidos (con muestra)
+  const knownRel = grid.filter(g=>g.hasHistory && g.reliability!=null);
+  const avgReliability = knownRel.length ? Math.round(knownRel.reduce((s,g)=>s+g.reliability,0)/knownRel.length) : 0;
+  const coverage = totalIns ? Math.round((grid.filter(g=>g.hasHistory).length/totalIns)*100) : 0;
+  const predictability = Math.round(avgReliability * (coverage/100)); // pondera por cobertura
+
+  const myTeamCount = grid.filter(g=>g.isMyTeam).length;
+  const myTeamWithHist = grid.filter(g=>g.isMyTeam && g.hasHistory).length;
+
+  _simCurrentData = {
+    race, inscritos, grid,
+    kpis:{ totalIns, strongRivals, difficulty, avgReliability, coverage, predictability, myTeamCount, myTeamWithHist }
+  };
+}
+
+function _simRenderCurrent(){
+  if(!_simCurrentData){ _simShowEmpty(); return; }
+  const {race, inscritos, grid, kpis} = _simCurrentData;
+  // Mostrar paneles
+  document.getElementById('simEmptyPanel').style.display = 'none';
+  document.getElementById('simKpiPanel').style.display = '';
+  document.getElementById('simTopPanel').style.display = '';
+  document.getElementById('simGridPanel').style.display = '';
+  document.getElementById('simRaceMeta').style.display = 'flex';
+  document.getElementById('simExportBtn').style.display = 'inline-block';
+  // Meta de la carrera
+  const ridersN = (race.riders||[]).length;
+  const isPre = ridersN < 3;
+  const stateChip = isPre
+    ? '<span class="ib-chip" style="background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a">🔮 Pre-carrera</span>'
+    : `<span class="ib-chip ok">🏁 Disputada · ${ridersN} clasificados</span>`;
+  document.getElementById('simRaceMeta').innerHTML = `
+    <b>🏁 ${escapeHtml(race.raceName||'')}</b>
+    ${race.raceDate?`<span>📅 ${escapeHtml(race.raceDate)}</span>`:''}
+    ${race.localidad?`<span>📍 ${escapeHtml(race.localidad)}</span>`:''}
+    ${race.circuitType?`<span>🛣️ ${escapeHtml(race.circuitType)}</span>`:''}
+    <span>📋 ${inscritos.length} inscritos</span>
+    ${stateChip}
+  `;
+  // Categorías disponibles en los inscritos
+  const cats = [...new Set(inscritos.map(i=>i.cat).filter(Boolean))].sort();
+  const catWrap = document.getElementById('simCatPickerWrap');
+  const catSel = document.getElementById('simCatSelect');
+  if(cats.length > 1){
+    catWrap.style.display = '';
+    if(catSel.options.length <= 1 || catSel.dataset.race !== race.id){
+      catSel.innerHTML = '<option value="">— Todas —</option>' + cats.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+      catSel.dataset.race = race.id;
+    }
+  } else {
+    catWrap.style.display = 'none';
+    catSel.value = '';
+  }
+
+  // KPIs
+  _simRenderKpis(kpis);
+  // Aplicar filtros
+  const catFilter = catSel.value || '';
+  const q = (document.getElementById('simSearchInput')?.value || '').toLowerCase().trim();
+  const onlyMy = document.getElementById('simOnlyMyTeam')?.checked;
+  const onlyKnown = document.getElementById('simOnlyKnown')?.checked;
+  let filtered = grid.slice();
+  if(catFilter) filtered = filtered.filter(g => (g.cat||'') === catFilter);
+  if(q) filtered = filtered.filter(g => `${g.name} ${g.team} ${g.bib}`.toLowerCase().includes(q));
+  if(onlyMy) filtered = filtered.filter(g => g.isMyTeam);
+  if(onlyKnown) filtered = filtered.filter(g => g.hasHistory);
+  // Top 10 esperado
+  _simRenderTop10(grid.slice(), catFilter);
+  // Tabla
+  _simRenderGrid(filtered);
+}
+
+function _simRenderKpis(k){
+  const body = document.getElementById('simKpiBody');
+  if(!body) return;
+  // Color de dificultad: <30% verde, 30-60 amarillo, >60 rojo
+  const diffColor = k.difficulty<30?'#16a34a':k.difficulty<60?'#f59e0b':'#dc2626';
+  const diffLabel = k.difficulty<30?'Asequible':k.difficulty<60?'Competitiva':'Exigente';
+  // Color de predictibilidad: >=70 verde, 40-69 amarillo, <40 rojo
+  const predColor = k.predictability>=70?'#16a34a':k.predictability>=40?'#f59e0b':'#dc2626';
+  const predLabel = k.predictability>=70?'Alta':k.predictability>=40?'Media':'Baja';
+  // Cobertura
+  const covColor = k.coverage>=70?'#16a34a':k.coverage>=40?'#f59e0b':'#dc2626';
+
+  body.innerHTML = `
+    <div class="sim-kpi-card sim-kpi-difficulty">
+      <div class="sim-kpi-label">⚠️ Dificultad de la prueba</div>
+      <div class="sim-kpi-value" style="color:${diffColor}">${k.difficulty}%</div>
+      <div class="sim-kpi-sub">${k.strongRivals} rivales fuertes (pos. media &lt; 15)</div>
+      <div class="sim-kpi-sub" style="margin-top:2px;font-weight:700;color:${diffColor}">${diffLabel}</div>
+      <div class="sim-kpi-bar"><div class="sim-kpi-bar-fill" style="width:${k.difficulty}%;background:${diffColor}"></div></div>
+    </div>
+    <div class="sim-kpi-card sim-kpi-predict">
+      <div class="sim-kpi-label">🎯 Predictibilidad</div>
+      <div class="sim-kpi-value" style="color:${predColor}">${k.predictability}%</div>
+      <div class="sim-kpi-sub">Fiabilidad media: ${k.avgReliability}% · Cobertura histórica: ${k.coverage}%</div>
+      <div class="sim-kpi-sub" style="margin-top:2px;font-weight:700;color:${predColor}">${predLabel}</div>
+      <div class="sim-kpi-bar"><div class="sim-kpi-bar-fill" style="width:${k.predictability}%;background:${predColor}"></div></div>
+    </div>
+    <div class="sim-kpi-card sim-kpi-coverage">
+      <div class="sim-kpi-label">🔍 Cobertura histórica</div>
+      <div class="sim-kpi-value" style="color:${covColor}">${k.coverage}%</div>
+      <div class="sim-kpi-sub">${k.totalIns - Math.round(k.totalIns*(1-k.coverage/100))} de ${k.totalIns} inscritos con histórico</div>
+      <div class="sim-kpi-sub" style="margin-top:2px">${k.totalIns - Math.round(k.totalIns*k.coverage/100)} debutantes / sin datos</div>
+      <div class="sim-kpi-bar"><div class="sim-kpi-bar-fill" style="width:${k.coverage}%;background:${covColor}"></div></div>
+    </div>
+    ${ (myTeam && k.myTeamCount>0) ? `
+    <div class="sim-kpi-card sim-kpi-mine">
+      <div class="sim-kpi-label">🔵 Mi equipo en parrilla</div>
+      <div class="sim-kpi-value">${k.myTeamCount}</div>
+      <div class="sim-kpi-sub">${k.myTeamWithHist} con historial · ${k.myTeamCount-k.myTeamWithHist} debutantes</div>
+      <div class="sim-kpi-sub" style="margin-top:2px;font-weight:700;color:#1d4ed8">${escapeHtml(myTeam)}</div>
+    </div>` : ''}
+  `;
+}
+
+function _simRenderTop10(grid, catFilter){
+  const body = document.getElementById('simTopBody');
+  if(!body) return;
+  let pool = grid.filter(g=>g.avgPos!=null);
+  if(catFilter) pool = pool.filter(g=>(g.cat||'')===catFilter);
+  // Score predictivo: combina puesto medio (mejor=más bajo) con fiabilidad
+  // score = avgPos * (1 + (100-reliability)/200) → corredores poco fiables se penalizan
+  pool.forEach(g=>{
+    const rel = g.reliability ?? 30;
+    g._predScore = g.avgPos * (1 + (100-rel)/200);
+  });
+  pool.sort((a,b)=>a._predScore - b._predScore);
+  const top = pool.slice(0,10);
+  if(!top.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin datos históricos suficientes para predecir el podio.</p>';
+    return;
+  }
+  body.innerHTML = `<div class="sim-top-list">${top.map((g,i)=>{
+    const rank = i+1;
+    const rankCls = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'def';
+    const confDot = `<span class="sim-conf ${g.confidence}" title="Confianza ${g.confidence}"></span>`;
+    return `<div class="sim-top-row ${g.isMyTeam?'sim-my-team':''}">
+      <div class="sim-top-rank ${rankCls}">${rank}º</div>
+      <div class="sim-top-info">
+        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)}</div>
+        <div class="sim-top-team">${escapeHtml(g.team||'(sin equipo)')}${g.cat?' · '+escapeHtml(g.cat):''}${g.bib?' · #'+escapeHtml(g.bib):''}${g.status==='team-fb'?' · <span style="color:#3730a3;font-weight:700">[fallback equipo]</span>':''}</div>
+      </div>
+      <div class="sim-top-metrics">
+        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.avgPos.toFixed(1)}º</div><div class="sim-top-metric-l">Media</div></div>
+        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.bestPos}º</div><div class="sim-top-metric-l">Mejor</div></div>
+        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.reliability??'—'}%</div><div class="sim-top-metric-l">Fiab.</div></div>
+        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.raceCount||0}</div><div class="sim-top-metric-l">Carrs.</div></div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function _simRenderGrid(rows){
+  const body = document.getElementById('simGridBody');
+  const count = document.getElementById('simGridCount');
+  if(!body) return;
+  if(count) count.textContent = `${rows.length} inscritos mostrados`;
+  if(!rows.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin inscritos que coincidan con los filtros.</p>';
+    return;
+  }
+  // Ordenar por puesto medio asc (sin valor al final)
+  rows.sort((a,b)=>{
+    if(a.avgPos==null && b.avgPos==null) return (a.name||'').localeCompare(b.name||'');
+    if(a.avgPos==null) return 1;
+    if(b.avgPos==null) return -1;
+    return a.avgPos - b.avgPos;
+  });
+  body.innerHTML = `
+    <div class="table-wrap" style="max-height:560px;overflow:auto">
+      <table class="sim-grid-table">
+        <thead><tr>
+          <th>Dorsal</th>
+          <th>Corredor</th>
+          <th>Club</th>
+          <th>Categoría</th>
+          <th>Historial</th>
+          <th style="text-align:center">Puesto medio</th>
+          <th style="text-align:center">Mejor</th>
+          <th style="text-align:center">Fiabilidad</th>
+          <th style="text-align:center">Carrs.</th>
+          <th>Forma reciente</th>
+        </tr></thead>
+        <tbody>${rows.map(g=>{
+          const cls = [];
+          if(g.isMyTeam) cls.push('sim-my-team');
+          if(g.status==='deb') cls.push('sim-debutant');
+          let badge;
+          if(g.status==='known') badge = '<span class="sim-status-badge known">✓ Sí</span>';
+          else if(g.status==='team-fb') badge = '<span class="sim-status-badge team-fb">📊 Equipo</span>';
+          else badge = '<span class="sim-status-badge deb">🆕 Debutante</span>';
+          const relColor = g.reliability==null?'#9ca3af':g.reliability>=75?'#16a34a':g.reliability>=50?'#f59e0b':'#dc2626';
+          const confDot = `<span class="sim-conf ${g.confidence}" title="Confianza ${g.confidence} (${g.raceCount} carreras)"></span>`;
+          const formHtml = (g.recentForm||[]).length
+            ? g.recentForm.map(p=>{
+                const c = p<=3?'#fbbf24':p<=10?'#3b82f6':p<=20?'#9ca3af':'#475569';
+                return `<span style="display:inline-block;background:${c};color:#fff;border-radius:50%;width:22px;height:22px;line-height:22px;text-align:center;font-size:10px;font-weight:800;margin-right:2px">${p}</span>`;
+              }).join('')
+            : '<span class="small" style="color:#9ca3af">—</span>';
+          return `<tr class="${cls.join(' ')}">
+            <td style="font-weight:700;color:#475569">${escapeHtml(g.bib||'—')}</td>
+            <td>${confDot}${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b></td>
+            <td>${escapeHtml(g.team||'(sin equipo)')}</td>
+            <td><span class="pill" style="background:#f3f6fb">${escapeHtml(g.cat||'—')}</span></td>
+            <td>${badge}</td>
+            <td style="text-align:center"><b>${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</b></td>
+            <td style="text-align:center">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
+            <td style="text-align:center"><b style="color:${relColor}">${g.reliability!=null?g.reliability+'%':'—'}</b></td>
+            <td style="text-align:center">${g.raceCount||0}</td>
+            <td>${formHtml}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <p class="small" style="margin-top:8px;color:#6b7280">
+      <span class="sim-conf alta"></span> Confianza alta (≥5 carreras) ·
+      <span class="sim-conf media"></span> media (3-4) ·
+      <span class="sim-conf baja"></span> baja (1-2) ·
+      <span class="sim-conf nula"></span> sin datos ·
+      <span class="sim-status-badge deb">🆕 Debutante</span> sin historial ·
+      <span class="sim-status-badge team-fb">📊 Equipo</span> usa media del equipo como fallback
+    </p>
+  `;
+}
+
+// Exportar predicción a PDF
+function _simExportPDF(){
+  if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+  const {race, grid, kpis} = _simCurrentData;
+  const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const now = new Date().toLocaleString('es-ES');
+  // Top 10
+  const pool = grid.filter(g=>g.avgPos!=null);
+  pool.forEach(g=>{ const rel=g.reliability??30; g._predScore = g.avgPos*(1+(100-rel)/200); });
+  pool.sort((a,b)=>a._predScore-b._predScore);
+  const top10 = pool.slice(0,10);
+  // Ordenar todo el grid por avgPos
+  const gridSorted = grid.slice().sort((a,b)=>{
+    if(a.avgPos==null && b.avgPos==null) return 0;
+    if(a.avgPos==null) return 1;
+    if(b.avgPos==null) return -1;
+    return a.avgPos-b.avgPos;
+  });
+  const topRows = top10.map((g,i)=>`<tr ${g.isMyTeam?'style="background:#dbeafe"':''}>
+    <td style="text-align:center;font-weight:800">${i+1}</td>
+    <td>${g.isMyTeam?'🔵 ':''}<b>${esc(g.name)}</b></td>
+    <td>${esc(g.team||'')}</td>
+    <td>${esc(g.cat||'')}</td>
+    <td style="text-align:center;font-weight:700;color:#1d4ed8">${g.avgPos.toFixed(1)}º</td>
+    <td style="text-align:center">${g.bestPos}º</td>
+    <td style="text-align:center">${g.reliability??'—'}%</td>
+  </tr>`).join('');
+  const gridRows = gridSorted.map(g=>{
+    const statusTxt = g.status==='known' ? '✓ Sí' : g.status==='team-fb' ? '📊 Equipo' : '🆕 Debutante';
+    return `<tr ${g.isMyTeam?'style="background:#dbeafe"':''}>
+      <td style="text-align:center">${esc(g.bib||'—')}</td>
+      <td>${g.isMyTeam?'🔵 ':''}<b>${esc(g.name)}</b></td>
+      <td>${esc(g.team||'')}</td>
+      <td>${esc(g.cat||'')}</td>
+      <td style="text-align:center">${statusTxt}</td>
+      <td style="text-align:center;font-weight:700">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
+      <td style="text-align:center">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
+      <td style="text-align:center">${g.reliability!=null?g.reliability+'%':'—'}</td>
+      <td style="text-align:center">${g.raceCount||0}</td>
+    </tr>`;
+  }).join('');
+  const diffColor = kpis.difficulty<30?'#16a34a':kpis.difficulty<60?'#f59e0b':'#dc2626';
+  const predColor = kpis.predictability>=70?'#16a34a':kpis.predictability>=40?'#f59e0b':'#dc2626';
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<title>Predicción · ${esc(race.raceName||'')}</title>
+<style>
+  @page{size:A4;margin:0}
+  html,body{margin:0;padding:0;background:#e2e8f0;font-family:'Helvetica Neue',Arial,sans-serif;color:#0f172a}
+  .page{box-sizing:border-box;width:210mm;min-height:297mm;padding:14mm 14mm 18mm;background:#fff;margin:0 auto 8mm;page-break-after:always;box-shadow:0 4px 14px rgba(0,0,0,.08);position:relative}
+  .page:last-child{page-break-after:auto;margin-bottom:0}
+  .header{display:flex;align-items:center;justify-content:space-between;gap:8mm;border-bottom:3px solid #6366f1;padding-bottom:5mm;margin-bottom:5mm}
+  .header h1{margin:0 0 1mm;font-size:20px;color:#3730a3;line-height:1.15}
+  .header .sub{margin:0;font-size:12px;color:#6366f1;font-weight:800}
+  .header .sub2{margin:1mm 0 0;font-size:11px;color:#64748b}
+  .brand{display:flex;align-items:center;gap:6px;background:#eef2ff;padding:5px 10px;border-radius:8px}
+  .brand img{height:28px;width:auto}
+  .brand span{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#3730a3}
+  .meta{margin:0 0 5mm;padding:3mm 4mm;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe;border-radius:2mm;font-size:11.5px;color:#3730a3;font-weight:700}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-bottom:5mm}
+  .kpi{padding:3mm 4mm;border-radius:3mm;border:1px solid #e5e7eb;background:#fff}
+  .kpi .l{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#64748b;font-weight:800;margin-bottom:1mm}
+  .kpi .v{font-size:22px;font-weight:900}
+  .kpi .s{font-size:10px;color:#475569;margin-top:1mm}
+  h2.section{font-size:14px;color:#3730a3;margin:5mm 0 2mm;padding-bottom:1mm;border-bottom:2px solid #c7d2fe}
+  table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:3mm}
+  th{background:#f3f6fb;text-align:left;padding:2mm 3mm;font-size:8.5px;text-transform:uppercase;letter-spacing:.3px;color:#475569;border-bottom:2px solid #e5e7eb}
+  td{padding:1.7mm 3mm;border-bottom:1px solid #f1f5f9}
+  tr:nth-child(even) td{background:#fafbfc}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  .footer{position:absolute;left:14mm;right:14mm;bottom:9mm;padding-top:2mm;border-top:1px solid #e2e8f0;font-size:9px;color:#64748b;display:flex;justify-content:space-between}
+  @media print{html,body{background:#fff}.page{box-shadow:none;margin:0}.tb{display:none!important}}
+  .tb{position:fixed;top:0;left:0;right:0;padding:10px 14px;background:#3730a3;color:#fff;display:flex;justify-content:space-between;align-items:center;z-index:9999;font-family:Helvetica,Arial,sans-serif}
+  .tb button{background:#fff;color:#3730a3;border:0;border-radius:6px;padding:7px 14px;font-weight:800;cursor:pointer;font-size:13px}
+  body.has-tb{padding-top:48px}
+</style>
+</head><body class="has-tb">
+<div class="tb">
+  <span>🔮 Predicción · ${esc(race.raceName||'')}</span>
+  <span><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button> <button onclick="window.close()" style="margin-left:6px;background:#c7d2fe">✕ Cerrar</button></span>
+</div>
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>🔮 Predicción de carrera</h1>
+      <p class="sub">${esc(race.raceName||'')}</p>
+      <p class="sub2">${esc(race.raceDate||'')}${race.localidad?' · 📍 '+esc(race.localidad):''}${race.circuitType?' · 🛣️ '+esc(race.circuitType):''}</p>
+    </div>
+    ${logoSrc?`<div class="brand"><img src="${logoSrc}" alt="MFPP"><span>MFPP Cycling</span></div>`:''}
+  </div>
+  <div class="meta">📋 ${grid.length} inscritos analizados${myTeam?' · 🔵 Mi equipo: '+esc(myTeam)+' ('+kpis.myTeamCount+' corredores)':''}</div>
+  <div class="kpis">
+    <div class="kpi" style="border-color:#fcd34d;background:#fffbeb">
+      <div class="l">⚠️ Dificultad</div>
+      <div class="v" style="color:${diffColor}">${kpis.difficulty}%</div>
+      <div class="s">${kpis.strongRivals} rivales fuertes (pos. media &lt; 15)</div>
+    </div>
+    <div class="kpi" style="border-color:#86efac;background:#f0fdf4">
+      <div class="l">🎯 Predictibilidad</div>
+      <div class="v" style="color:${predColor}">${kpis.predictability}%</div>
+      <div class="s">Fiab. media ${kpis.avgReliability}% · Cobertura ${kpis.coverage}%</div>
+    </div>
+    <div class="kpi" style="border-color:#c7d2fe;background:#eef2ff">
+      <div class="l">🔍 Cobertura</div>
+      <div class="v" style="color:#3730a3">${kpis.coverage}%</div>
+      <div class="s">Inscritos con historial</div>
+    </div>
+  </div>
+
+  <h2 class="section">🏆 Top 10 esperado (predicción IA)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Corredor</th><th>Club</th><th>Categoría</th><th style="text-align:center">Media</th><th style="text-align:center">Mejor</th><th style="text-align:center">Fiab.</th></tr></thead>
+    <tbody>${topRows||'<tr><td colspan="7" style="text-align:center;color:#9ca3af">Sin datos suficientes</td></tr>'}</tbody>
+  </table>
+
+  <h2 class="section">🚴 Parrilla completa analizada</h2>
+  <table>
+    <thead><tr><th>Dorsal</th><th>Corredor</th><th>Club</th><th>Cat.</th><th style="text-align:center">Historial</th><th style="text-align:center">Media</th><th style="text-align:center">Mejor</th><th style="text-align:center">Fiab.</th><th style="text-align:center">Carrs.</th></tr></thead>
+    <tbody>${gridRows}</tbody>
+  </table>
+
+  <div class="footer">
+    <span><b>Generado:</b> ${esc(now)}</span>
+    <span>🔮 Predicción IA · Uso interno del cuerpo técnico</span>
+  </div>
+</div>
+</body></html>`;
+  const w = window.open('','_blank','width=1100,height=850');
+  if(!w){ alert('Permite ventanas emergentes para imprimir el PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN SIMULADOR
+// ═══════════════════════════════════════════════════════════════════════════
