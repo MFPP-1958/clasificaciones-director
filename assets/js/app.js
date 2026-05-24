@@ -17551,6 +17551,7 @@ function _selPrintDetail(slotIdx){
   const rider = _selCurrentSlots[slotIdx]; if(!rider) return;
   const isTitular = slotIdx < 4;
   const label = isTitular ? `T${slotIdx+1}` : `S${slotIdx-3}`;
+  const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
   const rows = (rider.raceHistory||[]).map(r=>`
     <tr>
       <td style="color:#6b7280">${r.raceDate||'—'}</td>
@@ -17566,15 +17567,20 @@ function _selPrintDetail(slotIdx){
     body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{font-size:22px;margin:0;color:#fff!important}h2{font-size:14px;color:rgba(255,255,255,.8)!important;font-weight:400;margin:4px 0 16px}
     table{width:100%;border-collapse:collapse}th{background:#f0f4f8!important;padding:8px;text-align:left;font-size:11px;text-transform:uppercase;color:#475467;font-weight:700}
     td{padding:8px;border-bottom:1px solid #f3f4f6;font-size:13px}
-    .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:20px;border-radius:12px;margin-bottom:20px}
+    .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:20px;border-radius:12px;margin-bottom:20px;position:relative}
     .hdr *{color:#fff!important}
+    .hdr .brand-mark{position:absolute;top:14px;right:18px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.15)!important;padding:6px 10px;border-radius:8px}
+    .hdr .brand-mark img{height:30px;width:auto;filter:brightness(0) invert(1)}
+    .hdr .brand-mark span{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;opacity:.85}
     .kpis{display:flex;gap:12px;margin-top:12px}.kpi{background:rgba(255,255,255,.22)!important;border-radius:8px;padding:8px 14px;text-align:center}
     .kpi-v{font-size:20px;font-weight:900}.kpi-l{font-size:9px;opacity:.7;text-transform:uppercase}
     .pos-c{display:inline-block;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;font-weight:900;font-size:12px;color:#fff!important}
     .banda{display:inline-block;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:800;color:#fff!important}
     @media print{@page{margin:1.2cm}}
     </style></head><body>
-    <div class="hdr"><div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">${label} · ${_convoMode==='myteam' ? (escapeHtml(myTeam||'Mi Equipo')+' · Convocados próxima prueba') : 'Selección Autonómica VLC'}</div>
+    <div class="hdr">
+      ${logoSrc?`<div class="brand-mark"><img src="${logoSrc}" alt="MFPP"><span>MFPP Cycling</span></div>`:''}
+      <div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">${label} · ${_convoMode==='myteam' ? (escapeHtml(myTeam||'Mi Equipo')+' · Convocados próxima prueba') : 'Selección Autonómica VLC'}</div>
     <h1>${escapeHtml(_evolNormName(rider.displayName))}</h1><h2 style="color:rgba(255,255,255,.8)">${escapeHtml(rider.team)}</h2>
     <div class="kpis">
       <div class="kpi"><div class="kpi-v">${rider.bestPos}º</div><div class="kpi-l">Mejor puesto</div></div>
@@ -17667,6 +17673,7 @@ function _selPrintInforme(){
   const year   = $('selYearFilter')?.value||new Date().getFullYear();
   const cat    = _selSelectedCats.size>0?[..._selSelectedCats].join('+'):'Todas';
   const dateStr= new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+  const _logoPrint = (document.querySelector('img.brand-logo')?.src) || '';
 
   const ridersHtml = slots.map((rider,i)=>{
     if(!rider) return '';
@@ -17698,9 +17705,12 @@ function _selPrintInforme(){
     <style>
       *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
       body{font-family:Arial,sans-serif;padding:20px;color:#111;font-size:12px}
-      .page-hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:18px 22px;border-radius:12px;margin-bottom:20px}
+      .page-hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:18px 22px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:14px}
       .page-hdr h1{font-size:20px;font-weight:900;margin:0 0 4px;color:#fff!important}
       .page-hdr p{margin:0;font-size:12px;opacity:.85;color:#fff!important}
+      .page-hdr .brand{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.18)!important;padding:7px 12px;border-radius:10px;flex-shrink:0}
+      .page-hdr .brand img{height:32px;width:auto;filter:brightness(0) invert(1)}
+      .page-hdr .brand span{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;opacity:.85}
       .rider-block{border:1px solid #e5e7eb;border-radius:10px;margin-bottom:16px;overflow:hidden;page-break-inside:avoid}
       .rider-hdr{padding:12px 16px;color:#fff!important;display:flex;align-items:center;gap:12px}
       .rider-hdr *{color:#fff!important}
@@ -17716,8 +17726,13 @@ function _selPrintInforme(){
       .banda{display:inline-block;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:800;color:#fff!important}
       @media print{body{padding:10px}@page{margin:1.2cm}}
     </style></head><body>
-    <div class="page-hdr"><h1>🏆 Informe de Convocatoria — ${_convoMode==='myteam'?(myTeam||'Mi Equipo')+' (6+2)':'Selección VLC (4+2)'}</h1>
-      <p>${escapeHtml(cat)} · ${escapeHtml(String(year))} · ${escapeHtml(region)} · Generado el ${dateStr}</p></div>
+    <div class="page-hdr">
+      <div>
+        <h1>${_convoMode==='myteam'?`🎽 ${escapeHtml(myTeam||'Mi Equipo')} · Convocados próxima prueba`:'🏆 Informe de Convocatoria — Selección VLC (4+2)'}</h1>
+        <p>${escapeHtml(cat)} · ${escapeHtml(String(year))} · ${escapeHtml(region)} · Generado el ${dateStr}</p>
+      </div>
+      ${_logoPrint?`<div class="brand"><img src="${_logoPrint}" alt="MFPP"><span>MFPP Cycling</span></div>`:''}
+    </div>
     ${ridersHtml}
     <script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
@@ -17744,14 +17759,18 @@ async function _selExportInforme(){
   const dateStr= new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
   const hdr = document.createElement('div');
   hdr.style.cssText = 'background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff;padding:22px 28px;border-radius:14px;margin-bottom:20px';
+  const _logoInfHdr = (document.querySelector('img.brand-logo')?.src) || '';
   hdr.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-      <div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px">
+      <div style="flex:1;min-width:0">
         <div style="font-size:10px;font-weight:700;letter-spacing:2.5px;opacity:.65;text-transform:uppercase;margin-bottom:4px">📄 ${_convoMode==='myteam' ? 'Convocatoria del Equipo' : 'Informe de Convocatoria'}</div>
         <div style="font-size:22px;font-weight:900;line-height:1.1">${_convoMode==='myteam' ? (escapeHtml(myTeam||'Mi Equipo')+' · Convocados próxima prueba') : 'Selección Autonómica VLC'}</div>
         <div style="font-size:13px;opacity:.8;margin-top:4px">${escapeHtml(cat)} · ${escapeHtml(String(year))} · ${escapeHtml(region)}</div>
       </div>
-      <div style="opacity:.6;font-size:11px;padding-top:2px">${dateStr}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        ${_logoInfHdr?`<div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.18);padding:7px 12px;border-radius:10px"><img src="${_logoInfHdr}" alt="MFPP" style="height:32px;width:auto;filter:brightness(0) invert(1)"><span style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;opacity:.85">MFPP Cycling</span></div>`:''}
+        <div style="opacity:.6;font-size:11px">${dateStr}</div>
+      </div>
     </div>`;
   wrap.appendChild(hdr);
 
