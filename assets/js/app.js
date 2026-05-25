@@ -21666,3 +21666,455 @@ if(_origSimShowEmpty){
 // ═══════════════════════════════════════════════════════════════════════════
 // FIN SIMULADOR FASE 2
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULADOR DE CARRERAS — Fase 3
+// A) Guardar predicción en Supabase (races.notes.prediction)
+// B) Comparar predicción vs resultado real (precisión por prueba)
+// C) Predicción por equipos (Σ top 3 esperado)
+// D) Análisis por localidad
+// E) Histórico de precisión del modelo
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── A) GUARDAR PREDICCIÓN EN SUPABASE ────────────────────────────────────
+async function _simSavePrediction(){
+  if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const {race, grid, kpis} = _simCurrentData;
+  // Construir snapshot ligero (no guardamos toda la grid para evitar bloat)
+  const top10 = (()=>{
+    const pool = grid.filter(g=>g.avgPos!=null);
+    pool.forEach(g=>{ const rel=g.reliability??30; g._s = g.avgPos*(1+(100-rel)/200); });
+    pool.sort((a,b)=>a._s-b._s);
+    return pool.slice(0,10).map((g,i)=>({rank:i+1, name:g.name, bib:g.bib||'', team:g.team||'', cat:g.cat||'', avgPos:Math.round(g.avgPos*10)/10, reliability:g.reliability, isMyTeam:!!g.isMyTeam}));
+  })();
+  // Mi equipo Montecarlo (si hay)
+  const myTeamPred = grid.filter(g=>g.isMyTeam && g.avgPos!=null).map(g=>{
+    const mc = _simMonteCarlo(g, 1000);
+    if(!mc) return null;
+    return {name:g.name, bib:g.bib||'', cat:g.cat||'', predicted:mc.predicted, lower:mc.lower, upper:mc.upper, probTop3:mc.probTop3, probTop5:mc.probTop5, probTop10:mc.probTop10};
+  }).filter(Boolean);
+  // Predicción equipos (Σ top 3)
+  const teamsPred = _simComputeTeamPredictions(grid).slice(0,10).map((t,i)=>({rank:i+1, team:t.team, sumTop3:Math.round(t.sumTop3*10)/10, best:t.best, isMyTeam:!!t.isMyTeam}));
+
+  const snapshot = {
+    savedAt: new Date().toISOString(),
+    savedBy: (_rbacUser?.email || ''),
+    kpis: {difficulty:kpis.difficulty, predictability:kpis.predictability, coverage:kpis.coverage, totalIns:kpis.totalIns},
+    top10,
+    myTeamPred,
+    teamsPred
+  };
+
+  // Leer notes existentes y fusionar
+  const {data:current, error:fetchErr} = await _sb.from('races').select('notes').eq('id', race.id).single();
+  if(fetchErr){ alert('Error leyendo la prueba: '+fetchErr.message); return; }
+  let extra = {};
+  try{ extra = JSON.parse(current?.notes||'{}'); }catch(e){}
+  extra.prediction = snapshot;
+  const {error:updErr} = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', race.id);
+  if(updErr){ alert('Error guardando predicción: '+updErr.message); return; }
+  // Refrescar cachéd history para que aparezca en futuras vistas
+  if(_cachedHistory){
+    const h = _cachedHistory.find(x=>x.id===race.id);
+    if(h){ h.prediction = snapshot; }
+  }
+  const hint = document.getElementById('simSavedHint');
+  if(hint){
+    hint.style.display = '';
+    hint.innerHTML = `✅ Predicción guardada en Supabase (${snapshot.top10.length} candidatos top 10${myTeamPred.length?' · '+myTeamPred.length+' corredores de tu equipo':''}). Podrás comparar contra el resultado real cuando se dispute la carrera.`;
+  }
+}
+
+// Cargar la predicción guardada desde notes.prediction (parsea _sbLoadHistory ya lo expone vía extra)
+function _simGetSavedPrediction(race){
+  if(!race) return null;
+  return race.prediction || null;
+}
+
+// ── C) PREDICCIÓN POR EQUIPOS ─────────────────────────────────────────────
+// Para cada equipo con ≥3 inscritos con datos, calcular Σ top 3 puestos esperados.
+// Devuelve array ordenado asc por sumTop3 (menor = mejor).
+function _simComputeTeamPredictions(grid){
+  const byTeam = new Map();
+  grid.forEach(g=>{
+    if(g.avgPos==null) return;
+    const t = (g.team||'').trim() || '(Sin equipo)';
+    if(!byTeam.has(t)) byTeam.set(t, []);
+    byTeam.get(t).push(g);
+  });
+  const out = [];
+  const mk = (myTeam||'').toLowerCase();
+  byTeam.forEach((list, team)=>{
+    list.sort((a,b)=>a.avgPos-b.avgPos);
+    if(list.length<3) return; // Sólo equipos con al menos 3 con datos
+    const top3 = list.slice(0,3);
+    const sumTop3 = top3.reduce((s,g)=>s+g.avgPos,0);
+    const best = top3[0].avgPos;
+    out.push({
+      team, top3, sumTop3, best, count:list.length,
+      isMyTeam: mk && team.toLowerCase()===mk
+    });
+  });
+  out.sort((a,b)=>a.sumTop3-b.sumTop3);
+  return out;
+}
+
+function _simRenderTeamsPanel(){
+  const panel = document.getElementById('simTeamsPanel');
+  const body = document.getElementById('simTeamsBody');
+  if(!panel || !body) return;
+  if(!_simCurrentData){ panel.style.display='none'; return; }
+  const {grid} = _simCurrentData;
+  const teams = _simComputeTeamPredictions(grid);
+  if(teams.length<2){ panel.style.display='none'; return; }
+  panel.style.display = '';
+  // Top 10 equipos
+  const top = teams.slice(0,10);
+  body.innerHTML = `<div class="sim-teams-grid">${top.map((t,i)=>{
+    const rank = i+1;
+    let cls = '';
+    if(rank===1) cls = 'gold';
+    else if(rank===2) cls = 'silver';
+    else if(rank===3) cls = 'bronze';
+    if(t.isMyTeam) cls = 'mine';
+    const ridersHtml = t.top3.map(g=>`<div>${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b> <span style="color:#475569">${g.avgPos.toFixed(1)}º</span></div>`).join('');
+    return `<div class="sim-team-card ${cls}">
+      <div class="sim-team-card-hdr">
+        <span class="sim-team-rank">${rank}º</span>
+        <span class="sim-team-name">${t.isMyTeam?'🔵 ':''}${escapeHtml(t.team)}</span>
+        <span class="sim-team-sum">Σ ${t.sumTop3.toFixed(1)}</span>
+      </div>
+      <div class="sim-team-riders">${ridersHtml}</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px">Mejor: ${t.best.toFixed(1)}º · ${t.count} inscritos con datos</div>
+    </div>`;
+  }).join('')}</div>
+  <p class="small" style="margin-top:10px;color:#6b7280">Equipos ordenados por suma de las 3 mejores posiciones esperadas (menor = mejor). Sólo se incluyen equipos con ≥3 corredores con histórico.</p>`;
+}
+
+// ── D) ANÁLISIS POR LOCALIDAD ─────────────────────────────────────────────
+function _simRenderLocalityPanel(){
+  const panel = document.getElementById('simLocalityPanel');
+  const body = document.getElementById('simLocalityBody');
+  if(!panel || !body) return;
+  if(!_simCurrentData){ panel.style.display='none'; return; }
+  const {race, grid} = _simCurrentData;
+  const locality = (race.localidad||'').trim();
+  if(!locality){ panel.style.display='none'; return; }
+  // Normalizar localidad para matching (case-insensitive)
+  const locNorm = locality.toLowerCase();
+  const hist = (_cachedHistory||[]).filter(h => h.id!==race.id && (h.riders||[]).length>=3 && (h.localidad||'').toLowerCase().trim()===locNorm);
+  if(!hist.length){ panel.style.display='none'; return; }
+  // Para cada inscrito con histórico, calcular media en esa localidad
+  const rows = grid.filter(g=>g.hasHistory).map(g=>{
+    const nk = normalizeForMatching(g.name||'');
+    const positions = [];
+    hist.forEach(h=>{
+      const r = (h.riders||[]).find(x=>normalizeForMatching(x.name)===nk);
+      if(r && r.pos) positions.push(r.pos);
+    });
+    if(!positions.length) return null;
+    const avgInLoc = positions.reduce((s,p)=>s+p,0)/positions.length;
+    const delta = avgInLoc - g.avgPos;
+    return {
+      name: g.name, team: g.team, cat: g.cat, isMyTeam: g.isMyTeam,
+      avgGlobal: g.avgPos, avgInLoc, races: positions.length, delta
+    };
+  }).filter(Boolean).sort((a,b)=>a.avgInLoc-b.avgInLoc);
+  if(!rows.length){ panel.style.display='none'; return; }
+  // Resumen
+  const mineRows = rows.filter(r=>r.isMyTeam);
+  let mineSummary = '';
+  if(mineRows.length){
+    const avg = mineRows.reduce((s,r)=>s+r.avgInLoc,0)/mineRows.length;
+    const avgGl = mineRows.reduce((s,r)=>s+r.avgGlobal,0)/mineRows.length;
+    const dlt = avg - avgGl;
+    const dltCls = Math.abs(dlt)<1?'equal':dlt<0?'better':'worse';
+    const dltLbl = Math.abs(dlt)<1?'≈':(dlt<0?'▲ '+Math.abs(dlt).toFixed(1):'▼ '+dlt.toFixed(1));
+    mineSummary = `🔵 <b>Tu equipo en ${escapeHtml(locality)}</b>: media ${avg.toFixed(1)}º vs ${avgGl.toFixed(1)}º global · <span class="sim-circ-delta ${dltCls}">${dltLbl}</span>`;
+  }
+  panel.style.display = '';
+  body.innerHTML = `
+    <div class="sim-circ-summary" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border-color:#93c5fd">
+      <span>📍 <b>${hist.length} pruebas previas</b> en <b>${escapeHtml(locality)}</b> · <b>${rows.length} inscritos</b> con datos en esta localidad</span>
+      ${mineSummary?'<span style="margin-left:auto">'+mineSummary+'</span>':''}
+    </div>
+    <div class="table-wrap" style="max-height:380px;overflow:auto">
+      <table class="sim-circ-table">
+        <thead><tr>
+          <th>#</th><th>Corredor</th><th>Equipo</th><th style="text-align:center">Media en ${escapeHtml(locality)}</th><th style="text-align:center">Media global</th><th style="text-align:center">Δ</th><th style="text-align:center">Carrs.</th>
+        </tr></thead>
+        <tbody>${rows.map((r,i)=>{
+          const dlt = r.delta;
+          const dltCls = Math.abs(dlt)<1?'equal':dlt<0?'better':'worse';
+          const dltLbl = Math.abs(dlt)<1?'≈':(dlt<0?'▲ '+Math.abs(dlt).toFixed(1):'▼ '+dlt.toFixed(1));
+          return `<tr class="${r.isMyTeam?'sim-my-team':''}">
+            <td style="text-align:center;font-weight:700">${i+1}</td>
+            <td>${r.isMyTeam?'🔵 ':''}<b>${escapeHtml(r.name)}</b></td>
+            <td>${escapeHtml(r.team||'')}</td>
+            <td style="text-align:center;font-weight:800;color:#0c4a6e">${r.avgInLoc.toFixed(1)}º</td>
+            <td style="text-align:center;color:#6b7280">${r.avgGlobal.toFixed(1)}º</td>
+            <td style="text-align:center"><span class="sim-circ-delta ${dltCls}">${dltLbl}</span></td>
+            <td style="text-align:center;color:#6b7280">${r.races}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── B) COMPARAR PREDICCIÓN VS RESULTADO ──────────────────────────────────
+function _simRenderAccuracyPanel(){
+  const panel = document.getElementById('simAccuracyPanel');
+  const body = document.getElementById('simAccuracyBody');
+  const savePanel = document.getElementById('simSavePanel');
+  if(!panel || !body) return;
+  if(!_simCurrentData){ panel.style.display='none'; if(savePanel) savePanel.style.display='none'; return; }
+  const {race} = _simCurrentData;
+  const ridersN = (race.riders||[]).length;
+  const isPre = ridersN < 3;
+  const saved = _simGetSavedPrediction(race);
+
+  // Si carrera no disputada: mostrar panel de "guardar"
+  if(isPre){
+    panel.style.display = 'none';
+    if(savePanel){
+      savePanel.style.display = '';
+      const hint = document.getElementById('simSavedHint');
+      if(saved){
+        if(hint){
+          hint.style.display = '';
+          hint.innerHTML = `📌 Ya hay una predicción guardada de ${new Date(saved.savedAt).toLocaleString('es-ES')}. Pulsa de nuevo para sobreescribir.`;
+        }
+      } else {
+        if(hint) hint.style.display = 'none';
+      }
+    }
+    return;
+  }
+  // Si está disputada: ocultar panel de guardar, mostrar precisión si hay predicción guardada
+  if(savePanel) savePanel.style.display = 'none';
+  if(!saved){
+    panel.style.display = '';
+    body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#9ca3af">No se guardó una predicción antes de esta prueba. Para futuras pruebas, pulsa <b>"💾 Guardar predicción"</b> antes de que se disputen para poder evaluar la precisión del modelo.</p>`;
+    return;
+  }
+  panel.style.display = '';
+  // Comparar: para cada predicho top 10, ver dónde quedó realmente
+  const riders = race.riders || [];
+  const ridersByName = new Map();
+  riders.forEach(r=>{ ridersByName.set(normalizeForMatching(r.name||''), r); });
+  const compareRows = (saved.top10||[]).map(p=>{
+    const real = ridersByName.get(normalizeForMatching(p.name||''));
+    return {
+      ...p,
+      realPos: real ? real.pos : null,
+      diff: real ? real.pos - p.rank : null  // diff positivo = peor de lo predicho
+    };
+  });
+  // Métricas:
+  // - Hits Top 10: cuántos predichos top 10 quedaron en top 10 real
+  // - Hits Top 3: cuántos predichos top 3 quedaron en top 3 real
+  // - Diferencia media absoluta (MAE)
+  const inReal = compareRows.filter(r=>r.realPos!=null);
+  const hitsTop10 = compareRows.filter(r=>r.realPos!=null && r.realPos<=10).length;
+  const hitsTop3 = compareRows.slice(0,3).filter(r=>r.realPos!=null && r.realPos<=3).length;
+  const mae = inReal.length ? Math.round(inReal.reduce((s,r)=>s+Math.abs(r.diff),0)/inReal.length*10)/10 : null;
+  // Accuracy global: hitsTop10/10 si los 10 predichos están en clasificación
+  const accuracyTop10 = compareRows.length ? Math.round(hitsTop10/compareRows.length*100) : 0;
+  const accClass = accuracyTop10>=70?'good':accuracyTop10>=40?'ok':'bad';
+
+  // Mi equipo: comparar predicción Montecarlo vs realidad
+  const myAccRows = (saved.myTeamPred||[]).map(p=>{
+    const real = ridersByName.get(normalizeForMatching(p.name||''));
+    if(!real) return {...p, realPos:null, inRange:false, diff:null};
+    const inRange = real.pos>=p.lower && real.pos<=p.upper;
+    return {...p, realPos:real.pos, inRange, diff:real.pos-p.predicted};
+  });
+  const myHits = myAccRows.filter(r=>r.realPos!=null && r.inRange).length;
+  const myWithReal = myAccRows.filter(r=>r.realPos!=null).length;
+
+  const summaryHtml = `
+    <div class="sim-acc-summary">
+      <div class="sim-acc-card ${accClass}">
+        <div class="acc-v">${accuracyTop10}%</div>
+        <div class="acc-l">🎯 Aciertos Top 10</div>
+        <div class="acc-s">${hitsTop10} de ${compareRows.length} predichos</div>
+      </div>
+      <div class="sim-acc-card ${hitsTop3===3?'good':hitsTop3>=2?'ok':'bad'}">
+        <div class="acc-v">${hitsTop3}/3</div>
+        <div class="acc-l">🥇 Podio acertado</div>
+        <div class="acc-s">predichos en top 3 real</div>
+      </div>
+      ${mae!=null?`<div class="sim-acc-card ${mae<=3?'good':mae<=7?'ok':'bad'}">
+        <div class="acc-v">±${mae}</div>
+        <div class="acc-l">📐 Error medio (MAE)</div>
+        <div class="acc-s">posiciones de diferencia</div>
+      </div>`:''}
+      ${myWithReal?`<div class="sim-acc-card ${myHits===myWithReal?'good':myHits>0?'ok':'bad'}">
+        <div class="acc-v">${myHits}/${myWithReal}</div>
+        <div class="acc-l">🔵 Mi equipo</div>
+        <div class="acc-s">dentro del rango 50%</div>
+      </div>`:''}
+    </div>`;
+
+  const tableHtml = `
+    <h3 style="font-size:14px;margin:8px 0;color:#0b2f6b">📊 Top 10 predicho vs realidad</h3>
+    <div class="table-wrap" style="max-height:360px;overflow:auto">
+      <table class="sim-acc-table">
+        <thead><tr><th>Pred.</th><th>Corredor</th><th>Equipo</th><th style="text-align:center">Pos. real</th><th style="text-align:center">Diferencia</th></tr></thead>
+        <tbody>${compareRows.map(r=>{
+          let diffHtml = '<span class="small" style="color:#9ca3af">— No acabó</span>';
+          if(r.diff!=null){
+            const abs = Math.abs(r.diff);
+            const cls = abs<=3?'perfect':abs<=8?'close':'far';
+            const sign = r.diff>0?'+':'';
+            diffHtml = `<span class="sim-diff-badge ${cls}">${sign}${r.diff}</span>`;
+          }
+          return `<tr class="${r.isMyTeam?'sim-my-team':''}">
+            <td><b>${r.rank}º</b></td>
+            <td>${r.isMyTeam?'🔵 ':''}<b>${escapeHtml(r.name||'')}</b></td>
+            <td>${escapeHtml(r.team||'')}</td>
+            <td style="text-align:center;font-weight:800;color:#1d4ed8">${r.realPos!=null?r.realPos+'º':'DNF'}</td>
+            <td style="text-align:center">${diffHtml}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+    <p class="small" style="margin-top:6px;color:#6b7280">Predicción guardada el ${new Date(saved.savedAt).toLocaleString('es-ES')}.</p>`;
+
+  body.innerHTML = summaryHtml + tableHtml;
+}
+
+// ── E) HISTÓRICO PRECISIÓN DEL MODELO ────────────────────────────────────
+function _simToggleModelAccuracy(){
+  const panel = document.getElementById('simModelAccPanel');
+  if(!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : '';
+  if(!open) _simRenderModelAccuracy();
+}
+
+function _simRenderModelAccuracy(){
+  const body = document.getElementById('simModelAccBody');
+  if(!body) return;
+  const hist = _cachedHistory || [];
+  // Pruebas con predicción Y resultado real
+  const withBoth = hist.filter(h => h.prediction && Array.isArray(h.riders) && h.riders.length>=3);
+  if(!withBoth.length){
+    body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#9ca3af">Aún no hay predicciones guardadas que se hayan podido contrastar contra resultados reales.<br>Cuando guardes una predicción antes de una carrera y luego se dispute, aparecerá aquí.</p>`;
+    return;
+  }
+  // Calcular precisión por prueba
+  const evals = withBoth.map(h=>{
+    const ridersByName = new Map();
+    (h.riders||[]).forEach(r=>{ ridersByName.set(normalizeForMatching(r.name||''), r); });
+    const top10 = h.prediction.top10 || [];
+    const compare = top10.map(p=>{
+      const real = ridersByName.get(normalizeForMatching(p.name||''));
+      return real ? {predRank:p.rank, realPos:real.pos, diff:real.pos-p.rank} : null;
+    }).filter(Boolean);
+    const hitsTop10 = compare.filter(c=>c.realPos<=10).length;
+    const hitsTop3 = top10.slice(0,3).map(p=>{
+      const real = ridersByName.get(normalizeForMatching(p.name||''));
+      return real && real.pos<=3 ? 1 : 0;
+    }).reduce((s,v)=>s+v, 0);
+    const mae = compare.length ? compare.reduce((s,c)=>s+Math.abs(c.diff),0)/compare.length : null;
+    return {
+      raceId:h.id, raceName:h.raceName, raceDate:h.raceDate, localidad:h.localidad||'',
+      total: top10.length, hitsTop10, hitsTop3, mae, accuracyTop10: top10.length? Math.round(hitsTop10/top10.length*100):0
+    };
+  });
+  // Ordenar por fecha desc
+  evals.sort((a,b)=>{
+    const da=_parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db=_parseSpanishDate(b.raceDate)||'0000-00-00';
+    return db.localeCompare(da);
+  });
+  // Métricas globales
+  const totalEvals = evals.length;
+  const avgAccTop10 = Math.round(evals.reduce((s,e)=>s+e.accuracyTop10,0)/totalEvals);
+  const totalHitsPodium = evals.reduce((s,e)=>s+e.hitsTop3,0);
+  const totalPodiumPossible = totalEvals * 3;
+  const podiumPct = Math.round(totalHitsPodium/totalPodiumPossible*100);
+  const maes = evals.filter(e=>e.mae!=null).map(e=>e.mae);
+  const avgMae = maes.length ? Math.round(maes.reduce((s,v)=>s+v,0)/maes.length*10)/10 : null;
+  body.innerHTML = `
+    <div class="sim-model-summary">
+      <div class="sim-model-card">
+        <div class="m-l">🎯 Precisión Top 10 (media)</div>
+        <div class="m-v">${avgAccTop10}%</div>
+        <div class="m-s">en ${totalEvals} predicciones</div>
+      </div>
+      <div class="sim-model-card">
+        <div class="m-l">🥇 Aciertos podio</div>
+        <div class="m-v">${totalHitsPodium}/${totalPodiumPossible}</div>
+        <div class="m-s">${podiumPct}% del total</div>
+      </div>
+      ${avgMae!=null?`<div class="sim-model-card">
+        <div class="m-l">📐 Error medio (MAE)</div>
+        <div class="m-v">±${avgMae}</div>
+        <div class="m-s">posiciones</div>
+      </div>`:''}
+    </div>
+    <div class="table-wrap" style="max-height:380px;overflow:auto">
+      <table class="sim-acc-table">
+        <thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th><th style="text-align:center">Top 10</th><th style="text-align:center">Podio</th><th style="text-align:center">MAE</th></tr></thead>
+        <tbody>${evals.map(e=>{
+          const accCls = e.accuracyTop10>=70?'good':e.accuracyTop10>=40?'ok':'bad';
+          return `<tr>
+            <td style="color:#475569;white-space:nowrap">${escapeHtml(e.raceDate||'—')}</td>
+            <td><b>${escapeHtml(e.raceName||'')}</b></td>
+            <td>${escapeHtml(e.localidad||'—')}</td>
+            <td style="text-align:center"><span class="sim-diff-badge ${e.accuracyTop10>=70?'perfect':e.accuracyTop10>=40?'close':'far'}">${e.accuracyTop10}% (${e.hitsTop10}/${e.total})</span></td>
+            <td style="text-align:center;font-weight:800;color:${e.hitsTop3===3?'#16a34a':e.hitsTop3>=2?'#f59e0b':'#dc2626'}">${e.hitsTop3}/3</td>
+            <td style="text-align:center;color:#475569">${e.mae!=null?'±'+e.mae.toFixed(1):'—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+// Asegurar que _sbLoadHistory expone prediction desde notes
+const _origSbLoadHistory_F3 = (typeof _sbLoadHistory==='function') ? _sbLoadHistory : null;
+if(_origSbLoadHistory_F3){
+  window._sbLoadHistory = async function(){
+    const list = await _origSbLoadHistory_F3();
+    // Cargar prediction desde notes en cada race (need second pass)
+    if(!_sb || !list || !list.length) return list;
+    const {data} = await _sb.from('races').select('id, notes').eq('race_type','clasificacion');
+    if(data){
+      const notesMap = new Map();
+      data.forEach(r=>{ try{ notesMap.set(r.id, JSON.parse(r.notes||'{}')); }catch(e){} });
+      list.forEach(h=>{
+        const extra = notesMap.get(h.id);
+        if(extra && extra.prediction) h.prediction = extra.prediction;
+      });
+    }
+    return list;
+  };
+}
+
+// ── HOOK: integrar Fase 3 en _simRenderCurrent ───────────────────────────
+const _origSimRenderCurrent_F3 = (typeof _simRenderCurrent==='function') ? _simRenderCurrent : null;
+if(_origSimRenderCurrent_F3){
+  window._simRenderCurrent = function(){
+    _origSimRenderCurrent_F3();
+    try{ _simRenderLocalityPanel(); }catch(e){ console.warn('[sim][locality]', e); }
+    try{ _simRenderTeamsPanel(); }catch(e){ console.warn('[sim][teams]', e); }
+    try{ _simRenderAccuracyPanel(); }catch(e){ console.warn('[sim][accuracy]', e); }
+  };
+}
+
+// Ocultar Fase 3 cuando estado vacío
+const _origSimShowEmpty_F3 = (typeof _simShowEmpty==='function') ? _simShowEmpty : null;
+if(_origSimShowEmpty_F3){
+  window._simShowEmpty = function(customMsg){
+    _origSimShowEmpty_F3(customMsg);
+    ['simLocalityPanel','simTeamsPanel','simAccuracyPanel','simSavePanel'].forEach(id=>{
+      const el = document.getElementById(id); if(el) el.style.display = 'none';
+    });
+  };
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN SIMULADOR FASE 3
+// ═══════════════════════════════════════════════════════════════════════════
