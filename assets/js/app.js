@@ -20873,6 +20873,86 @@ function _simOnRaceChange(){
   _simRenderCurrent();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MOTOR ESTADÍSTICO — FUNCIONES HELPER
+// Funciones puras y documentadas. Cada una protegida contra null/NaN.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// — Fiabilidad: % de consistencia + techo por posición media —
+// Un corredor que SIEMPRE acaba en la cola NO puede tener fiabilidad alta:
+//   pos. media > 75% del pelotón → techo 40%
+//   pos. media > 50% del pelotón → techo 65%
+// Esto evita que corredores siempre últimos aparezcan como "100% fiables".
+function _simReliability(positions, refGridSize){
+  if(!positions || !positions.length) return null;
+  if(positions.length === 1) return 50; // 1 sola carrera: incertidumbre alta
+  const mu = positions.reduce((a,b)=>a+b,0) / positions.length;
+  // Banda estricta del 15% (antes 30%), mínimo ±3 puestos
+  const band = Math.max(3, mu * 0.15);
+  const inBand = positions.filter(p => Math.abs(p - mu) <= band).length;
+  let raw = Math.round((inBand / positions.length) * 100);
+  // Techo por posición relativa al pelotón típico
+  const N = refGridSize > 0 ? refGridSize : 60;
+  if(mu > N * 0.75)      raw = Math.min(raw, 40);
+  else if(mu > N * 0.50) raw = Math.min(raw, 65);
+  else if(mu > N * 0.30) raw = Math.min(raw, 85);
+  return Math.max(0, Math.min(100, raw));
+}
+
+// — Tendencia unificada (últimas N carreras) —
+// Compara promedio reciente vs promedio anterior. Umbral ±2 puestos.
+function _simTrend(recentForm){
+  if(!recentForm || recentForm.length < 2) return 'unknown';
+  let recent, older;
+  if(recentForm.length >= 4){
+    recent = (recentForm[0] + recentForm[1]) / 2;
+    const rest = recentForm.slice(2);
+    older = rest.reduce((a,b)=>a+b,0) / rest.length;
+  } else {
+    recent = recentForm[0];
+    older = recentForm[recentForm.length - 1];
+  }
+  const delta = older - recent;          // delta>0 → ha mejorado (baja la posición)
+  if(delta >  2.0) return 'up';
+  if(delta < -2.0) return 'down';
+  return 'stable';
+}
+
+// — Probabilidad Bernoulli con Laplace smoothing —
+// Reemplaza Poisson: matemáticamente correcto para "1 carrera futura".
+// P = (éxitos + 1) / (intentos + 2). El smoothing evita 0% y 100% absurdos
+// con muestras pequeñas y representa el prior uniforme Beta(1,1).
+function _simBernoulli(hits, total){
+  if(total == null || total <= 0) return null;
+  if(hits == null || hits < 0)    return null;
+  return (hits + 1) / (total + 2);
+}
+
+// — Categoría cadete: detecta año por la cadena, sin solaparse con experiencia —
+// Devuelve {isCadet, year:1|2|null}
+function _simCadetCategory(catStr){
+  const c = String(catStr||'').toLowerCase();
+  const isCadet = /cad(ete|et)?/.test(c);
+  if(!isCadet) return {isCadet:false, year:null};
+  // Marca explícita "1" o "m1"/"f1" tras la palabra cadete o separador
+  if(/(?:cad\w*\s*\-?\s*|^|[\s\-])(m|f)?1\b/.test(c)) return {isCadet:true, year:1};
+  if(/(?:cad\w*\s*\-?\s*|^|[\s\-])(m|f)?2\b/.test(c)) return {isCadet:true, year:2};
+  return {isCadet:true, year:null};
+}
+
+// — Sigmoide protegida —
+function _simSigmoid(z){
+  if(!isFinite(z)) return z > 0 ? 100 : 0;
+  return Math.max(0, Math.min(100, Math.round(100 / (1 + Math.exp(-z)))));
+}
+
+// — Acota una posición al rango físico [1, max] —
+function _simCapPos(p, max){
+  if(p == null) return null;
+  const m = max > 0 ? max : 999;
+  return Math.max(1, Math.min(m, Math.round(p)));
+}
+
 // Construye el grid analizado: para cada inscrito, calcula sus métricas históricas
 function _simBuildData(raceId){
   const hist = _cachedHistory || [];
@@ -20902,6 +20982,7 @@ function _simBuildData(raceId){
 
   // Para cada inscrito, calcular métricas
   const myTeamLower = (myTeam||'').toLowerCase().trim();
+  const totalInsRef = inscritos.length || 60; // tamaño de pelotón de referencia
   const grid = inscritos.map((ins, idx)=>{
     const nk = normalizeForMatching(ins.name||'');
     const hits = nk ? (byRider.get(nk)||[]) : [];
@@ -20909,132 +20990,119 @@ function _simBuildData(raceId){
     const isMyTeam = myTeamLower && tkey === myTeamLower;
     let avgPos=null, bestPos=null, reliability=null, status='known', source='rider', confidence='nula';
     let recentForm = []; // últimas 5 posiciones (más reciente primero)
-    let predictedPos=null, predLower=null, predUpper=null, trend='stable';
+    let predictedPos=null, predLower=null, predUpper=null, trend='unknown';
     // Árbol de Regresión — nodos y clasificación de rango
     let rangeClass='none', treeNode=[];
-    // Poisson — probabilidades brutas (sin ajuste de dificultad)
+    // Probabilidades brutas Bernoulli (sin ajuste de dificultad)
     let probTop10Raw=null, probPodiumRaw=null;
+    // Factores aplicados (transparencia)
+    let cadetFactor=1.0, relPenalty=1.0;
 
     if(hits.length){
       const positions = hits.map(h=>h.pos).filter(p=>p>0);
       if(positions.length){
-        avgPos = positions.reduce((s,p)=>s+p,0)/positions.length;
+        avgPos  = positions.reduce((s,p)=>s+p,0)/positions.length;
         bestPos = Math.min(...positions);
-        // Fiabilidad: % de carreras dentro de ±30% de la media
-        const margin = Math.max(3, avgPos*0.3);
-        reliability = Math.round(positions.filter(p=>Math.abs(p-avgPos)<=margin).length / positions.length * 100);
-        // Confianza por tamaño de muestra
-        confidence = positions.length>=5 ? 'alta' : positions.length>=3 ? 'media' : 'baja';
-        // Poisson λ: eventos de éxito / total apariciones (incluyendo DNF/DS)
-        const _nRaces = hits.length || 1;
-        const _top10Hits  = positions.filter(p=>p<=10).length;
-        const _podiumHits = positions.filter(p=>p<=3).length;
-        probTop10Raw  = 1 - Math.exp(-_top10Hits  / _nRaces);
-        probPodiumRaw = 1 - Math.exp(-_podiumHits / _nRaces);
+        reliability = _simReliability(positions, totalInsRef);
+        confidence  = positions.length>=5 ? 'alta' : positions.length>=3 ? 'media' : 'baja';
+
+        // ── Bernoulli con Laplace smoothing (sustituye al Poisson) ─────────
+        // Usa SOLO carreras válidas (positions.length) — coherente con avgPos
+        probTop10Raw  = _simBernoulli(positions.filter(p=>p<=10).length, positions.length);
+        probPodiumRaw = _simBernoulli(positions.filter(p=>p<=3).length,  positions.length);
+
         // Recent form: ordenar por fecha desc y coger 5
         const sorted = hits.slice().sort((a,b)=>{
           const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
           const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
           return db.localeCompare(da);
         });
-        recentForm = sorted.slice(0,5).map(h=>h.pos);
+        recentForm = sorted.slice(0,5).map(h=>h.pos).filter(p=>p>0);
+        trend = _simTrend(recentForm);
 
         // ══ ÁRBOL DE REGRESIÓN ════════════════════════════════════════════════
-        // ── RAMA A: Categoría y experiencia ──────────────────────────────────
-        const catL = (ins.cat||'').toLowerCase();
-        const isCadet = /cad(ete|et)?/.test(catL);
-        // Detectar 1er año: cat contiene "1" o "m1"/"f1" o pocas carreras (<3)
-        const isCadetNovice  = isCadet && ((/[mf]?1\b/.test(catL)) || hits.length < 3);
-        // Detectar 2º año veterano: cat contiene "2" o "m2"/"f2" y ≥5 carreras
-        const isCadetVeteran = isCadet && (/[mf]?2\b/.test(catL)) && hits.length >= 5;
-
-        // Fórmula ponderada 60/40 (base)
-        const recent3 = recentForm.slice(0,3).filter(p=>p>0);
-        const recentMean = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : null;
-        predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
-
-        if(isCadetNovice){
-          // Penalización +20%: factor aprendizaje en categoría (Rama A1)
-          predictedPos *= 1.20;
-          treeNode.push('A1:cadete-novicio');
-        } else if(isCadetVeteran){
-          // Veterano de 2º año: sin penalización adicional, posición óptima (Rama A2)
-          treeNode.push('A2:cadete-veterano');
+        // — RAMA A: Categoría y experiencia —
+        const {isCadet, year} = _simCadetCategory(ins.cat);
+        if(isCadet && year === 1){
+          cadetFactor = 1.20;
+          treeNode.push('A1:cadete-1er-año');
+        } else if(isCadet && year === 2 && hits.length < 3){
+          // 2º año pero apenas ha competido: penalización suavizada
+          cadetFactor = 1.10;
+          treeNode.push('A2b:cadete-2º-novato');
+        } else if(isCadet && year === 2){
+          treeNode.push('A2:cadete-2º-veterano');
+        } else if(isCadet && hits.length < 3){
+          cadetFactor = 1.15;
+          treeNode.push('A3:cadete-sin-año-novato');
         } else if(isCadet){
           treeNode.push('A3:cadete');
         } else {
           treeNode.push('A0:base');
         }
 
-        // ── Penalización por baja fiabilidad (<50%) ───────────────────────────
-        if(reliability < 50) predictedPos *= 1.15;
+        // — Fórmula ponderada 60/40: 60% forma reciente + 40% histórico —
+        const recent3 = recentForm.slice(0,3);
+        const recentMean = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : null;
+        predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
+        predictedPos *= cadetFactor;
 
-        // ── RAMA C: Fiabilidad → ajuste del intervalo de confianza ───────────
-        // ≥75% fiable → rango estrecho (σ×0.6, corredor predecible)
-        // <40% fiable → rango amplio (σ×1.4, corredor inestable)
-        // Resto → rango estándar (σ×0.8)
+        // — Penalización transparente por fiabilidad —
+        // Documentada en el panel de ayuda: ×1.00 / ×1.08 / ×1.15 / ×1.20
+        relPenalty = reliability >= 75 ? 1.00
+                   : reliability >= 50 ? 1.08
+                   : reliability >= 25 ? 1.15
+                   : 1.20;
+        predictedPos *= relPenalty;
+
+        // — RAMA C: Fiabilidad → ajuste del intervalo de confianza —
         let relFactor;
         if(reliability >= 75){
-          relFactor  = 0.6; rangeClass = 'stable';
+          relFactor = 0.6; rangeClass = 'stable';
           treeNode.push('C1:alta-fiabilidad');
         } else if(reliability < 40){
-          relFactor  = 1.4; rangeClass = 'unstable';
+          relFactor = 1.4; rangeClass = 'unstable';
           treeNode.push('C3:baja-fiabilidad');
         } else {
-          relFactor  = 0.8; rangeClass = 'normal';
+          relFactor = 0.8; rangeClass = 'normal';
           treeNode.push('C2:fiabilidad-media');
         }
 
         if(positions.length >= 2){
           const variance = positions.reduce((s,p)=>s+(p-avgPos)**2,0)/positions.length;
           const std = Math.sqrt(variance);
-          predLower = Math.max(1, Math.round(predictedPos - std * relFactor));
-          predUpper = Math.round(predictedPos + std * relFactor);
+          predLower = predictedPos - std * relFactor;
+          predUpper = predictedPos + std * relFactor;
         } else {
-          // Sólo 1 carrera: rango por proporción
           const pct = reliability>=75 ? 0.10 : reliability<40 ? 0.30 : 0.15;
-          predLower = Math.max(1, Math.round(predictedPos * (1 - pct)));
-          predUpper = Math.round(predictedPos * (1 + pct));
+          predLower = predictedPos * (1 - pct);
+          predUpper = predictedPos * (1 + pct);
         }
         // ══ FIN ÁRBOL DE REGRESIÓN ════════════════════════════════════════════
-
-        // Tendencia: comparar 1ª posición reciente vs la 3ª (más antigua del bloque)
-        if(recentForm.length >= 3){
-          const newest = recentForm[0];
-          const oldest = recentForm[Math.min(2, recentForm.length-1)];
-          if(newest < oldest - 1.5)     trend = 'up';
-          else if(newest > oldest + 1.5) trend = 'down';
-          else                           trend = 'stable';
-        } else if(recentForm.length >= 2){
-          trend = recentForm[0] < recentForm[1]-0.5 ? 'up' : recentForm[0] > recentForm[1]+0.5 ? 'down' : 'stable';
-        }
       } else {
         status = 'deb';
       }
     } else {
-      // ── RAMA B: Sin historial individual → fallback al club ───────────────
+      // ══ RAMA B: Sin historial individual → fallback al club ═══════════════
       status = 'deb';
       if(tkey && byTeam.has(tkey)){
         const teamPositions = byTeam.get(tkey).filter(p=>p>0);
         if(teamPositions.length){
-          avgPos = teamPositions.reduce((s,p)=>s+p,0)/teamPositions.length;
+          avgPos  = teamPositions.reduce((s,p)=>s+p,0)/teamPositions.length;
           bestPos = Math.min(...teamPositions);
-          reliability = 50; // provisional
+          // Fiabilidad del club, capada al 70% por incertidumbre del debutante
+          const clubRel = _simReliability(teamPositions, totalInsRef);
+          reliability = clubRel != null ? Math.min(70, clubRel) : 35;
           predictedPos = avgPos;
-          // Rama B: rango más amplio que para corredores con historial propio
-          predLower = Math.max(1, Math.round(avgPos * 0.78));
-          predUpper = Math.round(avgPos * 1.22);
-          rangeClass = 'club-fb'; // indicador visual especial
+          predLower = avgPos * 0.78;
+          predUpper = avgPos * 1.22;
+          rangeClass = 'club-fb';
           source = 'team';
           status = 'team-fb';
           confidence = 'baja';
           treeNode.push('B:club-fallback');
-          // Poisson estimado por historial del club
-          const _teamTop10  = teamPositions.filter(p=>p<=10).length;
-          const _teamPodium = teamPositions.filter(p=>p<=3).length;
-          const _teamN = teamPositions.length || 1;
-          probTop10Raw  = _teamTop10  ? 1 - Math.exp(-_teamTop10  / _teamN) : null;
-          probPodiumRaw = _teamPodium ? 1 - Math.exp(-_teamPodium / _teamN) : null;
+          probTop10Raw  = _simBernoulli(teamPositions.filter(p=>p<=10).length, teamPositions.length);
+          probPodiumRaw = _simBernoulli(teamPositions.filter(p=>p<=3).length,  teamPositions.length);
         } else {
           treeNode.push('B:deb-sin-datos');
         }
@@ -21052,35 +21120,48 @@ function _simBuildData(raceId){
       hasHistory: hits.length > 0,
       avgPos, bestPos, reliability, status, source, confidence,
       raceCount: hits.length,
-      recentForm,
-      // Árbol de Regresión — predicción enriquecida
-      predictedPos, predLower, predUpper, trend,
+      recentForm, trend,
+      // Árbol de Regresión — predicción enriquecida (acotada en post-proceso)
+      predictedPos, predLower, predUpper,
       rangeClass, treeNode,
-      // Poisson — brutas; ajustadas por dificultad en post-proceso
-      probTop10Raw, probPodiumRaw
+      // Bernoulli — brutas, ajustadas por dificultad en post-proceso
+      probTop10Raw, probPodiumRaw,
+      // Transparencia
+      cadetFactor, relPenalty
     };
   });
 
-  // KPIs globales
-  const withMetrics = grid.filter(g=>g.avgPos!=null);
-  const strongRivals = grid.filter(g=>g.avgPos!=null && g.avgPos < 15).length;
-  const totalIns = inscritos.length;
-  const difficulty = totalIns ? Math.round((strongRivals/totalIns)*100) : 0;
-  // Poisson — ajuste por dificultad de la prueba
-  // Factor: carrera muy exigente reduce la probabilidad de rendir bien
-  const _poissonDiffFactor = 1 - (difficulty * 0.5 / 100);
+  // ── ACOTAR posiciones al rango físico [1, totalIns] ─────────────────────
+  const _capN = inscritos.length || 60;
   grid.forEach(g=>{
-    g.probTop10Poisson  = g.probTop10Raw  != null ? Math.max(0, Math.round(g.probTop10Raw  * _poissonDiffFactor * 100)) : null;
-    g.probPodiumPoisson = g.probPodiumRaw != null ? Math.max(0, Math.round(g.probPodiumRaw * _poissonDiffFactor * 100)) : null;
+    g.predictedPos = _simCapPos(g.predictedPos, _capN);
+    g.predLower    = _simCapPos(g.predLower,    _capN);
+    g.predUpper    = _simCapPos(g.predUpper,    _capN);
   });
 
-  // ══ REGRESIÓN LOGÍSTICA (Fase Estadística 3) ═════════════════════════════
-  // Función sigmoide: P = 1 / (1 + e^{-z}), acotada [0,100]
-  // Protegida frente a NaN/Infinity — nunca bloquea aunque falten datos
-  const _sigmoid = z => {
-    if(!isFinite(z)) return z > 0 ? 100 : 0;
-    return Math.max(0, Math.min(100, Math.round(100 / (1 + Math.exp(-z)))));
-  };
+  // ══ KPIs GLOBALES ═════════════════════════════════════════════════════════
+  const withMetrics = grid.filter(g=>g.avgPos!=null);
+  // Dificultad: % de RIVALES (no de mi equipo) con avgPos<15
+  const rivalsWithHist = grid.filter(g => !g.isMyTeam && g.avgPos != null);
+  const strongRivals   = rivalsWithHist.filter(g => g.avgPos < 15).length;
+  const totalIns = inscritos.length;
+  // Denominador: nº de rivales con historial (excluye mi equipo y debutantes sin datos)
+  const difficulty = rivalsWithHist.length
+    ? Math.round((strongRivals / rivalsWithHist.length) * 100)
+    : 0;
+
+  // ══ Ajuste de probabilidades por dificultad ═════════════════════════════
+  // Factor lineal documentado: dif=0 → ×1.00, dif=50 → ×0.75, dif=100 → ×0.50
+  const _diffFactor = 1 - (difficulty * 0.5 / 100);
+  grid.forEach(g=>{
+    g.probTop10Poisson  = g.probTop10Raw  != null ? Math.max(0, Math.min(100, Math.round(g.probTop10Raw  * _diffFactor * 100))) : null;
+    g.probPodiumPoisson = g.probPodiumRaw != null ? Math.max(0, Math.min(100, Math.round(g.probPodiumRaw * _diffFactor * 100))) : null;
+  });
+
+  // ══ REGRESIÓN LOGÍSTICA ══════════════════════════════════════════════════
+  // Calibrada para ser COHERENTE con el Árbol de Regresión:
+  //   un favorito predicho como 1º debe tener ≥70% de podio (no 14%).
+  // Pesos transparentes — el panel los muestra al usuario.
   grid.forEach(g=>{
     const pos = g.predictedPos;
     const rel = g.reliability;
@@ -21090,26 +21171,30 @@ function _simBuildData(raceId){
       return;
     }
     const tVal = g.trend==='up' ? 1 : g.trend==='down' ? -1 : 0;
-    const relN = rel / 100; // normalizado 0-1
+    const relN = rel / 100;
 
-    // — Prob. Podio —
-    // Pesos: intercept –2.0 · posición –0.20 · tendencia +1.0 · fiabilidad +1.5
-    // Cuanto mejor la posición probable (más baja), tendencia al alza y alta fiab., mayor P
-    const zPodium = -2.0
-      - 0.20 * (pos - 1)
+    // — Prob. Podio (sigmoide) —
+    // z = -1.0 - 0.30·(pos-1) + 1.00·trend + 1.50·rel
+    //   pos=1 + rel=80% + trend=up   → z=1.7 → 85%
+    //   pos=3 + rel=70% + trend=stab → z=-0.55 → 37%
+    //   pos=10+ rel=50% + trend=down → z=-3.95 → 2%
+    const zPodium = -1.0
+      - 0.30 * Math.max(0, pos - 1)
       + 1.00 * tVal
       + 1.50 * relN;
-    g.probPodiumLogistic = _sigmoid(zPodium);
+    g.probPodiumLogistic = _simSigmoid(zPodium);
 
-    // — Riesgo de corte / abandono —
-    // Pesos: intercept –2.5 · posición +0.10 · tendencia –0.80 · fiabilidad –2.0 · dificultad +0.025
-    // Dispara cuando el corredor es irregular, va mal y la carrera es muy exigente
-    const zCut = -2.5
-      + 0.10 * (pos - 1)
-      - 0.80 * tVal
-      - 2.00 * relN
-      + 0.025 * difficulty;
-    g.probCutLogistic = _sigmoid(zCut);
+    // — Riesgo de corte/abandono —
+    // z = -3.0 + 0.05·(pos-1) - 1.00·trend - 2.50·rel + 0.040·dif
+    //   rel=25% + dif=80% + trend=down + pos=25 → z=2.0 → 88%
+    //   rel=80% + dif=30% + trend=up   + pos=5  → z=-4.5 → 1%
+    //   rel=50% + dif=60% + trend=stab + pos=15 → z=-0.85 → 30%
+    const zCut = -3.0
+      + 0.05 * Math.max(0, pos - 1)
+      - 1.00 * tVal
+      - 2.50 * relN
+      + 0.040 * difficulty;
+    g.probCutLogistic = _simSigmoid(zCut);
   });
   // ══ FIN REGRESIÓN LOGÍSTICA ═══════════════════════════════════════════════
   // Predictibilidad: media de reliability solo de los conocidos (con muestra)
@@ -21392,24 +21477,16 @@ function _simRenderGrid(rows){
       </table>
     </div>
     <p class="small" style="margin-top:8px;color:#6b7280;line-height:1.7">
-      <b style="color:#7c3aed">🤖 Árbol de Regresión</b>: 60% forma reciente + 40% historial.
-      🔒 <b style="color:#16a34a">Rango estable</b> (fiabilidad ≥75%, σ estrecha) ·
-      ⚠️ <b style="color:#d97706">Rango inestable</b> (fiabilidad &lt;40%, σ amplia) ·
-      📊 <b style="color:#2563eb">Estimado por club</b> (debutante, Rama B) ·
-      <span class="sim-conf alta"></span> Confianza alta (≥5 carr.) ·
-      <span class="sim-conf media"></span> media (3-4) ·
-      <span class="sim-conf baja"></span> baja (1-2) ·
+      <b style="color:#7c3aed">🤖 Árbol</b>: pos = (0.6·recent + 0.4·media) × factores · posición acotada al pelotón ·
+      🔒 <b style="color:#16a34a">estable</b> (fiab. ≥75%) ·
+      ⚠️ <b style="color:#d97706">inestable</b> (&lt;40%) ·
+      📊 <b style="color:#2563eb">por club</b> (Rama B) ·
+      <span class="sim-conf alta"></span> ≥5 carr. ·
+      <span class="sim-conf media"></span> 3-4 ·
+      <span class="sim-conf baja"></span> 1-2 ·
       <span class="sim-conf nula"></span> sin datos ·
-      <b>🎯 Top10</b>: Poisson P=1−e<sup>−λ</sup> ajustado por dificultad ·
-      <span style="color:#16a34a;font-weight:700">≥70%</span> alto ·
-      <span style="color:#d97706;font-weight:700">40–69%</span> medio ·
-      <span style="color:#94a3b8;font-weight:700">&lt;40%</span> bajo ·
-      <b>🥇 Podio</b>: Regresión Logística σ(z) ·
-      <span style="color:#15803d;font-weight:700">≥60% 🥇</span> candidato ·
-      <span style="color:#d97706;font-weight:700">30–59%</span> posible ·
-      <b>🚨 Riesgo</b>: Prob. corte/abandono ·
-      <span style="color:#b91c1c;font-weight:700">&gt;50% ⚠️</span> alerta ·
-      <span style="color:#d97706;font-weight:700">25–50%</span> moderado
+      <b>🎯 Top10</b>: Bernoulli (Top10+1)/(carr+2) ajustada por dif. ·
+      <b>🥇 Podio</b> y <b>🚨 Riesgo</b>: σ(z) logística — ver "🧠 Motor Estadístico" para pesos.
     </p>
   `;
 }
@@ -22689,12 +22766,18 @@ function _simComputeLineupScore(myRiders, activeSet){
 }
 
 // Probabilidad de podio colectivo a partir del ranking estimado
+// Curva exponencial: P(rank=k) ≈ 0.85 · exp(-0.45·(k-1)) · ajusteFiab
+// Justificación: la prob. de podio decae rápido con la posición esperada,
+// pero un equipo predicho 1º con baja fiabilidad NO debería ser 88% seguro.
 function _simPodiumProbability(rank, totalTeams, avgReliability){
-  if(totalTeams < 3) return 100;
-  const baseTable = [0,88,72,55,38,25,15,8,4,2,1];
-  const base = baseTable[Math.min(rank, 10)] ?? 0;
-  const relFactor = 0.35 + 0.65 * ((avgReliability||50)/100);
-  return Math.min(99, Math.max(1, Math.round(base * relFactor)));
+  if(rank == null || totalTeams < 3) return null;
+  // Decae exponencialmente con el ranking (más rápido si hay menos equipos)
+  const decay = Math.max(0.35, 0.55 - 0.02 * totalTeams); // más equipos = decae más lento
+  const base  = 0.85 * Math.exp(-decay * (rank - 1));
+  // Ajuste por fiabilidad: corredores fiables → la predicción se cumple más
+  // rel=100% → factor 1.00 · rel=50% → factor 0.75 · rel=0% → factor 0.50
+  const relFactor = 0.5 + 0.5 * ((avgReliability||50)/100);
+  return Math.min(95, Math.max(1, Math.round(base * relFactor * 100)));
 }
 
 // Detecta el rival directo (equipo más cercano por encima en el ranking)

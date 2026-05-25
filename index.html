@@ -1592,12 +1592,33 @@
           <h2 style="margin:0 0 10px;color:#0b2f6b">Bienvenido al Simulador de Carreras</h2>
           <p style="margin:0 0 6px;font-size:14px">Selecciona arriba una prueba que tenga lista de inscritos guardada para empezar el análisis.</p>
           <div style="margin:16px auto 0;max-width:560px;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:10px;padding:12px 16px;text-align:left">
-            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#5b21b6;margin-bottom:6px">🧠 Motor Estadístico — 3 Modelos Predictivos</div>
-            <p style="font-size:12px;color:#374151;margin:0;line-height:1.6">
-              <b>Fase 1 — Árbol de Regresión</b> 🤖: Predice el rango de posición con fórmula 60/40 (forma reciente + histórico). Tres ramas: categoría/experiencia, fallback al club para debutantes 📊, e intervalo ajustado por fiabilidad (🔒 estable / ⚠️ inestable).<br>
-              <b>Fase 2 — Regresión de Poisson</b> 🎯: P(Top 10) = 1 − e<sup>−λ</sup>, donde λ = entradas Top 10 / carreras. Ajustada por la dificultad de la prueba. Verde ≥70% · Ámbar 40–69%.<br>
-              <b>Fase 3 — Regresión Logística</b> 🥇🚨: Modelo de umbral binario. <b>🥇 Podio</b>: σ(z) con pesos sobre posición probable, tendencia y fiabilidad — candidato si ≥60%. <b>🚨 Riesgo de corte</b>: misma función con pesos inversos amplificados por la dificultad — alerta ⚠️ si &gt;50%.
-            </p>
+            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#5b21b6;margin-bottom:6px">🧠 Motor Estadístico — Pesos y Fórmulas</div>
+            <div style="font-size:11.5px;color:#374151;margin:0;line-height:1.55">
+
+              <div style="margin-bottom:8px"><b style="color:#7c3aed">🤖 Fase 1 — Árbol de Regresión</b> (Pos. IA)<br>
+                <code style="background:#ede9fe;padding:1px 5px;border-radius:4px;font-size:10.5px">pos = (0.60·recent3 + 0.40·media) × cadetFactor × relPenalty</code><br>
+                · <b>cadetFactor</b>: 1er año ×1.20 · 2º año novato (&lt;3 carr.) ×1.10 · veterano ×1.00<br>
+                · <b>relPenalty</b>: rel ≥75% ×1.00 · ≥50% ×1.08 · ≥25% ×1.15 · &lt;25% ×1.20<br>
+                · <b>Rama B</b>: si no hay historial → media del club (rango ±22%)<br>
+                · <b>Rama C</b>: intervalo σ × {0.6, 0.8, 1.4} según fiabilidad<br>
+                · <b>Posición acotada</b> al rango físico [1, nº inscritos]
+              </div>
+
+              <div style="margin-bottom:8px"><b style="color:#0369a1">🎯 Fase 2 — Bernoulli con suavizado</b> (Top 10)<br>
+                <code style="background:#dbeafe;padding:1px 5px;border-radius:4px;font-size:10.5px">P = (top10Hits + 1) / (carreras + 2)</code><br>
+                · Laplace smoothing α=β=1 — evita 0% y 100% extremos con pocas carreras<br>
+                · Ajuste por dificultad: <code style="background:#dbeafe;padding:0 3px;border-radius:3px;font-size:10.5px">×(1 − dif·0.5/100)</code> · dif=50 → ×0.75 · dif=100 → ×0.50
+              </div>
+
+              <div><b style="color:#15803d">🥇🚨 Fase 3 — Regresión Logística</b> (Podio / Riesgo)<br>
+                <code style="background:#dcfce7;padding:1px 5px;border-radius:4px;font-size:10.5px">P = σ(z) = 1 / (1 + e<sup>−z</sup>)</code><br>
+                · <b>z<sub>podio</sub></b> = −1.0 − 0.30·(pos−1) + 1.00·trend + 1.50·relN<br>
+                · <b>z<sub>corte</sub></b> = −3.0 + 0.05·(pos−1) − 1.00·trend − 2.50·relN + 0.040·dif<br>
+                · trend: ↑=+1, →=0, ↓=−1 · relN = fiabilidad/100<br>
+                · Candidato podio si ≥60% 🥇 · Alerta de corte si &gt;50% ⚠️
+              </div>
+
+            </div>
           </div>
           <p class="small" style="margin:14px 0 0">💡 Si no ves tu prueba en la lista, súbele la startlist desde el menú <b>Historial</b> → botón <b>➕ Añadir startlist</b>.</p>
         </div>
