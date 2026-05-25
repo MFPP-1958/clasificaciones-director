@@ -1466,6 +1466,50 @@
           <h2 style="margin:0;color:#1e3a8a">🔵 Predicción Mi Equipo (con intervalo de confianza)</h2>
           <span class="small">Simulación Montecarlo · 1000 iteraciones por corredor</span>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Cómo se calcula esto? — Explicación para el director técnico</summary>
+          <div class="sim-help-body">
+
+            <h4>🎲 ¿Qué es la simulación Montecarlo?</h4>
+            <p>Cuando un corredor llega a la salida, su puesto final no está escrito. Puede salirle un buen día y acabar 12º, o pinchar y acabar 50º. <b>Montecarlo "ensaya" 1000 carreras virtuales</b> para ese corredor usando su histórico, viendo qué puesto saca cada vez. De esas 1000 carreras virtuales sacamos su pronóstico.</p>
+
+            <h4>📌 El número grande (p. ej. "59º esperado")</h4>
+            <p>Es la <b>mediana</b> de las 1000 simulaciones — el puesto "típico" del corredor. Si simuláramos su carrera 1000 veces, en la mitad acaba mejor que este número, y en la otra mitad peor.</p>
+
+            <h4>📐 Intervalo de confianza al 50% (p. ej. "entre 49º y 69º")</h4>
+            <p>De las 1000 simulaciones, <b>en la mitad central acaba dentro de ese rango</b>. Es el "puesto realista". Si el rango es estrecho (p. ej. 10º–14º), el corredor es muy predecible. Si es ancho (p. ej. 30º–80º), su rendimiento varía mucho.</p>
+            <div class="example">
+              <b>Ejemplo:</b> Cubedo, Karles · 59º esperado, intervalo 49º–69º.<br>
+              → Lo más probable es que acabe entre el puesto 49 y el 69. El "59º" es el centro de gravedad de su rendimiento.
+            </div>
+
+            <h4>📊 El histograma de barritas azules</h4>
+            <p>Muestra <b>en qué tramos de posición cae más veces</b> en las 1000 simulaciones. Cada barrita representa un tramo de 5 puestos (1-5, 6-10, 11-15…). <b>Barritas altas a la izquierda</b> = el corredor pelea arriba. <b>Barritas altas a la derecha</b> = pelea en la cola.</p>
+
+            <h4>🥇 🟢 🔵 Los tres porcentajes (Podio / Top 5 / Top 10)</h4>
+            <p>Es <b>el % de las 1000 simulaciones</b> en las que acabó en esa posición o mejor:</p>
+            <ul>
+              <li><b>🥇 Podio</b>: % de simulaciones donde acabó 1º, 2º o 3º</li>
+              <li><b>🟢 Top 5</b>: % donde acabó entre los 5 primeros</li>
+              <li><b>🔵 Top 10</b>: % donde acabó entre los 10 primeros</li>
+            </ul>
+            <p>Si un corredor sale 107º esperado, en las 1000 simulaciones <b>casi nunca</b> aparece arriba → todas las probabilidades salen 0%. Es honestidad estadística: no le vamos a inflar las cifras.</p>
+
+            <h4>📈 ¿Cómo se genera cada simulación?</h4>
+            <p>Para cada una de las 1000 carreras virtuales tiramos una posición aleatoria con una <b>distribución normal (Box-Muller)</b> centrada en la media histórica del corredor, con una desviación derivada de su <b>fiabilidad</b>:</p>
+            <ul>
+              <li><b>Fiabilidad alta</b> (≥75%) → σ pequeña → el corredor casi siempre cae cerca de su media</li>
+              <li><b>Fiabilidad baja</b> (&lt;40%) → σ grande → resultados muy dispersos</li>
+            </ul>
+
+            <div class="tip">
+              💡 <b>Lectura táctica:</b> Compara los rangos de tus corredores. Uno con rango 30º–55º es más "apuesta segura" que otro con rango 50º–110º aunque tengan la misma media. Y los % de Podio/Top 5/Top 10 te dicen si <b>tiene sentido jugarse el resultado con ese corredor</b> o si es mejor que haga gregario.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simMyTeamBody"></div>
       </section>
 

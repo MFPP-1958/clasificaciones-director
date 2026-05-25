@@ -1286,3 +1286,91 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
   .sim-lineup-row{flex-wrap:wrap}
   .sim-lineup-toggle-btn{width:100%}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SIM HELP — Sistema reusable de ayuda contextual (basado en <details>)
+   Funciona sin JavaScript, accesible, óptimo en iPad.
+   ═══════════════════════════════════════════════════════════════════════ */
+details.sim-help{
+  margin:8px 0 14px;
+  border:1.5px solid #c7d2fe;
+  border-radius:10px;
+  background:linear-gradient(135deg,#eef2ff,#f0f9ff);
+  overflow:hidden;
+  transition:all .2s;
+}
+details.sim-help[open]{
+  border-color:#6366f1;
+  box-shadow:0 2px 8px rgba(99,102,241,.12);
+}
+details.sim-help > summary{
+  cursor:pointer;
+  padding:10px 14px;
+  font-size:12.5px;
+  font-weight:700;
+  color:#3730a3;
+  list-style:none;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  min-height:24px;
+}
+details.sim-help > summary::-webkit-details-marker{display:none}
+details.sim-help > summary::before{
+  content:"▶";
+  font-size:9px;
+  color:#6366f1;
+  transition:transform .2s;
+  display:inline-block;
+}
+details.sim-help[open] > summary::before{transform:rotate(90deg)}
+details.sim-help > summary:hover{background:rgba(99,102,241,.08)}
+details.sim-help .sim-help-body{
+  padding:0 14px 14px;
+  font-size:12.5px;
+  color:#1e293b;
+  line-height:1.65;
+  border-top:1px solid #c7d2fe;
+  margin-top:2px;
+  padding-top:12px;
+}
+details.sim-help .sim-help-body h4{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  color:#5b21b6;
+  margin:10px 0 4px;
+  font-weight:800;
+}
+details.sim-help .sim-help-body h4:first-child{margin-top:0}
+details.sim-help .sim-help-body p{margin:4px 0 8px}
+details.sim-help .sim-help-body ul{margin:4px 0 8px;padding-left:20px}
+details.sim-help .sim-help-body li{margin:3px 0}
+details.sim-help .sim-help-body code{
+  background:#e0e7ff;
+  color:#3730a3;
+  padding:1px 5px;
+  border-radius:4px;
+  font-size:11.5px;
+  font-family:'SF Mono','Menlo',monospace;
+}
+details.sim-help .sim-help-body .example{
+  background:#fff;
+  border-left:3px solid #6366f1;
+  padding:8px 12px;
+  margin:6px 0;
+  border-radius:0 6px 6px 0;
+  font-size:11.5px;
+}
+details.sim-help .sim-help-body .example b{color:#3730a3}
+details.sim-help .sim-help-body .tip{
+  background:#fef3c7;
+  border-left:3px solid #f59e0b;
+  padding:8px 12px;
+  margin:8px 0 0;
+  border-radius:0 6px 6px 0;
+  font-size:11.5px;
+  color:#78350f;
+}
