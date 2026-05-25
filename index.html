@@ -1926,6 +1926,52 @@
           <h2 style="margin:0;color:#166534">🎯 Precisión de la predicción · Esta prueba</h2>
           <span class="small">Comparación predicción vs resultado real</span>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Por qué dice que no hay predicción guardada y cómo aprende el sistema?</summary>
+          <div class="sim-help-body">
+
+            <h4>🎯 ¿Qué hace este bloque?</h4>
+            <p>Solo aparece con datos cuando se cumple una condición muy concreta: <b>guardaste una predicción ANTES de que se disputara esta carrera, y luego la carrera se ha disputado</b>. Entonces compara las dos cosas (predicción guardada vs. resultado real) y te enseña cómo de buena ha sido la predicción.</p>
+
+            <h4>📜 ¿Por qué para las 45 pruebas que has añadido ayer sale "Sin predicción guardada"?</h4>
+            <p>Porque cuando subiste las listas de inscritos, esas carreras <b>ya se habían disputado</b>. No existió un momento "predicción → carrera futura". El bloque te enseña ese hueco honestamente.</p>
+
+            <h4>🤔 ¿Y si pulso ahora "Guardar predicción" en una de esas carreras pasadas?</h4>
+            <p>Técnicamente sí se guardaría, pero <b>no serviría para nada</b>. Te lo explico con una analogía:</p>
+            <div class="example">
+              Imagina que quieres saber si un meteorólogo predice bien el tiempo. Solo le crees si predice <b>mañana</b>, no si te "predice" <b>ayer</b>. Si predice ayer es trampa, porque ya sabe lo que pasó.
+            </div>
+            <p>El motor estadístico usa <b>TODO el histórico</b> para predecir. Si guardas una predicción HOY para una carrera del 1 de febrero, el motor está usando datos de carreras de marzo, abril, mayo… para predecir el 1 de febrero. Eso es trampa en estadística — se llama <b>look-ahead bias</b> ("sesgo de mirar al futuro"). La precisión saldría artificialmente alta porque el modelo "ya conoce" lo que pasó después.</p>
+
+            <h4>📊 ¿Qué métricas mostraría este bloque si SÍ hubiera predicción válida?</h4>
+            <ul>
+              <li><b>MAE (Mean Absolute Error)</b>: error medio en puestos. Si MAE = 8, significa que las predicciones se equivocan de media en 8 puestos arriba o abajo</li>
+              <li><b>Acierto Top 10</b>: % de los predichos Top 10 que realmente acabaron Top 10</li>
+              <li><b>Acierto del podio colectivo</b>: si predijimos podio y se cumplió</li>
+              <li><b>Mejores y peores aciertos individuales</b>: en qué corredores clavamos y en cuáles fallamos</li>
+            </ul>
+
+            <h4>🤖 Entonces, ¿cómo aprende el sistema a mejorar?</h4>
+            <p>Hay una técnica honesta que SÍ funciona: el <b>backtest histórico</b>. Para cada carrera ya disputada, "fingimos" que solo tenemos los datos del histórico que existían ANTES de esa fecha, lanzamos la predicción con ese set limitado, y la comparamos con el resultado real.</p>
+            <p>Con eso podemos calcular:</p>
+            <ul>
+              <li>De cuántos puestos nos equivocamos de media a lo largo del tiempo</li>
+              <li>Si el modelo es mejor en algunos tipos de circuito que en otros</li>
+              <li>Si infraestima a los cadetes de 1er año (entonces ajustaríamos el factor 1.20)</li>
+              <li>Si los pesos 60/40 son los óptimos (quizá 70/30 funciona mejor)</li>
+            </ul>
+
+            <h4>🛠️ Próximo paso del desarrollo</h4>
+            <p>Vamos a construir un <b>Panel de Backtest histórico</b> que haga exactamente eso: recorra todas tus pruebas pasadas, simule la predicción con datos pre-carrera (sin trampa), y te muestre la <b>precisión real del modelo</b> a lo largo del tiempo. Eso sí es "ML básico real": optimizar pesos para minimizar el error en datos históricos.</p>
+
+            <div class="tip">
+              💡 <b>Para tus PRÓXIMAS carreras</b>: cuando subas una lista de inscritos de una prueba que aún NO se ha disputado, sí merece la pena pulsar <b>💾 Guardar predicción</b>. Cuando se dispute y subas los resultados, este bloque te dirá cuán acertada fue la IA. Cada predicción guardada-y-luego-comprobada es una <b>muestra honesta</b> para calibrar el modelo.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simAccuracyBody"></div>
       </section>
 
