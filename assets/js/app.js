@@ -21187,12 +21187,12 @@ function _simBuildData(raceId){
 
     // Si tras capar el rango colapsa o queda demasiado estrecho frente al original,
     // expandimos hacia abajo para mantener un ancho informativo (mínimo 5 puestos
-    // o el ancho original, lo que sea menor)
+    // o el ancho original, lo que sea menor). Siempre redondeado a entero.
     if(g.predLower != null && g.predUpper != null){
       const newWidth = g.predUpper - g.predLower;
-      const targetWidth = Math.min(_capN - 1, Math.max(5, origWidth));
+      const targetWidth = Math.round(Math.min(_capN - 1, Math.max(5, origWidth)));
       if(newWidth < targetWidth){
-        g.predLower = Math.max(1, g.predUpper - targetWidth);
+        g.predLower = Math.max(1, Math.round(g.predUpper - targetWidth));
       }
     }
   });
