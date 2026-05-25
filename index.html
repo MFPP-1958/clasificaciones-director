@@ -1777,6 +1777,69 @@
           <h2 style="margin:0;color:#3730a3">🛣️ Análisis por tipo de circuito</h2>
           <span class="small">Rendimiento en circuitos similares al de esta prueba</span>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Cómo se hace este análisis y cómo identifico especialistas?</summary>
+          <div class="sim-help-body">
+
+            <h4>🛣️ ¿Qué hace este bloque?</h4>
+            <p>Una predicción puede ser engañosa si miras solo la media global del corredor. <b>Un escalador rinde mucho mejor en montaña que en llano</b> — y al revés. Este bloque <b>aísla las carreras del histórico que son del mismo tipo de circuito que la prueba del domingo</b> y te enseña cómo ha ido cada inscrito específicamente en ese tipo.</p>
+            <p>El "tipo de circuito" sale del campo configurado en la carrera (Circuito, Línea, Montaña, Crono…). Si la carrera del domingo es "Línea", solo compara contra carreras de "Línea" del histórico.</p>
+
+            <h4>📋 La banda superior (resumen)</h4>
+            <ul>
+              <li><b>"5 pruebas previas de tipo X"</b>: cuántas carreras del histórico son de ese mismo tipo de circuito. Cuantas más, más fiable es el análisis</li>
+              <li><b>"64 inscritos con datos en este tipo"</b>: cuántos de los corredores de la prueba actual tienen al menos 1 carrera previa en ese tipo de circuito</li>
+              <li><b>"🔵 Tu equipo en circuitos X: media 37.4º vs 58.5º global · ▲ 21.1"</b>: tu equipo rinde 21 puestos MEJOR en este tipo de circuito que en su media general. Es una señal fortísima de que <b>os va este tipo de prueba</b></li>
+            </ul>
+
+            <h4>📊 Las columnas de la tabla</h4>
+            <ul>
+              <li><b>#</b>: rango por mejor rendimiento en este tipo (1º = el que mejor rinde aquí)</li>
+              <li><b>CORREDOR / EQUIPO</b>: identificación. Los tuyos llevan 🔵 al lado</li>
+              <li><b>MEDIA EN "X"</b>: puesto promedio solo en sus carreras de este tipo de circuito. <b>Menor = mejor</b></li>
+              <li><b>MEDIA GLOBAL</b>: puesto promedio en TODAS sus carreras (lo que ves en otros bloques)</li>
+              <li><b>Δ</b>: la diferencia (Δ = MEDIA GLOBAL − MEDIA EN X). Te dice cuánto mejor (o peor) le va este tipo de circuito comparado con su media general</li>
+              <li><b>CARRS. TIPO</b>: cuántas carreras de este tipo ha hecho. Con 1-2 los datos son poco fiables; con ≥5 ya hablamos de especialista confirmado</li>
+            </ul>
+
+            <h4>🎨 Los símbolos ▲ ▼ ≈ en la columna Δ</h4>
+            <ul>
+              <li><b style="color:#16a34a">▲ verde (p.ej. ▲ 22.0)</b>: <b>especialista</b>. Rinde 22 puestos por encima de su media en este tipo. Cuanto mayor el número, más claro el patrón</li>
+              <li><b style="color:#dc2626">▼ rojo</b>: este tipo de circuito <b>no es lo suyo</b>. Rinde peor que su media general</li>
+              <li><b style="color:#64748b">≈ gris</b>: indiferente — diferencia menor de 1 puesto, este tipo de circuito no le afecta especialmente</li>
+            </ul>
+
+            <h4>🤔 ¿Cómo identifico especialistas claros?</h4>
+            <p>Mira los tres factores juntos:</p>
+            <ol>
+              <li><b>Δ alto (▲ 10 o más)</b>: rinde claramente mejor en este tipo</li>
+              <li><b>MEDIA EN "X" baja</b>: no solo es mejor que él mismo, también es bueno en términos absolutos</li>
+              <li><b>CARRS. TIPO ≥ 3</b>: hay muestra suficiente para que la diferencia no sea casualidad</li>
+            </ol>
+            <div class="example">
+              <b>Caso real (tu screenshot):</b> Bort, Arnau · media en "Circuito" 13.5º · media global 24.2º · Δ ▲ 10.7 · 4 carreras tipo.<br>
+              → Es <b>~11 puestos mejor en circuitos que en general</b>. Y su media absoluta en este tipo (13.5º) es buena. Con 4 carreras en este tipo, el patrón es sólido: <b>Bort es candidato real al Top 15 el domingo</b>, aunque su media global lo deje en el puesto 24.
+            </div>
+            <div class="example">
+              <b>Otro caso:</b> Vidal, Ruben · media en "Circuito" 20.0º · media global 78.2º · Δ ▲ 58.2 · 2 carreras tipo.<br>
+              → Δ enorme pero <b>solo 2 carreras del tipo</b>. Es sospechoso: probablemente esas 2 fueron rachas puntuales. <b>No te fíes ciegamente</b>: que tenga 2 carreras buenas en "Circuito" no garantiza que vaya a repetir.
+            </div>
+
+            <h4>⚠️ Riesgos al interpretar los datos</h4>
+            <ul>
+              <li><b>Muestra pequeña</b>: Δ enormes con 1-2 carreras tipo son casi siempre ruido (suerte puntual)</li>
+              <li><b>Antigüedad</b>: si las carreras tipo son de hace mucho, el corredor puede haber cambiado de nivel</li>
+              <li><b>Sesgo de selección</b>: si solo ha hecho carreras tipo cuando estaba en buen estado de forma, la media de este tipo está inflada</li>
+            </ul>
+
+            <div class="tip">
+              💡 <b>Lectura táctica:</b> Si tu equipo tiene ▲ 21 en este tipo de circuito (como en el ejemplo), <b>esta es una de TUS pruebas</b>. Es momento de jugársela, no de conformarse. Pero si tu mejor corredor solo tiene 1 carrera previa de este tipo, no asumas que va a repetir un resultado bueno. Combina este análisis con el del Pronóstico colectivo y los marcadores Head-to-Head para tomar la decisión final.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simCircuitBody"></div>
       </section>
 
