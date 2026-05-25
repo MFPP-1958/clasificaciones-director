@@ -21171,11 +21171,30 @@ function _simBuildData(raceId){
   });
 
   // ── ACOTAR posiciones al rango físico [1, totalIns] ─────────────────────
+  // Si el rango colapsa al capar (p.ej. predUpper=130 y predLower=120 ambos
+  // capados a 72), preservamos un ancho mínimo razonable hacia atrás para
+  // mantener la información del intervalo.
   const _capN = inscritos.length || 60;
   grid.forEach(g=>{
+    if(g.predictedPos == null) return;
+    const origLower = g.predLower;
+    const origUpper = g.predUpper;
+    const origWidth = (origLower!=null && origUpper!=null) ? Math.max(0, origUpper - origLower) : 0;
+
     g.predictedPos = _simCapPos(g.predictedPos, _capN);
     g.predLower    = _simCapPos(g.predLower,    _capN);
     g.predUpper    = _simCapPos(g.predUpper,    _capN);
+
+    // Si tras capar el rango colapsa o queda demasiado estrecho frente al original,
+    // expandimos hacia abajo para mantener un ancho informativo (mínimo 5 puestos
+    // o el ancho original, lo que sea menor)
+    if(g.predLower != null && g.predUpper != null){
+      const newWidth = g.predUpper - g.predLower;
+      const targetWidth = Math.min(_capN - 1, Math.max(5, origWidth));
+      if(newWidth < targetWidth){
+        g.predLower = Math.max(1, g.predUpper - targetWidth);
+      }
+    }
   });
 
   // ══ KPIs GLOBALES ═════════════════════════════════════════════════════════
@@ -23056,7 +23075,7 @@ function _simLineupRedraw(body, myRiders, grid){
       </div>
     </div>
     ${!score.hasEnough?'<div class="sim-team-alert warning" style="margin-bottom:10px">⚠️ <b>Mínimo 3 titulares con datos</b> para calcular el score de equipo. Reactiva corredores.</div>':''}
-    <div class="sim-lineup-hint">👆 <b>Toca el botón</b> de cada corredor para cambiar entre titular y suplente. Los valores se recalculan al instante. Los <b>3 mejores puestos IA</b> de los titulares activos forman el score del equipo.</div>
+    <div class="sim-lineup-hint">👆 Pulsa <b style="color:#991b1b">❌ Quitar</b> a la derecha de un corredor para dejarlo en la <b>suplencia</b> (deja de contar para el score del equipo). Cuando esté suplente, el botón cambiará a <b style="color:#065f46">✅ Poner</b> para reactivarlo. La <b>Σ top3</b> de los titulares activos se recalcula al instante.</div>
     <div class="sim-lineup-list">`;
 
   sorted.forEach(r=>{

@@ -1640,6 +1640,57 @@
           <h2 style="margin:0;color:#065f46">🔧 Optimizador de alineación</h2>
           <span class="small" style="color:#64748b">¿Qué pasa si cambio a un corredor?</span>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Para qué sirve este bloque y dónde están los botones?</summary>
+          <div class="sim-help-body">
+
+            <h4>🎯 ¿Qué hace el optimizador?</h4>
+            <p>Es una herramienta de <b>simulación en vivo</b>. Te permite probar <b>qué pasaría si quitas un corredor del equipo</b> (lo mandas a la suplencia) y ver cómo cambiarían las cuatro cifras de arriba (Posición, Σ, % Podio, Top 3) al instante, sin tocar la base de datos. Útil cuando tienes dudas entre dos corredores o quieres ver el impacto real de una baja.</p>
+
+            <h4>🟢 La barra verde con 4 cifras</h4>
+            <ul>
+              <li><b>POSICIÓN EQUIPO (DE N)</b>: en qué puesto colectivo quedaría tu equipo con la alineación actual</li>
+              <li><b>Σ TOP3</b>: suma de los puestos esperados de tus 3 mejores titulares activos. <b>Menor = mejor</b>. Es el score que comparas con los rivales</li>
+              <li><b>PROB. PODIO EQUIPO</b>: probabilidad de que tu equipo entre en podio colectivo (idéntica a la del Pronóstico colectivo)</li>
+              <li><b>TITULARES EN TOP3</b>: cuántos titulares activos contribuyen ahora mismo a la Σ. Si pone "3/3" significa que tienes ≥3 activos. Si pone "2/3" te están avisando: <b>necesitas al menos 3 titulares activos para tener un score válido</b></li>
+            </ul>
+
+            <h4>🟢 ¿Dónde están los botones para cambiar de titular/suplente?</h4>
+            <p>A la <b>derecha de cada corredor</b>, en su tarjeta verde. Si el corredor está activo verás un botón rojo <b style="color:#991b1b">❌ Quitar</b>. Al pulsarlo:</p>
+            <ul>
+              <li>El corredor pasa a <b>SUPLENTE</b> (su tarjeta se queda gris)</li>
+              <li>El botón cambia a verde <b style="color:#065f46">✅ Poner</b></li>
+              <li>Las 4 cifras de arriba <b>se recalculan en tiempo real</b></li>
+            </ul>
+            <p>Pulsa <b>✅ Poner</b> para devolverlo a la lista activa. Si necesitas resetear todo, abajo del todo hay un botón 🔄 <b>Resetear (todos titulares)</b>.</p>
+
+            <h4>🏷️ Las etiquetas TOP3 / TITULAR / SUPLENTE</h4>
+            <ul>
+              <li><span style="background:#dcfce7;color:#166534;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800">TOP3 ✓</span>: este corredor está entre los <b>3 mejores activos</b> y contribuye a la Σ del equipo</li>
+              <li><span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800">TITULAR</span>: está activo pero NO en el top3 — está disponible por si quieres meterlo</li>
+              <li><span style="background:#f1f5f9;color:#64748b;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800">SUPLENTE</span>: está fuera de la alineación, no cuenta para el score</li>
+            </ul>
+
+            <h4>💡 ¿Cuándo usar el optimizador en la práctica?</h4>
+            <p>Tres escenarios típicos en el iPad antes de una carrera:</p>
+            <div class="example">
+              <b>1. Duda entre dos corredores</b>: tu top3 incluye uno con <b>fiabilidad &lt;30%</b> que puede romper la carrera o desaparecer. Lo quitas y miras si la Σ baja mucho. Si baja poco → mejor llevar al fiable. Si baja mucho → el inestable es necesario, asume el riesgo.
+            </div>
+            <div class="example">
+              <b>2. Baja de última hora</b>: un corredor no puede correr. Lo quitas y ves al instante si seguís peleando por el mismo objetivo o hay que replantear (p.ej. 3º → 6º).
+            </div>
+            <div class="example">
+              <b>3. Probar un debutante</b>: si quitas a alguien del top3 y entra un debutante (rama B, calculado por su club), comparas las dos opciones realistas.
+            </div>
+
+            <div class="tip">
+              💡 <b>Truco práctico:</b> Una bajada de 5+ puntos en la Σ al quitar a un corredor es relevante (puede cambiar tu posición). Una bajada de 1-2 puntos es ruido — esos cambios no merece la pena hacerlos.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simLineupBody"></div>
       </section>
 
