@@ -20912,6 +20912,8 @@ function _simBuildData(raceId){
     let predictedPos=null, predLower=null, predUpper=null, trend='stable';
     // Árbol de Regresión — nodos y clasificación de rango
     let rangeClass='none', treeNode=[];
+    // Poisson — probabilidades brutas (sin ajuste de dificultad)
+    let probTop10Raw=null, probPodiumRaw=null;
 
     if(hits.length){
       const positions = hits.map(h=>h.pos).filter(p=>p>0);
@@ -20923,6 +20925,12 @@ function _simBuildData(raceId){
         reliability = Math.round(positions.filter(p=>Math.abs(p-avgPos)<=margin).length / positions.length * 100);
         // Confianza por tamaño de muestra
         confidence = positions.length>=5 ? 'alta' : positions.length>=3 ? 'media' : 'baja';
+        // Poisson λ: eventos de éxito / total apariciones (incluyendo DNF/DS)
+        const _nRaces = hits.length || 1;
+        const _top10Hits  = positions.filter(p=>p<=10).length;
+        const _podiumHits = positions.filter(p=>p<=3).length;
+        probTop10Raw  = 1 - Math.exp(-_top10Hits  / _nRaces);
+        probPodiumRaw = 1 - Math.exp(-_podiumHits / _nRaces);
         // Recent form: ordenar por fecha desc y coger 5
         const sorted = hits.slice().sort((a,b)=>{
           const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
@@ -21021,6 +21029,12 @@ function _simBuildData(raceId){
           status = 'team-fb';
           confidence = 'baja';
           treeNode.push('B:club-fallback');
+          // Poisson estimado por historial del club
+          const _teamTop10  = teamPositions.filter(p=>p<=10).length;
+          const _teamPodium = teamPositions.filter(p=>p<=3).length;
+          const _teamN = teamPositions.length || 1;
+          probTop10Raw  = _teamTop10  ? 1 - Math.exp(-_teamTop10  / _teamN) : null;
+          probPodiumRaw = _teamPodium ? 1 - Math.exp(-_teamPodium / _teamN) : null;
         } else {
           treeNode.push('B:deb-sin-datos');
         }
@@ -21041,7 +21055,9 @@ function _simBuildData(raceId){
       recentForm,
       // Árbol de Regresión — predicción enriquecida
       predictedPos, predLower, predUpper, trend,
-      rangeClass, treeNode
+      rangeClass, treeNode,
+      // Poisson — brutas; ajustadas por dificultad en post-proceso
+      probTop10Raw, probPodiumRaw
     };
   });
 
@@ -21050,6 +21066,52 @@ function _simBuildData(raceId){
   const strongRivals = grid.filter(g=>g.avgPos!=null && g.avgPos < 15).length;
   const totalIns = inscritos.length;
   const difficulty = totalIns ? Math.round((strongRivals/totalIns)*100) : 0;
+  // Poisson — ajuste por dificultad de la prueba
+  // Factor: carrera muy exigente reduce la probabilidad de rendir bien
+  const _poissonDiffFactor = 1 - (difficulty * 0.5 / 100);
+  grid.forEach(g=>{
+    g.probTop10Poisson  = g.probTop10Raw  != null ? Math.max(0, Math.round(g.probTop10Raw  * _poissonDiffFactor * 100)) : null;
+    g.probPodiumPoisson = g.probPodiumRaw != null ? Math.max(0, Math.round(g.probPodiumRaw * _poissonDiffFactor * 100)) : null;
+  });
+
+  // ══ REGRESIÓN LOGÍSTICA (Fase Estadística 3) ═════════════════════════════
+  // Función sigmoide: P = 1 / (1 + e^{-z}), acotada [0,100]
+  // Protegida frente a NaN/Infinity — nunca bloquea aunque falten datos
+  const _sigmoid = z => {
+    if(!isFinite(z)) return z > 0 ? 100 : 0;
+    return Math.max(0, Math.min(100, Math.round(100 / (1 + Math.exp(-z)))));
+  };
+  grid.forEach(g=>{
+    const pos = g.predictedPos;
+    const rel = g.reliability;
+    if(pos == null || rel == null){
+      g.probPodiumLogistic = null;
+      g.probCutLogistic    = null;
+      return;
+    }
+    const tVal = g.trend==='up' ? 1 : g.trend==='down' ? -1 : 0;
+    const relN = rel / 100; // normalizado 0-1
+
+    // — Prob. Podio —
+    // Pesos: intercept –2.0 · posición –0.20 · tendencia +1.0 · fiabilidad +1.5
+    // Cuanto mejor la posición probable (más baja), tendencia al alza y alta fiab., mayor P
+    const zPodium = -2.0
+      - 0.20 * (pos - 1)
+      + 1.00 * tVal
+      + 1.50 * relN;
+    g.probPodiumLogistic = _sigmoid(zPodium);
+
+    // — Riesgo de corte / abandono —
+    // Pesos: intercept –2.5 · posición +0.10 · tendencia –0.80 · fiabilidad –2.0 · dificultad +0.025
+    // Dispara cuando el corredor es irregular, va mal y la carrera es muy exigente
+    const zCut = -2.5
+      + 0.10 * (pos - 1)
+      - 0.80 * tVal
+      - 2.00 * relN
+      + 0.025 * difficulty;
+    g.probCutLogistic = _sigmoid(zCut);
+  });
+  // ══ FIN REGRESIÓN LOGÍSTICA ═══════════════════════════════════════════════
   // Predictibilidad: media de reliability solo de los conocidos (con muestra)
   const knownRel = grid.filter(g=>g.hasHistory && g.reliability!=null);
   const avgReliability = knownRel.length ? Math.round(knownRel.reduce((s,g)=>s+g.reliability,0)/knownRel.length) : 0;
@@ -21250,6 +21312,9 @@ function _simRenderGrid(rows){
           <th style="text-align:center">Mejor</th>
           <th style="text-align:center">Fiab.</th>
           <th style="text-align:center">C.</th>
+          <th style="text-align:center;white-space:nowrap">🎯 Top10</th>
+          <th style="text-align:center;white-space:nowrap">🥇 Podio</th>
+          <th style="text-align:center;white-space:nowrap">🚨 Riesgo</th>
           <th>Forma reciente</th>
         </tr></thead>
         <tbody>${rows.map((g,rowIdx)=>{
@@ -21298,6 +21363,29 @@ function _simRenderGrid(rows){
             <td style="text-align:center;color:#475569">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
             <td style="text-align:center"><b style="color:${relColor}">${g.reliability!=null?g.reliability+'%':'—'}</b></td>
             <td style="text-align:center;color:#64748b">${g.raceCount||0}</td>
+            <td style="text-align:center">${(()=>{
+              const p = g.probTop10Poisson;
+              if(p==null) return '<span style="color:#d1d5db">—</span>';
+              const c = p>=70?'#16a34a':p>=40?'#d97706':'#94a3b8';
+              const bg = p>=70?'#dcfce7':p>=40?'#fef3c7':'#f1f5f9';
+              return `<span style="display:inline-block;min-width:36px;padding:2px 5px;border-radius:6px;background:${bg};color:${c};font-size:11px;font-weight:800">${p}%</span>`;
+            })()}</td>
+            <td style="text-align:center">${(()=>{
+              const p = g.probPodiumLogistic;
+              if(p==null) return '<span style="color:#d1d5db">—</span>';
+              const c  = p>=60?'#15803d':p>=30?'#d97706':'#94a3b8';
+              const bg = p>=60?'#dcfce7':p>=30?'#fef3c7':'#f1f5f9';
+              const medal = p>=60?' 🥇':'';
+              return `<span style="display:inline-block;min-width:36px;padding:2px 5px;border-radius:6px;background:${bg};color:${c};font-size:11px;font-weight:800">${p}%${medal}</span>`;
+            })()}</td>
+            <td style="text-align:center">${(()=>{
+              const p = g.probCutLogistic;
+              if(p==null) return '<span style="color:#d1d5db">—</span>';
+              const c  = p>50?'#b91c1c':p>25?'#d97706':'#94a3b8';
+              const bg = p>50?'#fee2e2':p>25?'#fef3c7':'#f1f5f9';
+              const icon = p>50?' ⚠️':'';
+              return `<span style="display:inline-block;min-width:36px;padding:2px 5px;border-radius:6px;background:${bg};color:${c};font-size:11px;font-weight:800">${p}%${icon}</span>`;
+            })()}</td>
             <td>${formHtml}</td>
           </tr>`;
         }).join('')}</tbody>
@@ -21311,7 +21399,17 @@ function _simRenderGrid(rows){
       <span class="sim-conf alta"></span> Confianza alta (≥5 carr.) ·
       <span class="sim-conf media"></span> media (3-4) ·
       <span class="sim-conf baja"></span> baja (1-2) ·
-      <span class="sim-conf nula"></span> sin datos
+      <span class="sim-conf nula"></span> sin datos ·
+      <b>🎯 Top10</b>: Poisson P=1−e<sup>−λ</sup> ajustado por dificultad ·
+      <span style="color:#16a34a;font-weight:700">≥70%</span> alto ·
+      <span style="color:#d97706;font-weight:700">40–69%</span> medio ·
+      <span style="color:#94a3b8;font-weight:700">&lt;40%</span> bajo ·
+      <b>🥇 Podio</b>: Regresión Logística σ(z) ·
+      <span style="color:#15803d;font-weight:700">≥60% 🥇</span> candidato ·
+      <span style="color:#d97706;font-weight:700">30–59%</span> posible ·
+      <b>🚨 Riesgo</b>: Prob. corte/abandono ·
+      <span style="color:#b91c1c;font-weight:700">&gt;50% ⚠️</span> alerta ·
+      <span style="color:#d97706;font-weight:700">25–50%</span> moderado
     </p>
   `;
 }
@@ -22783,7 +22881,8 @@ function _simLineupRedraw(body, myRiders, grid){
       </div>
       <div class="sim-lineup-role-badge ${role}">${roleLabel}</div>
       <button class="sim-lineup-toggle-btn ${isActive?'btn-quitar':'btn-poner'}"
-        onclick="_simLineupToggle(${JSON.stringify(r.name)})">
+        data-rider="${escapeHtml(r.name)}"
+        onclick="_simLineupToggle(this.dataset.rider)">
         ${isActive?'❌ Quitar':'✅ Poner'}
       </button>
     </div>`;

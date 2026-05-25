@@ -1592,8 +1592,12 @@
           <h2 style="margin:0 0 10px;color:#0b2f6b">Bienvenido al Simulador de Carreras</h2>
           <p style="margin:0 0 6px;font-size:14px">Selecciona arriba una prueba que tenga lista de inscritos guardada para empezar el análisis.</p>
           <div style="margin:16px auto 0;max-width:560px;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:10px;padding:12px 16px;text-align:left">
-            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#5b21b6;margin-bottom:6px">🧠 Modelo Predictivo — Árbol de Regresión</div>
-            <p style="font-size:12px;color:#374151;margin:0;line-height:1.6">Aplica un <b>Árbol de Regresión</b> que segmenta la parrilla en tres ramas: <b>Rama A</b> — categoría y experiencia (cadetes noveles +20%, veteranos sin penalización); <b>Rama B</b> — si no hay historial individual, usa el rendimiento histórico del club para estimar el puesto del debutante 📊; <b>Rama C</b> — ajusta el rango de error según fiabilidad: corredores con ≥75% de fiabilidad reciben un rango estrecho 🔒, los de &lt;40% reciben un rango amplio ⚠️.</p>
+            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#5b21b6;margin-bottom:6px">🧠 Motor Estadístico — 3 Modelos Predictivos</div>
+            <p style="font-size:12px;color:#374151;margin:0;line-height:1.6">
+              <b>Fase 1 — Árbol de Regresión</b> 🤖: Predice el rango de posición con fórmula 60/40 (forma reciente + histórico). Tres ramas: categoría/experiencia, fallback al club para debutantes 📊, e intervalo ajustado por fiabilidad (🔒 estable / ⚠️ inestable).<br>
+              <b>Fase 2 — Regresión de Poisson</b> 🎯: P(Top 10) = 1 − e<sup>−λ</sup>, donde λ = entradas Top 10 / carreras. Ajustada por la dificultad de la prueba. Verde ≥70% · Ámbar 40–69%.<br>
+              <b>Fase 3 — Regresión Logística</b> 🥇🚨: Modelo de umbral binario. <b>🥇 Podio</b>: σ(z) con pesos sobre posición probable, tendencia y fiabilidad — candidato si ≥60%. <b>🚨 Riesgo de corte</b>: misma función con pesos inversos amplificados por la dificultad — alerta ⚠️ si &gt;50%.
+            </p>
           </div>
           <p class="small" style="margin:14px 0 0">💡 Si no ves tu prueba en la lista, súbele la startlist desde el menú <b>Historial</b> → botón <b>➕ Añadir startlist</b>.</p>
         </div>
