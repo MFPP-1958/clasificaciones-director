@@ -22184,6 +22184,102 @@ function _simComputeTeamPredictions(grid){
   return out;
 }
 
+// ── Diagnóstico: ver carreras históricas de un corredor ───────────────────
+// Permite al director verificar si la predicción es realista. Si los puestos
+// históricos no cuadran con lo que él sabe del corredor, hay un problema de
+// datos o de matching de nombres.
+function _simShowRiderHistory(riderName){
+  const name = (riderName||'').trim();
+  if(!name) return;
+  const nk = normalizeForMatching(name);
+  const hist = _cachedHistory || [];
+  // Recoger TODAS las apariciones del corredor en el histórico
+  const apparitions = [];
+  hist.forEach(h=>{
+    (h.riders||[]).forEach(r=>{
+      if(normalizeForMatching(r.name||'')===nk){
+        apparitions.push({
+          raceName: h.raceName || '(sin nombre)',
+          raceDate: h.raceDate || '(sin fecha)',
+          localidad: h.localidad || '',
+          circuitType: h.circuitType || '',
+          pos: r.pos,
+          total: (h.riders||[]).length,
+          team: r.team || '',
+          cat: r.cat || ''
+        });
+      }
+    });
+  });
+  // Ordenar por fecha desc
+  apparitions.sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+    return db.localeCompare(da);
+  });
+  // Calcular estadísticas
+  const validPos = apparitions.filter(a=>a.pos>0).map(a=>a.pos);
+  const avg = validPos.length ? (validPos.reduce((s,p)=>s+p,0)/validPos.length).toFixed(1) : '—';
+  const best = validPos.length ? Math.min(...validPos) : '—';
+  const worst = validPos.length ? Math.max(...validPos) : '—';
+  const dnfs = apparitions.filter(a=>!a.pos || a.pos===0).length;
+
+  // Construir modal
+  const overlay = document.createElement('div');
+  overlay.id = '_simHistoryModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  const rowsHtml = apparitions.length
+    ? apparitions.map((a,i)=>{
+        const posColor = !a.pos || a.pos===0 ? '#dc2626' : a.pos<=3?'#16a34a':a.pos<=10?'#0369a1':a.pos<=20?'#475569':'#64748b';
+        const posLabel = !a.pos || a.pos===0 ? 'DNF/DS' : a.pos+'º';
+        return `<tr>
+          <td style="text-align:center;color:#94a3b8;font-size:11px">${i+1}</td>
+          <td><b>${escapeHtml(a.raceName)}</b><br><small style="color:#64748b">${escapeHtml(a.raceDate)}${a.localidad?' · '+escapeHtml(a.localidad):''}${a.circuitType?' · '+escapeHtml(a.circuitType):''}</small></td>
+          <td style="text-align:center;font-weight:800;color:${posColor};font-size:14px">${posLabel}</td>
+          <td style="text-align:center;color:#64748b">${a.total||'—'}</td>
+          <td><small>${escapeHtml(a.team)}${a.cat?' · '+escapeHtml(a.cat):''}</small></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af">Sin apariciones en el histórico — debutante absoluto.</td></tr>';
+
+  overlay.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:880px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+    <div style="padding:16px 20px;border-bottom:2px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(135deg,#eef2ff,#f0f9ff)">
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#3730a3;font-weight:800">🔍 Diagnóstico de datos</div>
+        <h3 style="margin:2px 0 0;color:#0f172a">${escapeHtml(name)}</h3>
+      </div>
+      <button onclick="document.getElementById('_simHistoryModal').remove()" style="background:#fff;color:#3730a3;border:1.5px solid #c7d2fe;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:700;font-size:13px">✕ Cerrar</button>
+    </div>
+    <div style="padding:14px 20px;background:#fafbfc;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:18px;font-size:13px">
+      <div><b>${apparitions.length}</b> apariciones</div>
+      <div><b>${validPos.length}</b> finalizadas</div>
+      <div style="color:${dnfs>0?'#dc2626':'#64748b'}"><b>${dnfs}</b> DNF/DS</div>
+      <div>Media: <b style="color:#3730a3">${avg}${avg!=='—'?'º':''}</b></div>
+      <div>Mejor: <b style="color:#16a34a">${best}${best!=='—'?'º':''}</b></div>
+      <div>Peor: <b style="color:#dc2626">${worst}${worst!=='—'?'º':''}</b></div>
+    </div>
+    <div style="overflow:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead style="position:sticky;top:0;background:#f3f6fb;z-index:1">
+          <tr>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #e2e8f0">#</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Carrera</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #e2e8f0">Puesto</th>
+            <th style="padding:8px 10px;text-align:center;border-bottom:2px solid #e2e8f0">Inscritos</th>
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0">Equipo · Cat.</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+    <div style="padding:10px 20px;background:#fffbeb;border-top:1px solid #fde68a;font-size:11.5px;color:#78350f">
+      💡 Si los puestos no cuadran con lo que sabes del corredor, puede haber un <b>problema de matching de nombres</b> (otro corredor con el mismo nombre/apellido se está mezclando) o un <b>error en los datos del histórico</b>. Avísame para revisarlo.
+    </div>
+  </div>`;
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
 function _simRenderTeamsPanel(){
   const panel = document.getElementById('simTeamsPanel');
   const body = document.getElementById('simTeamsBody');
@@ -22205,7 +22301,7 @@ function _simRenderTeamsPanel(){
     const ridersHtml = t.top3.map(g=>{
       const score = g._teamScore ?? g.predictedPos ?? g.avgPos;
       const trend = g.trend==='up'?'⬆️':g.trend==='down'?'⬇️':'';
-      return `<div>${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b> <span style="color:#7c3aed;font-weight:700">${score!=null?score.toFixed(1)+'º':'—'}</span> ${trend}</div>`;
+      return `<div>${g.isMyTeam?'🔵 ':''}<b class="sim-rider-clickable" data-rider="${escapeHtml(g.name)}" onclick="_simShowRiderHistory(this.dataset.rider)" title="Click para ver carreras históricas">${escapeHtml(g.name)}</b> <span style="color:#7c3aed;font-weight:700">${score!=null?score.toFixed(1)+'º':'—'}</span> ${trend}</div>`;
     }).join('');
     // Indicador de "amenaza" colectiva
     const podColor = t.anyPodiumProb>=50?'#15803d':t.anyPodiumProb>=25?'#d97706':'#94a3b8';
@@ -23092,7 +23188,7 @@ function _simLineupRedraw(body, myRiders, grid){
 
     html += `<div class="sim-lineup-row ${isActive?'active':'inactive'}">
       <div class="sim-lineup-rider-info">
-        <div class="sim-lr-name">${escapeHtml(r.name)} ${tIcon}</div>
+        <div class="sim-lr-name"><span class="sim-rider-clickable" data-rider="${escapeHtml(r.name)}" onclick="_simShowRiderHistory(this.dataset.rider)" title="Click para ver carreras históricas">${escapeHtml(r.name)}</span> ${tIcon}</div>
         <div class="sim-lr-meta">
           ${escapeHtml(r.cat||'—')} ·
           Pos. IA: <b style="color:#7c3aed">${rangeStr}</b> ·
