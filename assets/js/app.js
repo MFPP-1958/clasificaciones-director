@@ -21512,6 +21512,17 @@ function _simExportPDF(){
     if(pb==null) return -1;
     return pa-pb;
   });
+  // Helper para formatear cada probabilidad con color
+  const fmtProb = (p, type) => {
+    if(p==null) return '<span style="color:#9ca3af">—</span>';
+    let c, bg;
+    if(type==='top10'){ c=p>=70?'#15803d':p>=40?'#92400e':'#475569'; bg=p>=70?'#dcfce7':p>=40?'#fef3c7':'#f1f5f9'; }
+    else if(type==='podium'){ c=p>=60?'#15803d':p>=30?'#92400e':'#475569'; bg=p>=60?'#dcfce7':p>=30?'#fef3c7':'#f1f5f9'; }
+    else /* risk */ { c=p>50?'#991b1b':p>25?'#92400e':'#475569'; bg=p>50?'#fee2e2':p>25?'#fef3c7':'#f1f5f9'; }
+    const icon = (type==='podium' && p>=60) ? ' 🥇' : (type==='risk' && p>50) ? ' ⚠️' : '';
+    return `<span style="background:${bg};color:${c};padding:1px 4px;border-radius:3px;font-weight:800">${p}%${icon}</span>`;
+  };
+
   const topRows = top10.map((g,i)=>{
     const trendTxt = g.trend==='up'?'⬆️':g.trend==='down'?'⬇️':'➡️';
     const rangeStr = (g.predLower!=null&&g.predUpper!=null)?`${g.predLower}º–${g.predUpper}º`:(g.predictedPos!=null?Math.round(g.predictedPos)+'º':'—');
@@ -21521,6 +21532,9 @@ function _simExportPDF(){
     <td>${esc(g.team||'')}</td>
     <td>${esc(g.cat||'')}</td>
     <td style="text-align:center;font-weight:700;color:#7c3aed">${rangeStr} ${trendTxt}</td>
+    <td style="text-align:center">${fmtProb(g.probTop10Poisson,'top10')}</td>
+    <td style="text-align:center">${fmtProb(g.probPodiumLogistic,'podium')}</td>
+    <td style="text-align:center">${fmtProb(g.probCutLogistic,'risk')}</td>
     <td style="text-align:center;color:#475569">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
     <td style="text-align:center">${g.reliability??'—'}%</td>
   </tr>`;}).join('');
@@ -21535,8 +21549,10 @@ function _simExportPDF(){
       <td>${esc(g.cat||'')}</td>
       <td style="text-align:center">${statusTxt}</td>
       <td style="text-align:center;font-weight:700;color:#7c3aed">${rStr} ${tTxt}</td>
+      <td style="text-align:center">${fmtProb(g.probTop10Poisson,'top10')}</td>
+      <td style="text-align:center">${fmtProb(g.probPodiumLogistic,'podium')}</td>
+      <td style="text-align:center">${fmtProb(g.probCutLogistic,'risk')}</td>
       <td style="text-align:center;color:#475569">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
-      <td style="text-align:center">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
       <td style="text-align:center">${g.reliability!=null?g.reliability+'%':'—'}</td>
       <td style="text-align:center">${g.raceCount||0}</td>
     </tr>`;
@@ -21611,8 +21627,16 @@ function _simExportPDF(){
 
   <h2 class="section">🏆 Top 10 esperado (predicción IA — 60% forma reciente + 40% histórico)</h2>
   <table>
-    <thead><tr><th>#</th><th>Corredor</th><th>Club</th><th>Categoría</th><th style="text-align:center">🤖 Pos. IA</th><th style="text-align:center">Media hist.</th><th style="text-align:center">Fiab.</th></tr></thead>
-    <tbody>${topRows||'<tr><td colspan="7" style="text-align:center;color:#9ca3af">Sin datos suficientes</td></tr>'}</tbody>
+    <thead><tr>
+      <th>#</th><th>Corredor</th><th>Club</th><th>Cat.</th>
+      <th style="text-align:center">🤖 Pos. IA</th>
+      <th style="text-align:center">🎯 Top10</th>
+      <th style="text-align:center">🥇 Podio</th>
+      <th style="text-align:center">🚨 Riesgo</th>
+      <th style="text-align:center">Media</th>
+      <th style="text-align:center">Fiab.</th>
+    </tr></thead>
+    <tbody>${topRows||'<tr><td colspan="10" style="text-align:center;color:#9ca3af">Sin datos suficientes</td></tr>'}</tbody>
   </table>
 
   ${(()=>{
@@ -21680,7 +21704,17 @@ function _simExportPDF(){
 
   <h2 class="section">🚴 Parrilla completa analizada</h2>
   <table>
-    <thead><tr><th>#</th><th>Corredor</th><th>Club</th><th>Cat.</th><th style="text-align:center">Historial</th><th style="text-align:center">🤖 Pos. IA</th><th style="text-align:center">Media hist.</th><th style="text-align:center">Mejor</th><th style="text-align:center">Fiab.</th><th style="text-align:center">C.</th></tr></thead>
+    <thead><tr>
+      <th>#</th><th>Corredor</th><th>Club</th><th>Cat.</th>
+      <th style="text-align:center">Hist.</th>
+      <th style="text-align:center">🤖 Pos. IA</th>
+      <th style="text-align:center">🎯 Top10</th>
+      <th style="text-align:center">🥇 Podio</th>
+      <th style="text-align:center">🚨 Riesgo</th>
+      <th style="text-align:center">Media</th>
+      <th style="text-align:center">Fiab.</th>
+      <th style="text-align:center">C.</th>
+    </tr></thead>
     <tbody>${gridRows}</tbody>
   </table>
 
@@ -22063,9 +22097,29 @@ function _simComputeTeamPredictions(grid){
     const top3 = list.slice(0,3);
     const sumTop3 = top3.reduce((s,g)=>s+g._teamScore,0);
     const best = top3[0]._teamScore;
+    // Métricas de probabilidad agregadas (de los top3)
+    const _avg = (arr, key) => {
+      const vals = arr.map(r=>r[key]).filter(v=>v!=null);
+      return vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : null;
+    };
+    const avgPodiumProb = _avg(top3, 'probPodiumLogistic');   // % medio podio top3
+    const maxPodiumProb = top3.reduce((m,r)=>Math.max(m, r.probPodiumLogistic??0), 0);
+    const avgCutRisk    = _avg(top3, 'probCutLogistic');      // % medio riesgo corte top3
+    // Suma de Top10 individuales = nº esperado de finishers en Top 10
+    const expectedTop10 = top3.reduce((s,r)=>s+((r.probTop10Poisson??0)/100), 0);
+    // Probabilidad de que ALGÚN top3 haga podio individual (independencia aproximada)
+    // P(alguno podio) = 1 − ∏(1 − P_i)
+    const pAnyPodium = 1 - top3.reduce((prod, r)=>prod * (1 - (r.probPodiumLogistic??0)/100), 1);
+
     out.push({
       team, top3, sumTop3, best, count:list.length,
-      isMyTeam: mk && team.toLowerCase()===mk
+      isMyTeam: mk && team.toLowerCase()===mk,
+      // Enriquecimiento probabilístico
+      avgPodiumProb: avgPodiumProb!=null ? Math.round(avgPodiumProb) : null,
+      maxPodiumProb: Math.round(maxPodiumProb),
+      avgCutRisk:    avgCutRisk!=null    ? Math.round(avgCutRisk)    : null,
+      expectedTop10: Math.round(expectedTop10 * 100) / 100,
+      anyPodiumProb: Math.round(pAnyPodium * 100)
     });
   });
   out.sort((a,b)=>a.sumTop3-b.sumTop3);
@@ -22095,6 +22149,9 @@ function _simRenderTeamsPanel(){
       const trend = g.trend==='up'?'⬆️':g.trend==='down'?'⬇️':'';
       return `<div>${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b> <span style="color:#7c3aed;font-weight:700">${score!=null?score.toFixed(1)+'º':'—'}</span> ${trend}</div>`;
     }).join('');
+    // Indicador de "amenaza" colectiva
+    const podColor = t.anyPodiumProb>=50?'#15803d':t.anyPodiumProb>=25?'#d97706':'#94a3b8';
+    const riskColor = t.avgCutRisk>50?'#b91c1c':t.avgCutRisk>25?'#d97706':'#94a3b8';
     return `<div class="sim-team-card ${cls}">
       <div class="sim-team-card-hdr">
         <span class="sim-team-rank">${rank}º</span>
@@ -22102,10 +22159,17 @@ function _simRenderTeamsPanel(){
         <span class="sim-team-sum">Σ ${t.sumTop3.toFixed(1)}</span>
       </div>
       <div class="sim-team-riders">${ridersHtml}</div>
-      <div style="font-size:11px;color:#6b7280;margin-top:6px">Mejor: ${t.best.toFixed(1)}º · ${t.count} inscritos con datos</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:6px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <span>Mejor: ${t.best.toFixed(1)}º</span>
+        <span>·</span>
+        <span title="Suma de probabilidades Top10 individuales">🎯 ${t.expectedTop10!=null?t.expectedTop10.toFixed(1):'—'} esperados Top10</span>
+        <span>·</span>
+        <span style="color:${podColor};font-weight:700" title="Prob. de que algún top3 haga podio">🥇 ${t.anyPodiumProb??'—'}%</span>
+        ${t.avgCutRisk>25?`<span>·</span><span style="color:${riskColor};font-weight:700" title="Riesgo medio de corte top3">🚨 ${t.avgCutRisk}%</span>`:''}
+      </div>
     </div>`;
   }).join('')}</div>
-  <p class="small" style="margin-top:10px;color:#6b7280">Equipos ordenados por suma de las 3 mejores posiciones esperadas (menor = mejor). Sólo se incluyen equipos con ≥3 corredores con histórico.</p>`;
+  <p class="small" style="margin-top:10px;color:#6b7280">Ranking por Σ top3 (menor = mejor). 🎯 = nº esperado de Top10 (Bernoulli). 🥇 = prob. de podio individual del top3 (logística). 🚨 = riesgo medio de corte.</p>`;
 }
 
 // ── D) ANÁLISIS POR LOCALIDAD ─────────────────────────────────────────────
@@ -22860,7 +22924,13 @@ function _simRenderTeamSummaryPanel(){
         <div class="sim-ts-kpi-icon">🥇</div>
         <div class="sim-ts-kpi-val" style="color:${pc}">${podiumProb}%</div>
         <div class="sim-ts-kpi-lbl">Probabilidad de podio colectivo</div>
-        <div class="sim-ts-kpi-sub">Basado en ranking estimado y fiabilidad</div>
+        <div class="sim-ts-kpi-sub">P(alguno del top3 hace podio individual): ${myData.anyPodiumProb??'—'}%</div>
+      </div>
+      <div class="sim-ts-kpi" style="background:linear-gradient(135deg,#0ea5e912,#0ea5e906);border-color:#0ea5e930">
+        <div class="sim-ts-kpi-icon">🎯</div>
+        <div class="sim-ts-kpi-val" style="color:#0369a1">${myData.expectedTop10!=null?myData.expectedTop10.toFixed(1):'—'}</div>
+        <div class="sim-ts-kpi-lbl">Finishers esperados en Top 10</div>
+        <div class="sim-ts-kpi-sub">Suma de probabilidades individuales (Bernoulli)</div>
       </div>
       <div class="sim-ts-kpi" style="background:linear-gradient(135deg,#dc262612,#dc262606);border-color:#dc262630">
         <div class="sim-ts-kpi-icon">⚔️</div>
@@ -23095,29 +23165,36 @@ function _simBuildBriefing(){
       range: (leader.predLower!=null&&leader.predUpper!=null)
         ? `${leader.predLower}º–${leader.predUpper}º`
         : (leader.predictedPos!=null ? Math.round(leader.predictedPos)+'º' : null),
-      trend: leader.trend
+      trend: leader.trend,
+      probTop10: leader.probTop10Poisson,
+      probPodium: leader.probPodiumLogistic,
+      probCut: leader.probCutLogistic
     } : null,
     top3Riders: lineupScore.top3.map(r=>({
-      name:r.name, score:(r.predictedPos??r.avgPos)?.toFixed(1), trend:r.trend
-    }))
+      name:r.name, score:(r.predictedPos??r.avgPos)?.toFixed(1), trend:r.trend,
+      probTop10: r.probTop10Poisson, probPodium: r.probPodiumLogistic, probCut: r.probCutLogistic
+    })),
+    // Métricas agregadas del equipo
+    teamExpectedTop10: myData ? myData.expectedTop10 : null,
+    teamAnyPodium:     myData ? myData.anyPodiumProb : null,
+    teamAvgCutRisk:    myData ? myData.avgCutRisk : null
   };
 
-  // ── Bloque 2: Scouting — rivales más peligrosos en racha ─────────────────
+  // ── Bloque 2: Scouting — rivales más peligrosos por amenaza real ─────────
+  // Score de amenaza compuesto: posición + tendencia + prob. podio individual
   const rivals = grid
     .filter(g => !g.isMyTeam && g.hasHistory && (g.predictedPos??g.avgPos)!=null)
     .map(g=>({
       name:g.name, team:g.team, cat:g.cat,
       score: g.predictedPos??g.avgPos,
       trend:g.trend, rel:g.reliability,
-      range:(g.predLower!=null&&g.predUpper!=null)?`${g.predLower}º–${g.predUpper}º`:null
+      probTop10: g.probTop10Poisson, probPodium: g.probPodiumLogistic, probCut: g.probCutLogistic,
+      range:(g.predLower!=null&&g.predUpper!=null)?`${g.predLower}º–${g.predUpper}º`:null,
+      // Score amenaza: mayor prob. podio + tendencia ascendente = más peligroso
+      _threat: (g.probPodiumLogistic||0) + (g.trend==='up'?15:g.trend==='down'?-10:0) - (g.predictedPos||50)*0.5
     }));
-  // Prioridad: en racha ascendente, luego por score
-  rivals.sort((a,b)=>{
-    const aUp = a.trend==='up' ? 0 : 1;
-    const bUp = b.trend==='up' ? 0 : 1;
-    if(aUp!==bUp) return aUp-bUp;
-    return a.score - b.score;
-  });
+  // Ordenar por amenaza descendente (los más peligrosos primero)
+  rivals.sort((a,b)=>b._threat - a._threat);
   const scouting = rivals.slice(0,5);
 
   // ── Bloque 3: Consejo táctico ─────────────────────────────────────────────
@@ -23196,6 +23273,16 @@ function _simDrawBriefPanel(brief){
   const {obj, scouting, advice, circuitMeta, kpis, race, now} = brief;
   const trendI = t => t==='up'?'⬆️':t==='down'?'⬇️':t==='stable'?'➡️':'';
 
+  // Helper para chips de probabilidad compactos
+  const chip = (val, type) => {
+    if(val==null) return '';
+    let c, bg, icon='';
+    if(type==='top10'){ c=val>=70?'#15803d':val>=40?'#92400e':'#475569'; bg=val>=70?'#dcfce7':val>=40?'#fef3c7':'#f1f5f9'; }
+    else if(type==='podium'){ c=val>=60?'#15803d':val>=30?'#92400e':'#475569'; bg=val>=60?'#dcfce7':val>=30?'#fef3c7':'#f1f5f9'; if(val>=60) icon=' 🥇'; }
+    else /* risk */ { c=val>50?'#991b1b':val>25?'#92400e':'#475569'; bg=val>50?'#fee2e2':val>25?'#fef3c7':'#f1f5f9'; if(val>50) icon=' ⚠️'; }
+    return `<span style="background:${bg};color:${c};padding:1px 6px;border-radius:4px;font-weight:800;font-size:11px">${val}%${icon}</span>`;
+  };
+
   // ── Bloque 1: Objetivo ──────────────────────────────────────────────────
   const block1 = `<div class="sim-brief-block sim-brief-obj">
     <div class="sim-brief-block-title">🎯 Bloque 1 · Resumen de objetivos</div>
@@ -23205,10 +23292,17 @@ function _simDrawBriefPanel(brief){
       <b>${esc(obj.leader.name)}</b>
       ${obj.leader.range?`<span style="color:#7c3aed;font-weight:700">${esc(obj.leader.range)}</span>`:''}
       ${trendI(obj.leader.trend)}
+      <span style="margin-left:6px;display:inline-flex;gap:5px;align-items:center;flex-wrap:wrap">
+        ${obj.leader.probTop10!=null?`🎯 ${chip(obj.leader.probTop10,'top10')}`:''}
+        ${obj.leader.probPodium!=null?`🥇 ${chip(obj.leader.probPodium,'podium')}`:''}
+        ${obj.leader.probCut!=null && obj.leader.probCut>25?`🚨 ${chip(obj.leader.probCut,'risk')}`:''}
+      </span>
     </div>` : ''}
     ${obj.podiumProb!=null ? `<div style="margin-top:10px;display:flex;gap:14px;flex-wrap:wrap">
       <span style="font-size:12px;color:#475569">Pos. equipo estimada: <b style="color:#0b2f6b">${obj.myRank}º de ${obj.totalT}</b></span>
-      <span style="font-size:12px;color:#475569">Probabilidad de podio colectivo: <b style="color:${obj.podiumProb>=60?'#16a34a':obj.podiumProb>=35?'#d97706':'#dc2626'}">${obj.podiumProb}%</b></span>
+      <span style="font-size:12px;color:#475569">Prob. podio colectivo: <b style="color:${obj.podiumProb>=60?'#16a34a':obj.podiumProb>=35?'#d97706':'#dc2626'}">${obj.podiumProb}%</b></span>
+      ${obj.teamExpectedTop10!=null?`<span style="font-size:12px;color:#475569">🎯 Esperados Top10: <b style="color:#0369a1">${obj.teamExpectedTop10.toFixed(1)}</b></span>`:''}
+      ${obj.teamAnyPodium!=null?`<span style="font-size:12px;color:#475569">🥇 Algún top3 podio: <b>${obj.teamAnyPodium}%</b></span>`:''}
     </div>` : ''}
     ${obj.top3Riders.length ? `<div style="margin-top:10px;font-size:12px;color:#475569">Top 3 titulares activos: ${obj.top3Riders.map(r=>`<b>${esc(r.name.split(/[,\s]/)[0])}</b> (${r.score||'—'}º) ${trendI(r.trend)}`).join(' · ')}</div>` : ''}
   </div>`;
@@ -23218,7 +23312,9 @@ function _simDrawBriefPanel(brief){
     <div class="sim-brief-scout-rank">${i+1}</div>
     <div class="sim-brief-scout-info">
       <div class="sim-brief-scout-name">${esc(r.name)}</div>
-      <div class="sim-brief-scout-meta">${esc(r.team||'—')}${r.cat?' · '+esc(r.cat):''}  · Pos. IA: <b>${r.range||Math.round(r.score)+'º'}</b> · Fiab: ${r.rel!=null?r.rel+'%':'—'}</div>
+      <div class="sim-brief-scout-meta">${esc(r.team||'—')}${r.cat?' · '+esc(r.cat):''} · Pos. IA: <b>${r.range||Math.round(r.score)+'º'}</b> · Fiab: ${r.rel!=null?r.rel+'%':'—'}
+        ${r.probPodium!=null?'<br>'+chip(r.probTop10,'top10')+' '+chip(r.probPodium,'podium')+(r.probCut>25?' '+chip(r.probCut,'risk'):''):''}
+      </div>
     </div>
     <div class="sim-brief-scout-trend">${trendI(r.trend)}</div>
   </div>`).join('');
@@ -23311,9 +23407,13 @@ function _simBriefPDF(){
   <div class="block obj">
     <div class="block-title">🎯 Bloque 1 · Resumen de objetivos</div>
     <div class="goal">${esc(obj.goalText)}</div>
-    ${obj.leader?`<div class="leader">👑 Líder estimado: <b>${esc(obj.leader.name)}</b>${obj.leader.range?' · Pos. IA: <b style="color:#5b21b6">'+esc(obj.leader.range)+'</b>':''} ${trendT(obj.leader.trend)}</div>`:''}
-    ${obj.myRank!=null?`<div style="font-size:10px;color:#475569">Posición por equipos estimada: <b>${obj.myRank}º de ${obj.totalT}</b>${obj.podiumProb!=null?' · Probabilidad de podio: <b>'+obj.podiumProb+'%</b>':''}</div>`:''}
-    ${obj.top3Riders.length?`<div style="font-size:10px;color:#64748b;margin-top:2mm">Top 3 titulares: ${obj.top3Riders.map(r=>`<b>${esc(r.name.split(/[,\s]/)[0])}</b> (${r.score||'—'}º) ${trendT(r.trend)}`).join(' · ')}</div>`:''}
+    ${obj.leader?`<div class="leader">👑 Líder estimado: <b>${esc(obj.leader.name)}</b>${obj.leader.range?' · Pos. IA: <b style="color:#5b21b6">'+esc(obj.leader.range)+'</b>':''} ${trendT(obj.leader.trend)}
+      ${obj.leader.probTop10!=null?' · 🎯 '+obj.leader.probTop10+'%':''}
+      ${obj.leader.probPodium!=null?' · 🥇 '+obj.leader.probPodium+'%':''}
+      ${obj.leader.probCut!=null&&obj.leader.probCut>25?' · 🚨 '+obj.leader.probCut+'%':''}
+    </div>`:''}
+    ${obj.myRank!=null?`<div style="font-size:10px;color:#475569;margin-top:1mm">Posición por equipos estimada: <b>${obj.myRank}º de ${obj.totalT}</b>${obj.podiumProb!=null?' · Prob. podio colectivo: <b>'+obj.podiumProb+'%</b>':''}${obj.teamExpectedTop10!=null?' · 🎯 Esperados Top10: <b>'+obj.teamExpectedTop10.toFixed(1)+'</b>':''}${obj.teamAnyPodium!=null?' · 🥇 Algún top3 podio: <b>'+obj.teamAnyPodium+'%</b>':''}</div>`:''}
+    ${obj.top3Riders.length?`<div style="font-size:10px;color:#64748b;margin-top:2mm">Top 3 titulares: ${obj.top3Riders.map(r=>`<b>${esc(r.name.split(/[,\s]/)[0])}</b> (${r.score||'—'}º) ${trendT(r.trend)}${r.probPodium!=null?' [🥇 '+r.probPodium+'%]':''}`).join(' · ')}</div>`:''}
   </div>
   <div class="block scout">
     <div class="block-title">🔭 Bloque 2 · Radar de vigilancia rival</div>
@@ -23321,7 +23421,11 @@ function _simBriefPDF(){
       <div class="s-num">${i+1}</div>
       <div class="s-info" style="flex:1">
         <div class="n">${esc(r.name)} ${trendT(r.trend)}</div>
-        <div class="m">${esc(r.team||'—')}${r.cat?' · '+esc(r.cat):''} · Pos. IA: <b>${r.range||Math.round(r.score)+'º'}</b> · Fiab: ${r.rel!=null?r.rel+'%':'—'}</div>
+        <div class="m">${esc(r.team||'—')}${r.cat?' · '+esc(r.cat):''} · Pos. IA: <b>${r.range||Math.round(r.score)+'º'}</b> · Fiab: ${r.rel!=null?r.rel+'%':'—'}
+          ${r.probTop10!=null?' · 🎯 '+r.probTop10+'%':''}
+          ${r.probPodium!=null?' · 🥇 '+r.probPodium+'%':''}
+          ${r.probCut!=null&&r.probCut>25?' · 🚨 '+r.probCut+'%':''}
+        </div>
       </div>
     </div>`).join('')||'<p style="font-size:10px;color:#9ca3af">Sin datos suficientes</p>'}
   </div>
@@ -23353,11 +23457,11 @@ function _simBriefShare(){
     ``,
     `🎯 *OBJETIVO COLECTIVO*`,
     obj.goalText,
-    obj.leader ? `👑 Líder estimado: *${obj.leader.name}*${obj.leader.range?' ('+obj.leader.range+')':''}${tT(obj.leader.trend)}` : '',
-    obj.myRank!=null ? `🏆 Posición estimada: *${obj.myRank}º de ${obj.totalT} equipos*${obj.podiumProb!=null?' · Podio: '+obj.podiumProb+'%':''}` : '',
+    obj.leader ? `👑 Líder estimado: *${obj.leader.name}*${obj.leader.range?' ('+obj.leader.range+')':''}${tT(obj.leader.trend)}${obj.leader.probPodium!=null?' · 🥇 '+obj.leader.probPodium+'% podio':''}` : '',
+    obj.myRank!=null ? `🏆 Posición estimada: *${obj.myRank}º de ${obj.totalT} equipos*${obj.podiumProb!=null?' · Podio: '+obj.podiumProb+'%':''}${obj.teamExpectedTop10!=null?' · 🎯 '+obj.teamExpectedTop10.toFixed(1)+' esperados Top10':''}` : '',
     ``,
     `🔭 *RIVALES A VIGILAR*`,
-    ...scouting.slice(0,3).map((r,i)=>`${i+1}. *${r.name}*${tT(r.trend)} (${r.team||'—'}) · Pos. IA: ${r.range||Math.round(r.score)+'º'}`),
+    ...scouting.slice(0,3).map((r,i)=>`${i+1}. *${r.name}*${tT(r.trend)} (${r.team||'—'}) · Pos. IA: ${r.range||Math.round(r.score)+'º'}${r.probPodium!=null&&r.probPodium>=30?' · 🥇 '+r.probPodium+'%':''}`),
     ``,
     `🧠 *CONSEJO TÁCTICO*`,
     advice,
