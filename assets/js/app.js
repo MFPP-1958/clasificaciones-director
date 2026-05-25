@@ -20992,6 +20992,20 @@ function _simCapPos(p, max){
   return Math.max(1, Math.min(m, Math.round(p)));
 }
 
+// — Detecta si una carrera es una etapa de vuelta o una contrarreloj —
+// Las etapas y CRIs introducen ruido en el histórico porque sus puestos
+// reflejan especialización (escalador, cronoman, velocista…) no la forma
+// general del corredor. Mejor excluirlas del cálculo de avgPos.
+function _simIsStageRace(h){
+  if(!h) return false;
+  const name = (h.raceName||'').toLowerCase();
+  const modal = (h.modalidad||'').toLowerCase();
+  if(/\b(etapa|stage)\b/i.test(name)) return true;
+  if(/\b(cri|crono|contrarreloj|chrono|tt)\b/i.test(name)) return true;
+  if(/(etapa|stage|cri|crono)/i.test(modal)) return true;
+  return false;
+}
+
 // Construye el grid analizado: para cada inscrito, calcula sus métricas históricas
 function _simBuildData(raceId){
   const hist = _cachedHistory || [];
@@ -20999,7 +21013,12 @@ function _simBuildData(raceId){
   if(!race){ _simCurrentData = null; return; }
   const inscritos = race.inscritos || [];
   // Índices del histórico (excluyendo la propia prueba si no se ha disputado, para no contaminar)
-  const historicalRaces = hist.filter(h => h.id !== raceId && (h.riders||[]).length >= 3);
+  // Excluimos etapas y CRIs del histórico: introducen ruido por especialización
+  const historicalRaces = hist.filter(h =>
+    h.id !== raceId &&
+    (h.riders||[]).length >= 3 &&
+    !_simIsStageRace(h)
+  );
   // Index: nameKey → array de {pos, total, raceDate, cat, team}
   const byRider = new Map();
   // Index: teamKey → array de posiciones de cualquier corredor
@@ -21060,19 +21079,20 @@ function _simBuildData(raceId){
         trend = _simTrend(recentForm);
 
         // ══ ÁRBOL DE REGRESIÓN ════════════════════════════════════════════════
-        // — RAMA A: Categoría y experiencia —
+        // — RAMA A: Categoría y experiencia (CALIBRADO con backtest) —
+        // El backtest mostraba sesgo +10 → bajamos los factores cadete para no
+        // infraestimar tanto las posiciones reales de los cadetes en forma.
         const {isCadet, year} = _simCadetCategory(ins.cat);
         if(isCadet && year === 1){
-          cadetFactor = 1.20;
+          cadetFactor = 1.10;            // antes 1.20
           treeNode.push('A1:cadete-1er-año');
         } else if(isCadet && year === 2 && hits.length < 3){
-          // 2º año pero apenas ha competido: penalización suavizada
-          cadetFactor = 1.10;
+          cadetFactor = 1.05;            // antes 1.10
           treeNode.push('A2b:cadete-2º-novato');
         } else if(isCadet && year === 2){
           treeNode.push('A2:cadete-2º-veterano');
         } else if(isCadet && hits.length < 3){
-          cadetFactor = 1.15;
+          cadetFactor = 1.08;            // antes 1.15
           treeNode.push('A3:cadete-sin-año-novato');
         } else if(isCadet){
           treeNode.push('A3:cadete');
@@ -21086,12 +21106,13 @@ function _simBuildData(raceId){
         predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
         predictedPos *= cadetFactor;
 
-        // — Penalización transparente por fiabilidad —
-        // Documentada en el panel de ayuda: ×1.00 / ×1.08 / ×1.15 / ×1.20
+        // — Penalización por fiabilidad (CALIBRADO con backtest) —
+        // El backtest detectaba que la penalización antigua x1.20 era demasiado
+        // conservadora para corredores en racha pero inestables. La suavizamos.
         relPenalty = reliability >= 75 ? 1.00
-                   : reliability >= 50 ? 1.08
-                   : reliability >= 25 ? 1.15
-                   : 1.20;
+                   : reliability >= 50 ? 1.05   // antes 1.08
+                   : reliability >= 25 ? 1.10   // antes 1.15
+                   : 1.15;                       // antes 1.20
         predictedPos *= relPenalty;
 
         // — RAMA C: Fiabilidad → ajuste del intervalo de confianza —
@@ -21170,10 +21191,11 @@ function _simBuildData(raceId){
     };
   });
 
-  // ── ACOTAR posiciones al rango físico [1, totalIns] ─────────────────────
-  // Si el rango colapsa al capar (p.ej. predUpper=130 y predLower=120 ambos
-  // capados a 72), preservamos un ancho mínimo razonable hacia atrás para
-  // mantener la información del intervalo.
+  // ── ACOTAR posiciones para visualización ─────────────────────────────────
+  // Estrategia: guardamos predictedPosRaw (sin capar) para sortear y comparar
+  // entre corredores. predictedPos se redondea pero NO se capa, para que dos
+  // corredores con predicción 90 y 130 mantengan su orden relativo. El cap
+  // visual se aplica solo en el render (etiqueta "72+" si supera el pelotón).
   const _capN = inscritos.length || 60;
   grid.forEach(g=>{
     if(g.predictedPos == null) return;
@@ -21181,13 +21203,15 @@ function _simBuildData(raceId){
     const origUpper = g.predUpper;
     const origWidth = (origLower!=null && origUpper!=null) ? Math.max(0, origUpper - origLower) : 0;
 
-    g.predictedPos = _simCapPos(g.predictedPos, _capN);
-    g.predLower    = _simCapPos(g.predLower,    _capN);
-    g.predUpper    = _simCapPos(g.predUpper,    _capN);
+    // Guardar valor crudo para ordenamiento
+    g.predictedPosRaw = Math.round(g.predictedPos);
+    g.predictedPos    = Math.round(g.predictedPos); // sin cap → mantiene orden
+    g.predLower       = _simCapPos(g.predLower, _capN);
+    g.predUpper       = _simCapPos(g.predUpper, _capN);
+    // Flag para el render: ¿la predicción excede el pelotón?
+    g.predExceedsGrid = g.predictedPosRaw > _capN;
 
-    // Si tras capar el rango colapsa o queda demasiado estrecho frente al original,
-    // expandimos hacia abajo para mantener un ancho informativo (mínimo 5 puestos
-    // o el ancho original, lo que sea menor). Siempre redondeado a entero.
+    // Si tras capar predLower/predUpper el rango colapsa, expandimos hacia abajo
     if(g.predLower != null && g.predUpper != null){
       const newWidth = g.predUpper - g.predLower;
       const targetWidth = Math.round(Math.min(_capN - 1, Math.max(5, origWidth)));
@@ -22301,7 +22325,13 @@ function _simRenderTeamsPanel(){
     const ridersHtml = t.top3.map(g=>{
       const score = g._teamScore ?? g.predictedPos ?? g.avgPos;
       const trend = g.trend==='up'?'⬆️':g.trend==='down'?'⬇️':'';
-      return `<div>${g.isMyTeam?'🔵 ':''}<b class="sim-rider-clickable" data-rider="${escapeHtml(g.name)}" onclick="_simShowRiderHistory(this.dataset.rider)" title="Click para ver carreras históricas">${escapeHtml(g.name)}</b> <span style="color:#7c3aed;font-weight:700">${score!=null?score.toFixed(1)+'º':'—'}</span> ${trend}</div>`;
+      // Si la predicción excede el pelotón, mostrar con "+"
+      const totIns = _simCurrentData?.inscritos?.length || 60;
+      const exceeds = g.predExceedsGrid || (score != null && score > totIns);
+      const scoreStr = score==null ? '—'
+                     : exceeds ? totIns+'+º'
+                     : score.toFixed(1)+'º';
+      return `<div>${g.isMyTeam?'🔵 ':''}<b class="sim-rider-clickable" data-rider="${escapeHtml(g.name)}" onclick="_simShowRiderHistory(this.dataset.rider)" title="Click para ver carreras históricas">${escapeHtml(g.name)}</b> <span style="color:#7c3aed;font-weight:700" title="${exceeds?'Predicción real: '+Math.round(score)+'º (excede el pelotón)':'Posición predicha'}">${scoreStr}</span> ${trend}</div>`;
     }).join('');
     // Indicador de "amenaza" colectiva
     const podColor = t.anyPodiumProb>=50?'#15803d':t.anyPodiumProb>=25?'#d97706':'#94a3b8';
@@ -23689,7 +23719,12 @@ function _simRunBacktest(){
     try{
       const t0 = performance.now();
       const hist = _cachedHistory || [];
-      const past = hist.filter(h => (h.riders||[]).length >= 3 && _parseSpanishDate(h.raceDate));
+      // Filtros: con resultados, fecha válida, NO etapas/CRIs (que distorsionan)
+      const past = hist.filter(h =>
+        (h.riders||[]).length >= 3 &&
+        _parseSpanishDate(h.raceDate) &&
+        !_simIsStageRace(h)
+      );
 
       if(past.length < 5){
         if(typeof showToast==='function') showToast('Necesitas al menos 5 carreras con resultados para el backtest','warn',4500);
@@ -23753,7 +23788,8 @@ function _simRunBacktest(){
 
           // Penalización por fiabilidad
           const reliability = _simReliability(positions, N) ?? 50;
-          const relPenalty = reliability>=75 ? 1.00 : reliability>=50 ? 1.08 : reliability>=25 ? 1.15 : 1.20;
+          // CALIBRADO: misma escala suavizada que el motor real
+          const relPenalty = reliability>=75 ? 1.00 : reliability>=50 ? 1.05 : reliability>=25 ? 1.10 : 1.15;
           predicted *= relPenalty;
           predicted = Math.max(1, Math.min(N, Math.round(predicted)));
 
