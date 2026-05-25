@@ -1449,6 +1449,84 @@
         <div class="section-title">
           <h2 style="margin:0">📊 Nivel de la Parrilla (Strength of Field)</h2>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Qué significan estas 4 cifras y cómo influyen en la fiabilidad de las predicciones?</summary>
+          <div class="sim-help-body">
+
+            <h4>📊 ¿Qué es "Strength of Field"?</h4>
+            <p>Es un término del ciclismo profesional para medir el <b>nivel competitivo de una parrilla</b>. Estas 4 cifras te dan una <b>radiografía instantánea</b> de la prueba: si va a ser dura, si los datos del histórico son suficientes para predecir bien, y cuántos corredores son una incógnita. Te ayudan a contextualizar todo lo demás del simulador.</p>
+
+            <h4>⚠️ DIFICULTAD DE LA PRUEBA (amarillo)</h4>
+            <p>Mide qué porcentaje de los rivales (excluyendo tu equipo) tiene una media histórica inferior al puesto 15 — es decir, gente que normalmente pelea arriba. Cuantos más corredores así haya, más dura es la carrera.</p>
+            <p><b>Fórmula:</b> <code>(rivales con media&lt;15) / (rivales con histórico) × 100</code></p>
+            <ul>
+              <li><b style="color:#16a34a">≥0% y &lt;30% (verde)</b>: <b>Asequible</b> — pocos favoritos, oportunidad real para destacar</li>
+              <li><b style="color:#f59e0b">30-59% (amarillo)</b>: <b>Competitiva</b> — varios rivales fuertes pero no abrumador</li>
+              <li><b style="color:#dc2626">≥60% (rojo)</b>: <b>Exigente</b> — pelotón muy nivelado, será difícil destacar</li>
+            </ul>
+            <div class="example">
+              <b>Tu caso:</b> 12% · 8 rivales fuertes · <b>Asequible</b>. Solo 8 corredores de toda la parrilla tienen media histórica &lt;15. Es una carrera con buena ventana de oportunidad si tu equipo viene bien.
+            </div>
+
+            <h4>🎯 PREDICTIBILIDAD (verde/rojo)</h4>
+            <p>Mide <b>cuán fiables son las predicciones que estás viendo</b>. Combina dos cosas:</p>
+            <ol>
+              <li>La <b>fiabilidad media</b> de los corredores con histórico (cuán consistentes son sus resultados)</li>
+              <li>La <b>cobertura histórica</b> (qué porcentaje de inscritos tiene datos previos)</li>
+            </ol>
+            <p><b>Fórmula:</b> <code>Predictibilidad = Fiab. media × (Cobertura / 100)</code></p>
+            <ul>
+              <li><b style="color:#16a34a">≥70% (verde)</b>: <b>Alta</b> — confianza alta en las predicciones, fíate de las cifras</li>
+              <li><b style="color:#f59e0b">40-69% (amarillo)</b>: <b>Media</b> — las predicciones son orientativas, no las tomes como ley</li>
+              <li><b style="color:#dc2626">&lt;40% (rojo)</b>: <b>Baja</b> — la prueba tiene poco histórico fiable, las cifras son indicativas pero la incertidumbre es alta</li>
+            </ul>
+            <div class="example">
+              <b>Tu caso:</b> 31% · Fiab media 33% · Cobertura 93% · <b>Baja</b>.<br>
+              → El problema NO es la cobertura (93% tienen datos) sino la fiabilidad media: solo el 33% de los corredores son <b>consistentes</b> en sus resultados. Significa que el pelotón es muy variable día a día (la mayoría tiene resultados disparísimos).<br>
+              → <b>Implicación táctica:</b> el domingo cualquier cosa puede pasar. Las predicciones son hipótesis razonables, no certezas.
+            </div>
+
+            <h4>🔍 COBERTURA HISTÓRICA (azul)</h4>
+            <p>Porcentaje de los inscritos sobre los que <b>tenemos datos del histórico</b> (al menos 1 carrera previa). Los debutantes absolutos quedan fuera.</p>
+            <ul>
+              <li><b style="color:#16a34a">≥70% (verde)</b>: tenemos información de casi todos — predicción robusta</li>
+              <li><b style="color:#f59e0b">40-69% (amarillo)</b>: hay un grupo importante de debutantes — incertidumbre moderada</li>
+              <li><b style="color:#dc2626">&lt;40% (rojo)</b>: muchos debutantes — la mayoría es una incógnita, fiabilidad limitada</li>
+            </ul>
+            <div class="example">
+              <b>Tu caso:</b> 93% · 67 de 72 con histórico · 5 debutantes. <b>Excelente</b>. Casi todos los inscritos tienen datos, así que las predicciones individuales son fiables. Los 5 debutantes que faltan se compensan con la <b>Rama B</b> (estimación por club, si su club está en el histórico).
+            </div>
+
+            <h4>🔵 MI EQUIPO EN PARRILLA</h4>
+            <p>Cuántos corredores tuyos hay en esta carrera. Detalla cuántos tienen historial y cuántos son debutantes en tu equipo.</p>
+            <div class="example">
+              <b>Tu caso:</b> 4 corredores · 4 con historial · 0 debutantes · TBG-WIXUM.<br>
+              → Todos tus corredores tienen al menos 1 carrera previa, así que sus predicciones individuales son personales (no extrapoladas del club). El cuadro azul te confirma que es tu equipo correcto.
+            </div>
+
+            <h4>🤔 ¿Por qué la Predictibilidad sale 31% si la Cobertura es 93%?</h4>
+            <p>Esta es una pregunta clave para entender el bloque. Cobertura y Predictibilidad <b>NO son lo mismo</b>:</p>
+            <ul>
+              <li><b>Cobertura</b> = "¿de cuántos corredores tenemos datos?" (tu caso: 93% sí)</li>
+              <li><b>Fiabilidad media</b> = "¿cómo de consistentes son esos datos?" (tu caso: 33%, muy variables)</li>
+              <li><b>Predictibilidad</b> = combina ambas: tener datos no sirve si los datos son ruido</li>
+            </ul>
+            <p>Pensándolo así: <b>tienes muchos datos pero la gente del pelotón es inconsistente</b>. El mismo corredor un día acaba 5º y otro 50º. Eso baja la predictibilidad aunque tengamos sus carreras almacenadas.</p>
+
+            <div class="tip">
+              💡 <b>Lectura conjunta de los 4 KPIs:</b>
+              <ul style="margin:6px 0">
+                <li><b>Dificultad baja + Predictibilidad alta</b>: prueba ideal para hacer un resultado claro</li>
+                <li><b>Dificultad alta + Predictibilidad alta</b>: nivel duro pero sabemos a qué atenernos — predicciones fiables</li>
+                <li><b>Dificultad baja + Predictibilidad baja</b>: <b>tu caso</b>. Hay oportunidad pero el resultado depende del día. Las predicciones son hipótesis, no certezas. Táctica flexible y atenta a los cortes</li>
+                <li><b>Dificultad alta + Predictibilidad baja</b>: peor escenario — duro y caótico. Toca prepararse para todo</li>
+              </ul>
+            </div>
+
+          </div>
+        </details>
+
         <div id="simKpiBody" class="sim-kpi-grid"></div>
       </section>
 
