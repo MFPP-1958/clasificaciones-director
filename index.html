@@ -1573,8 +1573,64 @@
       <section class="panel" id="simTeamSummaryPanel" style="display:none;border-left:4px solid #0b2f6b">
         <div class="section-title">
           <h2 style="margin:0;color:#0b2f6b">🏆 Pronóstico colectivo · Mi equipo</h2>
-          <button class="btn light" onclick="_simRenderTeamSummaryPanel()" style="padding:5px 11px;font-size:12px">🔄 Recalcular</button>
+          <button class="btn light" onclick="_simRecalcAll('team')" style="padding:5px 11px;font-size:12px" title="Vuelve a recorrer el histórico y recalcular todas las predicciones">🔄 Recalcular</button>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Qué es el Pronóstico colectivo y cómo se calculan estas 4 cifras?</summary>
+          <div class="sim-help-body">
+
+            <h4>🎯 ¿Qué hace este bloque?</h4>
+            <p>Hasta ahora hemos visto predicciones <b>individuales</b> (corredor a corredor). Este bloque agrega esos datos para responder a la pregunta del director: <b>"¿qué resultado va a hacer MI EQUIPO el domingo?"</b>.</p>
+
+            <h4>🏆 Posición estimada del equipo (p. ej. "7º de 9")</h4>
+            <p>En ciclismo base, la clasificación por equipos se calcula sumando los puestos de los <b>3 mejores corredores de cada equipo</b>. El equipo con la <b>suma más baja gana</b>.</p>
+            <p>Aquí cogemos los 3 mejores corredores TUYOS según la Pos. IA, sumamos sus puestos esperados (eso es la "Suma top3"), y comparamos con todos los demás equipos que tengan ≥3 inscritos con datos.</p>
+            <div class="example">
+              <b>Ejemplo:</b> Suma top3 = 197 pts significa que tus 3 mejores corredores van a sumar ~197 puestos entre los tres (p. ej. 42 + 59 + 96 = 197).<br>
+              Si hay 6 equipos con menos suma → eres 7º de 9.
+            </div>
+
+            <h4>🥇 Probabilidad de podio colectivo (p. ej. "6%")</h4>
+            <p>Es <b>la probabilidad de que el equipo entre en el podio por equipos</b> (top 3 por equipos). Se calcula con una curva exponencial calibrada:</p>
+            <p><code>P = 0.85 × e<sup>−k·(rank−1)</sup> × ajusteFiabilidad</code></p>
+            <ul>
+              <li>El 1º estimado tiene ~85% de podio (depende de la fiabilidad)</li>
+              <li>El 3º estimado tiene ~25-40%</li>
+              <li>El 7º estimado tiene ~5-8%</li>
+              <li>Por debajo del 8º la probabilidad cae casi a cero</li>
+            </ul>
+            <p>El subtítulo <b>"P(alguno del top3 hace podio individual): X%"</b> es OTRA cosa: la probabilidad de que <b>al menos UNO de tus 3 corredores haga podio personal</b> (1º, 2º o 3º absoluto). Se calcula combinando las probabilidades logísticas individuales.</p>
+
+            <h4>🎯 Finishers esperados en TOP 10 (p. ej. "0.5")</h4>
+            <p>Es <b>la suma de las probabilidades individuales de Top 10</b> (modelo Bernoulli) de tus 3 mejores corredores. Si sale 0.5 significa que estadísticamente esperamos que <b>medio corredor tuyo entre en Top 10</b> — es decir, hay cierta probabilidad pero no es seguro.</p>
+            <ul>
+              <li><b>0.5–1.0</b>: difícil meter a alguien en Top 10</li>
+              <li><b>1.0–2.0</b>: probable meter a 1, posibilidad de 2</li>
+              <li><b>≥2.0</b>: seguramente vas a tener 2+ corredores en Top 10</li>
+            </ul>
+
+            <h4>⚔️ Rival directo más peligroso</h4>
+            <p>Es el equipo <b>inmediatamente por encima tuyo</b> en el ranking estimado. Es contra quien tienes que pelear para subir una posición. El subtítulo te dice cuántos puntos te separan ("Nos llevan X pts" si está por delante, "Diferencia: +X pts" si está justo encima por pocos).</p>
+
+            <h4>🚨 ¿Qué son los avisos rojos/amarillos de abajo?</h4>
+            <p>Son <b>alertas tácticas automáticas</b> que dispara la IA según patrones detectados. Hay tres tipos:</p>
+            <ul>
+              <li><span style="color:#b91c1c;font-weight:700">⚠️ Aviso IA (rojo)</span>: Un equipo rival inscribe <b>2 o más corredores en racha ⬆️</b> entre sus 3 mejores. Significa que <b>la predicción puede quedarse corta</b> porque ese rival podría dar la sorpresa y subir posiciones. Si lo ves, prepárate para que ese rival rinda mejor de lo previsto.</li>
+              <li><span style="color:#92400e;font-weight:700">⚠️ Titulares inestables (amarillo)</span>: Tus titulares en el top 3 tienen <b>fiabilidad &lt;50%</b>. Significa que sus resultados son disparísimos — pueden romper la carrera o quedarse fuera. Considera usar el <b>Optimizador de alineación</b> abajo para evaluar un cambio.</li>
+              <li><span style="color:#0369a1;font-weight:700">🔥 Equipo en buena forma (azul)</span>: ≥2 de tus 3 mejores corredores vienen en racha ⬆️. La predicción <b>puede quedar corta a tu favor</b> — es decir, podrías rendir mejor de lo que dicen las cifras frías.</li>
+            </ul>
+
+            <h4>🔄 ¿Y el botón "Recalcular"?</h4>
+            <p>Reconstruye <b>todo el simulador desde cero</b> usando los datos cacheados. Útil si has cambiado la alineación en el optimizador y quieres asegurarte de que todas las cifras se han actualizado. Te aparecerá un toast confirmando: <code>🔄 Pronóstico colectivo recalculado · X inscritos · X equipos · X ms</code>.</p>
+
+            <div class="tip">
+              💡 <b>Lectura táctica:</b> El número 1 a vigilar es la <b>posición estimada del equipo</b>. Si estás 7º de 9, no es realista pelear por podio colectivo, pero SÍ puedes apuntar a "Finishers en Top 10" para que tus corredores destaquen individualmente. Si aparece un aviso rojo sobre un rival, asume que <b>te van a ganar puntos</b> y replantea objetivos.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simTeamSummaryBody"></div>
       </section>
 

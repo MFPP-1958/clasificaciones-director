@@ -20873,6 +20873,45 @@ function _simOnRaceChange(){
   _simRenderCurrent();
 }
 
+// Recalcula TODO el módulo simulador y muestra confirmación al usuario.
+// Útil tras cambiar alineación en el optimizador, o cuando el director
+// quiere asegurarse de que las cifras están al día.
+function _simRecalcAll(scope){
+  if(!_simSelectedRaceId){
+    if(typeof showToast==='function') showToast('Selecciona una prueba primero','warn');
+    return;
+  }
+  const t0 = performance.now();
+  try{
+    _simBuildData(_simSelectedRaceId);
+    _simRenderCurrent();
+    // Volver a renderizar paneles secundarios que pueden depender del estado del optimizador
+    try{ _simRenderTeamSummaryPanel(); }catch(e){}
+    try{ _simRenderLineupOptimizer();  }catch(e){}
+    try{ _simRenderTacticPanel();      }catch(e){}
+  }catch(e){
+    if(typeof showToast==='function') showToast('Error al recalcular: '+(e.message||e),'err',5000);
+    return;
+  }
+  const ms = Math.round(performance.now() - t0);
+  // Datos para el toast
+  const d = _simCurrentData;
+  const teams = d ? _simComputeTeamPredictions(d.grid).length : 0;
+  const inscritos = d ? d.inscritos.length : 0;
+  const label = scope==='team' ? 'Pronóstico colectivo' : 'Simulador';
+  if(typeof showToast==='function'){
+    showToast(`🔄 ${label} recalculado · ${inscritos} inscritos · ${teams} equipos · ${ms} ms`, 'ok', 2800);
+  }
+  // Flash visual breve del panel pertinente
+  const target = scope==='team' ? document.getElementById('simTeamSummaryPanel') : null;
+  if(target){
+    target.style.transition = 'background .2s';
+    const prev = target.style.background;
+    target.style.background = '#eef2ff';
+    setTimeout(()=>{ target.style.background = prev; }, 420);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MOTOR ESTADÍSTICO — FUNCIONES HELPER
 // Funciones puras y documentadas. Cada una protegida contra null/NaN.
