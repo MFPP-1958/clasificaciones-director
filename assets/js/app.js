@@ -21812,19 +21812,21 @@ function _simGetSavedPrediction(race){
 function _simComputeTeamPredictions(grid){
   const byTeam = new Map();
   grid.forEach(g=>{
-    if(g.avgPos==null) return;
+    // Usar predictedPos (fórmula 60/40) si está disponible; sino avgPos
+    const score = g.predictedPos ?? g.avgPos;
+    if(score==null) return;
     const t = (g.team||'').trim() || '(Sin equipo)';
     if(!byTeam.has(t)) byTeam.set(t, []);
-    byTeam.get(t).push(g);
+    byTeam.get(t).push({...g, _teamScore: score});
   });
   const out = [];
   const mk = (myTeam||'').toLowerCase();
   byTeam.forEach((list, team)=>{
-    list.sort((a,b)=>a.avgPos-b.avgPos);
+    list.sort((a,b)=>a._teamScore - b._teamScore);
     if(list.length<3) return; // Sólo equipos con al menos 3 con datos
     const top3 = list.slice(0,3);
-    const sumTop3 = top3.reduce((s,g)=>s+g.avgPos,0);
-    const best = top3[0].avgPos;
+    const sumTop3 = top3.reduce((s,g)=>s+g._teamScore,0);
+    const best = top3[0]._teamScore;
     out.push({
       team, top3, sumTop3, best, count:list.length,
       isMyTeam: mk && team.toLowerCase()===mk
@@ -21852,7 +21854,11 @@ function _simRenderTeamsPanel(){
     else if(rank===2) cls = 'silver';
     else if(rank===3) cls = 'bronze';
     if(t.isMyTeam) cls = 'mine';
-    const ridersHtml = t.top3.map(g=>`<div>${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b> <span style="color:#475569">${g.avgPos.toFixed(1)}º</span></div>`).join('');
+    const ridersHtml = t.top3.map(g=>{
+      const score = g._teamScore ?? g.predictedPos ?? g.avgPos;
+      const trend = g.trend==='up'?'⬆️':g.trend==='down'?'⬇️':'';
+      return `<div>${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b> <span style="color:#7c3aed;font-weight:700">${score!=null?score.toFixed(1)+'º':'—'}</span> ${trend}</div>`;
+    }).join('');
     return `<div class="sim-team-card ${cls}">
       <div class="sim-team-card-hdr">
         <span class="sim-team-rank">${rank}º</span>
@@ -22497,4 +22503,304 @@ if(_origSimShowEmpty_F4){
 }
 // ═══════════════════════════════════════════════════════════════════════════
 // FIN SIMULADOR FASE 4
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULADOR FASE 3b — PRONÓSTICO COLECTIVO + OPTIMIZADOR DE ALINEACIÓN
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Estado global del optimizador (null = todos titulares)
+let _simLineupActive = null;
+
+// ── Utilidades de cálculo ─────────────────────────────────────────────────
+
+// Calcula el score (Σ top3) con la alineación activa
+function _simComputeLineupScore(myRiders, activeSet){
+  const pool = (activeSet
+    ? myRiders.filter(r=>activeSet.has(r.name))
+    : myRiders.slice()
+  ).filter(r=>(r.predictedPos??r.avgPos)!=null)
+   .map(r=>({...r, _ls: r.predictedPos??r.avgPos}));
+  pool.sort((a,b)=>a._ls - b._ls);
+  const top3 = pool.slice(0,3);
+  const sumTop3 = top3.reduce((s,r)=>s+r._ls, 0);
+  const avgReliability = top3.length
+    ? top3.reduce((s,r)=>s+(r.reliability??50),0)/top3.length : 0;
+  return { pool, top3, sumTop3, avgReliability, hasEnough: top3.length>=3 };
+}
+
+// Probabilidad de podio colectivo a partir del ranking estimado
+function _simPodiumProbability(rank, totalTeams, avgReliability){
+  if(totalTeams < 3) return 100;
+  const baseTable = [0,88,72,55,38,25,15,8,4,2,1];
+  const base = baseTable[Math.min(rank, 10)] ?? 0;
+  const relFactor = 0.35 + 0.65 * ((avgReliability||50)/100);
+  return Math.min(99, Math.max(1, Math.round(base * relFactor)));
+}
+
+// Detecta el rival directo (equipo más cercano por encima en el ranking)
+function _simGetDirectRival(myRank, teams){
+  const rivals = teams.filter(t=>!t.isMyTeam);
+  if(!rivals.length) return null;
+  // El de menor diferencia de Σ respecto al mío (inmediatamente encima)
+  const justAbove = teams[myRank - 2]; // rank 1 → index 0
+  if(justAbove && !justAbove.isMyTeam) return justAbove;
+  return rivals[0];
+}
+
+// Genera alertas contextuales para el equipo
+function _simTeamContextAlerts(grid, teams, myRank){
+  const alerts = [];
+  // Rivales con corredores en racha
+  teams.filter(t=>!t.isMyTeam).slice(0, myRank + 2).forEach(t=>{
+    const upCount = (t.top3||[]).filter(r=>r.trend==='up').length;
+    if(upCount >= 2){
+      alerts.push({type:'danger',icon:'⚠️',
+        title:'Aviso IA',
+        msg:`La predicción puede quedar corta: ${t.team} inscribe ${upCount} corredores en racha ascendente que podrían subir posiciones`});
+    }
+  });
+  // Mis top3 con baja fiabilidad
+  const myData = teams.find(t=>t.isMyTeam);
+  if(myData){
+    const unstable = (myData.top3||[]).filter(r=>(r.reliability??100)<50);
+    if(unstable.length){
+      alerts.push({type:'warning',icon:'⚠️',
+        title:'Titulares inestables',
+        msg:`${unstable.map(r=>(r.name||'').split(/[,\s]/)[0]).join(', ')} tienen fiabilidad <50%. Considera usar el optimizador para evaluar un cambio.`});
+    }
+    // Mis top3 en racha positiva
+    const racing = (myData.top3||[]).filter(r=>r.trend==='up').length;
+    if(racing >= 2){
+      alerts.push({type:'info',icon:'🔥',
+        title:'Equipo en buena forma',
+        msg:`${racing} de tus 3 mejores corredores llevan racha positiva. La probabilidad de podio puede ser mayor de lo indicado.`});
+    }
+  }
+  return alerts;
+}
+
+// ── Panel de pronóstico colectivo ─────────────────────────────────────────
+function _simRenderTeamSummaryPanel(){
+  const panel = document.getElementById('simTeamSummaryPanel');
+  const body  = document.getElementById('simTeamSummaryBody');
+  if(!panel||!body) return;
+  if(!_simCurrentData||!myTeam){ panel.style.display='none'; return; }
+  const {grid} = _simCurrentData;
+  const myRiders = grid.filter(g=>g.isMyTeam);
+  if(!myRiders.length){ panel.style.display='none'; return; }
+
+  const teams    = _simComputeTeamPredictions(grid);
+  const myData   = teams.find(t=>t.isMyTeam);
+  if(!myData){ panel.style.display='none'; return; }
+
+  const myRank     = teams.findIndex(t=>t.isMyTeam) + 1;
+  const totalTeams = teams.length;
+  const avgRel     = myData.top3.reduce((s,r)=>s+(r.reliability??50),0)/Math.max(1,myData.top3.length);
+  const podiumProb = _simPodiumProbability(myRank, totalTeams, avgRel);
+  const rival      = _simGetDirectRival(myRank, teams);
+  const alerts     = _simTeamContextAlerts(grid, teams, myRank);
+
+  panel.style.display='';
+  const rc = myRank<=3?'#16a34a':myRank<=6?'#f59e0b':'#dc2626';
+  const pc = podiumProb>=60?'#16a34a':podiumProb>=35?'#f59e0b':'#dc2626';
+  const rivalDiff = rival ? rival.sumTop3 - myData.sumTop3 : null;
+
+  body.innerHTML = `
+    <div class="sim-team-summary-kpis">
+      <div class="sim-ts-kpi" style="background:linear-gradient(135deg,${rc}12,${rc}06);border-color:${rc}30">
+        <div class="sim-ts-kpi-icon">🏆</div>
+        <div class="sim-ts-kpi-val" style="color:${rc}">${myRank}º <span style="font-size:15px;font-weight:600;color:#64748b">de ${totalTeams}</span></div>
+        <div class="sim-ts-kpi-lbl">Posición estimada del equipo</div>
+        <div class="sim-ts-kpi-sub">Suma top3: ${myData.sumTop3.toFixed(1)} pts · Fiab. media: ${Math.round(avgRel)}%</div>
+      </div>
+      <div class="sim-ts-kpi" style="background:linear-gradient(135deg,${pc}12,${pc}06);border-color:${pc}30">
+        <div class="sim-ts-kpi-icon">🥇</div>
+        <div class="sim-ts-kpi-val" style="color:${pc}">${podiumProb}%</div>
+        <div class="sim-ts-kpi-lbl">Probabilidad de podio colectivo</div>
+        <div class="sim-ts-kpi-sub">Basado en ranking estimado y fiabilidad</div>
+      </div>
+      <div class="sim-ts-kpi" style="background:linear-gradient(135deg,#dc262612,#dc262606);border-color:#dc262630">
+        <div class="sim-ts-kpi-icon">⚔️</div>
+        <div class="sim-ts-kpi-val" style="font-size:17px;color:#dc2626;font-weight:800">${rival?escapeHtml((rival.team||'').slice(0,22)):'—'}</div>
+        <div class="sim-ts-kpi-lbl">Rival directo más peligroso</div>
+        <div class="sim-ts-kpi-sub">${rival&&rivalDiff!=null?(rivalDiff<0?'Nos llevan':'Diferencia: +'+rivalDiff.toFixed(1))+' pts':'Sin rival detectado'}</div>
+      </div>
+    </div>
+    ${alerts.length?`<div class="sim-team-alerts">
+      ${alerts.map(a=>`<div class="sim-team-alert ${a.type}">${a.icon} <b>${escapeHtml(a.title)}:</b> ${escapeHtml(a.msg)}</div>`).join('')}
+    </div>`:''}
+  `;
+}
+
+// ── Optimizador de alineación ─────────────────────────────────────────────
+function _simRenderLineupOptimizer(){
+  const panel = document.getElementById('simLineupPanel');
+  const body  = document.getElementById('simLineupBody');
+  if(!panel||!body) return;
+  if(!_simCurrentData||!myTeam){ panel.style.display='none'; return; }
+  const {grid} = _simCurrentData;
+  const myRiders = grid.filter(g=>g.isMyTeam);
+  if(myRiders.length<2){ panel.style.display='none'; return; }
+  panel.style.display='';
+  // Inicializar estado si es primera vez o se cambió de prueba
+  if(_simLineupActive===null){
+    _simLineupActive = new Set(myRiders.map(r=>r.name));
+  }
+  _simLineupRedraw(body, myRiders, grid);
+}
+
+function _simLineupRedraw(body, myRiders, grid){
+  const activeSet = _simLineupActive || new Set(myRiders.map(r=>r.name));
+  const score = _simComputeLineupScore(myRiders, activeSet);
+  // Ranking de mi equipo con el score actual
+  const allTeams = _simComputeTeamPredictions(grid);
+  const rivals   = allTeams.filter(t=>!t.isMyTeam);
+  const myRank   = score.hasEnough
+    ? rivals.filter(t=>t.sumTop3 < score.sumTop3).length + 1
+    : null;
+  const total    = rivals.length + 1;
+  const podProb  = (myRank!=null) ? _simPodiumProbability(myRank, total, score.avgReliability) : null;
+
+  const rc = myRank==null?'#94a3b8':myRank<=3?'#16a34a':myRank<=6?'#f59e0b':'#dc2626';
+  const pc = podProb==null?'#94a3b8':podProb>=60?'#16a34a':podProb>=35?'#f59e0b':'#dc2626';
+
+  // Ordenar: activos primero, luego por score
+  const sorted = myRiders.slice().sort((a,b)=>{
+    const aA=activeSet.has(a.name), bA=activeSet.has(b.name);
+    if(aA&&!bA) return -1; if(!aA&&bA) return 1;
+    return ((a.predictedPos??a.avgPos)??99) - ((b.predictedPos??b.avgPos)??99);
+  });
+
+  let html = `
+    <div class="sim-lineup-score-bar">
+      <div class="sim-ls-metric">
+        <span class="sim-ls-val" style="color:${rc}">${myRank!=null?myRank+'º':'—'}</span>
+        <span class="sim-ls-lbl">Posición equipo ${myRank!=null?'(de '+total+')':''}</span>
+      </div>
+      <div class="sim-ls-sep"></div>
+      <div class="sim-ls-metric">
+        <span class="sim-ls-val" style="color:#7c3aed">${score.hasEnough?'Σ '+score.sumTop3.toFixed(1):'—'}</span>
+        <span class="sim-ls-lbl">Suma top3</span>
+      </div>
+      <div class="sim-ls-sep"></div>
+      <div class="sim-ls-metric">
+        <span class="sim-ls-val" style="color:${pc}">${podProb!=null?podProb+'%':'—'}</span>
+        <span class="sim-ls-lbl">Prob. podio equipo</span>
+      </div>
+      <div class="sim-ls-sep"></div>
+      <div class="sim-ls-metric">
+        <span class="sim-ls-val" style="color:#475569">${score.top3.length}/3</span>
+        <span class="sim-ls-lbl">Titulares en top3</span>
+      </div>
+    </div>
+    ${!score.hasEnough?'<div class="sim-team-alert warning" style="margin-bottom:10px">⚠️ <b>Mínimo 3 titulares con datos</b> para calcular el score de equipo. Reactiva corredores.</div>':''}
+    <div class="sim-lineup-hint">👆 <b>Toca el botón</b> de cada corredor para cambiar entre titular y suplente. Los valores se recalculan al instante. Los <b>3 mejores puestos IA</b> de los titulares activos forman el score del equipo.</div>
+    <div class="sim-lineup-list">`;
+
+  sorted.forEach(r=>{
+    const isActive = activeSet.has(r.name);
+    const inTop3   = score.top3.some(t=>t.name===r.name);
+    const score_ = r.predictedPos ?? r.avgPos;
+    const rangeStr = (r.predLower!=null&&r.predUpper!=null)
+      ? `${r.predLower}º–${r.predUpper}º`
+      : (score_!=null ? Math.round(score_)+'º' : 'Sin datos');
+    const relC = r.reliability==null?'#9ca3af':r.reliability>=75?'#16a34a':r.reliability>=50?'#f59e0b':'#dc2626';
+    const tIcon = r.trend==='up'?'⬆️':r.trend==='down'?'⬇️':r.recentForm?.length>=2?'➡️':'';
+    const role  = !isActive?'suplente':inTop3?'top3':'titular';
+    const roleLabel = !isActive?'SUPLENTE':inTop3?'TOP3 ✓':'TITULAR';
+
+    html += `<div class="sim-lineup-row ${isActive?'active':'inactive'}">
+      <div class="sim-lineup-rider-info">
+        <div class="sim-lr-name">${escapeHtml(r.name)} ${tIcon}</div>
+        <div class="sim-lr-meta">
+          ${escapeHtml(r.cat||'—')} ·
+          Pos. IA: <b style="color:#7c3aed">${rangeStr}</b> ·
+          Fiab: <b style="color:${relC}">${r.reliability!=null?r.reliability+'%':'—'}</b>
+          ${r.raceCount?` · ${r.raceCount} carr.`:''}
+        </div>
+      </div>
+      <div class="sim-lineup-role-badge ${role}">${roleLabel}</div>
+      <button class="sim-lineup-toggle-btn ${isActive?'btn-quitar':'btn-poner'}"
+        onclick="_simLineupToggle(${JSON.stringify(r.name)})">
+        ${isActive?'❌ Quitar':'✅ Poner'}
+      </button>
+    </div>`;
+  });
+
+  html += `</div>
+    <button class="btn light" style="margin-top:12px;font-size:12px;padding:7px 14px"
+      onclick="_simLineupReset()">🔄 Resetear (todos titulares)</button>`;
+  body.innerHTML = html;
+}
+
+function _simLineupToggle(name){
+  if(!_simCurrentData) return;
+  const {grid} = _simCurrentData;
+  const myRiders = grid.filter(g=>g.isMyTeam);
+  if(!_simLineupActive) _simLineupActive = new Set(myRiders.map(r=>r.name));
+  // Guardar el hint actual antes de cambiar
+  if(_simLineupActive.has(name)){
+    // Comprobar que quedan ≥3 activos con datos
+    const afterRemove = myRiders.filter(r=>
+      _simLineupActive.has(r.name) && r.name!==name && (r.predictedPos??r.avgPos)!=null
+    );
+    if(afterRemove.length < 3){
+      const body = document.getElementById('simLineupBody');
+      if(body){
+        const hint = body.querySelector('.sim-lineup-hint');
+        if(hint){
+          const prev = hint.innerHTML;
+          hint.style.color='#dc2626';
+          hint.textContent='⚠️ Necesitas al menos 3 titulares con datos para calcular el score del equipo.';
+          setTimeout(()=>{ if(hint){ hint.style.color=''; hint.innerHTML=prev; } }, 2200);
+        }
+      }
+      return;
+    }
+    _simLineupActive.delete(name);
+  } else {
+    _simLineupActive.add(name);
+  }
+  // Redibujado instantáneo
+  const body = document.getElementById('simLineupBody');
+  if(body) _simLineupRedraw(body, myRiders, grid);
+  // Actualizar también el panel de resumen colectivo
+  try{ _simRenderTeamSummaryPanel(); }catch(e){}
+}
+
+function _simLineupReset(){
+  if(!_simCurrentData) return;
+  const {grid} = _simCurrentData;
+  const myRiders = grid.filter(g=>g.isMyTeam);
+  _simLineupActive = new Set(myRiders.map(r=>r.name));
+  const body = document.getElementById('simLineupBody');
+  if(body) _simLineupRedraw(body, myRiders, grid);
+  try{ _simRenderTeamSummaryPanel(); }catch(e){}
+}
+
+// ── HOOK: integrar Fase 3b en _simRenderCurrent ───────────────────────────
+const _origSimRenderCurrent_F3b = (typeof _simRenderCurrent==='function') ? _simRenderCurrent : null;
+if(_origSimRenderCurrent_F3b){
+  window._simRenderCurrent = function(){
+    // Resetear lineup al cambiar de carrera
+    _simLineupActive = null;
+    _origSimRenderCurrent_F3b();
+    try{ _simRenderTeamSummaryPanel(); }catch(e){ console.warn('[sim][teamSummary]',e); }
+    try{ _simRenderLineupOptimizer(); }catch(e){ console.warn('[sim][lineup]',e); }
+  };
+}
+
+// Ocultar paneles Fase 3b cuando estado vacío
+const _origSimShowEmpty_F3b = (typeof _simShowEmpty==='function') ? _simShowEmpty : null;
+if(_origSimShowEmpty_F3b){
+  window._simShowEmpty = function(customMsg){
+    _origSimShowEmpty_F3b(customMsg);
+    ['simTeamSummaryPanel','simLineupPanel'].forEach(id=>{
+      const el = document.getElementById(id); if(el) el.style.display='none';
+    });
+  };
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN SIMULADOR FASE 3b
 // ═══════════════════════════════════════════════════════════════════════════
