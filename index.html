@@ -1999,8 +1999,57 @@
       <section class="panel" id="simTacticPanel" style="display:none;border-left:4px solid #7c3aed">
         <div class="section-title">
           <h2 style="margin:0;color:#5b21b6">🧠 Inteligencia Táctica</h2>
-          <button class="btn light" onclick="_simRenderTacticPanel()" style="padding:5px 11px;font-size:12px">🔄 Recalcular</button>
+          <button class="btn light" onclick="_simRecalcAll('tactic')" style="padding:5px 11px;font-size:12px" title="Recalcula los perfiles tácticos">🔄 Recalcular</button>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Qué hace este bloque y cómo se determinan los perfiles de cada corredor?</summary>
+          <div class="sim-help-body">
+
+            <h4>🧠 ¿Qué es la Inteligencia Táctica?</h4>
+            <p>Es el bloque que <b>conecta el TIPO de circuito del domingo con el perfil de cada corredor</b>. Si la prueba es tipo Velocista (llano, sprint en grupo), te dice qué corredores son especialistas en ese terreno, y te avisa de "wildcards" — rivales que pueden dar la sorpresa porque les va este tipo aunque no aparezcan en el top 10 predicho.</p>
+
+            <h4>⚡ La banda superior — "Tipo de circuito: Velocista"</h4>
+            <p>Indica el perfil del circuito de la próxima carrera (Velocista, Escalador, Rouleur, Cronoman, Todo-terreno) y cuántos corredores del histórico tenemos analizados de ese tipo. El tipo sale del campo configurado en la carrera.</p>
+
+            <h4>🎯 Alertas tácticas (cuadros verdes / amarillos / rojos)</h4>
+            <ul>
+              <li><b style="color:#15803d">✅ Mejor corredor para este tipo</b>: el corredor de TU equipo con mejor media en circuitos de este tipo (≥2 carreras). Si su perfil principal NO es este tipo pero igual rinde bien aquí, se indica explícitamente</li>
+              <li><b style="color:#92400e">⚠️ Sin histórico de este tipo</b>: ningún corredor tuyo tiene 2+ carreras del tipo. La predicción es menos fiable, considera plan alternativo</li>
+              <li><b style="color:#dc2626">🚨 Rival peligroso no detectado</b>: un rival que NO aparece en el top 10 predicho pero promedia muy bien en este tipo de circuito. Cuidado: puede subir el domingo</li>
+              <li><b style="color:#0369a1">💡 Carta escondida en tu equipo</b>: lo mismo pero tuyo — corredor que la IA infraestima pero tiene historial bueno en este tipo</li>
+              <li><b style="color:#dc2626">🔥 En estado de gracia</b>: corredor tuyo cuya forma reciente es ≥25% mejor que su media histórica</li>
+              <li><b style="color:#d97706">📉 Bajón de forma</b>: corredor tuyo cuya forma reciente es ≥40% peor que su media histórica</li>
+            </ul>
+
+            <h4>🃏 ¿Qué es un "comodín peligroso"?</h4>
+            <p>Un corredor que <b>NO está en el top 10 predicho</b> pero cuyo histórico en este tipo de circuito específico es muy bueno. La IA puede estar "engañada" porque su media global es mala (quizás corre todo tipo de circuitos pero solo rinde en uno). Cuando el circuito coincide con su especialidad, puede romper la previsión.</p>
+
+            <h4>👤 Perfiles de corredores en parrilla</h4>
+            <p>Tarjetas que clasifican a TODOS los inscritos por perfil. Cada corredor se clasifica analizando sus carreras históricas:</p>
+            <ul>
+              <li><b>⚡ Velocista</b>: rinde mejor en circuitos Velocista (llano, sprints)</li>
+              <li><b>⛰️ Escalador</b>: rinde mejor en circuitos Escalador (montaña)</li>
+              <li><b>🛞 Rouleur</b>: rinde mejor en circuitos Rouleur (mixto, ondulado)</li>
+              <li><b>⏱️ Cronoman</b>: rinde mejor en CRIs y contrarrelojes</li>
+              <li><b>🔄 Todo-terreno</b>: rinde parecido en ≥3 tipos (polivalente, no especialista)</li>
+            </ul>
+            <p>El número junto al nombre es la <b>media en su tipo principal</b>. Para todo-terreno se muestra la <b>media global</b> (en todos los tipos). El badge <b>HOY</b> marca el tipo que coincide con la prueba del domingo.</p>
+
+            <h4>🤔 ¿Por qué un corredor aparece en Todo-terreno y no en Velocista, aunque pueda ganarles?</h4>
+            <p>Porque tiene <b>resultados similares en varios tipos</b>. Si rinde igual de bien en Velocista y Escalador, no es "especialista" — es polivalente. <b>Eso no significa que sea peor</b>, al contrario: puede ganarle al especialista en su día.</p>
+            <p>Por eso ahora el "Mejor corredor para este tipo" ya NO filtra por perfil principal — busca quién tiene mejor media en este tipo concreto, sea cual sea su perfil global.</p>
+
+            <h4>🩺 Sobre la fiabilidad de los datos</h4>
+            <p>Este bloque depende mucho de tener historial variado: si todos los corredores corren siempre el mismo tipo de circuito, no podemos detectar especialistas. <b>Cuantos más resultados con tipos distintos, mejor</b>. Con pocos datos, los perfiles pueden ser engañosos.</p>
+
+            <div class="tip">
+              💡 <b>Lectura táctica:</b> El bloque más útil son las <b>alertas de comodines rivales</b> 🚨. Si la IA dice "el top 10 será X" pero hay 3 rivales fuera del top 10 con buena media en este tipo, prepárate: la carrera puede dar la sorpresa. Y si tu equipo no tiene especialista en este tipo y sale el ⚠️ "Sin histórico", baja tus expectativas — no puedes pedirle resultado a alguien que nunca ha corrido este tipo.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simTacticBody"></div>
       </section>
 

@@ -22788,22 +22788,31 @@ function _simGetTacticAlerts(grid, circuitProfile, wildcards){
     alerts.push({type:'warning',icon:'⚠️',title:'Sin datos de equipo',msg:'No hay corredores de tu equipo con historial suficiente para generar alertas tácticas.'});
     return alerts;
   }
-  // ── Mi mejor especialista para este circuito ──────────────────────────────
+  // ── Mi mejor corredor PARA ESTE TIPO DE CIRCUITO ─────────────────────────
+  // (Antes filtrábamos por "perfil principal" = circuitProfile, pero eso
+  // excluía a los todo-terreno que igual rinden mejor en este tipo concreto.
+  // Ahora simplemente buscamos quién tiene mejor media en este tipo.)
   const myProfiles = myTeam.map(r=>({...r,prof:_simGetRiderProfile(r.name)})).filter(r=>r.prof);
-  const mySpecialists = myProfiles.filter(r=>r.prof.type===circuitProfile);
-  if(mySpecialists.length>0){
-    const best = mySpecialists.sort((a,b)=>{
-      const as=a.prof.statsByProfile[circuitProfile], bs=b.prof.statsByProfile[circuitProfile];
-      return (as?as.sum/as.count:99) - (bs?bs.sum/bs.count:99);
-    })[0];
-    const s = best.prof.statsByProfile[circuitProfile];
-    const avg = s ? Math.round(s.sum/s.count*10)/10 : '—';
-    alerts.push({type:'positive',icon:'✅',title:'Especialista en plantilla',
-      msg:`${best.name} es tu mejor corredor para circuitos tipo "${_SIM_PROFILE_META[circuitProfile]?.label||circuitProfile}" (media ${avg}ª en ${s?s.count:0} carreras similares)`});
+  // Quedarse con quienes tienen ≥2 carreras del tipo actual
+  const withTypeData = myProfiles
+    .map(r=>{
+      const s = r.prof.statsByProfile[circuitProfile];
+      if(!s || s.count < 2) return null;
+      return { name: r.name, count: s.count, avg: s.sum/s.count, isMain: r.prof.type===circuitProfile };
+    })
+    .filter(Boolean)
+    .sort((a,b)=>a.avg - b.avg);
+  if(withTypeData.length > 0){
+    const best = withTypeData[0];
+    const meta = _SIM_PROFILE_META[circuitProfile];
+    const label = meta?.label||circuitProfile;
+    const mainTag = best.isMain ? ' (perfil principal)' : ' (no es su perfil principal pero rinde bien aquí)';
+    alerts.push({type:'positive',icon:'✅',title:'Mejor corredor para este tipo',
+      msg:`${best.name} tiene mejor media en circuitos tipo "${label}" (${best.avg.toFixed(1)}ª en ${best.count} carreras)${mainTag}`});
   } else {
     const meta = _SIM_PROFILE_META[circuitProfile];
-    alerts.push({type:'warning',icon:'⚠️',title:'Sin especialista en plantilla',
-      msg:`Ningún corredor de tu equipo es ${meta?.label||circuitProfile}. Considera un plan de carrera alternativo.`});
+    alerts.push({type:'warning',icon:'⚠️',title:'Sin histórico de este tipo',
+      msg:`Ningún corredor de tu equipo tiene ≥2 carreras previas tipo ${meta?.label||circuitProfile}. La predicción es menos fiable.`});
   }
   // ── Wildcards rivales peligrosos ──────────────────────────────────────────
   wildcards.filter(w=>!w.isMyTeam).slice(0,3).forEach(w=>{
@@ -22952,12 +22961,21 @@ function _simBuildTacticHTML(body, data){
         </div>
         <div class="sim-profile-riders-list">`;
       riders.forEach(({rider,prof})=>{
-        const s = prof.statsByProfile[type];
-        const avg = s ? Math.round(s.sum/s.count*10)/10 : '—';
+        // Para perfil 'todo-terreno' usamos overallAvg (no hay entrada propia
+        // en statsByProfile). Para los demás, su stats del tipo concreto.
+        let avg, count;
+        if(type === 'todo-terreno'){
+          avg = prof.overallAvg != null ? Math.round(prof.overallAvg*10)/10 : '—';
+          count = prof.totalRaces;
+        } else {
+          const s = prof.statsByProfile[type];
+          avg = s ? Math.round(s.sum/s.count*10)/10 : '—';
+          count = s ? s.count : 0;
+        }
         const isSpec = isCurrentType;
-        html += `<div class="sim-profile-rider-row${isSpec?' sim-profile-specialist':''}">
+        html += `<div class="sim-profile-rider-row${isSpec?' sim-profile-specialist':''}" title="${count} carreras">
           <span class="sim-profile-rider-name">${esc(rider.name)}${rider.isMyTeam?' 🔵':''}</span>
-          <span class="sim-profile-rider-stat">≈${avg}ª</span>
+          <span class="sim-profile-rider-stat">≈${avg}${avg!=='—'?'ª':''}</span>
         </div>`;
       });
       html += '</div></div>';
