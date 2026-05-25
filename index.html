@@ -1712,6 +1712,62 @@
           <h2 style="margin:0;color:#9a3412">⚔️ Head-to-Head · Rivales más enfrentados</h2>
           <span class="small">Duelos directos del histórico</span>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Qué es el Head-to-Head y cómo leer los marcadores?</summary>
+          <div class="sim-help-body">
+
+            <h4>⚔️ ¿Qué hace este bloque?</h4>
+            <p>Te enseña el <b>récord directo</b> de cada uno de tus corredores contra los rivales con los que ha coincidido en carreras anteriores. Es como un "cara a cara" del histórico: <b>cuántas veces tu corredor acabó por delante</b> y cuántas por detrás, sin importar el puesto absoluto.</p>
+            <p>Sólo se muestran los rivales que <b>ESTÁN inscritos en la carrera actual</b> — así te dice a quién te vas a enfrentar el domingo, no rivales antiguos que no van a estar.</p>
+
+            <h4>🔢 ¿Cómo se calcula el marcador (p.ej. "0 - 3")?</h4>
+            <p>Para cada carrera del histórico donde ambos corredores corrieron:</p>
+            <ul>
+              <li>Si <b>tu corredor acabó por delante</b> (menor puesto) → +1 <b>victoria</b></li>
+              <li>Si <b>el rival acabó por delante</b> → +1 <b>derrota</b></li>
+              <li>Si el puesto fue el mismo → +1 <b>empate</b> (se anota "1e" entre paréntesis)</li>
+            </ul>
+            <div class="example">
+              <b>Caso real (tu screenshot):</b> Alcon, Manuel vs Beltran, Alex → <b>0 - 3</b> en 3 carreras.<br>
+              → Han coincidido 3 veces. En las 3 Beltran acabó por delante de Alcon. Marcador 0 victorias / 3 derrotas.
+            </div>
+
+            <h4>🎨 Los colores del marcador</h4>
+            <ul>
+              <li><b style="color:#166534;background:#dcfce7;padding:1px 6px;border-radius:4px">verde</b>: tu corredor <b>domina</b> (más victorias que derrotas)</li>
+              <li><b style="color:#991b1b;background:#fee2e2;padding:1px 6px;border-radius:4px">rojo</b>: el rival <b>te domina</b> (más derrotas que victorias)</li>
+              <li><b style="color:#475569;background:#f1f5f9;padding:1px 6px;border-radius:4px">gris</b>: <b>empatados</b> (mismo número de wins y losses)</li>
+            </ul>
+
+            <h4>📋 ¿Qué significa "8 carrs." junto a cada rival?</h4>
+            <p>Es el <b>número de carreras donde han coincidido</b> (no la cantidad de victorias). Cuanto mayor sea este número, <b>más fiable es el marcador</b>: un 4-1 en 5 carreras dice mucho más que un 1-0 en 1 carrera.</p>
+
+            <h4>🚪 Filtros aplicados</h4>
+            <ul>
+              <li>Solo aparecen rivales con los que tu corredor coincidió <b>≥2 veces</b> (un único encuentro no es estadísticamente significativo)</li>
+              <li>Se muestran los <b>8 rivales más enfrentados</b> de cada corredor (los más relevantes)</li>
+              <li>Y solo entre los que <b>están inscritos en la prueba actual</b></li>
+            </ul>
+
+            <h4>💡 Lecturas tácticas para el director</h4>
+            <div class="example">
+              <b>Si todos los marcadores de un corredor son rojos:</b> históricamente está por debajo del nivel de los inscritos. No es realista pedirle podio o Top 10 contra estos rivales.
+            </div>
+            <div class="example">
+              <b>Si tiene varios verdes contra rivales fuertes:</b> es candidato real a hacer un buen resultado. Sabe ganarles cara a cara.
+            </div>
+            <div class="example">
+              <b>Si los marcadores son ajustados (1-2, 2-3):</b> hay duelo real. El domingo cualquier cosa puede pasar — buena oportunidad para sorprender si llega bien preparado.
+            </div>
+
+            <div class="tip">
+              💡 <b>Truco práctico:</b> Antes de la carrera, mira a quién has "ganado" tu corredor históricamente. Si sabes que un rival está delante en la Pos. IA pero tu corredor le ha ganado 4 de 5 veces → hay base para creer que <b>el domingo también puede superarle</b>, aunque la IA diga lo contrario. La estadística directa pesa más que la media general.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simH2HBody"></div>
       </section>
 
