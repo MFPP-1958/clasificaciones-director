@@ -20910,6 +20910,9 @@ function _simBuildData(raceId){
     let avgPos=null, bestPos=null, reliability=null, status='known', source='rider', confidence='nula';
     let recentForm = []; // últimas 5 posiciones (más reciente primero)
     let predictedPos=null, predLower=null, predUpper=null, trend='stable';
+    // Árbol de Regresión — nodos y clasificación de rango
+    let rangeClass='none', treeNode=[];
+
     if(hits.length){
       const positions = hits.map(h=>h.pos).filter(p=>p>0);
       if(positions.length){
@@ -20927,32 +20930,72 @@ function _simBuildData(raceId){
           return db.localeCompare(da);
         });
         recentForm = sorted.slice(0,5).map(h=>h.pos);
-        // ── Fórmula predictiva ponderada 60/40 ───────────────────────────────
-        // 60% → media de las últimas 3 carreras (estado de forma reciente)
-        // 40% → media histórica global
+
+        // ══ ÁRBOL DE REGRESIÓN ════════════════════════════════════════════════
+        // ── RAMA A: Categoría y experiencia ──────────────────────────────────
+        const catL = (ins.cat||'').toLowerCase();
+        const isCadet = /cad(ete|et)?/.test(catL);
+        // Detectar 1er año: cat contiene "1" o "m1"/"f1" o pocas carreras (<3)
+        const isCadetNovice  = isCadet && ((/[mf]?1\b/.test(catL)) || hits.length < 3);
+        // Detectar 2º año veterano: cat contiene "2" o "m2"/"f2" y ≥5 carreras
+        const isCadetVeteran = isCadet && (/[mf]?2\b/.test(catL)) && hits.length >= 5;
+
+        // Fórmula ponderada 60/40 (base)
         const recent3 = recentForm.slice(0,3).filter(p=>p>0);
         const recentMean = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : null;
-        predictedPos = recentMean!=null
-          ? 0.6*recentMean + 0.4*avgPos
-          : avgPos;
-        // Penalización +15% por baja fiabilidad (<50%) → corredor inestable
+        predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
+
+        if(isCadetNovice){
+          // Penalización +20%: factor aprendizaje en categoría (Rama A1)
+          predictedPos *= 1.20;
+          treeNode.push('A1:cadete-novicio');
+        } else if(isCadetVeteran){
+          // Veterano de 2º año: sin penalización adicional, posición óptima (Rama A2)
+          treeNode.push('A2:cadete-veterano');
+        } else if(isCadet){
+          treeNode.push('A3:cadete');
+        } else {
+          treeNode.push('A0:base');
+        }
+
+        // ── Penalización por baja fiabilidad (<50%) ───────────────────────────
         if(reliability < 50) predictedPos *= 1.15;
-        // Intervalo de confianza basado en desviación estándar histórica
+
+        // ── RAMA C: Fiabilidad → ajuste del intervalo de confianza ───────────
+        // ≥75% fiable → rango estrecho (σ×0.6, corredor predecible)
+        // <40% fiable → rango amplio (σ×1.4, corredor inestable)
+        // Resto → rango estándar (σ×0.8)
+        let relFactor;
+        if(reliability >= 75){
+          relFactor  = 0.6; rangeClass = 'stable';
+          treeNode.push('C1:alta-fiabilidad');
+        } else if(reliability < 40){
+          relFactor  = 1.4; rangeClass = 'unstable';
+          treeNode.push('C3:baja-fiabilidad');
+        } else {
+          relFactor  = 0.8; rangeClass = 'normal';
+          treeNode.push('C2:fiabilidad-media');
+        }
+
         if(positions.length >= 2){
           const variance = positions.reduce((s,p)=>s+(p-avgPos)**2,0)/positions.length;
           const std = Math.sqrt(variance);
-          predLower = Math.max(1, Math.round(predictedPos - std*0.8));
-          predUpper = Math.round(predictedPos + std*0.8);
+          predLower = Math.max(1, Math.round(predictedPos - std * relFactor));
+          predUpper = Math.round(predictedPos + std * relFactor);
         } else {
-          predLower = Math.max(1, Math.round(predictedPos * 0.85));
-          predUpper = Math.round(predictedPos * 1.15);
+          // Sólo 1 carrera: rango por proporción
+          const pct = reliability>=75 ? 0.10 : reliability<40 ? 0.30 : 0.15;
+          predLower = Math.max(1, Math.round(predictedPos * (1 - pct)));
+          predUpper = Math.round(predictedPos * (1 + pct));
         }
+        // ══ FIN ÁRBOL DE REGRESIÓN ════════════════════════════════════════════
+
         // Tendencia: comparar 1ª posición reciente vs la 3ª (más antigua del bloque)
         if(recentForm.length >= 3){
-          const newest = recentForm[0]; // más reciente
-          const oldest = recentForm[Math.min(2, recentForm.length-1)]; // 3ª o última
-          if(newest < oldest - 1.5)     trend = 'up';   // mejorando (número más bajo = mejor)
-          else if(newest > oldest + 1.5) trend = 'down'; // empeorando
+          const newest = recentForm[0];
+          const oldest = recentForm[Math.min(2, recentForm.length-1)];
+          if(newest < oldest - 1.5)     trend = 'up';
+          else if(newest > oldest + 1.5) trend = 'down';
           else                           trend = 'stable';
         } else if(recentForm.length >= 2){
           trend = recentForm[0] < recentForm[1]-0.5 ? 'up' : recentForm[0] > recentForm[1]+0.5 ? 'down' : 'stable';
@@ -20961,21 +21004,28 @@ function _simBuildData(raceId){
         status = 'deb';
       }
     } else {
-      // Sin historial individual → fallback al equipo
+      // ── RAMA B: Sin historial individual → fallback al club ───────────────
       status = 'deb';
       if(tkey && byTeam.has(tkey)){
         const teamPositions = byTeam.get(tkey).filter(p=>p>0);
         if(teamPositions.length){
           avgPos = teamPositions.reduce((s,p)=>s+p,0)/teamPositions.length;
           bestPos = Math.min(...teamPositions);
-          reliability = 50; // valor provisional
-          predictedPos = avgPos; // sin forma reciente propia, usamos la media del equipo
-          predLower = Math.max(1, Math.round(avgPos * 0.8));
-          predUpper = Math.round(avgPos * 1.2);
+          reliability = 50; // provisional
+          predictedPos = avgPos;
+          // Rama B: rango más amplio que para corredores con historial propio
+          predLower = Math.max(1, Math.round(avgPos * 0.78));
+          predUpper = Math.round(avgPos * 1.22);
+          rangeClass = 'club-fb'; // indicador visual especial
           source = 'team';
           status = 'team-fb';
           confidence = 'baja';
+          treeNode.push('B:club-fallback');
+        } else {
+          treeNode.push('B:deb-sin-datos');
         }
+      } else {
+        treeNode.push('B:deb-sin-club');
       }
     }
     return {
@@ -20989,8 +21039,9 @@ function _simBuildData(raceId){
       avgPos, bestPos, reliability, status, source, confidence,
       raceCount: hits.length,
       recentForm,
-      // Campos de predicción ponderada (Fase 2 upgrade)
-      predictedPos, predLower, predUpper, trend
+      // Árbol de Regresión — predicción enriquecida
+      predictedPos, predLower, predUpper, trend,
+      rangeClass, treeNode
     };
   });
 
@@ -21143,9 +21194,12 @@ function _simRenderTop10(grid, catFilter){
       : g.trend==='down'
       ? '<span title="Empeorando" style="color:#dc2626;font-size:14px;font-weight:900">⬇️</span>'
       : '<span title="Estable" style="color:#9ca3af;font-size:13px">➡️</span>';
+    const _rc2 = g.rangeClass||'normal';
+    const _rc2c = _rc2==='stable'?'#16a34a':_rc2==='unstable'?'#d97706':_rc2==='club-fb'?'#2563eb':'#7c3aed';
+    const _rc2i = _rc2==='stable'?'🔒':_rc2==='unstable'?'⚠️':_rc2==='club-fb'?'📊':'';
     const rangeStr = (g.predLower!=null && g.predUpper!=null)
-      ? `${g.predLower}º–${g.predUpper}º`
-      : (g.predictedPos!=null ? Math.round(g.predictedPos)+'º' : '—');
+      ? `<span style="color:${_rc2c}">${_rc2i} ${g.predLower}º–${g.predUpper}º</span>`
+      : (g.predictedPos!=null ? `<span style="color:${_rc2c}">${_rc2i} ${Math.round(g.predictedPos)}º</span>` : '—');
     return `<div class="sim-top-row ${g.isMyTeam?'sim-my-team':''}">
       <div class="sim-top-rank ${rankCls}">${rank}º</div>
       <div class="sim-top-info">
@@ -21216,11 +21270,15 @@ function _simRenderGrid(rows){
             : g.recentForm.length>=2
             ? '<span title="Forma estable" style="font-size:14px;color:#9ca3af">➡️</span>'
             : '<span style="color:#d1d5db">—</span>';
-          // Rango IA
+          // Rango IA — color y etiqueta según rangeClass (árbol de regresión)
+          const _rc = g.rangeClass || 'normal';
+          const _rcColor = _rc==='stable'?'#16a34a':_rc==='unstable'?'#d97706':_rc==='club-fb'?'#2563eb':'#7c3aed';
+          const _rcIcon  = _rc==='stable'?'🔒':_rc==='unstable'?'⚠️':_rc==='club-fb'?'📊':'';
+          const _rcLabel = _rc==='unstable'?'<span style="font-size:9px;font-weight:700;color:#d97706;display:block;line-height:1">inestable</span>':'';
           const rangeStr = (g.predLower!=null && g.predUpper!=null)
-            ? `<b style="color:#7c3aed">${g.predLower}º–${g.predUpper}º</b>`
+            ? `<b style="color:${_rcColor}">${_rcIcon} ${g.predLower}º–${g.predUpper}º</b>${_rcLabel}`
             : (g.predictedPos!=null
-              ? `<b style="color:#7c3aed">${Math.round(g.predictedPos)}º</b>`
+              ? `<b style="color:${_rcColor}">${_rcIcon} ${Math.round(g.predictedPos)}º</b>${_rcLabel}`
               : '<span style="color:#d1d5db">—</span>');
           const formHtml = (g.recentForm||[]).length
             ? g.recentForm.map(p=>{
@@ -21234,7 +21292,7 @@ function _simRenderGrid(rows){
             <td style="font-size:12px">${escapeHtml(g.team||'(sin equipo)')}</td>
             <td><span class="pill" style="background:#f3f6fb;font-size:11px">${escapeHtml(g.cat||'—')}</span></td>
             <td>${badge}</td>
-            <td style="text-align:center">${rangeStr}</td>
+            <td style="text-align:center" title="Árbol: ${(g.treeNode||[]).join(' → ')}">${rangeStr}</td>
             <td style="text-align:center">${trendCell}</td>
             <td style="text-align:center;color:#475569">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
             <td style="text-align:center;color:#475569">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
@@ -21245,9 +21303,12 @@ function _simRenderGrid(rows){
         }).join('')}</tbody>
       </table>
     </div>
-    <p class="small" style="margin-top:8px;color:#6b7280">
-      <b style="color:#7c3aed">🤖 Pos. IA</b>: rango calculado con 60% forma reciente + 40% historial (±σ). Penalización +15% si fiabilidad &lt;50% ·
-      <span class="sim-conf alta"></span> Confianza alta (≥5) ·
+    <p class="small" style="margin-top:8px;color:#6b7280;line-height:1.7">
+      <b style="color:#7c3aed">🤖 Árbol de Regresión</b>: 60% forma reciente + 40% historial.
+      🔒 <b style="color:#16a34a">Rango estable</b> (fiabilidad ≥75%, σ estrecha) ·
+      ⚠️ <b style="color:#d97706">Rango inestable</b> (fiabilidad &lt;40%, σ amplia) ·
+      📊 <b style="color:#2563eb">Estimado por club</b> (debutante, Rama B) ·
+      <span class="sim-conf alta"></span> Confianza alta (≥5 carr.) ·
       <span class="sim-conf media"></span> media (3-4) ·
       <span class="sim-conf baja"></span> baja (1-2) ·
       <span class="sim-conf nula"></span> sin datos
