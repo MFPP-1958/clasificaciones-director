@@ -22804,3 +22804,358 @@ if(_origSimShowEmpty_F3b){
 // ═══════════════════════════════════════════════════════════════════════════
 // FIN SIMULADOR FASE 3b
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULADOR FASE 4b — HOJA DE RUTA TÁCTICA (BRIEFING)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Genera el objeto de briefing estructurado a partir de los datos actuales
+function _simBuildBriefing(){
+  if(!_simCurrentData) return null;
+  const {race, grid, kpis} = _simCurrentData;
+  const esc = s => escapeHtml(String(s||''));
+
+  // ── Bloque 1: Objetivo colectivo ─────────────────────────────────────────
+  const teams    = _simComputeTeamPredictions(grid);
+  const myData   = teams.find(t=>t.isMyTeam);
+  const myRank   = myData ? teams.findIndex(t=>t.isMyTeam) + 1 : null;
+  const totalT   = teams.length;
+  const myRiders = grid.filter(g=>g.isMyTeam);
+
+  // Alineación activa (respeta el optimizador)
+  const activeSet = _simLineupActive && _simLineupActive.size
+    ? _simLineupActive
+    : new Set(myRiders.map(r=>r.name));
+  const lineupScore = _simComputeLineupScore(myRiders, activeSet);
+  const podiumProb  = lineupScore.hasEnough && myRank!=null
+    ? _simPodiumProbability(myRank, totalT, lineupScore.avgReliability) : null;
+
+  // Objetivo textual
+  const goalText = (() => {
+    if(!myRank) return 'Consolidar presencia y sumar experiencia';
+    if(myRank===1) return 'Pelear por la victoria colectiva';
+    if(myRank<=3)  return 'Luchar por el podio por equipos';
+    if(myRank<=6)  return 'Alcanzar el Top ' + myRank + ' por equipos';
+    return 'Sumar puntos y colocar a nuestros hombres en el top ' + Math.min(myRank+2, 15);
+  })();
+
+  // Líder estimado (mejor predictedPos de los titulares activos)
+  const leaderPool = myRiders
+    .filter(r=>activeSet.has(r.name) && (r.predictedPos??r.avgPos)!=null)
+    .sort((a,b)=>((a.predictedPos??a.avgPos)||99)-((b.predictedPos??b.avgPos)||99));
+  const leader = leaderPool[0] || null;
+
+  const obj = {
+    goalText, myRank, totalT, podiumProb,
+    leader: leader ? {
+      name: leader.name,
+      range: (leader.predLower!=null&&leader.predUpper!=null)
+        ? `${leader.predLower}º–${leader.predUpper}º`
+        : (leader.predictedPos!=null ? Math.round(leader.predictedPos)+'º' : null),
+      trend: leader.trend
+    } : null,
+    top3Riders: lineupScore.top3.map(r=>({
+      name:r.name, score:(r.predictedPos??r.avgPos)?.toFixed(1), trend:r.trend
+    }))
+  };
+
+  // ── Bloque 2: Scouting — rivales más peligrosos en racha ─────────────────
+  const rivals = grid
+    .filter(g => !g.isMyTeam && g.hasHistory && (g.predictedPos??g.avgPos)!=null)
+    .map(g=>({
+      name:g.name, team:g.team, cat:g.cat,
+      score: g.predictedPos??g.avgPos,
+      trend:g.trend, rel:g.reliability,
+      range:(g.predLower!=null&&g.predUpper!=null)?`${g.predLower}º–${g.predUpper}º`:null
+    }));
+  // Prioridad: en racha ascendente, luego por score
+  rivals.sort((a,b)=>{
+    const aUp = a.trend==='up' ? 0 : 1;
+    const bUp = b.trend==='up' ? 0 : 1;
+    if(aUp!==bUp) return aUp-bUp;
+    return a.score - b.score;
+  });
+  const scouting = rivals.slice(0,5);
+
+  // ── Bloque 3: Consejo táctico ─────────────────────────────────────────────
+  const circuitType = (race.circuitType||'').toLowerCase();
+  const circuitProf = _simCircuitToProfile(race.circuitType||'');
+  const circuitMeta = _SIM_PROFILE_META[circuitProf] || {};
+  const advice = _simGenerateTacticAdvice({race, kpis, myRank, totalT, lineupScore, scouting, circuitProf, circuitMeta, leaderPool});
+
+  return { race, kpis, obj, scouting, advice, circuitMeta, now: new Date().toLocaleString('es-ES') };
+}
+
+function _simGenerateTacticAdvice({race, kpis, myRank, totalT, lineupScore, scouting, circuitProf, circuitMeta, leaderPool}){
+  const lines = [];
+  const pred = kpis.predictability;
+  const diff = kpis.difficulty;
+  const cov  = kpis.coverage;
+  const upRivals = scouting.filter(r=>r.trend==='up').length;
+
+  // Sobre la predictibilidad y cobertura
+  if(pred < 35 || cov < 50){
+    lines.push(`La predictibilidad de la prueba es ${pred<35?'baja':'limitada'} (${pred}%) debido a la ${cov<50?'escasa cobertura histórica de la parrilla':'alta variabilidad de resultados'}. Se recomienda una táctica flexible y atenta a los cortes en los primeros kilómetros.`);
+  } else if(pred >= 70){
+    lines.push(`La prueba tiene alta predictibilidad (${pred}%), lo que indica una parrilla estable y conocida. Nuestro modelo es fiable en este contexto.`);
+  }
+
+  // Sobre la dificultad
+  if(diff >= 60){
+    lines.push(`La competencia es exigente: ${kpis.strongRivals} corredores con posición media inferior a 15. Prioriza proteger a nuestros líderes en los momentos de mayor exigencia.`);
+  } else if(diff < 30){
+    lines.push(`La parrilla es relativamente asequible. Buena oportunidad para que nuestros corredores adopten un rol más ofensivo.`);
+  }
+
+  // Sobre el tipo de circuito
+  if(circuitProf && circuitMeta.label){
+    lines.push(`Circuito de tipo ${circuitMeta.label}${race.circuitType?' ("'+race.circuitType+'")'||'':''}: ${circuitMeta.desc}. Asegúrate de que nuestros ${circuitMeta.label.toLowerCase()}s estén en posición en los momentos decisivos.`);
+  }
+
+  // Sobre la fiabilidad del equipo
+  const unreliable = leaderPool.filter(r=>(r.reliability??100)<50);
+  if(unreliable.length){
+    lines.push(`Atención: ${unreliable.map(r=>(r.name||'').split(/[,\s]/)[0]).join(' y ')} presentan fiabilidad inferior al 50%. No expongas a estos corredores innecesariamente en la primera parte de carrera.`);
+  }
+
+  // Sobre rivales en racha
+  if(upRivals>=2){
+    const names = scouting.filter(r=>r.trend==='up').slice(0,2).map(r=>(r.name||'').split(/[,\s]/)[0]).join(' y ');
+    lines.push(`${names} llevan racha ascendente y pueden superar su posición media esperada. Marcaje prioritario en las fases decisivas.`);
+  }
+
+  // Cierre constructivo
+  if(myRank && myRank<=3 && lineupScore.hasEnough){
+    lines.push(`Con la alineación actual nuestro equipo se sitúa ${myRank}º de ${totalT} en la clasificación por escuadras. Mantén el plan y protege esa posición.`);
+  } else if(myRank && myRank>3 && lineupScore.hasEnough){
+    lines.push(`Una mejora de 2-3 posiciones en nuestros corredores de apoyo podría hacer subir al equipo del ${myRank}º al podio colectivo. Busca el máximo rendimiento de todos los titulares.`);
+  }
+
+  return lines.join(' ');
+}
+
+// ── Render del panel ──────────────────────────────────────────────────────
+function _simOpenBriefPanel(){
+  const panel = document.getElementById('simBriefPanel');
+  if(!panel) return;
+  if(!_simCurrentData){ showToast('Selecciona una prueba primero', 'warn'); return; }
+  const brief = _simBuildBriefing();
+  if(!brief) return;
+  _simDrawBriefPanel(brief);
+  panel.style.display = '';
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function _simDrawBriefPanel(brief){
+  const body = document.getElementById('simBriefBody');
+  if(!body) return;
+  const esc = s => escapeHtml(String(s||''));
+  const {obj, scouting, advice, circuitMeta, kpis, race, now} = brief;
+  const trendI = t => t==='up'?'⬆️':t==='down'?'⬇️':t==='stable'?'➡️':'';
+
+  // ── Bloque 1: Objetivo ──────────────────────────────────────────────────
+  const block1 = `<div class="sim-brief-block sim-brief-obj">
+    <div class="sim-brief-block-title">🎯 Bloque 1 · Resumen de objetivos</div>
+    <div class="sim-brief-obj-goal">Objetivo colectivo: ${esc(obj.goalText)}</div>
+    ${obj.leader ? `<div class="sim-brief-obj-leader">
+      <span>👑 Líder estimado:</span>
+      <b>${esc(obj.leader.name)}</b>
+      ${obj.leader.range?`<span style="color:#7c3aed;font-weight:700">${esc(obj.leader.range)}</span>`:''}
+      ${trendI(obj.leader.trend)}
+    </div>` : ''}
+    ${obj.podiumProb!=null ? `<div style="margin-top:10px;display:flex;gap:14px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#475569">Pos. equipo estimada: <b style="color:#0b2f6b">${obj.myRank}º de ${obj.totalT}</b></span>
+      <span style="font-size:12px;color:#475569">Probabilidad de podio colectivo: <b style="color:${obj.podiumProb>=60?'#16a34a':obj.podiumProb>=35?'#d97706':'#dc2626'}">${obj.podiumProb}%</b></span>
+    </div>` : ''}
+    ${obj.top3Riders.length ? `<div style="margin-top:10px;font-size:12px;color:#475569">Top 3 titulares activos: ${obj.top3Riders.map(r=>`<b>${esc(r.name.split(/[,\s]/)[0])}</b> (${r.score||'—'}º) ${trendI(r.trend)}`).join(' · ')}</div>` : ''}
+  </div>`;
+
+  // ── Bloque 2: Scouting ──────────────────────────────────────────────────
+  const scoutRows = scouting.map((r,i)=>`<div class="sim-brief-scout-row">
+    <div class="sim-brief-scout-rank">${i+1}</div>
+    <div class="sim-brief-scout-info">
+      <div class="sim-brief-scout-name">${esc(r.name)}</div>
+      <div class="sim-brief-scout-meta">${esc(r.team||'—')}${r.cat?' · '+esc(r.cat):''}  · Pos. IA: <b>${r.range||Math.round(r.score)+'º'}</b> · Fiab: ${r.rel!=null?r.rel+'%':'—'}</div>
+    </div>
+    <div class="sim-brief-scout-trend">${trendI(r.trend)}</div>
+  </div>`).join('');
+  const block2 = `<div class="sim-brief-block sim-brief-scout">
+    <div class="sim-brief-block-title">🔭 Bloque 2 · Radar de vigilancia rival (Scouting)</div>
+    <div class="sim-brief-scout-list">${scoutRows||'<p style="color:#9ca3af;font-size:12px">Sin rivales con suficiente historial detectados</p>'}</div>
+  </div>`;
+
+  // ── Bloque 3: Consejo táctico ────────────────────────────────────────────
+  const block3 = `<div class="sim-brief-block sim-brief-advice">
+    <div class="sim-brief-block-title">🧠 Bloque 3 · Consejo táctico de la IA</div>
+    <div class="sim-brief-advice-text">${esc(advice)}</div>
+  </div>`;
+
+  // Cabecera
+  const header = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#7c3aed;font-weight:800;margin-bottom:2px">Hoja de Ruta · Generada ${esc(now)}</div>
+      <div style="font-size:15px;font-weight:900;color:#0f172a">${esc(race.raceName||'')}</div>
+      <div style="font-size:12px;color:#64748b">${esc(race.raceDate||'')}${race.localidad?' · 📍'+esc(race.localidad):''}${circuitMeta.icon?' · '+circuitMeta.icon+' '+esc(circuitMeta.label||''):''}</div>
+    </div>
+    <div style="font-size:11px;color:#94a3b8;text-align:right">Predictibilidad: <b>${kpis.predictability}%</b><br>Cobertura: <b>${kpis.coverage}%</b><br>Inscritos: <b>${kpis.totalIns}</b></div>
+  </div>`;
+
+  body.innerHTML = header + block1 + block2 + block3;
+}
+
+// ── Exportar Briefing como PDF (ventana imprimible) ───────────────────────
+function _simBriefPDF(){
+  const brief = _simBuildBriefing();
+  if(!brief){ showToast('Selecciona una prueba primero','warn'); return; }
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
+  const {obj, scouting, advice, circuitMeta, kpis, race, now} = brief;
+  const trendT = t => t==='up'?'⬆️':t==='down'?'⬇️':'➡️';
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<title>Hoja de Ruta · ${esc(race.raceName||'')}</title>
+<style>
+  @page{size:A4;margin:0}
+  html,body{margin:0;padding:0;font-family:'Helvetica Neue',Arial,sans-serif;color:#0f172a;background:#e2e8f0}
+  .page{width:210mm;min-height:297mm;padding:14mm;background:#fff;margin:0 auto 8mm;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #7c3aed;padding-bottom:5mm;margin-bottom:6mm}
+  .hdr h1{margin:0 0 1mm;font-size:20px;color:#5b21b6}
+  .hdr .sub{margin:0;font-size:11px;color:#64748b}
+  .brand{display:flex;align-items:center;gap:5px;background:#f5f3ff;padding:5px 10px;border-radius:8px}
+  .brand img{height:26px;width:auto}
+  .brand span{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#5b21b6}
+  .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-bottom:5mm}
+  .kpi{padding:3mm;border-radius:3mm;border:1px solid #e5e7eb;text-align:center}
+  .kpi .l{font-size:8.5px;text-transform:uppercase;color:#64748b;font-weight:800;letter-spacing:.4px;margin-bottom:1mm}
+  .kpi .v{font-size:18px;font-weight:900}
+  .block{border-radius:3mm;padding:4mm 5mm;margin-bottom:4mm;border:1.5px solid}
+  .block-title{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3mm}
+  .obj{background:#f5f3ff;border-color:#c4b5fd}.obj .block-title{color:#5b21b6}
+  .goal{font-size:16px;font-weight:900;color:#3730a3;margin:0 0 2mm}
+  .leader{font-size:11px;color:#475569;margin-bottom:2mm}
+  .scout{background:#fff7ed;border-color:#fed7aa}.scout .block-title{color:#c2410c}
+  .s-row{display:flex;align-items:center;gap:3mm;padding:2mm 3mm;background:#fff;border:1px solid #fed7aa;border-radius:2mm;margin-bottom:2mm}
+  .s-num{font-size:14px;font-weight:900;color:#c2410c;width:6mm;text-align:center}
+  .s-info .n{font-weight:700;font-size:10.5px}.s-info .m{font-size:9px;color:#64748b}
+  .advice{background:#ecfdf5;border-color:#6ee7b7}.advice .block-title{color:#065f46}
+  .advice-txt{font-size:11px;line-height:1.65;border-left:3px solid #6ee7b7;padding-left:3mm;color:#1e293b}
+  .footer{margin-top:5mm;padding-top:3mm;border-top:1px solid #e2e8f0;font-size:9px;color:#94a3b8;display:flex;justify-content:space-between}
+  .tb{position:fixed;top:0;left:0;right:0;padding:8px 14px;background:#5b21b6;color:#fff;display:flex;justify-content:space-between;align-items:center;font-family:Arial,sans-serif;z-index:9}
+  .tb button{background:#fff;color:#5b21b6;border:0;border-radius:6px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:13px;margin-left:6px}
+  body.tbon{padding-top:46px}
+  @media print{.tb,.tbon{display:none!important;padding:0}.page{box-shadow:none;margin:0}}
+</style>
+</head><body class="tbon">
+<div class="tb">
+  <span>📋 Hoja de Ruta · ${esc(race.raceName||'')}</span>
+  <span><button onclick="window.print()">🖨️ Imprimir / PDF</button><button onclick="window.close()" style="background:#ddd8fe">✕</button></span>
+</div>
+<div class="page">
+  <div class="hdr">
+    <div>
+      <h1>📋 Hoja de Ruta de Carrera</h1>
+      <p class="sub">${esc(race.raceName||'')} · ${esc(race.raceDate||'')}${race.localidad?' · 📍'+esc(race.localidad):''}${circuitMeta.icon?' · '+circuitMeta.icon+' '+esc(circuitMeta.label||''):''}</p>
+      <p class="sub" style="margin-top:1mm">Generada: ${esc(now)}${myTeam?' · Equipo: '+esc(myTeam):''}</p>
+    </div>
+    ${logoSrc?`<div class="brand"><img src="${logoSrc}" alt="Logo"><span>MFPP Cycling</span></div>`:''}
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="l">📋 Inscritos</div><div class="v">${kpis.totalIns}</div></div>
+    <div class="kpi"><div class="l">🎯 Predictibilidad</div><div class="v" style="color:${kpis.predictability>=70?'#16a34a':kpis.predictability>=40?'#d97706':'#dc2626'}">${kpis.predictability}%</div></div>
+    <div class="kpi"><div class="l">⚠️ Dificultad</div><div class="v" style="color:${kpis.difficulty>=60?'#dc2626':kpis.difficulty>=30?'#d97706':'#16a34a'}">${kpis.difficulty}%</div></div>
+  </div>
+  <div class="block obj">
+    <div class="block-title">🎯 Bloque 1 · Resumen de objetivos</div>
+    <div class="goal">${esc(obj.goalText)}</div>
+    ${obj.leader?`<div class="leader">👑 Líder estimado: <b>${esc(obj.leader.name)}</b>${obj.leader.range?' · Pos. IA: <b style="color:#5b21b6">'+esc(obj.leader.range)+'</b>':''} ${trendT(obj.leader.trend)}</div>`:''}
+    ${obj.myRank!=null?`<div style="font-size:10px;color:#475569">Posición por equipos estimada: <b>${obj.myRank}º de ${obj.totalT}</b>${obj.podiumProb!=null?' · Probabilidad de podio: <b>'+obj.podiumProb+'%</b>':''}</div>`:''}
+    ${obj.top3Riders.length?`<div style="font-size:10px;color:#64748b;margin-top:2mm">Top 3 titulares: ${obj.top3Riders.map(r=>`<b>${esc(r.name.split(/[,\s]/)[0])}</b> (${r.score||'—'}º) ${trendT(r.trend)}`).join(' · ')}</div>`:''}
+  </div>
+  <div class="block scout">
+    <div class="block-title">🔭 Bloque 2 · Radar de vigilancia rival</div>
+    ${scouting.map((r,i)=>`<div class="s-row">
+      <div class="s-num">${i+1}</div>
+      <div class="s-info" style="flex:1">
+        <div class="n">${esc(r.name)} ${trendT(r.trend)}</div>
+        <div class="m">${esc(r.team||'—')}${r.cat?' · '+esc(r.cat):''} · Pos. IA: <b>${r.range||Math.round(r.score)+'º'}</b> · Fiab: ${r.rel!=null?r.rel+'%':'—'}</div>
+      </div>
+    </div>`).join('')||'<p style="font-size:10px;color:#9ca3af">Sin datos suficientes</p>'}
+  </div>
+  <div class="block advice">
+    <div class="block-title">🧠 Bloque 3 · Consejo táctico de la IA</div>
+    <div class="advice-txt">${esc(advice)}</div>
+  </div>
+  <div class="footer">
+    <span>MFPP Cycling Director · ${esc(race.raceName||'')} · ${esc(race.raceDate||'')}</span>
+    <span>Generado: ${esc(now)}</span>
+  </div>
+</div>
+</body></html>`;
+  const w = window.open('','_blank');
+  if(w){ w.document.write(html); w.document.close(); }
+  else { showToast('Activa las ventanas emergentes para exportar el PDF','warn',4000); }
+}
+
+// ── Compartir por WhatsApp / Web Share API ────────────────────────────────
+function _simBriefShare(){
+  const brief = _simBuildBriefing();
+  if(!brief){ showToast('Selecciona una prueba primero','warn'); return; }
+  const {obj, scouting, advice, kpis, race, circuitMeta} = brief;
+  const tT = t => t==='up'?' ⬆️':t==='down'?' ⬇️':'';
+
+  const lines = [
+    `📋 *HOJA DE RUTA · ${(race.raceName||'').toUpperCase()}*`,
+    `📅 ${race.raceDate||''}${race.localidad?' · 📍'+race.localidad:''}${circuitMeta.icon?' · '+circuitMeta.icon+' '+(circuitMeta.label||''):''}`,
+    ``,
+    `🎯 *OBJETIVO COLECTIVO*`,
+    obj.goalText,
+    obj.leader ? `👑 Líder estimado: *${obj.leader.name}*${obj.leader.range?' ('+obj.leader.range+')':''}${tT(obj.leader.trend)}` : '',
+    obj.myRank!=null ? `🏆 Posición estimada: *${obj.myRank}º de ${obj.totalT} equipos*${obj.podiumProb!=null?' · Podio: '+obj.podiumProb+'%':''}` : '',
+    ``,
+    `🔭 *RIVALES A VIGILAR*`,
+    ...scouting.slice(0,3).map((r,i)=>`${i+1}. *${r.name}*${tT(r.trend)} (${r.team||'—'}) · Pos. IA: ${r.range||Math.round(r.score)+'º'}`),
+    ``,
+    `🧠 *CONSEJO TÁCTICO*`,
+    advice,
+    ``,
+    `_Generado con MFPP Cycling Director · ${new Date().toLocaleString('es-ES')}_`
+  ].filter(l=>l!==undefined && l!==null).join('\n');
+
+  // Web Share API (iOS Safari, Android Chrome) → fallback WhatsApp link
+  if(navigator.share){
+    navigator.share({ title: `Hoja de Ruta · ${race.raceName||''}`, text: lines })
+      .catch(()=>{}); // usuario canceló
+  } else {
+    const url = 'https://wa.me/?text=' + encodeURIComponent(lines);
+    window.open(url, '_blank');
+  }
+}
+
+// ── HOOK: mostrar botón Hoja de Ruta y panel ─────────────────────────────
+const _origSimShowEmptyBrief = (typeof _simShowEmpty==='function') ? _simShowEmpty : null;
+if(_origSimShowEmptyBrief){
+  window._simShowEmpty = function(msg){
+    _origSimShowEmptyBrief(msg);
+    const p = document.getElementById('simBriefPanel');  if(p) p.style.display='none';
+    const b = document.getElementById('simBriefBtn');    if(b) b.style.display='none';
+  };
+}
+// Mostrar el botón cuando hay datos (hookeamos la función que muestra paneles)
+const _origSimRenderCurrentBrief = (typeof _simRenderCurrent==='function') ? _simRenderCurrent : null;
+if(_origSimRenderCurrentBrief){
+  window._simRenderCurrent = function(){
+    _origSimRenderCurrentBrief();
+    const b = document.getElementById('simBriefBtn');
+    if(b) b.style.display = _simCurrentData ? 'inline-block' : 'none';
+    // Si el panel ya estaba abierto, refrescar su contenido
+    const p = document.getElementById('simBriefPanel');
+    if(p && p.style.display!=='none' && _simCurrentData){
+      const brief = _simBuildBriefing();
+      if(brief) _simDrawBriefPanel(brief);
+    }
+  };
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN SIMULADOR FASE 4b — HOJA DE RUTA
+// ═══════════════════════════════════════════════════════════════════════════

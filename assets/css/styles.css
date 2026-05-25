@@ -1214,6 +1214,30 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
   .sim-profiles-grid{grid-template-columns:1fr 1fr}
 }
 
+/* ── SIMULADOR FASE 4b — Hoja de Ruta (Briefing) ───────────────────────── */
+.sim-brief-block{border-radius:12px;padding:16px 18px;margin-bottom:14px;border:1.5px solid}
+.sim-brief-block-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+/* Bloque 1 objetivo */
+.sim-brief-obj{background:linear-gradient(135deg,#eef2ff,#f5f3ff);border-color:#c4b5fd}
+.sim-brief-obj .sim-brief-block-title{color:#5b21b6}
+.sim-brief-obj-goal{font-size:18px;font-weight:900;color:#3730a3;margin:4px 0 8px;line-height:1.2}
+.sim-brief-obj-leader{font-size:13px;color:#475569;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sim-brief-obj-leader b{color:#0b2f6b}
+/* Bloque 2 scouting */
+.sim-brief-scout{background:linear-gradient(135deg,#fff7ed,#fff);border-color:#fed7aa}
+.sim-brief-scout .sim-brief-block-title{color:#c2410c}
+.sim-brief-scout-list{display:flex;flex-direction:column;gap:7px}
+.sim-brief-scout-row{display:flex;align-items:center;gap:10px;padding:7px 10px;background:#fff;border:1px solid #fed7aa;border-radius:8px}
+.sim-brief-scout-rank{font-size:20px;font-weight:900;color:#c2410c;width:28px;text-align:center;flex-shrink:0}
+.sim-brief-scout-info{flex:1;min-width:0}
+.sim-brief-scout-name{font-weight:700;font-size:13px;color:#1e293b}
+.sim-brief-scout-meta{font-size:11px;color:#64748b;margin-top:1px}
+.sim-brief-scout-trend{font-size:18px;flex-shrink:0}
+/* Bloque 3 consejo */
+.sim-brief-advice{background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border-color:#6ee7b7}
+.sim-brief-advice .sim-brief-block-title{color:#065f46}
+.sim-brief-advice-text{font-size:13.5px;color:#1e293b;line-height:1.6;border-left:3px solid #6ee7b7;padding-left:12px}
+
 /* ── SIMULADOR FASE 3b — Pronóstico colectivo + Optimizador ─────────────── */
 /* KPIs resumen equipo */
 .sim-team-summary-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}

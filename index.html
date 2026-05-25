@@ -1439,6 +1439,7 @@
             </select>
           </div>
           <button class="btn light" onclick="_simExportPDF()" id="simExportBtn" style="display:none;background:#0369a1;color:#fff;border:0;font-weight:800">🖨️ Exportar predicción PDF</button>
+          <button class="btn light" onclick="_simOpenBriefPanel()" id="simBriefBtn" style="display:none;background:#7c3aed;color:#fff;border:0;font-weight:800">📋 Hoja de Ruta</button>
           <button class="btn light" onclick="_simToggleModelAccuracy()" style="background:#16a34a;color:#fff;border:0;font-weight:800">📊 Precisión del modelo</button>
         </div>
         <div id="simRaceMeta" class="sim-race-meta" style="display:none"></div>
@@ -1484,6 +1485,18 @@
           <span class="small" style="color:#64748b">¿Qué pasa si cambio a un corredor?</span>
         </div>
         <div id="simLineupBody"></div>
+      </section>
+
+      <!-- Fase 4: Hoja de Ruta Táctica -->
+      <section class="panel" id="simBriefPanel" style="display:none;border-left:4px solid #7c3aed;background:linear-gradient(135deg,#faf5ff,#fff)">
+        <div class="section-title">
+          <h2 style="margin:0;color:#5b21b6">📋 Hoja de Ruta de Carrera</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn light" onclick="_simBriefPDF()" style="background:#7c3aed;color:#fff;border:0;font-weight:800;padding:6px 13px;font-size:13px">🖨️ Exportar PDF</button>
+            <button class="btn light" onclick="_simBriefShare()" style="background:#25d366;color:#fff;border:0;font-weight:800;padding:6px 13px;font-size:13px">📲 Compartir</button>
+          </div>
+        </div>
+        <div id="simBriefBody"></div>
       </section>
 
       <!-- Fase 2: Head-to-head rivales -->
