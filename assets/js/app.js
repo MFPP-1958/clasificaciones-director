@@ -23670,3 +23670,237 @@ if(_origSimRenderCurrentBrief){
 // ═══════════════════════════════════════════════════════════════════════════
 // FIN SIMULADOR FASE 4b — HOJA DE RUTA
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULADOR — BACKTEST HISTÓRICO
+// Para cada carrera disputada, simula la predicción usando SOLO datos
+// de carreras anteriores en el tiempo (sin look-ahead bias) y compara
+// con el resultado real. Sirve para calibrar la precisión del modelo.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _simBacktestResults = null;  // Cache de resultados del último backtest
+
+function _simRunBacktest(){
+  const btn = document.getElementById('simBacktestRunBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '🔄 Simulando…'; }
+
+  // Sacamos el cálculo a un setTimeout para que el botón cambie ANTES de bloquear
+  setTimeout(()=>{
+    try{
+      const t0 = performance.now();
+      const hist = _cachedHistory || [];
+      const past = hist.filter(h => (h.riders||[]).length >= 3 && _parseSpanishDate(h.raceDate));
+
+      if(past.length < 5){
+        if(typeof showToast==='function') showToast('Necesitas al menos 5 carreras con resultados para el backtest','warn',4500);
+        if(btn){ btn.disabled = false; btn.textContent = '🧪 Lanzar backtest histórico'; }
+        return;
+      }
+
+      // Ordenar por fecha ascendente
+      past.sort((a,b)=>{
+        const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+        const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+        return da.localeCompare(db);
+      });
+
+      const raceResults = [];
+
+      for(let i = 0; i < past.length; i++){
+        const target = past[i];
+        const targetDate = _parseSpanishDate(target.raceDate);
+        if(!targetDate) continue;
+
+        // Histórico disponible: SOLO carreras estrictamente anteriores
+        const available = past.filter(h => {
+          if(h.id === target.id) return false;
+          const d = _parseSpanishDate(h.raceDate);
+          return d && d < targetDate;
+        });
+        if(available.length < 3) continue; // Necesitamos un mínimo de muestras previas
+
+        // Índice por corredor con SOLO available
+        const byRider = new Map();
+        available.forEach(h => {
+          (h.riders||[]).forEach(r => {
+            const nk = normalizeForMatching(r.name||'');
+            if(nk && r.pos > 0){
+              if(!byRider.has(nk)) byRider.set(nk, []);
+              byRider.get(nk).push({pos: r.pos, raceDate: h.raceDate});
+            }
+          });
+        });
+
+        const N = (target.riders||[]).length;
+        const riderResults = [];
+        (target.riders||[]).forEach(r => {
+          if(!r.pos || r.pos <= 0) return; // Solo finalistas con puesto válido
+          const nk = normalizeForMatching(r.name||'');
+          const hits = nk ? (byRider.get(nk)||[]) : [];
+          const positions = hits.map(h => h.pos);
+          if(positions.length < 2) return; // Necesitamos ≥2 carreras previas
+
+          // Predicción simplificada (misma fórmula del motor real, sin Árbol de Regresión completo)
+          const avgPos = positions.reduce((s,p)=>s+p,0) / positions.length;
+          const sorted = hits.slice().sort((a,b)=>{
+            const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+            const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+            return db.localeCompare(da);
+          });
+          const recent3 = sorted.slice(0,3).map(h=>h.pos);
+          const recentMean = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : null;
+          let predicted = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
+
+          // Penalización por fiabilidad
+          const reliability = _simReliability(positions, N) ?? 50;
+          const relPenalty = reliability>=75 ? 1.00 : reliability>=50 ? 1.08 : reliability>=25 ? 1.15 : 1.20;
+          predicted *= relPenalty;
+          predicted = Math.max(1, Math.min(N, Math.round(predicted)));
+
+          const error = predicted - r.pos;
+          riderResults.push({
+            name: r.name, team: r.team, cat: r.cat,
+            predicted, real: r.pos, error, absError: Math.abs(error),
+            reliability,
+            wasTop10:       r.pos <= 10,
+            predictedTop10: predicted <= 10,
+            wasTop5:        r.pos <= 5,
+            predictedTop5:  predicted <= 5,
+            wasPodium:      r.pos <= 3,
+            predictedPodium: predicted <= 3,
+            historySize: positions.length
+          });
+        });
+
+        if(riderResults.length < 3) continue;
+        raceResults.push({
+          raceId: target.id,
+          raceName: target.raceName || '(sin nombre)',
+          raceDate: target.raceDate,
+          localidad: target.localidad || '',
+          circuitType: target.circuitType || '',
+          totalInscritos: N,
+          riders: riderResults,
+          avgError: riderResults.reduce((s,r)=>s+r.absError,0)/riderResults.length
+        });
+      }
+
+      const ms = Math.round(performance.now()-t0);
+      _simBacktestResults = { raceResults, ms, totalPast: past.length };
+      _simRenderBacktest();
+      if(typeof showToast==='function') showToast(`🧪 Backtest completado · ${raceResults.length} carreras simuladas · ${ms} ms`, 'ok', 3500);
+
+    }catch(e){
+      console.error('[backtest]', e);
+      if(typeof showToast==='function') showToast('Error en backtest: '+(e.message||e), 'err', 5000);
+    } finally {
+      if(btn){ btn.disabled = false; btn.textContent = '🔄 Lanzar de nuevo'; }
+    }
+  }, 50);
+}
+
+function _simRenderBacktest(){
+  const body = document.getElementById('simBacktestBody');
+  if(!body) return;
+  const data = _simBacktestResults;
+  if(!data || !data.raceResults.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Pulsa "🧪 Lanzar backtest histórico" para empezar.</p>';
+    return;
+  }
+
+  const { raceResults, ms, totalPast } = data;
+  const allRiders = raceResults.flatMap(r => r.riders);
+  const N = allRiders.length;
+
+  // — Métricas globales —
+  const mae = allRiders.reduce((s,r)=>s+r.absError,0) / N;
+  const meanError = allRiders.reduce((s,r)=>s+r.error,0) / N;
+  const sortedErrors = allRiders.map(r=>r.absError).sort((a,b)=>a-b);
+  const median = sortedErrors[Math.floor(N/2)];
+  const p90    = sortedErrors[Math.floor(N*0.9)] || 0;
+
+  // — Confusion matrix Top 10 —
+  const m10 = { TP:0, FP:0, TN:0, FN:0 };
+  const m5  = { TP:0, FP:0, TN:0, FN:0 };
+  const m3  = { TP:0, FP:0, TN:0, FN:0 };
+  allRiders.forEach(r=>{
+    [['10', r.predictedTop10, r.wasTop10, m10], ['5', r.predictedTop5, r.wasTop5, m5], ['3', r.predictedPodium, r.wasPodium, m3]].forEach(([_, p, w, m])=>{
+      if(p && w)       m.TP++;
+      else if(p && !w) m.FP++;
+      else if(!p && w) m.FN++;
+      else             m.TN++;
+    });
+  });
+  const _prec = m => m.TP+m.FP>0 ? Math.round(100*m.TP/(m.TP+m.FP)) : 0;
+  const _rec  = m => m.TP+m.FN>0 ? Math.round(100*m.TP/(m.TP+m.FN)) : 0;
+  const _f1   = m => { const p=_prec(m)/100, r=_rec(m)/100; return p+r>0 ? Math.round(100*2*p*r/(p+r)) : 0; };
+
+  // — Mejores y peores carreras —
+  const byQuality = raceResults.slice().sort((a,b)=>a.avgError-b.avgError);
+  const bestRaces  = byQuality.slice(0,5);
+  const worstRaces = byQuality.slice(-5).reverse();
+
+  // — Diagnóstico inteligente —
+  const diagnoses = [];
+  if(mae > 15) diagnoses.push({type:'danger', txt:`Error medio alto (±${mae.toFixed(1)} puestos). El modelo tiene margen de mejora. Posibles causas: poco histórico, baja calidad de datos, o pesos por afinar.`});
+  else if(mae > 8) diagnoses.push({type:'warning', txt:`Error medio moderado (±${mae.toFixed(1)} puestos). Razonable para ciclismo base — la variabilidad real de las carreras es alta.`});
+  else diagnoses.push({type:'ok', txt:`Error medio bajo (±${mae.toFixed(1)} puestos). El modelo predice con buena precisión.`});
+
+  if(Math.abs(meanError) > 3){
+    const dir = meanError > 0 ? 'INFRAESTIMANDO' : 'SOBREESTIMANDO';
+    diagnoses.push({type:'warning', txt:`El modelo está ${dir} las posiciones de media (sesgo: ${meanError.toFixed(1)}). Conviene revisar los factores cadete o el peso de la fiabilidad.`});
+  }
+  if(_prec(m10) < 50) diagnoses.push({type:'warning', txt:`Precisión Top 10 baja (${_prec(m10)}%): demasiados falsos positivos. Cuando predecimos Top 10, fallamos más de la mitad de veces.`});
+  if(_rec(m10)  < 50) diagnoses.push({type:'warning', txt:`Recall Top 10 bajo (${_rec(m10)}%): se nos escapan corredores reales del Top 10 que no predijimos.`});
+
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px">
+      <div style="padding:12px;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border-radius:10px;border:1.5px solid #c7d2fe">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#3730a3;font-weight:800">📊 Carreras simuladas</div>
+        <div style="font-size:26px;font-weight:900;color:#3730a3">${raceResults.length}</div>
+        <div style="font-size:11px;color:#64748b">de ${totalPast} con resultados · ${ms} ms</div>
+      </div>
+      <div style="padding:12px;background:linear-gradient(135deg,#fef3c7,#fff);border-radius:10px;border:1.5px solid #fcd34d">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#92400e;font-weight:800">📏 Error medio (MAE)</div>
+        <div style="font-size:26px;font-weight:900;color:#92400e">±${mae.toFixed(1)}</div>
+        <div style="font-size:11px;color:#64748b">puestos · mediana ${median} · p90 ${p90}</div>
+      </div>
+      <div style="padding:12px;background:linear-gradient(135deg,#dcfce7,#fff);border-radius:10px;border:1.5px solid #86efac">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#166534;font-weight:800">🎯 Top 10 (F1-score)</div>
+        <div style="font-size:26px;font-weight:900;color:#166534">${_f1(m10)}%</div>
+        <div style="font-size:11px;color:#64748b">precisión ${_prec(m10)}% · recall ${_rec(m10)}%</div>
+      </div>
+      <div style="padding:12px;background:linear-gradient(135deg,#fee2e2,#fff);border-radius:10px;border:1.5px solid #fca5a5">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#991b1b;font-weight:800">🥇 Podio (F1-score)</div>
+        <div style="font-size:26px;font-weight:900;color:#991b1b">${_f1(m3)}%</div>
+        <div style="font-size:11px;color:#64748b">precisión ${_prec(m3)}% · recall ${_rec(m3)}%</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      ${diagnoses.map(d => {
+        const c = d.type==='danger'?'#fee2e2':d.type==='warning'?'#fef3c7':'#dcfce7';
+        const cb = d.type==='danger'?'#dc2626':d.type==='warning'?'#f59e0b':'#16a34a';
+        const ic = d.type==='danger'?'🔴':d.type==='warning'?'🟡':'🟢';
+        return `<div style="background:${c};border-left:4px solid ${cb};padding:9px 14px;margin-bottom:6px;border-radius:0 8px 8px 0;font-size:12.5px;color:#1e293b">${ic} ${escapeHtml(d.txt)}</div>`;
+      }).join('')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px">
+      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px">
+        <div style="font-size:12px;font-weight:800;color:#166534;margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px">✅ Mejores aciertos (carreras con menor error)</div>
+        ${bestRaces.map(r=>`<div style="padding:5px 0;border-bottom:1px dashed #d1fae5;font-size:12px">
+          <b>${escapeHtml(r.raceName.slice(0,40))}</b><br>
+          <small style="color:#475569">${escapeHtml(r.raceDate||'')} · ${r.riders.length} corredores · <b style="color:#166534">±${r.avgError.toFixed(1)} puestos</b></small>
+        </div>`).join('')}
+      </div>
+      <div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:12px">
+        <div style="font-size:12px;font-weight:800;color:#991b1b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px">❌ Peores aciertos (carreras con mayor error)</div>
+        ${worstRaces.map(r=>`<div style="padding:5px 0;border-bottom:1px dashed #fee2e2;font-size:12px">
+          <b>${escapeHtml(r.raceName.slice(0,40))}</b><br>
+          <small style="color:#475569">${escapeHtml(r.raceDate||'')} · ${r.riders.length} corredores · <b style="color:#991b1b">±${r.avgError.toFixed(1)} puestos</b></small>
+        </div>`).join('')}
+      </div>
+    </div>
+  `;
+}

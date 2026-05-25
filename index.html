@@ -2054,6 +2054,69 @@
           <p class="small" style="margin:14px 0 0">💡 Si no ves tu prueba en la lista, súbele la startlist desde el menú <b>Historial</b> → botón <b>➕ Añadir startlist</b>.</p>
         </div>
       </section>
+
+      <!-- Backtest histórico: validación honesta del modelo -->
+      <section class="panel" id="simBacktestPanel" style="border-left:4px solid #0369a1;background:linear-gradient(135deg,#f0f9ff,#fff)">
+        <div class="section-title">
+          <h2 style="margin:0;color:#075985">🧪 Backtest histórico · Precisión del modelo</h2>
+          <button class="btn" id="simBacktestRunBtn" onclick="_simRunBacktest()" style="background:#0369a1;border-color:#0369a1;color:#fff;font-weight:800;padding:9px 16px">🧪 Lanzar backtest histórico</button>
+        </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Qué es el backtest y cómo aprende el sistema con esto?</summary>
+          <div class="sim-help-body">
+
+            <h4>🧪 ¿Qué hace este botón?</h4>
+            <p>Recorre <b>TODAS tus carreras ya disputadas con resultados</b>, y para cada una hace lo siguiente:</p>
+            <ol>
+              <li>"Olvida" la propia carrera y todas las posteriores (simula que vivimos en el día anterior a esa carrera)</li>
+              <li>Lanza la predicción IA con solo los datos disponibles en ese momento del pasado</li>
+              <li>Compara la predicción con el resultado real que conocemos</li>
+              <li>Acumula los errores y aciertos</li>
+            </ol>
+            <p>Eso es predicción <b>honesta</b>: sin trampa, sin "ver el futuro". Los números que verás son la <b>precisión real del modelo</b>.</p>
+
+            <h4>📊 ¿Qué significan los 4 KPIs?</h4>
+            <ul>
+              <li><b>📊 Carreras simuladas</b>: cuántas pasaron el filtro (mínimo 3 carreras previas en el histórico)</li>
+              <li><b>📏 Error medio (MAE)</b>: de cuántos puestos nos equivocamos de media. <b>±5</b> es excelente. <b>±10</b> es razonable. <b>±20</b> es malo. La mediana y el p90 te dicen si los errores se concentran o están repartidos</li>
+              <li><b>🎯 Top 10 (F1-score)</b>: combina <b>precisión</b> (de los predichos Top 10, cuántos acertamos) y <b>recall</b> (de los Top 10 reales, cuántos predijimos). Un F1 del 70% es muy bueno</li>
+              <li><b>🥇 Podio (F1-score)</b>: lo mismo pero para el podio (Top 3). Es más difícil porque hay solo 3 plazas</li>
+            </ul>
+
+            <h4>🩺 Los diagnósticos automáticos</h4>
+            <p>Después de los KPIs aparecen 1-4 mensajes de colores con la interpretación:</p>
+            <ul>
+              <li><b>🟢 verde</b>: el modelo funciona bien</li>
+              <li><b>🟡 amarillo</b>: aviso menor — el modelo es razonable pero hay un sesgo</li>
+              <li><b>🔴 rojo</b>: problema serio — error medio alto o métricas pobres</li>
+            </ul>
+            <p>Los avisos pueden incluir cosas como "el modelo infraestima de media 5 puestos" → pista para ajustar pesos.</p>
+
+            <h4>🤖 ¿Y cómo aprende el sistema realmente?</h4>
+            <p>Por ahora el backtest solo te <b>enseña la precisión</b>. El siguiente paso (no implementado todavía) sería usar esos datos para <b>optimizar los pesos automáticamente</b>: probar variantes del peso 60/40 (50/50, 70/30, 80/20), probar factores cadete (1.10, 1.15, 1.20, 1.25), etc., y quedarnos con la combinación que minimiza el error medio.</p>
+            <p>Eso es ML básico: <b>buscar los parámetros que mejor encajan con los datos históricos</b>. Cuando tengamos suficientes carreras (idealmente &gt;100) podemos hacerlo de forma robusta.</p>
+
+            <h4>📋 Ejemplos / Cómo interpretarlos</h4>
+            <div class="example">
+              <b>Caso bueno</b>: MAE ±6, F1 Top 10 = 75% → el modelo predice los Top 10 con muy buena precisión y solo se equivoca ±6 puestos de media. Confianza alta.
+            </div>
+            <div class="example">
+              <b>Caso típico de ciclismo base</b>: MAE ±10-12, F1 Top 10 = 45-55% → razonable. El ciclismo es muy variable (pinchazos, cortes, días malos), perfecto es imposible. Si los Top 10 que dice clavados son acertados &gt;50% del tiempo, vale.
+            </div>
+            <div class="example">
+              <b>Caso a investigar</b>: MAE ±18, sesgo +6 (siempre infraestima 6 puestos) → algo está mal. Probablemente el factor cadete o la penalización por fiabilidad son demasiado conservadores. Hay que afinar.
+            </div>
+
+            <div class="tip">
+              💡 <b>Importante:</b> El backtest excluye automáticamente carreras donde tenemos &lt;3 datos previos por corredor (no se puede predecir sin histórico). Si te aparece "0 carreras simuladas" es porque no hay suficiente histórico acumulado. Cuando subas más resultados, la simulación tendrá más muestras y será más fiable.
+            </div>
+
+          </div>
+        </details>
+
+        <div id="simBacktestBody"><p class="small" style="text-align:center;padding:18px;color:#9ca3af">Pulsa <b>"🧪 Lanzar backtest histórico"</b> para empezar.<br>Simulará cada una de tus carreras pasadas y te dirá cómo de buenas son las predicciones del modelo.</p></div>
+      </section>
     </div>
     <!-- ══════════════════════════════  FIN SIMULADOR  ═══════════ -->
 
