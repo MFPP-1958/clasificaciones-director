@@ -1457,6 +1457,62 @@
           <h2 style="margin:0">🏆 Top 10 esperado (predicción IA)</h2>
           <span class="small">Pondera puesto medio + fiabilidad</span>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Cómo se construye este Top 10 y qué significa cada columna?</summary>
+          <div class="sim-help-body">
+
+            <h4>🔢 ¿Cómo se ordena el Top 10?</h4>
+            <p>El orden NO es por la media histórica, sino por la <b>Posición IA</b> — la predicción para esta carrera. La fórmula:</p>
+            <p><code>Pos. IA = (0.60 × media de las 3 últimas) + (0.40 × media histórica) × factor cadete × penalización por fiabilidad</code></p>
+            <p>Esto significa que un corredor en racha (últimas carreras buenas) sube en la lista <b>aunque su histórico general no sea brillante</b>. Y al revés: un buen corredor que lleva 3 malas baja.</p>
+
+            <h4>🟢 🟡 🟠 El punto de color junto al nombre</h4>
+            <p>Es el <b>indicador de confianza por tamaño de muestra</b>:</p>
+            <ul>
+              <li>🟢 <b>Verde</b>: alta (≥5 carreras en el histórico)</li>
+              <li>🟡 <b>Amarillo</b>: media (3-4 carreras)</li>
+              <li>🟠 <b>Naranja</b>: baja (1-2 carreras)</li>
+            </ul>
+            <p>Cuantas más carreras tenemos del corredor, más fiables son TODAS sus métricas.</p>
+
+            <h4>⬆️ ⬇️ La flecha junto al nombre</h4>
+            <p>Es la <b>tendencia reciente</b>: compara el promedio de sus 2 últimas con las anteriores. ⬆️ va a mejor (umbral 2 puestos), ⬇️ va a peor, sin flecha = estable.</p>
+
+            <h4>🔒 ⚠️ 4º–6º · POS. IA</h4>
+            <p>El número entre rayas es el <b>intervalo donde la IA cree que acabará</b>. El ancho del rango depende de la fiabilidad:</p>
+            <ul>
+              <li>🔒 <b>Candado verde</b>: fiabilidad ≥75% → rango estrecho, predicción robusta</li>
+              <li>(sin icono) <b>fiabilidad 40-75%</b>: rango normal</li>
+              <li>⚠️ <b>Aviso amarillo</b>: fiabilidad &lt;40% → rango muy amplio, predicción incierta</li>
+            </ul>
+
+            <h4>📊 MEDIA · MEJOR · FIAB. · CARRS.</h4>
+            <ul>
+              <li><b>MEDIA</b>: posición promedio histórica de todas sus carreras (sin DNF/DS)</li>
+              <li><b>MEJOR</b>: la mejor posición que ha conseguido en su carrera</li>
+              <li><b>FIAB.</b>: % de carreras dentro de ±15% de su media (con tope si compite siempre en cola del pelotón — un corredor que siempre acaba 80º no puede ser "100% fiable")</li>
+              <li><b>CARRS.</b>: número total de carreras en el histórico</li>
+            </ul>
+
+            <h4>🤔 ¿Por qué hay corredores con 0% fiabilidad arriba?</h4>
+            <p>Esta es la pregunta clave. Un corredor con <b>fiab. 0% en Top 10</b> casi siempre es así:</p>
+            <div class="example">
+              <b>Caso real (Greus, Marc):</b> Media 21.9º, mejor 1º, fiab 0%, range 1º–45º, tendencia ⬆️<br>
+              → Su histórico tiene resultados disparísimos (alguna podio + alguna pájara).<br>
+              → Pero sus <b>últimas 3 carreras han sido buenas</b>, así que la fórmula 60/40 le sube.<br>
+              → La IA lo predice ~16º pero su rango sale 1º–45º porque su desviación es enorme.<br>
+              → El ⚠️ te avisa: <b>"puede ser top 5 o quedarse fuera del 40, no es predecible"</b>.
+            </div>
+            <p>Lo correcto es interpretarlo así: <b>la IA reconoce que viene en forma</b>, pero por su historial no garantiza el resultado. Es honestidad estadística.</p>
+
+            <div class="tip">
+              💡 <b>Lectura táctica:</b> Da más peso a corredores con 🔒 (fiabilidad alta) — sus puestos son apuestas seguras. Los que tienen ⚠️ son <b>cartas tapadas</b>: pueden romper la carrera o desaparecer en los primeros kilómetros. Si vas a controlar la carrera, marca a los 🔒. Si quieres sorpresa, vigila los ⚠️ con tendencia ⬆️.
+            </div>
+
+          </div>
+        </details>
+
         <div id="simTopBody"></div>
       </section>
 
