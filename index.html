@@ -2058,6 +2058,72 @@
           <h2 style="margin:0">🚴 Parrilla de salida analizada</h2>
           <span class="small" id="simGridCount"></span>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ Guía completa de la parrilla: filtros, columnas y cómo se ordena</summary>
+          <div class="sim-help-body">
+
+            <h4>🚴 ¿Qué es este bloque?</h4>
+            <p>Es la <b>tabla maestra</b> del simulador. Contiene <b>TODOS los inscritos</b> de la prueba (no solo el top 10) con sus métricas históricas, predicción de la IA, tendencia, fiabilidad y probabilidades. Es la vista de referencia que un director consulta para tomar decisiones tácticas detalladas.</p>
+
+            <h4>🔢 ¿Cómo se ordena la tabla?</h4>
+            <p>Por <b>Pos. IA ascendente</b> (mejor predicción primero). Los corredores sin predicción quedan al final. Igual que el Top 10 esperado, pero aquí ves la lista completa.</p>
+
+            <h4>🔎 Los tres filtros de la cabecera</h4>
+            <ul>
+              <li><b>🔎 Buscar corredor o equipo</b>: escribe parte del nombre, club o dorsal. Filtra al instante</li>
+              <li><b>🔵 Solo mi equipo</b>: te quedas únicamente con los corredores de tu equipo (la fila azul)</li>
+              <li><b>🔍 Solo con historial</b>: oculta los debutantes (sin carreras previas), te quedas solo con los que tienen datos del histórico</li>
+            </ul>
+            <p>Los filtros se combinan: puedes buscar "Sanchez" + Solo mi equipo y verás solo Sanchez de los tuyos.</p>
+
+            <h4>📋 Las 14 columnas explicadas (de izquierda a derecha)</h4>
+            <ol>
+              <li><b>#</b>: ranking según Pos. IA</li>
+              <li><b>CORREDOR</b>: nombre + dorsal. Punto de color = nivel de confianza (verde ≥5 carreras, amarillo 3-4, naranja 1-2, gris sin datos). Los tuyos llevan 🔵 y fondo azul claro</li>
+              <li><b>CLUB</b>: el equipo</li>
+              <li><b>CAT.</b>: categoría (CAD-1, CAD-2, CADETE…)</li>
+              <li><b>HISTORIAL</b>: <span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">✓ Sí</span> tiene carreras previas · <span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">📊 Equipo</span> usa fallback del club (Rama B) · <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700">🆕 Debutante</span> sin datos</li>
+              <li><b>🤖 POS. IA</b>: predicción con el Árbol de Regresión. El rango se muestra como "Xº–Yº" con icono según fiabilidad: 🔒 (estable, ≥75%), sin icono (normal 40-74%), ⚠️ (inestable, &lt;40%), 📊 (estimado por club). Si excede el pelotón aparece "72+º"</li>
+              <li><b>TENDENCIA</b>: ⬆️ va a mejor · ⬇️ va a peor · ➡️ estable · — sin datos suficientes</li>
+              <li><b>MEDIA HIST.</b>: posición promedio histórica en todas sus carreras (sin DNF/DS, sin etapas/CRIs)</li>
+              <li><b>MEJOR</b>: la mejor posición conseguida en toda su carrera</li>
+              <li><b>FIAB.</b>: % de consistencia (carreras dentro de ±15% de su media) con techo según posición. Color: verde ≥75% · amarillo 50-74% · naranja 25-49% · rojo &lt;25%</li>
+              <li><b>C.</b>: número de carreras previas analizadas en el histórico</li>
+              <li><b>🎯 TOP10</b>: probabilidad Bernoulli de entrar en Top 10 · verde ≥70% · ámbar 40-69%</li>
+              <li><b>🥇 PODIO</b>: probabilidad logística de subir al podio · 🥇 si ≥60%</li>
+              <li><b>🚨 RIESGO</b>: probabilidad de corte/abandono · ⚠️ si &gt;50%</li>
+            </ol>
+
+            <h4>🔒 ⚠️ 📊 Los iconos junto a la Pos. IA</h4>
+            <ul>
+              <li><b>🔒 Rango estable (verde)</b>: fiabilidad ≥75%. El intervalo se calcula con σ × 0.6 → más estrecho. Predicción robusta — el corredor es predecible</li>
+              <li><b>(sin icono)</b>: fiabilidad entre 40-74%. Intervalo σ × 0.8 — anchura normal</li>
+              <li><b>⚠️ Rango inestable (ámbar) con "inestable" debajo</b>: fiabilidad &lt;40%. Intervalo σ × 1.4 → muy amplio. <b>Cuidado</b>: este corredor puede ser top 5 o quedarse fuera del 40 sin diferencia</li>
+              <li><b>📊 Por club (azul)</b>: debutante absoluto, su predicción se estima a partir de la media histórica del CLUB (Rama B). Rango ±22%</li>
+            </ul>
+
+            <h4>🎨 ¿Por qué algunos corredores tienen Pos. IA arriba (1º-43º) y MEDIA hist alta?</h4>
+            <p>Caso típico (visible en tu screenshot):</p>
+            <div class="example">
+              <b>Garcia, Pedro</b>: Pos. IA 1º–43º · Media hist 21.5º · Mejor 3º · Fiab 0% · 6 carreras<br>
+              → <b>¿Por qué tan arriba en la lista?</b> Su rango incluye desde el 1º hasta el 43º (rango muy amplio porque 0% fiabilidad). Su Pos. IA central probablemente es ~22, pero la fórmula 60/40 le da peso a su forma reciente. Si sus últimas 3 carreras han sido buenas, sube. PERO el ⚠️ inestable te avisa: <b>puede ser top 3 o quedarse fuera del 40</b>.<br>
+              → Conclusión: la IA reconoce que viene en forma, pero su consistencia no garantiza el resultado.
+            </div>
+
+            <h4>📜 Leyenda al pie de la tabla</h4>
+            <p>Bajo la tabla hay una línea con resumen de todos los iconos y conceptos. Si tienes dudas durante el uso, ahí encuentras la chuleta rápida.</p>
+
+            <h4>🔵 La fila azul de tu corredor</h4>
+            <p>Los corredores de tu equipo siempre aparecen con <b>fondo azul claro</b> y el símbolo 🔵 antes del nombre. Así no se pierden en la lista de 60-100 inscritos.</p>
+
+            <div class="tip">
+              💡 <b>Flujo de trabajo recomendado:</b> Primero <b>filtra "Solo mi equipo"</b> para ver tus corredores y entender qué predicción tiene cada uno. Luego <b>quita el filtro</b> y mira a los 10 primeros — son los favoritos del domingo. Compara las Pos. IA de tus corredores con esos favoritos. Si alguno tuyo tiene 🥇 ≥30%, tienes carta para jugar. Si todos tus corredores tienen ⚠️ inestable, el resultado depende del día — táctica defensiva (gregario, control).
+            </div>
+
+          </div>
+        </details>
+
         <div class="sim-filters">
           <input id="simSearchInput" placeholder="🔎 Buscar corredor o equipo…" oninput="_simRenderCurrent()" />
           <label class="sim-chip-toggle"><input type="checkbox" id="simOnlyMyTeam" onchange="_simRenderCurrent()"> 🔵 Solo mi equipo</label>
