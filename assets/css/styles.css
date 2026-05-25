@@ -1189,3 +1189,27 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 @media (max-width:540px){
   .sim-teams-grid{grid-template-columns:1fr}
 }
+
+/* ── SIMULADOR FASE 4 — Inteligencia Táctica ─────────────────────────────── */
+.sim-tactic-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:0}
+.sim-tactic-section{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px}
+.sim-tactic-section-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#5b21b6;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #ede9fe}
+.sim-tactic-empty{font-size:12px;color:#94a3b8;font-style:italic;padding:8px 0}
+.sim-tactic-alert{border-radius:7px;padding:10px 12px;margin-bottom:8px}
+.sim-tactic-alert:last-child{margin-bottom:0}
+.sim-tactic-alert-title{font-size:12px;font-weight:800;color:#1e293b;margin-bottom:3px}
+.sim-tactic-alert-msg{font-size:12px;color:#475569;line-height:1.4}
+.sim-wildcard-card{background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px}
+.sim-wildcard-card:last-child{margin-bottom:0}
+/* Profiles grid */
+.sim-profiles-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.sim-profile-type-card{border-radius:9px;padding:12px;border:1px solid #e5e7eb}
+.sim-profile-riders-list{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto}
+.sim-profile-rider-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 6px;border-radius:5px;background:#fff;border:1px solid #f1f5f9}
+.sim-profile-rider-row.sim-profile-specialist{border-color:#c4b5fd;background:#f5f3ff;font-weight:700}
+.sim-profile-rider-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1e293b}
+.sim-profile-rider-stat{font-size:11px;color:#64748b;white-space:nowrap;margin-left:6px}
+@media(max-width:600px){
+  .sim-tactic-grid{grid-template-columns:1fr}
+  .sim-profiles-grid{grid-template-columns:1fr 1fr}
+}

@@ -22118,3 +22118,309 @@ if(_origSimShowEmpty_F3){
 // ═══════════════════════════════════════════════════════════════════════════
 // FIN SIMULADOR FASE 3
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULADOR FASE 4 — INTELIGENCIA TÁCTICA
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Clasificar tipo de circuito en categoría de perfil
+function _simCircuitToProfile(circuitType){
+  const ct = (circuitType||'').toLowerCase().trim();
+  if(!ct) return 'rouleur';
+  if(ct.includes('criterium')||ct.includes('criteri')||ct.includes('sprint')||ct.includes('plano')) return 'sprinter';
+  if(ct.includes('monta')||ct.includes('escala')||ct.includes('sierra')||ct.includes('puerto')) return 'escalador';
+  if(ct.includes('contra')||ct.includes('crono')||ct.includes('ttf')||ct.includes('contrarreloj')) return 'cronoman';
+  if(ct.includes('circuito')||ct.includes('ciclocross')||ct.includes('pista')) return 'sprinter';
+  return 'rouleur';
+}
+
+const _SIM_PROFILE_META = {
+  'sprinter':     { icon:'⚡', label:'Velocista',     color:'#dc2626', bg:'#fef2f2', desc:'Especialista en sprints y llegadas en grupo' },
+  'escalador':    { icon:'⛰️',  label:'Escalador',     color:'#16a34a', bg:'#f0fdf4', desc:'Destaca en circuitos con desnivel importante' },
+  'rouleur':      { icon:'🛞',  label:'Rouleur',        color:'#2563eb', bg:'#eff6ff', desc:'Corredor de fondo, rinde en pruebas de resistencia' },
+  'cronoman':     { icon:'⏱️',  label:'Cronoman',       color:'#7c3aed', bg:'#f5f3ff', desc:'Especialista en contrarreloj' },
+  'todo-terreno': { icon:'🔄',  label:'Todo-terreno',  color:'#d97706', bg:'#fffbeb', desc:'Polivalente, rinde bien en todo tipo de circuito' },
+};
+
+// Calcula el perfil de un corredor a partir del historial global (_cachedHistory)
+// Devuelve {type, bestCircuitType, statsByProfile, totalRaces, overallAvg} o null
+function _simGetRiderProfile(riderName){
+  const hist = (typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+  if(!hist.length) return null;
+  const normName = normalizeForMatching(riderName||'');
+  // Acumular por perfil de circuito
+  const byProfile = {}; // profile -> {sum, count, best, circuits:[]}
+  let totalSum = 0, totalCount = 0;
+  hist.forEach(race=>{
+    if(!race.riders || !race.riders.length) return;
+    const ct = (race.circuitType||'').trim();
+    const profile = _simCircuitToProfile(ct);
+    const r = race.riders.find(x=> normalizeForMatching(x.name||'')===normName);
+    if(!r || typeof r.pos!=='number' || r.pos<=0) return;
+    if(!byProfile[profile]) byProfile[profile]={sum:0,count:0,best:999,circuits:[]};
+    byProfile[profile].sum += r.pos;
+    byProfile[profile].count++;
+    if(r.pos < byProfile[profile].best) byProfile[profile].best = r.pos;
+    if(ct && !byProfile[profile].circuits.includes(ct)) byProfile[profile].circuits.push(ct);
+    totalSum += r.pos; totalCount++;
+  });
+  if(totalCount < 2) return null;
+  const overallAvg = totalSum / totalCount;
+  // Encontrar perfil con mejor media (mínima posición) con ≥2 carreras
+  let bestProfile = null, bestAvg = Infinity;
+  for(const [p, s] of Object.entries(byProfile)){
+    if(s.count < 2) continue;
+    const avg = s.sum / s.count;
+    if(avg < bestAvg){ bestAvg = avg; bestProfile = p; }
+  }
+  // ¿Es todo-terreno? (≥3 perfiles con ≥2 carreras y diferencia < 2 pos)
+  const validProfiles = Object.entries(byProfile).filter(([,s])=>s.count>=2);
+  if(validProfiles.length >= 3 && bestAvg !== Infinity && bestAvg - overallAvg < 2){
+    return { type:'todo-terreno', bestProfile, statsByProfile:byProfile, totalRaces:totalCount, overallAvg };
+  }
+  if(!bestProfile){
+    // Sin perfil claro → usar el tipo con más carreras
+    let maxC=0;
+    for(const [p,s] of Object.entries(byProfile)){
+      if(s.count>maxC){maxC=s.count; bestProfile=p;}
+    }
+  }
+  return bestProfile
+    ? { type:bestProfile, bestProfile, statsByProfile:byProfile, totalRaces:totalCount, overallAvg, bestAvg }
+    : null;
+}
+
+// Detecta corredores "wildcard": no están en el top10 predicho pero son especialistas
+// del tipo de circuito actual con buenos resultados históricos
+function _simGetWildcards(grid, predictedTop10Names, circuitProfile){
+  if(!grid || !grid.length) return [];
+  const top10Set = new Set(predictedTop10Names.map(n=>normalizeForMatching(n||'')));
+  const wildcards = [];
+  grid.forEach(rider=>{
+    if(top10Set.has(normalizeForMatching(rider.name||''))) return; // ya predicho top10
+    if(!rider.hasHistory || rider.raceCount < 3) return;
+    const prof = _simGetRiderProfile(rider.name);
+    if(!prof || prof.type !== circuitProfile) return; // no es especialista
+    const typeStats = prof.statsByProfile[circuitProfile];
+    if(!typeStats || typeStats.count < 2) return;
+    const typeAvg = typeStats.sum / typeStats.count;
+    if(typeAvg > 10) return; // sólo si promedia ≤10 en su especialidad
+    wildcards.push({
+      name: rider.name, team: rider.team, isMyTeam: rider.isMyTeam,
+      profile: prof, typeAvg: Math.round(typeAvg*10)/10,
+      typeCount: typeStats.count, typeBest: typeStats.best,
+      predictedAvg: rider.avgPos,
+    });
+  });
+  wildcards.sort((a,b)=> a.typeAvg - b.typeAvg);
+  return wildcards.slice(0,8);
+}
+
+// Genera alertas tácticas contextuales para el director de equipo
+function _simGetTacticAlerts(grid, circuitProfile, wildcards){
+  const alerts = [];
+  const myTeam = grid.filter(r=>r.isMyTeam && r.hasHistory && r.raceCount>=2);
+  if(!myTeam.length){
+    alerts.push({type:'warning',icon:'⚠️',title:'Sin datos de equipo',msg:'No hay corredores de tu equipo con historial suficiente para generar alertas tácticas.'});
+    return alerts;
+  }
+  // ── Mi mejor especialista para este circuito ──────────────────────────────
+  const myProfiles = myTeam.map(r=>({...r,prof:_simGetRiderProfile(r.name)})).filter(r=>r.prof);
+  const mySpecialists = myProfiles.filter(r=>r.prof.type===circuitProfile);
+  if(mySpecialists.length>0){
+    const best = mySpecialists.sort((a,b)=>{
+      const as=a.prof.statsByProfile[circuitProfile], bs=b.prof.statsByProfile[circuitProfile];
+      return (as?as.sum/as.count:99) - (bs?bs.sum/bs.count:99);
+    })[0];
+    const s = best.prof.statsByProfile[circuitProfile];
+    const avg = s ? Math.round(s.sum/s.count*10)/10 : '—';
+    alerts.push({type:'positive',icon:'✅',title:'Especialista en plantilla',
+      msg:`${best.name} es tu mejor corredor para circuitos tipo "${_SIM_PROFILE_META[circuitProfile]?.label||circuitProfile}" (media ${avg}ª en ${s?s.count:0} carreras similares)`});
+  } else {
+    const meta = _SIM_PROFILE_META[circuitProfile];
+    alerts.push({type:'warning',icon:'⚠️',title:'Sin especialista en plantilla',
+      msg:`Ningún corredor de tu equipo es ${meta?.label||circuitProfile}. Considera un plan de carrera alternativo.`});
+  }
+  // ── Wildcards rivales peligrosos ──────────────────────────────────────────
+  wildcards.filter(w=>!w.isMyTeam).slice(0,3).forEach(w=>{
+    const meta = _SIM_PROFILE_META[w.profile.type]||{};
+    alerts.push({type:'danger',icon:'🚨',title:'Rival peligroso no detectado',
+      msg:`${w.name} (${w.team||'—'}) no aparece en el top 10 predicho, pero promedia ${w.typeAvg}ª en ${w.typeCount} carreras tipo ${meta.label||w.profile.type}. Mejor resultado: ${w.typeBest}º`});
+  });
+  // ── Wildcard de mi equipo (sorpresa positiva) ─────────────────────────────
+  wildcards.filter(w=>w.isMyTeam).slice(0,2).forEach(w=>{
+    alerts.push({type:'surprise',icon:'💡',title:'Carta escondida en tu equipo',
+      msg:`${w.name} puede ser sorpresa: especialista no computado en el top 10 predicho. Su mejor resultado en circuitos similares es ${w.typeBest}º (media ${w.typeAvg})`});
+  });
+  // ── Forma reciente de mi equipo ───────────────────────────────────────────
+  myTeam.forEach(rider=>{
+    if(!rider.recentForm||rider.recentForm.length<3) return;
+    const recent = rider.recentForm.slice(0,3).filter(p=>p>0);
+    if(!recent.length) return;
+    const recentAvg = recent.reduce((s,p)=>s+p,0)/recent.length;
+    const hist = rider.avgPos||0;
+    if(!hist) return;
+    if(recentAvg < hist*0.75){
+      alerts.push({type:'positive',icon:'🔥',title:'En estado de gracia',
+        msg:`${rider.name} rinde un ${Math.round((1-recentAvg/hist)*100)}% mejor que su media histórica (${Math.round(recentAvg*10)/10} vs ${Math.round(hist*10)/10})`});
+    } else if(recentAvg > hist*1.4 && hist>0){
+      alerts.push({type:'warning',icon:'📉',title:'Bajón de forma',
+        msg:`${rider.name} ha rendido peor en sus últimas carreras (media ${Math.round(recentAvg*10)/10} vs histórico ${Math.round(hist*10)/10}). Considera su posición táctica.`});
+    }
+  });
+  return alerts;
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function _simRenderTacticPanel(){
+  const panel = document.getElementById('simTacticPanel');
+  const body  = document.getElementById('simTacticBody');
+  if(!panel||!body) return;
+  const data = _simCurrentData;
+  if(!data||!data.grid||!data.grid.length){ panel.style.display='none'; return; }
+  panel.style.display='';
+  body.innerHTML='<div style="color:#64748b;padding:14px 0">⏳ Calculando inteligencia táctica…</div>';
+  // Diferir para no bloquear UI
+  setTimeout(()=>{
+    try{ _simBuildTacticHTML(body, data); }
+    catch(e){ console.warn('[sim][tactic]',e); body.innerHTML=`<div style="color:#dc2626;padding:12px">Error al calcular: ${e.message}</div>`; }
+  }, 60);
+}
+
+function _simBuildTacticHTML(body, data){
+  const {grid, race} = data;
+  const esc = s => escapeHtml(String(s||''));
+  // Detectar perfil de circuito
+  const circuitProfile = _simCircuitToProfile(race.circuitType||'');
+  const circuitMeta    = _SIM_PROFILE_META[circuitProfile] || _SIM_PROFILE_META['rouleur'];
+  // Top 10 predicho para wildcards
+  const predictedTop10 = grid.filter(r=>r.hasHistory)
+    .sort((a,b)=>(a.avgPos||99)-(b.avgPos||99))
+    .slice(0,10).map(r=>r.name);
+  // Perfiles de todos los corredores con suficiente historial
+  const riderProfiles = []; // {rider, prof}
+  grid.filter(r=>r.hasHistory&&r.raceCount>=2).forEach(rider=>{
+    const prof = _simGetRiderProfile(rider.name);
+    if(prof) riderProfiles.push({rider, prof});
+  });
+  const byType = {};
+  riderProfiles.forEach(({rider,prof})=>{
+    if(!byType[prof.type]) byType[prof.type]=[];
+    byType[prof.type].push({rider,prof});
+  });
+  // Wildcards y alertas
+  const wildcards = _simGetWildcards(grid, predictedTop10, circuitProfile);
+  const alerts    = _simGetTacticAlerts(grid, circuitProfile, wildcards);
+  let html = '';
+  // Header: circuito detectado
+  html += `<div style="background:${circuitMeta.bg};border:2px solid ${circuitMeta.color};border-radius:10px;
+    padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+    <span style="font-size:2rem">${circuitMeta.icon}</span>
+    <div>
+      <div style="font-size:14px;font-weight:700;color:${circuitMeta.color}">
+        Tipo de circuito: ${esc(circuitMeta.label)}
+        ${race.circuitType?`<span style="font-weight:400;font-size:12px;color:#64748b"> — "${esc(race.circuitType)}"</span>`:''}
+      </div>
+      <div style="font-size:12px;color:#64748b">${esc(circuitMeta.desc)} · ${riderProfiles.length} corredor${riderProfiles.length!==1?'es':''} analizados</div>
+    </div>
+  </div>`;
+  // Grid 2 columnas: alertas + wildcards
+  html += '<div class="sim-tactic-grid">';
+  // — Alertas —
+  html += '<div class="sim-tactic-section"><div class="sim-tactic-section-title">🎯 Alertas tácticas</div>';
+  if(!alerts.length){
+    html += '<div class="sim-tactic-empty">Sin alertas tácticas para esta carrera</div>';
+  } else {
+    const colorMap = {positive:'#16a34a',warning:'#d97706',danger:'#dc2626',surprise:'#7c3aed'};
+    const bgMap    = {positive:'#f0fdf4',warning:'#fffbeb',danger:'#fef2f2',surprise:'#f5f3ff'};
+    alerts.forEach(a=>{
+      html += `<div class="sim-tactic-alert" style="border-left:3px solid ${colorMap[a.type]||'#94a3b8'};background:${bgMap[a.type]||'#f8fafc'}">
+        <div class="sim-tactic-alert-title">${esc(a.icon)} ${esc(a.title)}</div>
+        <div class="sim-tactic-alert-msg">${esc(a.msg)}</div>
+      </div>`;
+    });
+  }
+  html += '</div>';
+  // — Wildcards —
+  html += '<div class="sim-tactic-section"><div class="sim-tactic-section-title">🃏 Comodines peligrosos <span style="font-size:10px;color:#94a3b8;font-weight:400">(fuera del top 10 predicho)</span></div>';
+  if(!wildcards.length){
+    html += '<div class="sim-tactic-empty">No se detectan comodines para este tipo de circuito</div>';
+  } else {
+    wildcards.forEach(w=>{
+      const meta = _SIM_PROFILE_META[w.profile.type]||{};
+      const myBadge = w.isMyTeam
+        ? '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:700;margin-left:4px">MI EQUIPO</span>' : '';
+      html += `<div class="sim-wildcard-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div style="min-width:0">
+            <div style="font-weight:700;font-size:13px;display:flex;align-items:center;flex-wrap:wrap;gap:2px">${esc(w.name)}${myBadge}</div>
+            <div style="font-size:11px;color:#64748b">${esc(w.team||'—')}</div>
+          </div>
+          <div style="flex-shrink:0;background:${meta.bg||'#f1f5f9'};color:${meta.color||'#475569'};
+            padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${meta.icon||'•'} ${esc(meta.label||w.profile.type)}</div>
+        </div>
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:#475569">
+          <span>📊 Media especialidad: <b>${w.typeAvg}ª</b></span>
+          <span>🏆 Mejor: <b>${w.typeBest}º</b></span>
+          <span>🔢 Carreras: <b>${w.typeCount}</b></span>
+        </div>
+      </div>`;
+    });
+  }
+  html += '</div></div>'; // end grid
+  // — Perfiles de la parrilla —
+  html += '<div class="sim-tactic-section" style="margin-top:14px"><div class="sim-tactic-section-title">👤 Perfiles de corredores en parrilla</div>';
+  const typeOrder = ['sprinter','escalador','rouleur','cronoman','todo-terreno'];
+  const presentTypes = typeOrder.filter(t=>byType[t]&&byType[t].length>0);
+  if(!presentTypes.length){
+    html += '<div class="sim-tactic-empty">Sin suficiente historial para clasificar perfiles</div>';
+  } else {
+    html += '<div class="sim-profiles-grid">';
+    presentTypes.forEach(type=>{
+      const meta = _SIM_PROFILE_META[type]||{};
+      const riders = byType[type].sort((a,b)=>(a.rider.avgPos||99)-(b.rider.avgPos||99));
+      const isCurrentType = type === circuitProfile;
+      html += `<div class="sim-profile-type-card" style="border-top:3px solid ${meta.color||'#94a3b8'};background:${meta.bg||'#f8fafc'};${isCurrentType?'box-shadow:0 0 0 2px '+meta.color+'40':''}">
+        <div style="font-weight:700;color:${meta.color||'#475569'};margin-bottom:8px;font-size:13px">
+          ${meta.icon||'•'} ${esc(meta.label||type)}
+          ${isCurrentType?'<span style="font-size:10px;background:'+meta.color+';color:#fff;padding:1px 6px;border-radius:20px;margin-left:4px">HOY</span>':''}
+          <span style="font-weight:400;font-size:11px;color:#94a3b8">(${riders.length})</span>
+        </div>
+        <div class="sim-profile-riders-list">`;
+      riders.forEach(({rider,prof})=>{
+        const s = prof.statsByProfile[type];
+        const avg = s ? Math.round(s.sum/s.count*10)/10 : '—';
+        const isSpec = isCurrentType;
+        html += `<div class="sim-profile-rider-row${isSpec?' sim-profile-specialist':''}">
+          <span class="sim-profile-rider-name">${esc(rider.name)}${rider.isMyTeam?' 🔵':''}</span>
+          <span class="sim-profile-rider-stat">≈${avg}ª</span>
+        </div>`;
+      });
+      html += '</div></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+// ── HOOK: integrar Fase 4 en _simRenderCurrent ────────────────────────────
+const _origSimRenderCurrent_F4 = (typeof _simRenderCurrent==='function') ? _simRenderCurrent : null;
+if(_origSimRenderCurrent_F4){
+  window._simRenderCurrent = function(){
+    _origSimRenderCurrent_F4();
+    try{ _simRenderTacticPanel(); }catch(e){ console.warn('[sim][tactic]',e); }
+  };
+}
+
+// Ocultar panel Fase 4 cuando estado vacío
+const _origSimShowEmpty_F4 = (typeof _simShowEmpty==='function') ? _simShowEmpty : null;
+if(_origSimShowEmpty_F4){
+  window._simShowEmpty = function(customMsg){
+    _origSimShowEmpty_F4(customMsg);
+    const el = document.getElementById('simTacticPanel'); if(el) el.style.display='none';
+  };
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FIN SIMULADOR FASE 4
+// ═══════════════════════════════════════════════════════════════════════════
