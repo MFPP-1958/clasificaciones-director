@@ -22975,7 +22975,17 @@ function _simRenderTeamSummaryPanel(){
         <div class="sim-ts-kpi-icon">⚔️</div>
         <div class="sim-ts-kpi-val" style="font-size:17px;color:#dc2626;font-weight:800">${rival?escapeHtml((rival.team||'').slice(0,22)):'—'}</div>
         <div class="sim-ts-kpi-lbl">Rival directo más peligroso</div>
-        <div class="sim-ts-kpi-sub">${rival&&rivalDiff!=null?(rivalDiff<0?'Nos llevan':'Diferencia: +'+rivalDiff.toFixed(1))+' pts':'Sin rival detectado'}</div>
+        <div class="sim-ts-kpi-sub">${(() => {
+          if(!rival || rivalDiff==null) return 'Sin rival detectado';
+          const absDiff = Math.abs(rivalDiff).toFixed(1);
+          // sumTop3 es la suma de puestos del top3 — menor = mejor posición
+          // rivalDiff = rival.sumTop3 - myData.sumTop3
+          //   <0 → el rival tiene menor suma → está POR DELANTE → nos llevan ventaja
+          //   >0 → el rival tiene mayor suma → está POR DETRÁS → vamos por delante
+          if(rivalDiff < -0.05) return `🔴 Nos llevan <b>${absDiff} pts</b> · Hay que recuperar`;
+          if(rivalDiff >  0.05) return `🟢 Les llevamos <b>${absDiff} pts</b> · A defender la ventaja`;
+          return `⚖️ Empate técnico — Σ idéntica`;
+        })()}</div>
       </div>
     </div>
     ${alerts.length?`<div class="sim-team-alerts">
