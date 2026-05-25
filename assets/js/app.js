@@ -20908,7 +20908,8 @@ function _simBuildData(raceId){
     const tkey = (ins.team||'').toLowerCase().trim();
     const isMyTeam = myTeamLower && tkey === myTeamLower;
     let avgPos=null, bestPos=null, reliability=null, status='known', source='rider', confidence='nula';
-    let recentForm = []; // últimas 5 posiciones
+    let recentForm = []; // últimas 5 posiciones (más reciente primero)
+    let predictedPos=null, predLower=null, predUpper=null, trend='stable';
     if(hits.length){
       const positions = hits.map(h=>h.pos).filter(p=>p>0);
       if(positions.length){
@@ -20926,6 +20927,36 @@ function _simBuildData(raceId){
           return db.localeCompare(da);
         });
         recentForm = sorted.slice(0,5).map(h=>h.pos);
+        // ── Fórmula predictiva ponderada 60/40 ───────────────────────────────
+        // 60% → media de las últimas 3 carreras (estado de forma reciente)
+        // 40% → media histórica global
+        const recent3 = recentForm.slice(0,3).filter(p=>p>0);
+        const recentMean = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : null;
+        predictedPos = recentMean!=null
+          ? 0.6*recentMean + 0.4*avgPos
+          : avgPos;
+        // Penalización +15% por baja fiabilidad (<50%) → corredor inestable
+        if(reliability < 50) predictedPos *= 1.15;
+        // Intervalo de confianza basado en desviación estándar histórica
+        if(positions.length >= 2){
+          const variance = positions.reduce((s,p)=>s+(p-avgPos)**2,0)/positions.length;
+          const std = Math.sqrt(variance);
+          predLower = Math.max(1, Math.round(predictedPos - std*0.8));
+          predUpper = Math.round(predictedPos + std*0.8);
+        } else {
+          predLower = Math.max(1, Math.round(predictedPos * 0.85));
+          predUpper = Math.round(predictedPos * 1.15);
+        }
+        // Tendencia: comparar 1ª posición reciente vs la 3ª (más antigua del bloque)
+        if(recentForm.length >= 3){
+          const newest = recentForm[0]; // más reciente
+          const oldest = recentForm[Math.min(2, recentForm.length-1)]; // 3ª o última
+          if(newest < oldest - 1.5)     trend = 'up';   // mejorando (número más bajo = mejor)
+          else if(newest > oldest + 1.5) trend = 'down'; // empeorando
+          else                           trend = 'stable';
+        } else if(recentForm.length >= 2){
+          trend = recentForm[0] < recentForm[1]-0.5 ? 'up' : recentForm[0] > recentForm[1]+0.5 ? 'down' : 'stable';
+        }
       } else {
         status = 'deb';
       }
@@ -20933,11 +20964,14 @@ function _simBuildData(raceId){
       // Sin historial individual → fallback al equipo
       status = 'deb';
       if(tkey && byTeam.has(tkey)){
-        const teamPositions = byTeam.get(tkey);
+        const teamPositions = byTeam.get(tkey).filter(p=>p>0);
         if(teamPositions.length){
           avgPos = teamPositions.reduce((s,p)=>s+p,0)/teamPositions.length;
           bestPos = Math.min(...teamPositions);
-          reliability = 50; // valor provisional para evitar romper cálculos
+          reliability = 50; // valor provisional
+          predictedPos = avgPos; // sin forma reciente propia, usamos la media del equipo
+          predLower = Math.max(1, Math.round(avgPos * 0.8));
+          predUpper = Math.round(avgPos * 1.2);
           source = 'team';
           status = 'team-fb';
           confidence = 'baja';
@@ -20954,7 +20988,9 @@ function _simBuildData(raceId){
       hasHistory: hits.length > 0,
       avgPos, bestPos, reliability, status, source, confidence,
       raceCount: hits.length,
-      recentForm
+      recentForm,
+      // Campos de predicción ponderada (Fase 2 upgrade)
+      predictedPos, predLower, predUpper, trend
     };
   });
 
@@ -21082,15 +21118,17 @@ function _simRenderKpis(k){
 function _simRenderTop10(grid, catFilter){
   const body = document.getElementById('simTopBody');
   if(!body) return;
-  let pool = grid.filter(g=>g.avgPos!=null);
+  let pool = grid.filter(g=>g.predictedPos!=null || g.avgPos!=null);
   if(catFilter) pool = pool.filter(g=>(g.cat||'')===catFilter);
-  // Score predictivo: combina puesto medio (mejor=más bajo) con fiabilidad
-  // score = avgPos * (1 + (100-reliability)/200) → corredores poco fiables se penalizan
+  // Ordenar por predictedPos (fórmula 60/40 + penalización fiabilidad)
+  // Si no hay predictedPos calculado, usar avgPos con penalización suave
   pool.forEach(g=>{
-    const rel = g.reliability ?? 30;
-    g._predScore = g.avgPos * (1 + (100-rel)/200);
+    if(g.predictedPos==null){
+      const rel = g.reliability ?? 30;
+      g.predictedPos = (g.avgPos||99) * (1 + (100-rel)/200);
+    }
   });
-  pool.sort((a,b)=>a._predScore - b._predScore);
+  pool.sort((a,b)=>(a.predictedPos||99) - (b.predictedPos||99));
   const top = pool.slice(0,10);
   if(!top.length){
     body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin datos históricos suficientes para predecir el podio.</p>';
@@ -21100,15 +21138,24 @@ function _simRenderTop10(grid, catFilter){
     const rank = i+1;
     const rankCls = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'def';
     const confDot = `<span class="sim-conf ${g.confidence}" title="Confianza ${g.confidence}"></span>`;
+    const trendIcon = g.trend==='up'
+      ? '<span title="Mejorando" style="color:#16a34a;font-size:14px;font-weight:900">⬆️</span>'
+      : g.trend==='down'
+      ? '<span title="Empeorando" style="color:#dc2626;font-size:14px;font-weight:900">⬇️</span>'
+      : '<span title="Estable" style="color:#9ca3af;font-size:13px">➡️</span>';
+    const rangeStr = (g.predLower!=null && g.predUpper!=null)
+      ? `${g.predLower}º–${g.predUpper}º`
+      : (g.predictedPos!=null ? Math.round(g.predictedPos)+'º' : '—');
     return `<div class="sim-top-row ${g.isMyTeam?'sim-my-team':''}">
       <div class="sim-top-rank ${rankCls}">${rank}º</div>
       <div class="sim-top-info">
-        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)}</div>
+        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}</div>
         <div class="sim-top-team">${escapeHtml(g.team||'(sin equipo)')}${g.cat?' · '+escapeHtml(g.cat):''}${g.bib?' · #'+escapeHtml(g.bib):''}${g.status==='team-fb'?' · <span style="color:#3730a3;font-weight:700">[fallback equipo]</span>':''}</div>
       </div>
       <div class="sim-top-metrics">
-        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.avgPos.toFixed(1)}º</div><div class="sim-top-metric-l">Media</div></div>
-        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.bestPos}º</div><div class="sim-top-metric-l">Mejor</div></div>
+        <div class="sim-top-metric sim-predicted-metric"><div class="sim-top-metric-v" style="color:#7c3aed">${rangeStr}</div><div class="sim-top-metric-l">🤖 Pos. IA</div></div>
+        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</div><div class="sim-top-metric-l">Media</div></div>
+        <div class="sim-top-metric"><div class="sim-top-metric-v">${g.bestPos!=null?g.bestPos+'º':'—'}</div><div class="sim-top-metric-l">Mejor</div></div>
         <div class="sim-top-metric"><div class="sim-top-metric-v">${g.reliability??'—'}%</div><div class="sim-top-metric-l">Fiab.</div></div>
         <div class="sim-top-metric"><div class="sim-top-metric-v">${g.raceCount||0}</div><div class="sim-top-metric-l">Carrs.</div></div>
       </div>
@@ -21125,29 +21172,33 @@ function _simRenderGrid(rows){
     body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin inscritos que coincidan con los filtros.</p>';
     return;
   }
-  // Ordenar por puesto medio asc (sin valor al final)
+  // Ordenar por predictedPos (fórmula 60/40 + penalización fiabilidad). Sin valor al final.
   rows.sort((a,b)=>{
-    if(a.avgPos==null && b.avgPos==null) return (a.name||'').localeCompare(b.name||'');
-    if(a.avgPos==null) return 1;
-    if(b.avgPos==null) return -1;
-    return a.avgPos - b.avgPos;
+    const pa = a.predictedPos ?? (a.avgPos!=null ? a.avgPos * 1.5 : null);
+    const pb = b.predictedPos ?? (b.avgPos!=null ? b.avgPos * 1.5 : null);
+    if(pa==null && pb==null) return (a.name||'').localeCompare(b.name||'');
+    if(pa==null) return 1;
+    if(pb==null) return -1;
+    return pa - pb;
   });
   body.innerHTML = `
     <div class="table-wrap" style="max-height:560px;overflow:auto">
       <table class="sim-grid-table">
         <thead><tr>
-          <th>Dorsal</th>
+          <th>#</th>
           <th>Corredor</th>
           <th>Club</th>
-          <th>Categoría</th>
+          <th>Cat.</th>
           <th>Historial</th>
-          <th style="text-align:center">Puesto medio</th>
+          <th style="text-align:center">🤖 Pos. IA</th>
+          <th style="text-align:center">Tendencia</th>
+          <th style="text-align:center">Media hist.</th>
           <th style="text-align:center">Mejor</th>
-          <th style="text-align:center">Fiabilidad</th>
-          <th style="text-align:center">Carrs.</th>
+          <th style="text-align:center">Fiab.</th>
+          <th style="text-align:center">C.</th>
           <th>Forma reciente</th>
         </tr></thead>
-        <tbody>${rows.map(g=>{
+        <tbody>${rows.map((g,rowIdx)=>{
           const cls = [];
           if(g.isMyTeam) cls.push('sim-my-team');
           if(g.status==='deb') cls.push('sim-debutant');
@@ -21157,34 +21208,49 @@ function _simRenderGrid(rows){
           else badge = '<span class="sim-status-badge deb">🆕 Debutante</span>';
           const relColor = g.reliability==null?'#9ca3af':g.reliability>=75?'#16a34a':g.reliability>=50?'#f59e0b':'#dc2626';
           const confDot = `<span class="sim-conf ${g.confidence}" title="Confianza ${g.confidence} (${g.raceCount} carreras)"></span>`;
+          // Flecha de tendencia
+          const trendCell = g.trend==='up'
+            ? '<span title="Mejorando forma" style="font-size:16px">⬆️</span>'
+            : g.trend==='down'
+            ? '<span title="Empeorando forma" style="font-size:16px">⬇️</span>'
+            : g.recentForm.length>=2
+            ? '<span title="Forma estable" style="font-size:14px;color:#9ca3af">➡️</span>'
+            : '<span style="color:#d1d5db">—</span>';
+          // Rango IA
+          const rangeStr = (g.predLower!=null && g.predUpper!=null)
+            ? `<b style="color:#7c3aed">${g.predLower}º–${g.predUpper}º</b>`
+            : (g.predictedPos!=null
+              ? `<b style="color:#7c3aed">${Math.round(g.predictedPos)}º</b>`
+              : '<span style="color:#d1d5db">—</span>');
           const formHtml = (g.recentForm||[]).length
             ? g.recentForm.map(p=>{
                 const c = p<=3?'#fbbf24':p<=10?'#3b82f6':p<=20?'#9ca3af':'#475569';
-                return `<span style="display:inline-block;background:${c};color:#fff;border-radius:50%;width:22px;height:22px;line-height:22px;text-align:center;font-size:10px;font-weight:800;margin-right:2px">${p}</span>`;
+                return `<span style="display:inline-block;background:${c};color:#fff;border-radius:50%;width:21px;height:21px;line-height:21px;text-align:center;font-size:10px;font-weight:800;margin-right:2px">${p}</span>`;
               }).join('')
             : '<span class="small" style="color:#9ca3af">—</span>';
           return `<tr class="${cls.join(' ')}">
-            <td style="font-weight:700;color:#475569">${escapeHtml(g.bib||'—')}</td>
-            <td>${confDot}${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b></td>
-            <td>${escapeHtml(g.team||'(sin equipo)')}</td>
-            <td><span class="pill" style="background:#f3f6fb">${escapeHtml(g.cat||'—')}</span></td>
+            <td style="font-weight:700;color:#94a3b8;text-align:center;font-size:11px">${rowIdx+1}</td>
+            <td>${confDot}${g.isMyTeam?'🔵 ':''}<b>${escapeHtml(g.name)}</b>${g.bib?` <span style="color:#94a3b8;font-size:10px">#${escapeHtml(g.bib)}</span>`:''}</td>
+            <td style="font-size:12px">${escapeHtml(g.team||'(sin equipo)')}</td>
+            <td><span class="pill" style="background:#f3f6fb;font-size:11px">${escapeHtml(g.cat||'—')}</span></td>
             <td>${badge}</td>
-            <td style="text-align:center"><b>${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</b></td>
-            <td style="text-align:center">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
+            <td style="text-align:center">${rangeStr}</td>
+            <td style="text-align:center">${trendCell}</td>
+            <td style="text-align:center;color:#475569">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
+            <td style="text-align:center;color:#475569">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
             <td style="text-align:center"><b style="color:${relColor}">${g.reliability!=null?g.reliability+'%':'—'}</b></td>
-            <td style="text-align:center">${g.raceCount||0}</td>
+            <td style="text-align:center;color:#64748b">${g.raceCount||0}</td>
             <td>${formHtml}</td>
           </tr>`;
         }).join('')}</tbody>
       </table>
     </div>
     <p class="small" style="margin-top:8px;color:#6b7280">
-      <span class="sim-conf alta"></span> Confianza alta (≥5 carreras) ·
+      <b style="color:#7c3aed">🤖 Pos. IA</b>: rango calculado con 60% forma reciente + 40% historial (±σ). Penalización +15% si fiabilidad &lt;50% ·
+      <span class="sim-conf alta"></span> Confianza alta (≥5) ·
       <span class="sim-conf media"></span> media (3-4) ·
       <span class="sim-conf baja"></span> baja (1-2) ·
-      <span class="sim-conf nula"></span> sin datos ·
-      <span class="sim-status-badge deb">🆕 Debutante</span> sin historial ·
-      <span class="sim-status-badge team-fb">📊 Equipo</span> usa media del equipo como fallback
+      <span class="sim-conf nula"></span> sin datos
     </p>
   `;
 }
@@ -21196,36 +21262,44 @@ function _simExportPDF(){
   const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const now = new Date().toLocaleString('es-ES');
-  // Top 10
-  const pool = grid.filter(g=>g.avgPos!=null);
-  pool.forEach(g=>{ const rel=g.reliability??30; g._predScore = g.avgPos*(1+(100-rel)/200); });
-  pool.sort((a,b)=>a._predScore-b._predScore);
+  // Top 10 — ordenado por predictedPos (fórmula 60/40)
+  const pool = grid.filter(g=>g.predictedPos!=null||g.avgPos!=null);
+  pool.forEach(g=>{ if(g.predictedPos==null){ const rel=g.reliability??30; g.predictedPos=(g.avgPos||99)*(1+(100-rel)/200); } });
+  pool.sort((a,b)=>(a.predictedPos||99)-(b.predictedPos||99));
   const top10 = pool.slice(0,10);
-  // Ordenar todo el grid por avgPos
+  // Ordenar todo el grid por predictedPos
   const gridSorted = grid.slice().sort((a,b)=>{
-    if(a.avgPos==null && b.avgPos==null) return 0;
-    if(a.avgPos==null) return 1;
-    if(b.avgPos==null) return -1;
-    return a.avgPos-b.avgPos;
+    const pa = a.predictedPos ?? (a.avgPos!=null?a.avgPos*1.5:null);
+    const pb = b.predictedPos ?? (b.avgPos!=null?b.avgPos*1.5:null);
+    if(pa==null&&pb==null) return 0;
+    if(pa==null) return 1;
+    if(pb==null) return -1;
+    return pa-pb;
   });
-  const topRows = top10.map((g,i)=>`<tr ${g.isMyTeam?'style="background:#dbeafe"':''}>
+  const topRows = top10.map((g,i)=>{
+    const trendTxt = g.trend==='up'?'⬆️':g.trend==='down'?'⬇️':'➡️';
+    const rangeStr = (g.predLower!=null&&g.predUpper!=null)?`${g.predLower}º–${g.predUpper}º`:(g.predictedPos!=null?Math.round(g.predictedPos)+'º':'—');
+    return `<tr ${g.isMyTeam?'style="background:#dbeafe"':''}>
     <td style="text-align:center;font-weight:800">${i+1}</td>
     <td>${g.isMyTeam?'🔵 ':''}<b>${esc(g.name)}</b></td>
     <td>${esc(g.team||'')}</td>
     <td>${esc(g.cat||'')}</td>
-    <td style="text-align:center;font-weight:700;color:#1d4ed8">${g.avgPos.toFixed(1)}º</td>
-    <td style="text-align:center">${g.bestPos}º</td>
+    <td style="text-align:center;font-weight:700;color:#7c3aed">${rangeStr} ${trendTxt}</td>
+    <td style="text-align:center;color:#475569">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
     <td style="text-align:center">${g.reliability??'—'}%</td>
-  </tr>`).join('');
-  const gridRows = gridSorted.map(g=>{
+  </tr>`;}).join('');
+  const gridRows = gridSorted.map((g,gi)=>{
     const statusTxt = g.status==='known' ? '✓ Sí' : g.status==='team-fb' ? '📊 Equipo' : '🆕 Debutante';
+    const tTxt = g.trend==='up'?'⬆️':g.trend==='down'?'⬇️':g.recentForm.length>=2?'➡️':'—';
+    const rStr = (g.predLower!=null&&g.predUpper!=null)?`${g.predLower}º–${g.predUpper}º`:(g.predictedPos!=null?Math.round(g.predictedPos)+'º':'—');
     return `<tr ${g.isMyTeam?'style="background:#dbeafe"':''}>
-      <td style="text-align:center">${esc(g.bib||'—')}</td>
-      <td>${g.isMyTeam?'🔵 ':''}<b>${esc(g.name)}</b></td>
+      <td style="text-align:center;color:#94a3b8;font-size:9px">${gi+1}</td>
+      <td>${g.isMyTeam?'🔵 ':''}<b>${esc(g.name)}</b>${g.bib?` <span style="color:#94a3b8">#${esc(g.bib)}</span>`:''}</td>
       <td>${esc(g.team||'')}</td>
       <td>${esc(g.cat||'')}</td>
       <td style="text-align:center">${statusTxt}</td>
-      <td style="text-align:center;font-weight:700">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
+      <td style="text-align:center;font-weight:700;color:#7c3aed">${rStr} ${tTxt}</td>
+      <td style="text-align:center;color:#475569">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
       <td style="text-align:center">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
       <td style="text-align:center">${g.reliability!=null?g.reliability+'%':'—'}</td>
       <td style="text-align:center">${g.raceCount||0}</td>
@@ -21299,9 +21373,9 @@ function _simExportPDF(){
     </div>
   </div>
 
-  <h2 class="section">🏆 Top 10 esperado (predicción IA)</h2>
+  <h2 class="section">🏆 Top 10 esperado (predicción IA — 60% forma reciente + 40% histórico)</h2>
   <table>
-    <thead><tr><th>#</th><th>Corredor</th><th>Club</th><th>Categoría</th><th style="text-align:center">Media</th><th style="text-align:center">Mejor</th><th style="text-align:center">Fiab.</th></tr></thead>
+    <thead><tr><th>#</th><th>Corredor</th><th>Club</th><th>Categoría</th><th style="text-align:center">🤖 Pos. IA</th><th style="text-align:center">Media hist.</th><th style="text-align:center">Fiab.</th></tr></thead>
     <tbody>${topRows||'<tr><td colspan="7" style="text-align:center;color:#9ca3af">Sin datos suficientes</td></tr>'}</tbody>
   </table>
 
@@ -21370,7 +21444,7 @@ function _simExportPDF(){
 
   <h2 class="section">🚴 Parrilla completa analizada</h2>
   <table>
-    <thead><tr><th>Dorsal</th><th>Corredor</th><th>Club</th><th>Cat.</th><th style="text-align:center">Historial</th><th style="text-align:center">Media</th><th style="text-align:center">Mejor</th><th style="text-align:center">Fiab.</th><th style="text-align:center">Carrs.</th></tr></thead>
+    <thead><tr><th>#</th><th>Corredor</th><th>Club</th><th>Cat.</th><th style="text-align:center">Historial</th><th style="text-align:center">🤖 Pos. IA</th><th style="text-align:center">Media hist.</th><th style="text-align:center">Mejor</th><th style="text-align:center">Fiab.</th><th style="text-align:center">C.</th></tr></thead>
     <tbody>${gridRows}</tbody>
   </table>
 
