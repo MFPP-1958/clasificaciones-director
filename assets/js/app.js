@@ -21097,20 +21097,25 @@ function _simBuildData(raceId){
         trend = _simTrend(recentForm);
 
         // ══ ÁRBOL DE REGRESIÓN ════════════════════════════════════════════════
-        // — RAMA A: Categoría y experiencia (CALIBRADO con backtest) —
-        // El backtest mostraba sesgo +10 → bajamos los factores cadete para no
-        // infraestimar tanto las posiciones reales de los cadetes en forma.
+        // — RAMA A: Categoría y experiencia (CALIBRADO v3 — sesgo +10 persistía) —
+        // Razonamiento: si un cadete tiene ≥3 carreras propias, sus puestos YA
+        // reflejan su nivel real como cadete. Aplicar una penalización extra
+        // "porque es cadete" cuenta dos veces la misma información.
+        // Mantenemos penalización SOLO cuando faltan datos (novato real).
         const {isCadet, year} = _simCadetCategory(ins.cat);
-        if(isCadet && year === 1){
-          cadetFactor = 1.10;            // antes 1.20
+        if(isCadet && year === 1 && hits.length < 3){
+          cadetFactor = 1.05;            // antes 1.10 — solo si 1er año con poco historial
+          treeNode.push('A1n:cadete-1er-novato');
+        } else if(isCadet && year === 1){
+          cadetFactor = 1.00;            // antes 1.10 — historial propio ya cubre
           treeNode.push('A1:cadete-1er-año');
         } else if(isCadet && year === 2 && hits.length < 3){
-          cadetFactor = 1.05;            // antes 1.10
+          cadetFactor = 1.03;            // antes 1.05
           treeNode.push('A2b:cadete-2º-novato');
         } else if(isCadet && year === 2){
           treeNode.push('A2:cadete-2º-veterano');
         } else if(isCadet && hits.length < 3){
-          cadetFactor = 1.08;            // antes 1.15
+          cadetFactor = 1.05;            // antes 1.08
           treeNode.push('A3:cadete-sin-año-novato');
         } else if(isCadet){
           treeNode.push('A3:cadete');
@@ -21124,13 +21129,13 @@ function _simBuildData(raceId){
         predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
         predictedPos *= cadetFactor;
 
-        // — Penalización por fiabilidad (CALIBRADO con backtest) —
-        // El backtest detectaba que la penalización antigua x1.20 era demasiado
-        // conservadora para corredores en racha pero inestables. La suavizamos.
+        // — Penalización por fiabilidad (CALIBRADO v3) —
+        // El sesgo +10 persistente sugiere que aun con la calibración v2 el
+        // modelo seguía castigando de más. La suavizamos otro paso.
         relPenalty = reliability >= 75 ? 1.00
-                   : reliability >= 50 ? 1.05   // antes 1.08
-                   : reliability >= 25 ? 1.10   // antes 1.15
-                   : 1.15;                       // antes 1.20
+                   : reliability >= 50 ? 1.03   // antes 1.05
+                   : reliability >= 25 ? 1.06   // antes 1.10
+                   : 1.10;                       // antes 1.15
         predictedPos *= relPenalty;
 
         // — RAMA C: Fiabilidad → ajuste del intervalo de confianza —
@@ -23827,7 +23832,8 @@ function _simRunBacktest(){
           // Penalización por fiabilidad
           const reliability = _simReliability(positions, N) ?? 50;
           // CALIBRADO: misma escala suavizada que el motor real
-          const relPenalty = reliability>=75 ? 1.00 : reliability>=50 ? 1.05 : reliability>=25 ? 1.10 : 1.15;
+          // CALIBRADO v3: misma escala suavizada que el motor real
+          const relPenalty = reliability>=75 ? 1.00 : reliability>=50 ? 1.03 : reliability>=25 ? 1.06 : 1.10;
           predicted *= relPenalty;
           predicted = Math.max(1, Math.min(N, Math.round(predicted)));
 

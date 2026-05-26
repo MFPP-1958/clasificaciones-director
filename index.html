@@ -2320,10 +2320,10 @@
             <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#5b21b6;margin-bottom:6px">🧠 Motor Estadístico — Pesos y Fórmulas</div>
             <div style="font-size:11.5px;color:#374151;margin:0;line-height:1.55">
 
-              <div style="margin-bottom:8px"><b style="color:#7c3aed">🤖 Fase 1 — Árbol de Regresión</b> (Pos. IA) · <span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:800">v2 — calibrado con backtest</span><br>
+              <div style="margin-bottom:8px"><b style="color:#7c3aed">🤖 Fase 1 — Árbol de Regresión</b> (Pos. IA) · <span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:800">v3 — recalibrado tras 2º backtest</span><br>
                 <code style="background:#ede9fe;padding:1px 5px;border-radius:4px;font-size:10.5px">pos = (0.60·recent3 + 0.40·media) × cadetFactor × relPenalty</code><br>
-                · <b>cadetFactor</b>: 1er año ×1.10 · 2º año novato (&lt;3 carr.) ×1.05 · veterano ×1.00<br>
-                · <b>relPenalty</b>: rel ≥75% ×1.00 · ≥50% ×1.05 · ≥25% ×1.10 · &lt;25% ×1.15<br>
+                · <b>cadetFactor</b>: 1er año con ≥3 carreras ×1.00 (su historial ya cubre) · 1er año novato (&lt;3) ×1.05 · 2º año novato ×1.03 · resto cadete ×1.00–1.05 según experiencia<br>
+                · <b>relPenalty</b>: rel ≥75% ×1.00 · ≥50% ×1.03 · ≥25% ×1.06 · &lt;25% ×1.10<br>
                 · <b>Filtros</b>: las <b>etapas de vuelta</b> y <b>contrarrelojes</b> se excluyen del histórico (introducen ruido por especialización)<br>
                 · <b>Rama B</b>: si no hay historial → media del club (rango ±22%)<br>
                 · <b>Rama C</b>: intervalo σ × {0.6, 0.8, 1.4} según fiabilidad<br>
