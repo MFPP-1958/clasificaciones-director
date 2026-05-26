@@ -4615,6 +4615,11 @@ async function _sbLoadHistory(){
       avg: extra.avg || '',
       localidad: extra.localidad || '',
       circuitType: extra.circuitType || '',
+      // Meteo (Open-Meteo) — opcionales, leídos desde notes
+      hora_inicio: extra.hora_inicio || '',
+      weather: extra.weather || null,
+      lat: extra.lat || null,
+      lon: extra.lon || null,
       inscritos: Array.isArray(extra.inscritos) ? extra.inscritos : [],
       riders: (race.race_results||[]).sort((a,b)=>a.pos-b.pos).map(r=>{
         const normName=normalizeRiderName(r.name);
@@ -9586,6 +9591,7 @@ async function loadHistoryEntry(id){
   }
   if($('raceLocalidad')) $('raceLocalidad').value = h.localidad||'';
   if($('raceCircuitType')) $('raceCircuitType').value = h.circuitType||'';
+  if($('raceStartTime'))  $('raceStartTime').value  = h.hora_inicio||'';
   // Restaurar inscritos (Tier 1)
   try{ inscritos = Array.isArray(h.inscritos) ? h.inscritos.slice() : []; }catch(e){ inscritos = []; }
   if(typeof _updateInscritosUI === 'function') _updateInscritosUI();
@@ -9904,7 +9910,9 @@ async function saveHistory(){
   riders.forEach(r=>{if(r.region)regionMap[r.name]=r.region;});
   // Inscritos / startlist (Tier 1)
   const inscritosToSave = (typeof inscritos !== 'undefined' && Array.isArray(inscritos) && inscritos.length) ? inscritos : [];
-  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave});
+  // Hora de inicio (Open-Meteo) — leída del formulario; opcional pero recomendado
+  const horaInicio = (document.getElementById('raceStartTime')?.value || '').trim();
+  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio});
 
   // ── Buscar duplicados por fecha ──────────────────────────────────────────
   const {data:existing,error:dupErr}=await _sb
@@ -9953,6 +9961,12 @@ async function saveHistory(){
   _cachedHistory=null; _prFiltersReady=false; _trendFiltersReady=false;
   await renderHistory();
   alert(accion==='actualizar'?'Carrera actualizada en el histórico (Supabase).':'Carrera guardada en el histórico (Supabase).');
+  // ── Captura asíncrona del clima histórico (no bloquea, no muestra error si falla)
+  if(localidad && raceDateStr && typeof _wxAutoCaptureForRace === 'function'){
+    _wxAutoCaptureForRace(raceId, localidad, raceDateStr, horaInicio)
+      .then(wx => { if(wx) console.log('[wx] clima histórico guardado:', wx); })
+      .catch(e => console.warn('[wx] captura falló:', e));
+  }
 }
 
 async function enrichFromHistory(){
@@ -21507,10 +21521,12 @@ function _simRenderGrid(rows){
           const _rcColor = _rc==='stable'?'#16a34a':_rc==='unstable'?'#d97706':_rc==='club-fb'?'#2563eb':'#7c3aed';
           const _rcIcon  = _rc==='stable'?'🔒':_rc==='unstable'?'⚠️':_rc==='club-fb'?'📊':'';
           const _rcLabel = _rc==='unstable'?'<span style="font-size:9px;font-weight:700;color:#d97706;display:block;line-height:1">inestable</span>':'';
+          // Indicador climático (capa Open-Meteo) — solo si la condición activa una penalización
+          const _wxIc = g.climateIcon ? ` <span title="${escapeHtml(g.climateReason||'')}" style="font-size:13px">${g.climateIcon}</span>` : '';
           const rangeStr = (g.predLower!=null && g.predUpper!=null)
-            ? `<b style="color:${_rcColor}">${_rcIcon} ${g.predLower}º–${g.predUpper}º</b>${_rcLabel}`
+            ? `<b style="color:${_rcColor}">${_rcIcon} ${g.predLower}º–${g.predUpper}º</b>${_wxIc}${_rcLabel}`
             : (g.predictedPos!=null
-              ? `<b style="color:${_rcColor}">${_rcIcon} ${Math.round(g.predictedPos)}º</b>${_rcLabel}`
+              ? `<b style="color:${_rcColor}">${_rcIcon} ${Math.round(g.predictedPos)}º</b>${_wxIc}${_rcLabel}`
               : '<span style="color:#d1d5db">—</span>');
           const formHtml = (g.recentForm||[]).length
             ? g.recentForm.map(p=>{
@@ -23957,4 +23973,338 @@ function _simRenderBacktest(){
       </div>
     </div>
   `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO METEOROLÓGICO — Open-Meteo (gratuito, sin API key)
+// ═══════════════════════════════════════════════════════════════════════════
+// Capa aditiva sobre el simulador. NO modifica la base matemática existente.
+// Persistencia: dentro del campo notes JSON de cada carrera, en notes.weather
+// y notes.hora_inicio. No requiere cambios de esquema en Supabase.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _WX_GEO_API  = 'https://geocoding-api.open-meteo.com/v1/search';
+const _WX_FORECAST = 'https://api.open-meteo.com/v1/forecast';
+const _WX_ARCHIVE  = 'https://archive-api.open-meteo.com/v1/archive';
+const _WX_GEO_CACHE_KEY = '_wx_geo_cache_v1';
+
+// Caché de geocodificación en localStorage (evita llamadas repetidas)
+function _wxGetGeoCache(){
+  try{
+    const raw = localStorage.getItem(_WX_GEO_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch{ return {}; }
+}
+function _wxSaveGeoCache(c){
+  try{ localStorage.setItem(_WX_GEO_CACHE_KEY, JSON.stringify(c)); }catch{}
+}
+
+// Geocoding: localidad (texto) → {lat, lon}
+async function _wxGeocode(localidad){
+  const key = (localidad||'').trim().toLowerCase();
+  if(!key) return null;
+  const cache = _wxGetGeoCache();
+  if(cache[key]) return cache[key];
+  try{
+    const url = `${_WX_GEO_API}?name=${encodeURIComponent(localidad)}&count=1&language=es&format=json`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(7000)});
+    if(!r.ok) return null;
+    const json = await r.json();
+    if(!json.results || !json.results.length) return null;
+    const {latitude, longitude, name, country, country_code} = json.results[0];
+    const data = {lat: latitude, lon: longitude, name, country, country_code};
+    cache[key] = data;
+    _wxSaveGeoCache(cache);
+    return data;
+  }catch(e){
+    console.warn('[wx] geocode error', e);
+    return null;
+  }
+}
+
+// Toma una fecha (DD/MM/YYYY o YYYY-MM-DD) → ISO YYYY-MM-DD
+function _wxDateToISO(dateStr){
+  const iso = _parseSpanishDate(dateStr);
+  return iso || dateStr;
+}
+
+// Calcula índice horario más cercano a la hora de salida (HH:MM)
+function _wxHourIndex(hourStr){
+  if(!hourStr) return 12; // por defecto medio día
+  const [h] = (hourStr||'12:00').split(':').map(n=>parseInt(n,10)||0);
+  return Math.max(0, Math.min(23, h));
+}
+
+// — Forecast (próxima carrera, hasta 16 días vista) —
+async function _wxFetchForecast(lat, lon, dateStr, hourStr){
+  const dateISO = _wxDateToISO(dateStr);
+  if(!dateISO) return null;
+  try{
+    const url = `${_WX_FORECAST}?latitude=${lat}&longitude=${lon}`
+      + `&hourly=temperature_2m,wind_speed_10m,precipitation_probability`
+      + `&start_date=${dateISO}&end_date=${dateISO}&timezone=auto`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(8000)});
+    if(!r.ok) return null;
+    const json = await r.json();
+    const hourly = json.hourly;
+    if(!hourly || !Array.isArray(hourly.time)) return null;
+    const idx = _wxHourIndex(hourStr);
+    const safeIdx = Math.min(idx, hourly.time.length - 1);
+    return {
+      temp: Math.round(hourly.temperature_2m[safeIdx] * 10) / 10,
+      wind: Math.round(hourly.wind_speed_10m[safeIdx] * 10) / 10,
+      rain: Math.round(hourly.precipitation_probability[safeIdx] || 0),
+      hourUsed: hourly.time[safeIdx],
+      source: 'forecast',
+      captured_at: new Date().toISOString()
+    };
+  }catch(e){
+    console.warn('[wx] forecast error', e);
+    return null;
+  }
+}
+
+// — Historical (carrera ya disputada) —
+async function _wxFetchHistorical(lat, lon, dateStr, hourStr){
+  const dateISO = _wxDateToISO(dateStr);
+  if(!dateISO) return null;
+  try{
+    const url = `${_WX_ARCHIVE}?latitude=${lat}&longitude=${lon}`
+      + `&start_date=${dateISO}&end_date=${dateISO}`
+      + `&hourly=temperature_2m,wind_speed_10m&timezone=auto`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
+    if(!r.ok) return null;
+    const json = await r.json();
+    const hourly = json.hourly;
+    if(!hourly || !Array.isArray(hourly.time)) return null;
+    const idx = _wxHourIndex(hourStr);
+    const safeIdx = Math.min(idx, hourly.time.length - 1);
+    return {
+      temp: Math.round(hourly.temperature_2m[safeIdx] * 10) / 10,
+      wind: Math.round(hourly.wind_speed_10m[safeIdx] * 10) / 10,
+      rain: null, // Historical no expone precipitation_probability
+      hourUsed: hourly.time[safeIdx],
+      source: 'historical',
+      captured_at: new Date().toISOString()
+    };
+  }catch(e){
+    console.warn('[wx] historical error', e);
+    return null;
+  }
+}
+
+// — Icono según condiciones —
+function _wxIcon(weather){
+  if(!weather) return '❓';
+  if((weather.rain||0) >= 60) return '🌧️';
+  if((weather.rain||0) >= 30) return '🌦️';
+  if((weather.wind||0) >= 25) return '🌬️';
+  if((weather.temp||0) >= 30) return '🥵';
+  if((weather.temp||0) >= 25) return '☀️';
+  if((weather.temp||0) <=  5) return '🥶';
+  if((weather.temp||0) <= 10) return '🧊';
+  return '⛅';
+}
+
+// — Decide si capturar clima histórico para una carrera —
+// Llamado al guardar resultados. Async/no bloquea.
+async function _wxAutoCaptureForRace(raceId, localidad, dateStr, horaInicio){
+  if(!raceId || !localidad || !dateStr) return null;
+  try{
+    const geo = await _wxGeocode(localidad);
+    if(!geo) return null;
+    const wx = await _wxFetchHistorical(geo.lat, geo.lon, dateStr, horaInicio||'12:00');
+    if(!wx) return null;
+    // Guardar en notes.weather de la carrera
+    const {data, error} = await _sb.from('races').select('notes').eq('id', raceId).single();
+    if(error || !data) return null;
+    let extra = {};
+    try{ extra = data.notes ? JSON.parse(data.notes) : {}; }catch{}
+    extra.weather = wx;
+    extra.lat = geo.lat;
+    extra.lon = geo.lon;
+    await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', raceId);
+    console.log('[wx] histórico capturado para', raceId, wx);
+    return wx;
+  }catch(e){
+    console.warn('[wx] auto-capture error', e);
+    return null;
+  }
+}
+
+// — Renderiza widget en la home —
+// raceForWidget: la próxima carrera planificada (de _cachedHistory si existe)
+async function _wxRenderHomeWidget(forceRefresh){
+  const panel = document.getElementById('weatherWidgetPanel');
+  const body  = document.getElementById('weatherWidgetBody');
+  if(!panel || !body) return;
+
+  // Detectar próxima carrera planificada (futura, con localidad)
+  const hist = _cachedHistory || [];
+  const now = new Date(); now.setHours(0,0,0,0);
+  const planned = hist
+    .filter(h => h.localidad && h.raceDate)
+    .map(h => ({h, dateObj: _parseSpanishDate(h.raceDate) ? new Date(_parseSpanishDate(h.raceDate)) : null}))
+    .filter(x => x.dateObj && x.dateObj >= now)
+    .sort((a,b) => a.dateObj - b.dateObj);
+
+  if(!planned.length){
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+  const next = planned[0].h;
+  // Reusar weather guardada si reciente (<6h) y no forzamos
+  let wx = null;
+  if(!forceRefresh && next._cachedWeather){
+    const age = Date.now() - new Date(next._cachedWeather.captured_at).getTime();
+    if(age < 6*3600*1000) wx = next._cachedWeather;
+  }
+  if(!wx){
+    body.innerHTML = '<div class="wx-loading">⏳ Consultando Open-Meteo…</div>';
+    const horaInicio = next.hora_inicio || (next._extraNotes && next._extraNotes.hora_inicio) || '09:30';
+    const geo = await _wxGeocode(next.localidad);
+    if(!geo){
+      body.innerHTML = `<div class="wx-error">⚠️ No se pudo geocodificar "${escapeHtml(next.localidad)}". Comprueba que la localidad esté escrita correctamente.</div>`;
+      return;
+    }
+    wx = await _wxFetchForecast(geo.lat, geo.lon, next.raceDate, horaInicio);
+    if(!wx){
+      body.innerHTML = `<div class="wx-error">⚠️ Open-Meteo no devolvió datos para esa fecha. Puede que esté fuera del rango de previsión (>16 días vista).</div>`;
+      return;
+    }
+    next._cachedWeather = wx;
+  }
+  // Avisos extremos
+  const warnings = [];
+  if(wx.temp >= 30) warnings.push('🥵 Calor extremo');
+  if(wx.temp <= 5)  warnings.push('🥶 Frío extremo');
+  if(wx.wind >= 25) warnings.push('💨 Viento fuerte');
+  if(wx.rain >= 50) warnings.push('🌧️ Alta probabilidad de lluvia');
+
+  const horaStr = next.hora_inicio || (next._extraNotes && next._extraNotes.hora_inicio) || '—';
+  body.innerHTML = `
+    <div class="wx-card">
+      <div class="wx-card-icon">${_wxIcon(wx)}</div>
+      <div class="wx-card-main">
+        <div class="wx-card-race">${escapeHtml(next.raceName||'')}</div>
+        <div class="wx-card-meta">📅 ${escapeHtml(next.raceDate||'')} · 🕓 ${escapeHtml(horaStr)} · 📍 ${escapeHtml(next.localidad)}</div>
+        <div class="wx-card-stats">
+          <div class="wx-stat wx-stat-temp"><span class="wx-stat-ic">🌡️</span> ${wx.temp}ºC</div>
+          <div class="wx-stat wx-stat-wind"><span class="wx-stat-ic">💨</span> ${wx.wind} km/h</div>
+          <div class="wx-stat wx-stat-rain"><span class="wx-stat-ic">🌧️</span> ${wx.rain}%</div>
+        </div>
+      </div>
+      ${warnings.length ? `<div class="wx-warn">${warnings.join(' · ')}</div>` : ''}
+    </div>
+    <p class="small" style="margin:8px 0 0;color:#64748b">Previsión Open-Meteo (gratuita, sin API key) · Capturada ${new Date(wx.captured_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})} · Cuanto más se acerca la carrera, más fiable la previsión</p>`;
+}
+
+// ─── HOOK: refrescar widget al cargar histórico ───────────────────────────
+// Auto-render en la vista de inicio cuando _cachedHistory esté disponible
+if(typeof window !== 'undefined'){
+  document.addEventListener('DOMContentLoaded', ()=>{
+    // Si view-inicio está activa y hay datos, pintar
+    const tryRender = () => {
+      if(_cachedHistory && _cachedHistory.length){
+        _wxRenderHomeWidget(false).catch(e=>console.warn('[wx] render error',e));
+        return true;
+      }
+      return false;
+    };
+    if(!tryRender()){
+      // Reintentar tras carga inicial
+      let attempts = 0;
+      const iv = setInterval(()=>{
+        attempts++;
+        if(tryRender() || attempts > 30) clearInterval(iv);
+      }, 1000);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FACTOR CLIMÁTICO EN EL PREDICTOR
+// Capa POST-PROCESS sobre el grid del simulador. NO toca la fórmula original.
+// Aplica un multiplicador ligero a predictedPos si el clima previsto activa
+// una "alergia" detectada en el histórico del corredor.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Detecta si el corredor empeora en condiciones similares
+// Devuelve {factor, icon, reason} o null si no aplica
+function _simClimateFactorForRider(riderName, raceWeather){
+  if(!raceWeather) return null;
+  const nk = normalizeForMatching(riderName||'');
+  if(!nk) return null;
+  const hist = _cachedHistory || [];
+  // Buscar carreras donde el corredor tenga puesto Y la carrera tenga weather guardada
+  const hits = [];
+  hist.forEach(h => {
+    const w = (h.weather) || (h._extraNotes && h._extraNotes.weather);
+    if(!w) return;
+    const r = (h.riders||[]).find(x => normalizeForMatching(x.name||'') === nk);
+    if(!r || !r.pos || r.pos <= 0) return;
+    hits.push({pos: r.pos, temp: w.temp, wind: w.wind});
+  });
+  if(hits.length < 3) return null; // muestra insuficiente para una correlación
+
+  // Media global del corredor en las carreras CON weather
+  const avgAll = hits.reduce((s,x)=>s+x.pos,0) / hits.length;
+
+  // — Calor extremo —
+  if(raceWeather.temp >= 28){
+    const hot = hits.filter(x => x.temp >= 28);
+    if(hot.length >= 2){
+      const avgHot = hot.reduce((s,x)=>s+x.pos,0) / hot.length;
+      // Si rinde >25% peor en calor → penalización 5%
+      if(avgHot > avgAll * 1.25){
+        return {factor: 1.05, icon: '☀️', reason: `Rinde ${Math.round((avgHot/avgAll-1)*100)}% peor con calor (${hot.length} carreras)`};
+      }
+    }
+  }
+  // — Viento fuerte —
+  if(raceWeather.wind >= 20){
+    const windy = hits.filter(x => x.wind >= 20);
+    if(windy.length >= 2){
+      const avgWindy = windy.reduce((s,x)=>s+x.pos,0) / windy.length;
+      if(avgWindy > avgAll * 1.25){
+        return {factor: 1.05, icon: '💨', reason: `Rinde ${Math.round((avgWindy/avgAll-1)*100)}% peor con viento (${windy.length} carreras)`};
+      }
+    }
+  }
+  return null;
+}
+
+// Aplica el factor climático sobre _simCurrentData.grid (post-process)
+function _simApplyClimateLayer(){
+  if(!_simCurrentData || !_simCurrentData.race) return;
+  const race = _simCurrentData.race;
+  const weather = race.weather || (race._extraNotes && race._extraNotes.weather);
+  if(!weather) return; // sin previsión, nada que hacer
+  // Solo aplicar si las condiciones son extremas (lo que el usuario pidió)
+  const isExtreme = (weather.temp >= 28) || (weather.wind >= 20);
+  if(!isExtreme) return;
+  _simCurrentData.grid.forEach(g => {
+    const adj = _simClimateFactorForRider(g.name, weather);
+    if(adj){
+      // Aplicar factor a predictedPos (y predLower/predUpper proporcionalmente)
+      const origPos = g.predictedPos;
+      g.predictedPosClimateAdj = Math.round(origPos * adj.factor);
+      g.climateIcon = adj.icon;
+      g.climateReason = adj.reason;
+      // Update display value but keep raw
+      g.predictedPos = g.predictedPosClimateAdj;
+      if(g.predLower != null) g.predLower = Math.max(1, Math.round(g.predLower * adj.factor));
+      if(g.predUpper != null) g.predUpper = Math.round(g.predUpper * adj.factor);
+    }
+  });
+}
+
+// ─── HOOK: aplicar capa climática DESPUÉS de _simBuildData ───────────────
+const _origSimBuildData_WX = (typeof _simBuildData === 'function') ? _simBuildData : null;
+if(_origSimBuildData_WX){
+  window._simBuildData = function(raceId){
+    _origSimBuildData_WX(raceId);
+    try{ _simApplyClimateLayer(); }catch(e){ console.warn('[wx] climate layer error', e); }
+  };
 }

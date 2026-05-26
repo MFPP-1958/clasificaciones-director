@@ -239,6 +239,15 @@
         <div id="inicioKpis" class="evol-kpis"></div>
       </section>
 
+      <!-- Widget meteorológico de la próxima carrera (Open-Meteo) -->
+      <section class="panel" id="weatherWidgetPanel" style="display:none;border-left:4px solid #0ea5e9;background:linear-gradient(135deg,#f0f9ff,#fff)">
+        <div class="section-title" style="margin-bottom:10px">
+          <h2 style="margin:0;color:#075985">🌤️ El tiempo el día de la próxima carrera</h2>
+          <button class="btn light" id="weatherRefreshBtn" onclick="_wxRenderHomeWidget(true)" style="padding:5px 11px;font-size:12px" title="Actualizar previsión desde Open-Meteo">🔄 Actualizar</button>
+        </div>
+        <div id="weatherWidgetBody"></div>
+      </section>
+
       <!-- Cuerpo en rejilla 2×2 — cada fila iguala alturas izquierda/derecha -->
       <div class="inicio-grid">
         <!-- Fila 1 · IZQUIERDA: Próximas pruebas + Accesos directos -->
@@ -353,7 +362,7 @@
 
   <!-- Metadatos con etiquetas y campos obligatorios -->
   <div class="meta-labeled">
-    <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,.65fr) minmax(100px,.58fr) minmax(130px,.7fr) minmax(130px,.7fr) minmax(140px,.75fr);gap:10px">
+    <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,.65fr) minmax(95px,.55fr) minmax(95px,.55fr) minmax(125px,.65fr) minmax(125px,.65fr) minmax(135px,.7fr);gap:10px">
       <div class="meta-field">
         <div class="meta-field-lbl">Nombre de la carrera <span class="req">*</span></div>
         <input id="raceName" class="req-field" placeholder="Ej: XXX Copa de España Ciclismo" />
@@ -362,6 +371,10 @@
         <div class="meta-field-lbl">Fecha <span class="req">*</span></div>
         <input id="raceDate" class="req-field" placeholder="dd/mm/aaaa" />
         <div id="raceDateHint" style="font-size:11px;margin-top:3px;min-height:14px"></div>
+      </div>
+      <div class="meta-field">
+        <div class="meta-field-lbl">🕓 Hora inicio <span class="small" style="color:#94a3b8">(meteo)</span></div>
+        <input id="raceStartTime" type="time" placeholder="09:30" title="Usada para capturar el clima exacto de esa hora desde Open-Meteo" />
       </div>
       <div class="meta-field">
         <div class="meta-field-lbl">Kilómetros</div>

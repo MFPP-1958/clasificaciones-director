@@ -1385,3 +1385,21 @@ details.sim-help .sim-help-body .tip{
 }
 .sim-rider-clickable:hover,
 .sim-rider-clickable:active{color:#3730a3;text-decoration-color:#6366f1}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   WIDGET METEOROLÓGICO (Open-Meteo)
+   ═══════════════════════════════════════════════════════════════════════ */
+.wx-card{display:flex;align-items:center;gap:18px;padding:14px 18px;background:#fff;border:1.5px solid #bae6fd;border-radius:14px;flex-wrap:wrap}
+.wx-card-icon{font-size:54px;line-height:1;flex-shrink:0}
+.wx-card-main{flex:1;min-width:200px}
+.wx-card-race{font-size:13px;font-weight:800;color:#0f172a;margin-bottom:2px}
+.wx-card-meta{font-size:11.5px;color:#64748b;margin-bottom:6px}
+.wx-card-stats{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}
+.wx-stat{display:flex;align-items:center;gap:4px;font-weight:700}
+.wx-stat-ic{font-size:18px}
+.wx-stat-temp{color:#dc2626}
+.wx-stat-wind{color:#0369a1}
+.wx-stat-rain{color:#7c3aed}
+.wx-warn{background:#fef3c7;color:#92400e;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;margin-left:auto}
+.wx-loading{padding:16px;text-align:center;color:#64748b;font-size:13px}
+.wx-error{padding:14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;color:#991b1b;font-size:12.5px}
