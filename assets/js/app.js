@@ -5579,7 +5579,7 @@ function extractWinnerTime(text){
   const m2=oneLine.match(new RegExp('\\b1\\s+\\d{1,3}\\s+.+?\\s+(?:'+catRe+')\\s+.+?\\s+(\\d{1,2}:\\d{2}:\\d{2})\\b','i'));
   return m2?m2[1]:'';
 }
-function extractMeta(text){const oneLine=(text||'').replace(/\s+/g,' ');const title=(oneLine.match(/((?:XXIX|XXX|XVI|XVII|[A-ZÁÉÍÓÚÑ0-9]).{10,90}?)(?:\s+Km:|\s+CLASIFICACIÓN|\s+Vmedia)/i)||[])[1];if(title)$('raceName').value=cleanSpaces(title);const km=(oneLine.match(/Km:\s*([0-9,.]+)/i)||[])[1];if(km)$('raceKm').value=formatKmValue(km);const avg=(oneLine.match(/Vmedia\s*:?\s*([0-9,.]+)\s*Km/i)||[])[1];if(avg)$('raceAvg').value=avg+' km/h';const date=(oneLine.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/)||[])[1];if(date){const _iso=_parseSpanishDate(date);$('raceDate').value=_iso?formatDateDisplay(_iso):date;}}
+function extractMeta(text){const oneLine=(text||'').replace(/\s+/g,' ');const title=(oneLine.match(/((?:XXIX|XXX|XVI|XVII|[A-ZÁÉÍÓÚÑ0-9]).{10,90}?)(?:\s+Km:|\s+CLASIFICACIÓN|\s+Vmedia)/i)||[])[1];if(title)$('raceName').value=cleanSpaces(title);const km=(oneLine.match(/Km:\s*([0-9,.]+)/i)||[])[1];if(km)$('raceKm').value=formatKmValue(km);const avg=(oneLine.match(/Vmedia\s*:?\s*([0-9,.]+)\s*Km/i)||[])[1];if(avg)$('raceAvg').value=avg+' km/h';const date=(oneLine.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/)||[])[1];if(date){const _iso=_parseSpanishDate(date);$('raceDate').value=_iso?formatDateDisplay(_iso):date;}try{if(typeof _wxRenderLoadedRaceChip==='function')_wxRenderLoadedRaceChip();}catch{}}
 
 function stripTeamNoise(t){
   return cleanSpaces(String(t||'')
@@ -9592,6 +9592,8 @@ async function loadHistoryEntry(id){
   if($('raceLocalidad')) $('raceLocalidad').value = h.localidad||'';
   if($('raceCircuitType')) $('raceCircuitType').value = h.circuitType||'';
   if($('raceStartTime'))  $('raceStartTime').value  = h.hora_inicio||'';
+  // Refrescar chip meteorológico (si hay weather guardada de esta carrera)
+  try{ if(typeof _wxRenderLoadedRaceChip === 'function') _wxRenderLoadedRaceChip(); }catch{}
   // Restaurar inscritos (Tier 1)
   try{ inscritos = Array.isArray(h.inscritos) ? h.inscritos.slice() : []; }catch(e){ inscritos = []; }
   if(typeof _updateInscritosUI === 'function') _updateInscritosUI();
@@ -19362,6 +19364,8 @@ function _fillFromPlanned(id){
   // Pista visual: banner discreto debajo del nombre
   const rdHint = $('raceDateHint');
   if(rdHint) rdHint.innerHTML = `<span style="color:#0369a1;font-weight:700">📅 Datos importados de prueba planificada: ${escapeHtml(p.name||'')}</span>`;
+  // Refrescar chip meteorológico tras importar datos
+  try{ if(typeof _wxRenderLoadedRaceChip === 'function') _wxRenderLoadedRaceChip(); }catch{}
   // Si hay inscritos cargados, recalcula porque el año puede haber cambiado
   if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
   // Scroll al nombre
@@ -24208,6 +24212,8 @@ if(typeof window !== 'undefined'){
     const tryRender = () => {
       if(_cachedHistory && _cachedHistory.length){
         _wxRenderHomeWidget(false).catch(e=>console.warn('[wx] render error',e));
+        // Refrescar también el chip de view-carga si hay datos en el formulario
+        try{ _wxRenderLoadedRaceChip(); }catch{}
         return true;
       }
       return false;
@@ -24464,3 +24470,79 @@ async function _wxSyncHistoricalBatch(){
 function _wxSleep(ms){
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHIP METEOROLÓGICO en view-carga
+// Muestra el clima histórico guardado de la carrera actualmente cargada.
+// Se actualiza al cambiar fecha o localidad, o al cargar desde Historial.
+// ═══════════════════════════════════════════════════════════════════════════
+function _wxRenderLoadedRaceChip(){
+  const chip = document.getElementById('raceLoadedWeatherChip');
+  if(!chip) return;
+  // Tomar fecha + localidad del formulario actual
+  const raceDate = (document.getElementById('raceDate')?.value || '').trim();
+  const raceName = (document.getElementById('raceName')?.value || '').trim();
+  const localidad = (document.getElementById('raceLocalidad')?.value || '').trim();
+  if(!raceDate || !localidad){
+    chip.style.display = 'none';
+    return;
+  }
+
+  // Buscar carrera matching en _cachedHistory
+  const hist = _cachedHistory || [];
+  const isoTarget = _parseSpanishDate(raceDate);
+  const nameKey = raceName.toLowerCase().trim();
+  // Match preferentemente por fecha + nombre, sino solo fecha + localidad
+  let match = null;
+  for(const h of hist){
+    const isoH = _parseSpanishDate(h.raceDate);
+    if(!isoH || isoH !== isoTarget) continue;
+    if(nameKey && (h.raceName||'').toLowerCase().trim() === nameKey){ match = h; break; }
+    if(!match && (h.localidad||'').toLowerCase().trim() === localidad.toLowerCase()) match = h;
+  }
+  if(!match || !match.weather){
+    // No hay weather guardada — opcional: mostrar mensaje suave
+    chip.style.display = 'none';
+    return;
+  }
+
+  const w = match.weather;
+  const icon = _wxIcon(w);
+  const hora = match.hora_inicio ? `🕓 ${escapeHtml(match.hora_inicio)} · ` : '';
+  const sourceTxt = w.source === 'historical' ? '📜 Archivo histórico' : '🔮 Previsión';
+  const captured  = w.captured_at ? new Date(w.captured_at).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
+
+  // Avisos extremos
+  const warns = [];
+  if(w.temp >= 30) warns.push('🥵 Calor extremo');
+  if(w.temp <= 5)  warns.push('🥶 Frío extremo');
+  if(w.wind >= 25) warns.push('💨 Viento fuerte');
+  if((w.rain||0) >= 50) warns.push('🌧️ Lluvia');
+
+  chip.style.display = '';
+  chip.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;background:linear-gradient(135deg,#f0f9ff,#fff);border:1.5px solid #bae6fd;border-radius:10px;flex-wrap:wrap">
+      <div style="font-size:34px;line-height:1">${icon}</div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#0369a1;font-weight:800;margin-bottom:2px">🌤️ Clima de esta carrera ${hora ? '· '+hora.replace('🕓 ','') : ''}</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;font-weight:700">
+          <span style="color:#dc2626">🌡️ ${w.temp}ºC</span>
+          <span style="color:#0369a1">💨 ${w.wind} km/h</span>
+          ${w.rain != null ? `<span style="color:#7c3aed">🌧️ ${w.rain}%</span>` : ''}
+        </div>
+        <div style="font-size:10.5px;color:#94a3b8;margin-top:2px">${sourceTxt}${captured ? ' · capturado '+captured : ''}</div>
+      </div>
+      ${warns.length ? `<div style="background:#fef3c7;color:#92400e;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700">${warns.join(' · ')}</div>` : ''}
+    </div>`;
+}
+
+// ─── HOOKS: refrescar chip cuando cambien fecha o localidad ─────────────────
+document.addEventListener('DOMContentLoaded', ()=>{
+  ['raceDate','raceLocalidad','raceName'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){
+      el.addEventListener('change', ()=>{ try{ _wxRenderLoadedRaceChip(); }catch{} });
+      el.addEventListener('input',  ()=>{ try{ _wxRenderLoadedRaceChip(); }catch{} });
+    }
+  });
+});
