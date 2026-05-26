@@ -24308,3 +24308,159 @@ if(_origSimBuildData_WX){
     try{ _simApplyClimateLayer(); }catch(e){ console.warn('[wx] climate layer error', e); }
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKFILL CLIMÁTICO — Herramienta de admin
+// Recorre las carreras pasadas sin weather y captura el clima histórico de
+// Open-Meteo Archive. Throttle de 1.5 s entre llamadas para no saturar la API.
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _wxBackfillRunning = false;
+
+async function _wxSyncHistoricalBatch(){
+  if(_wxBackfillRunning){
+    if(typeof showToast==='function') showToast('Ya se está ejecutando una sincronización','warn');
+    return;
+  }
+  const btn        = document.getElementById('wxBackfillBtn');
+  const progressUI = document.getElementById('wxBackfillProgress');
+  const statusEl   = document.getElementById('wxBackfillStatus');
+  const percentEl  = document.getElementById('wxBackfillPercent');
+  const barEl      = document.getElementById('wxBackfillBar');
+  const logEl      = document.getElementById('wxBackfillLog');
+  if(!btn || !_sb){ alert('Supabase no disponible'); return; }
+
+  _wxBackfillRunning = true;
+  btn.disabled = true; btn.textContent = '⏳ Sincronizando…';
+  progressUI.style.display = '';
+  statusEl.textContent = 'Consultando carreras pendientes…';
+  percentEl.textContent = '0%';
+  barEl.style.width = '0%';
+  logEl.innerHTML = '';
+  const log = (msg, type='info') => {
+    const c = type==='ok'?'#16a34a':type==='err'?'#dc2626':type==='skip'?'#94a3b8':'#475569';
+    logEl.innerHTML = `<div style="color:${c}">${msg}</div>` + logEl.innerHTML;
+  };
+
+  try{
+    // 1) Buscar carreras con resultados Y sin weather guardada
+    const {data: races, error} = await _sb
+      .from('races')
+      .select('id, name, date, notes, race_type')
+      .eq('race_type', 'clasificacion')
+      .order('date', {ascending: false})
+      .limit(500);
+    if(error) throw error;
+    if(!races || !races.length){
+      statusEl.textContent = 'No hay carreras con resultados';
+      log('Sin carreras candidatas');
+      _wxBackfillRunning = false;
+      btn.disabled = false; btn.textContent = '🔄 Sincronizar Clima Histórico';
+      return;
+    }
+
+    // 2) Filtrar las que NO tienen weather
+    const candidates = [];
+    for(const r of races){
+      let extra = {};
+      try{ extra = r.notes ? JSON.parse(r.notes) : {}; }catch{}
+      // Saltar si ya tiene weather completa
+      if(extra.weather && extra.weather.temp != null && extra.weather.wind != null){
+        continue;
+      }
+      // Saltar si no hay localidad ni fecha
+      const localidad = extra.localidad || '';
+      const raceDate  = extra.raceDate || r.date || '';
+      if(!localidad || !raceDate) continue;
+      candidates.push({ id: r.id, name: r.name, raceDate, localidad,
+        horaInicio: extra.hora_inicio || '10:00', notes: extra });
+    }
+
+    if(!candidates.length){
+      statusEl.textContent = '✓ Todas las carreras ya tienen clima histórico';
+      log('No hay carreras pendientes de sincronizar', 'ok');
+      btn.disabled = false; btn.textContent = '✅ Todo sincronizado';
+      _wxBackfillRunning = false;
+      return;
+    }
+
+    log(`Encontradas ${candidates.length} carreras sin clima`, 'info');
+
+    // 3) Bucle for...of con throttle de 1.5s entre llamadas
+    let okCount = 0, errCount = 0, skipCount = 0;
+    for(let i = 0; i < candidates.length; i++){
+      const c = candidates[i];
+      const idx = i + 1;
+      const pct = Math.round((idx / candidates.length) * 100);
+      statusEl.textContent = `Actualizando carrera ${idx} de ${candidates.length}: ${c.name||'(sin nombre)'}`;
+      percentEl.textContent = `${pct}%`;
+      barEl.style.width = `${pct}%`;
+
+      try{
+        // Geocoding
+        const geo = await _wxGeocode(c.localidad);
+        if(!geo){
+          log(`[${idx}/${candidates.length}] ⏭️ "${c.name}" — geocoding falló para "${c.localidad}"`, 'skip');
+          skipCount++;
+          await _wxSleep(500); // pequeña pausa también en saltos
+          continue;
+        }
+        // Historical fetch
+        const wx = await _wxFetchHistorical(geo.lat, geo.lon, c.raceDate, c.horaInicio);
+        if(!wx){
+          log(`[${idx}/${candidates.length}] ⏭️ "${c.name}" — Open-Meteo sin datos para ${c.raceDate}`, 'skip');
+          skipCount++;
+          await _wxSleep(500);
+          continue;
+        }
+        // Guardar
+        const newNotes = { ...c.notes, weather: wx, lat: geo.lat, lon: geo.lon };
+        const {error: updErr} = await _sb.from('races').update({notes: JSON.stringify(newNotes)}).eq('id', c.id);
+        if(updErr){
+          log(`[${idx}/${candidates.length}] ❌ "${c.name}" — error guardando: ${updErr.message}`, 'err');
+          errCount++;
+        } else {
+          log(`[${idx}/${candidates.length}] ✅ "${c.name}" — ${wx.temp}ºC · ${wx.wind} km/h`, 'ok');
+          okCount++;
+        }
+      }catch(e){
+        log(`[${idx}/${candidates.length}] ❌ "${c.name}" — ${e.message||e}`, 'err');
+        errCount++;
+      }
+
+      // ── PROTECCIÓN ANTI-BLOQUEO: 1.5s entre llamadas ────────────────────
+      // Open-Meteo permite ~10000 req/día gratis pero conviene ir con calma.
+      if(idx < candidates.length){
+        await _wxSleep(1500);
+      }
+    }
+
+    // 4) Resumen final
+    statusEl.textContent = `✓ Sincronización completada · ${okCount} OK · ${skipCount} saltadas · ${errCount} errores`;
+    log(`────────`, 'info');
+    log(`RESUMEN: ${okCount} OK · ${skipCount} saltadas · ${errCount} errores`, okCount>0?'ok':'info');
+
+    // Invalidar caché de histórico para que cargue las nuevas weather
+    _cachedHistory = null;
+    if(typeof renderHistory === 'function'){
+      try{ await renderHistory(); }catch{}
+    }
+
+    if(typeof showToast === 'function'){
+      showToast(`🌤️ Backfill clima · ${okCount} carreras actualizadas`, okCount>0?'ok':'warn', 4500);
+    }
+  }catch(e){
+    console.error('[wx-backfill]', e);
+    log(`❌ Error general: ${e.message||e}`, 'err');
+    statusEl.textContent = '❌ Error en la sincronización';
+  } finally {
+    _wxBackfillRunning = false;
+    btn.disabled = false;
+    btn.textContent = '🔄 Lanzar de nuevo';
+  }
+}
+
+// Sleep helper
+function _wxSleep(ms){
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
