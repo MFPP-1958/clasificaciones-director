@@ -1781,6 +1781,91 @@
             <button class="btn light" onclick="_simBriefShare()" style="background:#25d366;color:#fff;border:0;font-weight:800;padding:6px 13px;font-size:13px">📲 Compartir</button>
           </div>
         </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Qué es la Hoja de Ruta y cómo se genera cada bloque?</summary>
+          <div class="sim-help-body">
+
+            <h4>📋 ¿Qué es la Hoja de Ruta?</h4>
+            <p>Es la <b>síntesis final</b> del simulador: condensa los 10 bloques anteriores en un documento de una sola pantalla que el director puede llevar a la reunión pre-carrera con sus corredores. Es lo que <b>llevarías impreso al coche el domingo</b>. Tiene 3 bloques + acciones para PDF y WhatsApp.</p>
+
+            <h4>📌 Cabecera</h4>
+            <p>Identifica la carrera (nombre, fecha, localidad, tipo de circuito) y muestra arriba a la derecha las 3 cifras de contexto:</p>
+            <ul>
+              <li><b>Predictibilidad</b>: cuán fiables son las predicciones (del bloque Nivel de la Parrilla)</li>
+              <li><b>Cobertura</b>: % de inscritos con histórico</li>
+              <li><b>Inscritos</b>: total de la parrilla</li>
+            </ul>
+
+            <h4>🎯 BLOQUE 1 · Resumen de objetivos</h4>
+            <p>El director necesita un objetivo claro. Este bloque lo genera automáticamente a partir de la posición estimada de tu equipo:</p>
+            <ul>
+              <li><b>Objetivo colectivo</b>: frase auto-generada según rank:
+                <ul style="margin:3px 0">
+                  <li>1º estimado → "Pelear por la victoria colectiva"</li>
+                  <li>2º-3º → "Luchar por el podio por equipos"</li>
+                  <li>4º-6º → "Alcanzar el Top X por equipos"</li>
+                  <li>≥7º → "Sumar puntos y colocar a nuestros hombres en el top X+2"</li>
+                </ul>
+              </li>
+              <li><b>Líder estimado</b>: tu corredor con mejor Pos. IA. Se muestra con su rango, tendencia ⬆️⬇️, y sus probabilidades 🎯 Top10 · 🥇 Podio · 🚨 Riesgo si supera 25%</li>
+              <li><b>Pos. equipo estimada</b> + <b>Prob. podio colectivo</b> (la curva exponencial calibrada)</li>
+              <li><b>🎯 Esperados Top10</b>: suma de las probabilidades Top10 de tus 3 mejores (0.7 = "esperamos medio corredor en Top 10")</li>
+              <li><b>🥇 Algún top3 podio</b>: <code>P = 1 − ∏(1 − P_i)</code> probabilidad de que AL MENOS uno de tus 3 mejores haga podio</li>
+              <li><b>Top 3 titulares activos</b>: los nombres con sus puestos esperados</li>
+            </ul>
+
+            <h4>🔭 BLOQUE 2 · Radar de vigilancia rival (Scouting)</h4>
+            <p>Los <b>5 rivales más peligrosos</b> según un score de amenaza compuesto:</p>
+            <p><code>amenaza = prob.podio + (tendencia ⬆️ = +15 / ⬇️ = −10) − pos × 0.5</code></p>
+            <p>El orden NO es solo por posición — un corredor con 70% de podio en racha ⬆️ aparece antes que otro con 30% aunque ambos vayan a Top 5. Cada fila muestra:</p>
+            <ul>
+              <li><b>Número de amenaza</b> (1-5)</li>
+              <li><b>Nombre y club</b> del rival</li>
+              <li><b>Categoría · Pos. IA · Fiabilidad</b></li>
+              <li><b>Probabilidades</b>: 🎯 Top10 y 🥇 Podio (chips de colores)</li>
+              <li><b>Tendencia</b> (⬆️⬇️➡️)</li>
+            </ul>
+            <div class="example">
+              <b>Tu screenshot:</b> Beltran (81% Top10, 40% Podio, ➡️) es la <b>amenaza nº 1</b>. Roig (75/33, ➡️) la 2. Pero Pastor (63/16) aparece TERCERO, por delante de otros con números similares, porque va en racha ⬆️. Eso es exactamente lo que queremos: no solo "quién es bueno" sino "quién es PELIGROSO el domingo".
+            </div>
+
+            <h4>🧠 BLOQUE 3 · Consejo táctico de la IA</h4>
+            <p>Texto auto-generado que combina <b>4-5 elementos</b>:</p>
+            <ol>
+              <li>Comentario sobre la <b>predictibilidad y cobertura</b> de la prueba</li>
+              <li>Comentario sobre la <b>dificultad</b> (asequible / exigente)</li>
+              <li>Comentario sobre el <b>tipo de circuito</b> (velocista / escalador / etc.)</li>
+              <li>Aviso si tienes <b>titulares con fiabilidad &lt;50%</b> (recomienda no exponerlos)</li>
+              <li>Recomendación general basada en posición + clima de carrera</li>
+            </ol>
+            <p>No es un texto fijo: cambia según los KPIs del simulador.</p>
+
+            <h4>🖨️ Botón "Exportar PDF"</h4>
+            <p>Abre una ventana imprimible con toda la Hoja de Ruta en formato A4. Está pensada para imprimirla y llevarla al coche, o guardarla como PDF para enviarla por email. <b>Funciona sin conexión</b> — usa la API de impresión nativa del navegador.</p>
+
+            <h4>📲 Botón "Compartir"</h4>
+            <p>En iPad/iPhone abre el menú nativo de compartir (WhatsApp, Mail, Mensajes…). En desktop intentará abrir WhatsApp Web. El mensaje incluye los puntos clave en formato corto: objetivo, líder estimado, posición, top 3 rivales y consejo.</p>
+
+            <h4>🤔 ¿Por qué la Hoja de Ruta no se ve siempre?</h4>
+            <p>Solo aparece si <b>has cargado una prueba y tu equipo tiene corredores en la parrilla</b>. Si no eres el director de un equipo presente, este bloque se oculta automáticamente.</p>
+
+            <h4>📊 ¿Se ven aquí las cifras Top10 / Podio / Riesgo?</h4>
+            <p>Sí. En la línea del líder estimado y debajo de cada rival del scouting aparecen los chips coloreados. También en los KPIs colectivos (Esperados Top10, Algún top3 podio). Todas vienen del motor estadístico ya calibrado tras el último backtest.</p>
+
+            <div class="tip">
+              💡 <b>Cómo usarla el día de la carrera:</b>
+              <ol style="margin:6px 0">
+                <li>Genera la Hoja de Ruta el sábado por la noche (asegúrate de tener actualizada la alineación en el Optimizador)</li>
+                <li>Exporta a PDF e imprime — o guárdala en el móvil</li>
+                <li>Compártela por WhatsApp con tu segundo director si lo tienes</li>
+                <li>En la reunión pre-carrera con los corredores, lee el objetivo colectivo y los 3 rivales más peligrosos. NO les des los porcentajes — son ruido para el corredor. Tradúcelo: "Sanchez tienes una buena Pos. IA y vienes en forma — fíjate especialmente en Beltran y Roig, no les dejes hueco en los ataques"</li>
+              </ol>
+            </div>
+
+          </div>
+        </details>
+
         <div id="simBriefBody"></div>
       </section>
 
