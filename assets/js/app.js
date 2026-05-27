@@ -7519,6 +7519,9 @@ function renderTop10(){
       }).join('');
     }
   }
+
+  // TOP 10 Opción B: badges de forma, botones de acción, sorpresa, toggle Top 20, H2H hover
+  try{ _t10B_postRender(top, base); }catch(e){ console.warn('t10B_postRender', e); }
 }
 function spreadClass(spread){
   if(spread==null)return '';
@@ -28293,3 +28296,320 @@ function _eqB_simulateAB(teamA, teamB){
 document.addEventListener('DOMContentLoaded', ()=>{
   setTimeout(_eqB_injectToolbar, 500);
 });
+
+// ════════════════════════════════════════════════════════════════════════
+// TOP 10 — Opción B (Tier ALTO + MEDIO)
+//   1. Badges de forma (🔥 racha, 📈 sube, 🌱 debutante) en cada fila
+//   2. Botón "📊 Comparar todos en Comparativa" (primeros 6)
+//   3. Botón "🎲 Simular próxima carrera con este Top 10"
+//   4. Tooltip H2H en hover de fila (últimas coincidencias con otros del top10)
+//   5. Toggle "▼ Mostrar Top 20"
+//   6. "💎 Sorpresa" detectada en el comentario del director
+// ════════════════════════════════════════════════════════════════════════
+
+let _t10B_expandedTo20 = false;
+
+function _t10B_riderHistory(name){
+  try{
+    if(!Array.isArray(_cachedHistory) || !_cachedHistory.length) return [];
+    const nk = (typeof normalizeForMatching==='function') ? normalizeForMatching(name) : (name||'').toLowerCase().trim();
+    const out = [];
+    for(const race of _cachedHistory){
+      const r = (race.riders||[]).find(x=>{
+        const xk = (typeof normalizeForMatching==='function') ? normalizeForMatching(x.name||'') : (x.name||'').toLowerCase().trim();
+        return xk === nk;
+      });
+      if(r && r.pos){
+        out.push({
+          raceName: race.raceName||race.name||'?',
+          raceDate: race.raceDate||'',
+          pos: parseInt(r.pos)||0,
+          sortKey: (typeof _parseSpanishDate==='function' && _parseSpanishDate(race.raceDate))||(race.raceDate||'')
+        });
+      }
+    }
+    out.sort((a,b)=>String(b.sortKey).localeCompare(String(a.sortKey)));
+    return out;
+  }catch(e){ return []; }
+}
+
+function _t10B_formBadge(rider){
+  const hist = _t10B_riderHistory(rider.name);
+  if(!hist.length) return '<span class="t10b-badge" style="background:#dbeafe;color:#1e40af" title="Sin historial previo (al menos en el año en caché)">🌱 Nuevo</span>';
+  if(hist.length < 3) return `<span class="t10b-badge" style="background:#fef3c7;color:#92400e" title="Solo ${hist.length} carrera(s) en histórico">🌱 Debutante</span>`;
+  const recent3 = hist.slice(0,3).map(h=>h.pos);
+  const avgRecent = recent3.reduce((s,v)=>s+v,0)/recent3.length;
+  const all = hist.map(h=>h.pos);
+  const avgAll = all.reduce((s,v)=>s+v,0)/all.length;
+  const currentPos = rider.pos;
+  // Racha: las últimas dos posiciones han mejorado consecutivamente
+  if(recent3.length>=2 && recent3[0] < recent3[1] - 0 && recent3[1] < (recent3[2]||999)){
+    // mejora monótona reciente
+    return `<span class="t10b-badge" style="background:#fee2e2;color:#b91c1c" title="Mejorando en las últimas carreras: ${recent3.join('→')}">🔥 En racha</span>`;
+  }
+  // Sube mucho respecto a su media global
+  if(currentPos < avgAll - 5){
+    const delta = Math.round(avgAll - currentPos);
+    return `<span class="t10b-badge" style="background:#dcfce7;color:#166534" title="Esta posición (${currentPos}º) supera a su media histórica (${avgAll.toFixed(1)}º)">📈 +${delta}</span>`;
+  }
+  // Mantiene nivel
+  if(Math.abs(currentPos - avgAll) <= 2){
+    return `<span class="t10b-badge" style="background:#e0e7ff;color:#3730a3" title="Posición acorde a su media histórica (${avgAll.toFixed(1)}º)">▬ Regular</span>`;
+  }
+  return '';
+}
+
+function _t10B_styleInject(){
+  if(document.getElementById('t10B-styles')) return;
+  const st = document.createElement('style');
+  st.id = 't10B-styles';
+  st.textContent = `
+    .t10b-badge{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:6px;letter-spacing:.2px;cursor:help}
+    .t10b-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+    .t10b-actions button{font-size:12px;padding:7px 12px}
+    .t10b-h2h-tip{position:absolute;background:#0b2f6b;color:#fff;padding:8px 10px;border-radius:8px;font-size:11px;line-height:1.45;max-width:280px;z-index:9999;box-shadow:0 6px 16px rgba(0,0,0,.25);pointer-events:none}
+    .t10b-h2h-tip .t10b-h2h-title{font-weight:800;border-bottom:1px solid rgba(255,255,255,.25);padding-bottom:3px;margin-bottom:4px;color:#fbbf24}
+    .top10-table tbody tr{cursor:default}
+  `;
+  document.head.appendChild(st);
+}
+
+function _t10B_addBadgesToTable(top){
+  const table = document.querySelector('#top10 .top10-table tbody');
+  if(!table) return;
+  const rows = table.querySelectorAll('tr');
+  rows.forEach((tr, i)=>{
+    if(!top[i]) return;
+    const nameCell = tr.querySelector('.t-name');
+    if(nameCell && !nameCell.querySelector('.t10b-badge')){
+      const badge = _t10B_formBadge(top[i]);
+      if(badge) nameCell.insertAdjacentHTML('beforeend', ' '+badge);
+    }
+    // Marcar fila con data para H2H
+    tr.setAttribute('data-t10b-rider', top[i].name);
+    tr.setAttribute('data-t10b-idx', String(i));
+  });
+}
+
+// ── H2H tooltip en hover ──
+let _t10B_tipEl = null;
+function _t10B_hideTip(){ if(_t10B_tipEl){ _t10B_tipEl.remove(); _t10B_tipEl=null; } }
+function _t10B_showH2HTip(tr, rider, top){
+  _t10B_hideTip();
+  const others = top.filter(r=>r.name !== rider.name);
+  const ridersHist = _t10B_riderHistory(rider.name);
+  // Para cada otro, buscar carreras en común (en el cache)
+  const matches = [];
+  for(const other of others){
+    let foundPos = null, foundOtherPos = null, foundDate = '', foundName = '';
+    for(const h of ridersHist){
+      const race = _cachedHistory.find(rc => (rc.raceName||rc.name)===h.raceName && rc.raceDate===h.raceDate);
+      if(!race) continue;
+      const otherR = (race.riders||[]).find(x=>{
+        const xk = (typeof normalizeForMatching==='function') ? normalizeForMatching(x.name||'') : (x.name||'').toLowerCase();
+        const ok = (typeof normalizeForMatching==='function') ? normalizeForMatching(other.name||'') : (other.name||'').toLowerCase();
+        return xk === ok;
+      });
+      if(otherR && otherR.pos){
+        foundPos = h.pos;
+        foundOtherPos = parseInt(otherR.pos)||0;
+        foundDate = race.raceDate||'';
+        foundName = race.raceName||race.name||'?';
+        break; // la más reciente
+      }
+    }
+    if(foundPos!=null){
+      matches.push({ other: other.name, myPos: foundPos, otherPos: foundOtherPos, race: foundName, date: foundDate, win: foundPos < foundOtherPos });
+    }
+  }
+  const tip = document.createElement('div');
+  tip.className = 't10b-h2h-tip';
+  let html = `<div class="t10b-h2h-title">${escapeHtml(rider.name)} · Histórico vs Top 10</div>`;
+  if(!matches.length){
+    html += `Sin coincidencias previas en el histórico cargado.`;
+  } else {
+    const wins = matches.filter(m=>m.win).length;
+    html += `<div style="margin-bottom:3px;font-size:10px;opacity:.85">${wins} victorias en ${matches.length} duelos directos</div>`;
+    html += matches.slice(0,5).map(m=>{
+      const ic = m.win ? '✅' : '❌';
+      return `${ic} <b>${m.myPos}º</b> vs ${m.otherPos}º — ${escapeHtml(m.other)} <span style="opacity:.6">(${escapeHtml(m.date||'')})</span>`;
+    }).join('<br>');
+  }
+  tip.innerHTML = html;
+  document.body.appendChild(tip);
+  const rect = tr.getBoundingClientRect();
+  let top_ = rect.top + window.scrollY + rect.height + 6;
+  let left = rect.left + window.scrollX + 20;
+  // ajustar si se sale
+  const tipRect = tip.getBoundingClientRect();
+  if(left + tipRect.width > window.innerWidth - 10) left = window.innerWidth - tipRect.width - 10;
+  if(top_ + tipRect.height > window.scrollY + window.innerHeight - 10){
+    top_ = rect.top + window.scrollY - tipRect.height - 6;
+  }
+  tip.style.top = top_+'px';
+  tip.style.left = left+'px';
+  _t10B_tipEl = tip;
+}
+
+function _t10B_attachH2HHover(top){
+  const table = document.querySelector('#top10 .top10-table tbody');
+  if(!table) return;
+  const rows = table.querySelectorAll('tr');
+  rows.forEach((tr, i)=>{
+    if(tr._t10b_hooked) return;
+    tr._t10b_hooked = true;
+    tr.addEventListener('mouseenter', ()=>{
+      const idx = parseInt(tr.getAttribute('data-t10b-idx'));
+      if(top[idx]) _t10B_showH2HTip(tr, top[idx], top);
+    });
+    tr.addEventListener('mouseleave', _t10B_hideTip);
+  });
+  window.addEventListener('scroll', _t10B_hideTip, {passive:true});
+}
+
+// ── Sorpresa: corredor con media histórica >20 que está en el top 10 ──
+function _t10B_findSorpresas(top){
+  const out = [];
+  for(const r of top){
+    const hist = _t10B_riderHistory(r.name);
+    if(hist.length < 3) continue;
+    const avg = hist.reduce((s,h)=>s+h.pos,0)/hist.length;
+    if(avg > 20 && r.pos <= 10){
+      out.push({ name: r.name, pos: r.pos, avg });
+    }
+  }
+  return out;
+}
+
+function _t10B_addSorpresaToCommentary(top){
+  const commentEl = document.getElementById('top10Commentary');
+  if(!commentEl) return;
+  if(commentEl.querySelector('[data-t10b-sorpresa]')) return;
+  const sorp = _t10B_findSorpresas(top);
+  if(!sorp.length) return;
+  const html = `<div data-t10b-sorpresa style="margin-top:8px;padding:6px 10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;font-size:12px">
+    💎 <b>Sorpresa${sorp.length>1?'s':''} del día:</b> ${sorp.map(s=>`<b>${escapeHtml(s.name)}</b> (${s.pos}º; media histórica ${s.avg.toFixed(1)}º)`).join(', ')}.
+  </div>`;
+  commentEl.insertAdjacentHTML('beforeend', html);
+}
+
+// ── Botones de acción ──
+function _t10B_injectActionButtons(top, base){
+  const sect = document.querySelector('#view-top10 .top10-panel .section-title');
+  if(!sect) return;
+  if(sect.querySelector('#t10B_actionsRow')) {
+    // ya existe — solo actualizar visibilidad del toggle
+    const tBtn = sect.querySelector('#t10B_toggle20');
+    if(tBtn) tBtn.textContent = _t10B_expandedTo20 ? '▲ Solo Top 10' : '▼ Mostrar Top 20';
+    return;
+  }
+  const row = document.createElement('div');
+  row.id = 't10B_actionsRow';
+  row.className = 't10b-actions';
+  row.style.width = '100%';
+  row.innerHTML = `
+    <button class="btn light" onclick="_t10B_goCompare()" title="Lleva los primeros 6 al menú Comparativo">📊 Comparar (6)</button>
+    <button class="btn light" onclick="_t10B_goSimulator()" title="Abre el Simulador con los del Top 10 como rivales clave">🎲 Simular próxima</button>
+    <button class="btn light" id="t10B_toggle20" onclick="_t10B_toggle20()">${_t10B_expandedTo20?'▲ Solo Top 10':'▼ Mostrar Top 20'}</button>
+  `;
+  sect.appendChild(row);
+}
+
+function _t10B_toggle20(){
+  _t10B_expandedTo20 = !_t10B_expandedTo20;
+  // Mostrar/ocultar filas extra
+  const base = (typeof getTeamRankingFilteredRiders==='function') ? getTeamRankingFilteredRiders() : [];
+  const sorted = base.slice().sort((a,b)=>a.pos-b.pos);
+  const tbody = document.querySelector('#top10 .top10-table tbody');
+  if(!tbody) return;
+  // Quitar filas extra previas
+  tbody.querySelectorAll('tr.t10b-extra').forEach(tr=>tr.remove());
+  const btn = document.getElementById('t10B_toggle20');
+  if(_t10B_expandedTo20){
+    const extra = sorted.slice(10,20);
+    if(!extra.length){
+      if(btn) btn.textContent = '▼ No hay más corredores';
+      _t10B_expandedTo20 = false;
+      return;
+    }
+    extra.forEach((r,i)=>{
+      let timeDisplay;
+      if(r.totalSeconds && typeof formatSeconds==='function'){
+        timeDisplay = formatSeconds(r.totalSeconds);
+        if(r.gapSeconds) timeDisplay += `<span style="font-size:11px;color:#667085;display:block">+${formatSeconds(r.gapSeconds)}</span>`;
+      } else if(r.gapSeconds!=null && typeof formatSeconds==='function'){
+        timeDisplay = '+'+formatSeconds(r.gapSeconds);
+      } else {
+        timeDisplay = escapeHtml(r.time||'—');
+      }
+      const tr = document.createElement('tr');
+      tr.className = 't10b-extra';
+      tr.style.background = '#fafbfc';
+      tr.style.opacity = '0.85';
+      tr.innerHTML = `<td><b>${r.pos}</b></td>
+        <td class="t-name">${escapeHtml(r.name)}</td>
+        <td class="t-time">${timeDisplay}</td>
+        <td><span class="pill"><span class="cat-dot" style="background:${typeof getColorForCategory==='function'?getColorForCategory(r.cat):'#999'}"></span>${escapeHtml(r.cat||'')}</span></td>
+        <td>${escapeHtml(r.region||'—')}</td>
+        <td class="t-team">${escapeHtml(r.team||'')}</td>
+        <td><button onclick="analyzeRiderByKey('${escapeAttr(getRiderKey(r))}');showView('view-analisis')" style="background:none;border:none;cursor:pointer;font-size:15px;opacity:.55" title="Análisis individual">👤</button></td>`;
+      tbody.appendChild(tr);
+    });
+    if(btn) btn.textContent = '▲ Solo Top 10';
+  } else {
+    if(btn) btn.textContent = '▼ Mostrar Top 20';
+  }
+}
+
+function _t10B_goCompare(){
+  try{
+    const base = (typeof getTeamRankingFilteredRiders==='function') ? getTeamRankingFilteredRiders() : [];
+    const top6 = base.slice().sort((a,b)=>a.pos-b.pos).slice(0,6);
+    if(top6.length<2){ alert('No hay suficientes corredores en el Top para comparar.'); return; }
+    selectedCompare = top6.slice(0,3); // por si Comparativa simple lee este array
+    if(typeof comparativoRiders !== 'undefined' && Array.isArray(comparativoRiders)){
+      for(let i=0;i<comparativoRiders.length;i++) comparativoRiders[i] = top6[i] || null;
+    }
+    window._suppressAutoFill = true;
+    if(typeof showView==='function') showView('view-comparativo');
+    setTimeout(()=>{
+      if(typeof renderComparativo==='function') renderComparativo();
+      window._suppressAutoFill = false;
+    }, 100);
+  }catch(e){ console.warn('_t10B_goCompare', e); }
+}
+
+function _t10B_goSimulator(){
+  try{
+    const base = (typeof getTeamRankingFilteredRiders==='function') ? getTeamRankingFilteredRiders() : [];
+    const top10 = base.slice().sort((a,b)=>a.pos-b.pos).slice(0,10);
+    sessionStorage.setItem('_t10B_simKey', JSON.stringify({ names: top10.map(r=>r.name), ts: Date.now() }));
+    if(typeof showView==='function'){
+      showView('view-simulador');
+      setTimeout(()=>{
+        try{
+          const banner = document.createElement('div');
+          banner.id = 't10B_simBanner';
+          banner.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;color:#92400e;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,0.15);max-width:90vw';
+          banner.innerHTML = `🎲 Rivales clave a vigilar (del Top 10 actual): <b>${top10.slice(0,5).map(r=>escapeHtml(r.name)).join(', ')}${top10.length>5?'…':''}</b> &nbsp; <button onclick="this.parentNode.remove()" style="background:none;border:0;cursor:pointer;font-size:14px">✕</button>`;
+          const old = document.getElementById('t10B_simBanner'); if(old) old.remove();
+          document.body.appendChild(banner);
+          setTimeout(()=>{ const b=document.getElementById('t10B_simBanner'); if(b) b.remove(); }, 14000);
+        }catch(e){}
+      }, 250);
+    }
+  }catch(e){ console.warn('_t10B_goSimulator', e); }
+}
+
+function _t10B_postRender(top, base){
+  _t10B_styleInject();
+  _t10B_injectActionButtons(top, base);
+  _t10B_addBadgesToTable(top);
+  _t10B_attachH2HHover(top);
+  _t10B_addSorpresaToCommentary(top);
+  // Restaurar estado del toggle
+  if(_t10B_expandedTo20){
+    _t10B_expandedTo20 = false;
+    _t10B_toggle20();
+  }
+}
