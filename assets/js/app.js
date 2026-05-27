@@ -27956,15 +27956,23 @@ function _eqB_injectToolbar(){
   try{
     const sec = document.querySelector('.team-ranking-full .section-title');
     if(!sec || sec.querySelector('#eqB_myTeamBtn')) return;
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;width:100%';
-    wrap.innerHTML = `
-      <button id="eqB_myTeamBtn" class="btn light" style="font-size:11px;padding:5px 10px"
-              onclick="_eqB_focusMyTeam()" title="Resaltar y enfocar mi equipo">
-        🎯 Solo mi equipo
-      </button>
-      <span id="eqB_myTeamStatus" style="font-size:11px;color:#6b7280;align-self:center"></span>`;
-    sec.appendChild(wrap);
+    // Buscar el contenedor de controles de la derecha (el que ya tiene "Por tiempos / Por puntos / Informe completo")
+    const exportBtn = sec.querySelector('button[onclick*="_exportTeamRanking"]');
+    const rightBox = exportBtn ? exportBtn.parentElement : null;
+    if(!rightBox) return;
+    const btn = document.createElement('button');
+    btn.id = 'eqB_myTeamBtn';
+    btn.className = 'btn light';
+    btn.style.cssText = 'font-size:12px;padding:6px 12px';
+    btn.title = 'Resaltar y enfocar mi equipo';
+    btn.innerHTML = '🎯 Solo mi equipo';
+    btn.onclick = _eqB_focusMyTeam;
+    rightBox.appendChild(btn);
+    // Status (solo aparece cuando hay mensaje, no rompe el layout)
+    const status = document.createElement('span');
+    status.id = 'eqB_myTeamStatus';
+    status.style.cssText = 'font-size:11px;color:#6b7280;align-self:center;margin-left:6px';
+    rightBox.appendChild(status);
   }catch(e){}
 }
 
