@@ -10254,6 +10254,37 @@ async function _inicioAddAllUpcoming(){
 // Análisis Individual. Lo encontramos por nombre normalizado en `riders` (si
 // hay prueba cargada) o redirigimos al Análisis genérico para que el usuario
 // elija manualmente.
+// Abre el simulador con una carrera concreta pre-seleccionada
+function _inicioOpenSimulator(raceId){
+  showView('view-simulador');
+  setTimeout(()=>{
+    try{
+      if(!raceId) return;
+      const sel = document.getElementById('simRaceSelect');
+      if(sel){
+        sel.value = raceId;
+        if(typeof _simOnRaceChange === 'function') _simOnRaceChange();
+      }
+    }catch(e){ console.warn('[inicio] openSimulator',e); }
+  }, 200);
+}
+
+// Abre el análisis de una carrera concreta (vista Tabla y Filtros)
+function _inicioOpenRaceAnalysis(raceId, raceName){
+  try{
+    // Cargar la carrera del histórico desde Supabase (si tenemos id)
+    if(raceId && typeof reEditFromHistory === 'function' && Array.isArray(_cachedHistory)){
+      const race = _cachedHistory.find(h => h.id === raceId);
+      if(race){
+        reEditFromHistory(race);
+        showView('view-tabla');
+        return;
+      }
+    }
+    showView('view-historial');
+  }catch(e){ console.warn('[inicio] openRace',e); }
+}
+
 function _inicioOpenRider(displayName){
   try{
     const target = (typeof normalizeRiderName==='function' ? normalizeRiderName(displayName) : displayName).toLowerCase();
@@ -10360,13 +10391,93 @@ async function renderInicio(){
     return `<span style="color:#9ca3af;font-weight:700;font-size:11px;margin-left:6px">━ igual</span>`;
   };
 
+  // ─── 2b. KPIs TÁCTICOS (Tier 1 mejoras Dashboard) ──────────────────
+  // Calculamos métricas accionables para el director, no solo cantidades.
+  // - % Top 10 del equipo: cuántas participaciones acaban en Top 10
+  // - % Podios del equipo: cuántas participaciones acaban en podio
+  // - Mejor corredor del equipo: el de mejor media reciente
+  // - Tendencia 30d vs 30 anteriores
+  let teamTop10Pct = 0, teamPodiumPct = 0, teamParticipations = 0;
+  let bestRiderName = '—', bestRiderAvg = null;
+  if(team){
+    const myTeamKey = (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim());
+    const teamHits = [];
+    const riderHitsMap = new Map(); // nameKey → {name, positions}
+    history.forEach(race => (race.riders||[]).forEach(r => {
+      const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+      if(tk !== myTeamKey) return;
+      if(!r.pos || r.pos <= 0) return;
+      teamHits.push(r.pos);
+      const nm = normalizeRiderName(r.name||'').toLowerCase();
+      if(!nm) return;
+      if(!riderHitsMap.has(nm)) riderHitsMap.set(nm, {name:r.name, positions:[]});
+      riderHitsMap.get(nm).positions.push(r.pos);
+    }));
+    teamParticipations = teamHits.length;
+    if(teamHits.length){
+      teamTop10Pct  = Math.round(teamHits.filter(p => p <= 10).length / teamHits.length * 100);
+      teamPodiumPct = Math.round(teamHits.filter(p => p <= 3).length  / teamHits.length * 100);
+    }
+    // Mejor corredor: mejor media en últimas 5 carreras (o menos)
+    const candidates = [];
+    riderHitsMap.forEach((d, nk)=>{
+      if(d.positions.length < 3) return;
+      const recent = d.positions.slice(-5);
+      const avg = recent.reduce((s,p)=>s+p,0)/recent.length;
+      candidates.push({name:d.name, avg, races:d.positions.length});
+    });
+    candidates.sort((a,b)=>a.avg-b.avg);
+    if(candidates.length){
+      bestRiderName = candidates[0].name.split(',')[0].trim() || candidates[0].name;
+      bestRiderAvg  = candidates[0].avg;
+    }
+  }
+
+  // Helper para sparkline simple: array de números → SVG mini-gráfica
+  const sparkline = (values, color='#0b2f6b') => {
+    if(!values || values.length < 2) return '';
+    const w = 60, h = 18, pad = 1;
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = max - min || 1;
+    const pts = values.map((v,i)=>{
+      const x = pad + (i / (values.length-1)) * (w - 2*pad);
+      // Invertir: menor número (mejor posición) → arriba
+      const y = pad + ((v - min) / range) * (h - 2*pad);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return `<svg width="${w}" height="${h}" style="vertical-align:middle;margin-left:6px"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+  };
+
+  // Sparkline de podios mensuales (últimos 6 meses)
+  const monthlyPodiums = [];
+  for(let mb = 5; mb >= 0; mb--){
+    const from = new Date(now.getFullYear(), now.getMonth()-mb,   1);
+    const to   = new Date(now.getFullYear(), now.getMonth()-mb+1, 1);
+    const rcs = racesByPeriod(from, to);
+    monthlyPodiums.push(podiumsInRaces(rcs));
+  }
+
   const kpiBox = document.getElementById('inicioKpis');
   if(kpiBox){
     kpiBox.innerHTML = `
       <div class="evol-kpi"><div class="ek-label">Carreras en historial</div><div class="ek-value">${totalRaces}</div><div class="ek-sub">Últimos 30 días: ${racesLast30.length}${trendChip(racesDelta,' pruebas')}</div></div>
-      <div class="evol-kpi"><div class="ek-label">Ciclistas únicos</div><div class="ek-value">${uniqueRiders.size}</div><div class="ek-sub">En todas las pruebas</div></div>
-      <div class="evol-kpi"><div class="ek-label">Mi equipo</div><div class="ek-value" style="font-size:16px">${team ? escapeHtml(team) : '—'}</div><div class="ek-sub">${myTeamRiders} ciclista${myTeamRiders!==1?'s':''}</div></div>
-      <div class="evol-kpi"><div class="ek-label">${team?'Podios del equipo':'Podios globales'} (30d)</div><div class="ek-value">${podiums30}</div><div class="ek-sub">vs ${podiumsPrev} mes anterior${trendChip(podiumDelta)}</div></div>`;
+      ${team
+        ? `<div class="evol-kpi" style="background:linear-gradient(135deg,#ecfdf5,#fff);border-left:3px solid #16a34a">
+             <div class="ek-label">🎯 % Top 10 ${escapeHtml(team).slice(0,15)}</div>
+             <div class="ek-value" style="color:#15803d">${teamTop10Pct}%</div>
+             <div class="ek-sub">${teamParticipations} participaciones · ${teamPodiumPct}% al podio</div>
+           </div>`
+        : `<div class="evol-kpi"><div class="ek-label">Ciclistas únicos</div><div class="ek-value">${uniqueRiders.size}</div><div class="ek-sub">En todas las pruebas</div></div>`
+      }
+      ${team && bestRiderAvg != null
+        ? `<div class="evol-kpi" style="background:linear-gradient(135deg,#fef3c7,#fff);border-left:3px solid #f59e0b">
+             <div class="ek-label">⭐ Mejor del equipo</div>
+             <div class="ek-value" style="font-size:16px;color:#92400e">${escapeHtml(bestRiderName)}</div>
+             <div class="ek-sub">Media reciente: ${bestRiderAvg.toFixed(1)}º · ${myTeamRiders} en plantilla</div>
+           </div>`
+        : `<div class="evol-kpi"><div class="ek-label">Mi equipo</div><div class="ek-value" style="font-size:16px">${team ? escapeHtml(team) : '—'}</div><div class="ek-sub">${myTeamRiders} ciclista${myTeamRiders!==1?'s':''}</div></div>`
+      }
+      <div class="evol-kpi"><div class="ek-label">${team?'Podios del equipo':'Podios globales'} (30d)</div><div class="ek-value">${podiums30}${sparkline(monthlyPodiums,'#0b2f6b')}</div><div class="ek-sub">vs ${podiumsPrev} mes anterior${trendChip(podiumDelta)}</div></div>`;
   }
 
   // ─── 3. Próximas pruebas (de TU calendario planificado, NO del scrape FCCV) ──
@@ -10421,24 +10532,65 @@ async function renderInicio(){
         ? `_fccvShowRaceDetails('${escapeAttr(r.fccvId)}')`
         : `showView('view-calendario')`;
 
+      // Tier 1 Dashboard #4-#6: enriquecemos la próxima prueba con
+      // - chip de clima si tenemos datos
+      // - botón "Simular esta prueba" si ya está en historial como planificada
+      // - botón "Ver detalle" si tiene fccvId
+      const nextWeatherChip = (() => {
+        // Buscar match en _cachedHistory por fecha + localidad
+        if(!Array.isArray(_cachedHistory)) return '';
+        const matchRace = _cachedHistory.find(h => {
+          if(!h.raceDate) return false;
+          const hIso = _parseSpanishDate(h.raceDate);
+          if(hIso !== next.iso) return false;
+          if(next.localidad && h.localidad && h.localidad.toLowerCase() !== next.localidad.toLowerCase()) return false;
+          return true;
+        });
+        if(!matchRace || !matchRace.weather) return '';
+        const w = matchRace.weather;
+        const icon = typeof _wxIcon === 'function' ? _wxIcon(w) : '🌤️';
+        return `<span style="background:#f0f9ff;color:#075985;padding:3px 8px;border-radius:6px;font-size:11.5px;font-weight:700;border:1px solid #bae6fd">${icon} ${w.temp}ºC · 💨${w.wind}km/h${w.rain!=null?' · 🌧️'+w.rain+'%':''}</span>`;
+      })();
+      // Función para abrir el simulador con esta prueba seleccionada
+      const simulateHandler = (r) => {
+        if(!Array.isArray(_cachedHistory)) return `showView('view-simulador')`;
+        const match = _cachedHistory.find(h => {
+          if(!h.raceDate) return false;
+          return _parseSpanishDate(h.raceDate) === r.iso &&
+                 (!r.localidad || !h.localidad || h.localidad.toLowerCase() === r.localidad.toLowerCase());
+        });
+        if(match) return `_inicioOpenSimulator('${escapeAttr(match.id||'')}')`;
+        return `showView('view-simulador')`;
+      };
+
       lastBox.innerHTML = `
-        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;margin-bottom:12px;cursor:pointer" onclick="${handlerFor(next)}">
-          <div style="font-size:11px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">🏁 Próxima prueba ${labelDays}</div>
-          <div style="font-size:18px;font-weight:900;color:#78350f;margin-bottom:6px">${escapeHtml(next.name)}</div>
-          <div style="font-size:13px;color:#92400e;display:flex;flex-wrap:wrap;gap:12px">
-            <span>📅 ${fmtDate(next.iso)}</span>
-            ${next.localidad?`<span>📍 ${escapeHtml(next.localidad)}</span>`:''}
-            ${next.modality?`<span>🚴 ${escapeHtml(next.modality)}</span>`:''}
-            ${next.cat?`<span>🎽 ${escapeHtml(String(next.cat).slice(0,28))}</span>`:''}
+        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:11px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">🏁 Próxima prueba ${labelDays}</div>
+              <div style="font-size:18px;font-weight:900;color:#78350f;margin-bottom:6px">${escapeHtml(next.name)}</div>
+              <div style="font-size:13px;color:#92400e;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+                <span>📅 ${fmtDate(next.iso)}</span>
+                ${next.localidad?`<span>📍 ${escapeHtml(next.localidad)}</span>`:''}
+                ${next.modality?`<span>🚴 ${escapeHtml(next.modality)}</span>`:''}
+                ${next.cat?`<span>🎽 ${escapeHtml(String(next.cat).slice(0,28))}</span>`:''}
+                ${nextWeatherChip}
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn" onclick="${simulateHandler(next)}" style="background:#7c3aed;color:#fff;font-size:12px;padding:7px 13px;font-weight:800">🔮 Simular</button>
+            <button class="btn light" onclick="${handlerFor(next)}" style="font-size:12px;padding:7px 13px">📋 Ver detalle</button>
           </div>
         </div>
         ${upcoming.length > 1 ? `
         <div style="font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Siguientes ${upcoming.length-1}</div>
         ${upcoming.slice(1).map(r=>{
           const dn = daysUntil(r.iso);
-          return `<div onclick="${handlerFor(r)}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:#f9fafb;border:1px solid #f3f4f6;margin-bottom:5px;cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#f9fafb'">
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:#f9fafb;border:1px solid #f3f4f6;margin-bottom:5px;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#f9fafb'">
             <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:3px 8px;border-radius:6px;min-width:48px;text-align:center">${fmtDate(r.iso).slice(0,5)}</div>
-            <div style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0b2f6b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.name)}</div>
+            <div style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0b2f6b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="${handlerFor(r)}">${escapeHtml(r.name)}</div>
+            <button onclick="${simulateHandler(r)}" title="Simular esta prueba" style="background:#ede9fe;color:#5b21b6;border:0;border-radius:5px;padding:3px 7px;font-size:10.5px;font-weight:800;cursor:pointer">🔮</button>
             <div style="font-size:10.5px;color:#6b7280">${dn===0?'hoy':dn===1?'mañana':`+${dn}d`}</div>
           </div>`;
         }).join('')}
@@ -10640,15 +10792,42 @@ async function renderInicio(){
       if(!arr.length){
         topBox.innerHTML = chip + `<div class="inicio-empty">No se encontraron corredores${hasTeam?` de "${escapeHtml(team)}"`:''} en el historial.</div>`;
       } else {
+        // Tier 1 Dashboard #7-#9: tendencia reciente, semáforo y posición en ranking
         topBox.innerHTML = chip + arr.map((r,i)=>{
           const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
-          // Click → abrir Análisis individual del ciclista
+          // — Tendencia reciente: comparar promedio últimas 3 vs anteriores —
+          // raceHistory está ordenado por aparición; ordenamos por fecha desc
+          const rhSorted = (r.raceHistory||[]).slice().sort((a,b)=>{
+            const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+            const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+            return db.localeCompare(da);
+          });
+          const recent3 = rhSorted.slice(0,3).map(x=>x.pos).filter(p=>p>0);
+          const older   = rhSorted.slice(3,6).map(x=>x.pos).filter(p=>p>0);
+          let trendIc = '', trendTxt = '';
+          if(recent3.length >= 2){
+            const recentAvg = recent3.reduce((s,p)=>s+p,0)/recent3.length;
+            const olderAvg  = older.length ? older.reduce((s,p)=>s+p,0)/older.length : r.avg;
+            const delta = olderAvg - recentAvg;
+            if(delta > 2)      { trendIc = '⬆️'; trendTxt = 'en forma'; }
+            else if(delta < -2){ trendIc = '⬇️'; trendTxt = 'en bajón'; }
+            else                { trendIc = '➡️'; trendTxt = 'estable'; }
+          }
+          // — Semáforo de estado de forma —
+          // verde: media reciente < 10 · amarillo: < 20 · rojo: peor
+          const recentAvgForLight = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : r.avg;
+          const lightColor = recentAvgForLight <= 10 ? '#16a34a'
+                          : recentAvgForLight <= 20 ? '#f59e0b' : '#dc2626';
+          const lightTitle = recentAvgForLight <= 10 ? 'Buen momento de forma'
+                          : recentAvgForLight <= 20 ? 'Forma moderada' : 'Forma baja / necesita atención';
+          const semaforo = `<span title="${lightTitle}" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${lightColor};margin-right:6px;vertical-align:middle"></span>`;
+          // — Compact stats —
           const safeNm = escapeAttr(r.displayName||'');
           return `<div class="inicio-rider-row" onclick="_inicioOpenRider('${safeNm}')" style="cursor:pointer;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
             <div class="inicio-rider-pos">${medal}</div>
             <div style="flex:1;min-width:0">
-              <div style="font-weight:700;color:#0b2f6b">${escapeHtml(r.displayName)}</div>
-              <div style="font-size:12px;color:#6b7280">${!hasTeam && r.team?escapeHtml(r.team)+' · ':''}${r.n} carreras · media ${r.avg.toFixed(1)}º · ${r.podiums} podios${r.wins>0?` · 🏆 ${r.wins} victoria${r.wins>1?'s':''}`:''}</div>
+              <div style="font-weight:700;color:#0b2f6b">${semaforo}${escapeHtml(r.displayName)} ${trendIc?`<span title="${trendTxt}" style="font-size:13px;margin-left:4px">${trendIc}</span>`:''}</div>
+              <div style="font-size:12px;color:#6b7280">${!hasTeam && r.team?escapeHtml(r.team)+' · ':''}${r.n} carreras · media ${r.avg.toFixed(1)}º · ${r.podiums} podios${r.wins>0?` · 🏆 ${r.wins} victoria${r.wins>1?'s':''}`:''}${trendTxt?` · <b style="color:${lightColor}">${trendTxt}</b>`:''}</div>
             </div>
             <div style="color:#9ca3af;font-size:18px">›</div>
           </div>`;
@@ -10923,14 +11102,40 @@ async function renderInicio(){
       if(!filtered5.length){
         recBox.innerHTML = `<div class="inicio-empty">No hay carreras del filtro actual en el historial.</div>`;
       } else {
+        // Tier 1 Dashboard #10-#11: mostrar mejor resultado del equipo + botones de acción
+        const myTeamKeyRec = team ? (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim()) : '';
         recBox.innerHTML = filtered5.map(race=>{
           const nRiders = (race.riders||[]).length;
-          return `<div class="inicio-race-row" onclick="showView('view-historial')">
-            <div style="flex:1;min-width:0">
+          // Mejor resultado del equipo en esta carrera
+          let bestTeamResult = null;
+          if(team){
+            const myRiders = (race.riders||[]).filter(r => {
+              const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+              return tk === myTeamKeyRec && r.pos > 0;
+            });
+            if(myRiders.length){
+              myRiders.sort((a,b)=>a.pos-b.pos);
+              bestTeamResult = myRiders[0];
+            }
+          }
+          // Color del badge según el resultado
+          let resultBadge = '';
+          if(bestTeamResult){
+            const p = bestTeamResult.pos;
+            const bg = p<=3 ? '#dcfce7' : p<=10 ? '#dbeafe' : p<=20 ? '#fef3c7' : '#f1f5f9';
+            const col= p<=3 ? '#15803d' : p<=10 ? '#1d4ed8' : p<=20 ? '#92400e' : '#475569';
+            const ic = p===1 ? '🥇' : p===2 ? '🥈' : p===3 ? '🥉' : '🔵';
+            const nm = (bestTeamResult.name||'').split(',')[0].trim();
+            resultBadge = `<div style="display:inline-flex;align-items:center;gap:5px;background:${bg};color:${col};padding:2px 7px;border-radius:6px;font-size:11px;font-weight:800;margin-top:3px"><span>${ic} ${p}º</span><span style="font-weight:600">${escapeHtml(nm.slice(0,18))}</span></div>`;
+          }
+          const raceId = race.id || '';
+          return `<div class="inicio-race-row" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 11px" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
+            <div style="flex:1;min-width:0" onclick="_inicioOpenRaceAnalysis('${escapeAttr(raceId)}','${escapeAttr(race.raceName||'')}')">
               <div style="font-weight:700;color:#0b2f6b">${escapeHtml((race.raceName||'').slice(0,50))}</div>
               <div style="font-size:12px;color:#6b7280">${race.raceDate||'—'}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''} · ${nRiders} corredores</div>
+              ${resultBadge}
             </div>
-            <span style="color:#9ca3af">›</span>
+            <button onclick="_inicioOpenRaceAnalysis('${escapeAttr(raceId)}','${escapeAttr(race.raceName||'')}')" title="Analizar esta carrera" style="background:#dbeafe;color:#1d4ed8;border:0;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">📊 Analizar</button>
           </div>`;
         }).join('');
       }
