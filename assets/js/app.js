@@ -25966,10 +25966,28 @@ document.addEventListener('DOMContentLoaded', ()=>{
     // Cerrar al salir del tr (a otro elemento que no sea un hijo)
     const toEl = ev.relatedTarget;
     if(toEl && tr.contains(toEl)) return;
-    if(_tablaTooltipTimer){ clearTimeout(_tablaTooltipTimer); _tablaTooltipTimer = null; }
-    if(_tablaTooltipEl) _tablaTooltipEl.classList.remove('active');
+    _tablaHideTooltip();
   });
+  // Ocultar también al hacer click en cualquier sitio (sino se queda pegado al cambiar de vista)
+  root.addEventListener('click', _tablaHideTooltip, true);
+  // Y al hacer scroll en la tabla
+  root.addEventListener('scroll', _tablaHideTooltip, true);
 });
+
+// Helper centralizado para ocultar tooltip y cancelar timer pendiente
+function _tablaHideTooltip(){
+  if(_tablaTooltipTimer){ clearTimeout(_tablaTooltipTimer); _tablaTooltipTimer = null; }
+  if(_tablaTooltipEl){ _tablaTooltipEl.classList.remove('active'); }
+}
+
+// Hook en showView: al cambiar de vista, asegurar que el tooltip se cierre
+const _tablaPrevShowView_tooltip = (typeof window.showView === 'function') ? window.showView : null;
+if(_tablaPrevShowView_tooltip){
+  window.showView = function(id){
+    _tablaHideTooltip();
+    _tablaPrevShowView_tooltip(id);
+  };
+}
 
 // ─── 6. CONTADOR DE FILTROS ACTIVOS ────────────────────────────────────────
 // Actualiza el botón "🧹 Limpiar filtros" con un badge mostrando el nº
