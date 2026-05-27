@@ -28890,19 +28890,19 @@ function _simInjectPVRStyles(){
       body * { visibility: hidden !important; }
       #pvrModalOverlay, #pvrModalOverlay * { visibility: visible !important; }
       #pvrModalOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; padding: 6mm 4mm !important; }
+      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
       .no-print { display: none !important; }
-      .pvr-header { border-bottom: 2px solid #0b2f6b !important; padding: 10px 14px !important; }
+      .pvr-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
       .pvr-logo { height: 52px !important; }
-      .pvr-kpis { background: #fff !important; padding: 10px 14px !important; }
+      .pvr-kpis { background: #fff !important; padding: 0 !important; border-bottom: 0 !important; margin-bottom: 8px !important; }
       .pvr-kpi { border: 1px solid #999 !important; }
-      .pvr-table-wrap { padding: 0 14px 10px !important; }
+      .pvr-table-wrap { padding: 0 !important; margin-top: 8px !important; }
       .pvr-table th, .pvr-table td { border: 1px solid #999 !important; }
       .pvr-table { font-size: 10.5px !important; }
-      .pvr-footer { padding: 10px 14px !important; }
+      .pvr-footer { padding: 10px 0 0 !important; margin-top: 12px !important; }
       #pvrModalBox, #pvrModalBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
-    @page { margin: 28mm 22mm 22mm 22mm; size: A4; }
+    @page { margin: 0; size: A4; }
   `;
   document.head.appendChild(st);
 }
@@ -29366,24 +29366,26 @@ function _aiInjectDNFStyles(){
       body * { visibility: hidden !important; }
       #aiDnfOverlay, #aiDnfOverlay * { visibility: visible !important; }
       #aiDnfOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; padding: 0 !important; }
+      /* Margen real DENTRO del documento (no depende del @page del navegador) */
+      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
       .no-print { display: none !important; }
-      .ai-dnf-header { border-bottom: 2px solid #0b2f6b !important; padding: 14px 4mm 12px !important; }
+      .ai-dnf-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 14px 0 !important; margin-bottom: 12px !important; }
       .ai-dnf-logo { height: 58px !important; }
       .ai-dnf-title { font-size: 22px !important; }
       .ai-dnf-rider-name { font-size: 26px !important; }
       .ai-dnf-rider-label { font-size: 13px !important; }
-      .ai-dnf-kpis { background: #fff !important; padding: 12px 4mm !important; }
+      .ai-dnf-kpis { background: #fff !important; padding: 0 !important; border-bottom: 0 !important; margin-bottom: 8px !important; }
       .ai-dnf-kpi { border: 1px solid #999 !important; }
       .ai-dnf-table-wrap { padding: 0 !important; }
-      .ai-dnf-section { padding: 8px 4mm 0 !important; }
+      .ai-dnf-section { padding: 0 !important; margin-top: 8px !important; }
       .ai-dnf-section h3 { margin: 12px 0 6px !important; font-size: 15px !important; }
       .ai-dnf-table th, .ai-dnf-table td { border: 1px solid #999 !important; }
       .ai-dnf-table { font-size: 10.5px !important; }
-      .ai-dnf-footer { padding: 10px 4mm 4px !important; }
+      .ai-dnf-footer { padding: 10px 0 0 !important; margin-top: 14px !important; }
       #aiDnfBox, #aiDnfBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
-    @page { margin: 28mm 22mm 22mm 22mm; size: A4; }
+    /* @page a 0 para que NO compita con el padding interno; los márgenes están ya en #aiDnfBox */
+    @page { margin: 0; size: A4; }
   `;
   document.head.appendChild(st);
 }
