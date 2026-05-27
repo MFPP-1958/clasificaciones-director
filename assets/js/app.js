@@ -21039,6 +21039,95 @@ function _simSigmoid(z){
   return Math.max(0, Math.min(100, Math.round(100 / (1 + Math.exp(-z)))));
 }
 
+// ─── TIER 1 · TRES MEJORAS DE PRECISIÓN ──────────────────────────────────────
+
+// (1) Media reciente con DECAIMIENTO EXPONENCIAL
+// La carrera más reciente cuenta más que la 2ª, y mucho más que la 3ª.
+// Pesos {0.50, 0.30, 0.20} = la última pesa 2.5× más que la 3ª.
+// Captura mejor la "racha caliente" o el bajón puntual.
+function _simRecentWeightedMean(recentForm){
+  if(!recentForm || !recentForm.length) return null;
+  const recent3 = recentForm.slice(0, 3).filter(p=>p>0);
+  if(!recent3.length) return null;
+  const W = recent3.length === 3 ? [0.50, 0.30, 0.20]
+          : recent3.length === 2 ? [0.60, 0.40]
+          : [1.00];
+  let s = 0, totW = 0;
+  for(let i = 0; i < recent3.length; i++){
+    s    += recent3[i] * W[i];
+    totW += W[i];
+  }
+  return s / totW;
+}
+
+// (2) Factor FATIGA: penaliza si el corredor ha competido mucho en los días previos
+// Devuelve {factor, racesIn7, racesIn14, reason}
+function _simFatigueFactor(hits, targetDateMs){
+  const out = {factor: 1.00, racesIn7: 0, racesIn14: 0, reason: ''};
+  if(!hits || !hits.length || !targetDateMs) return out;
+  const MS = 86400 * 1000;
+  for(const h of hits){
+    const iso = _parseSpanishDate(h.raceDate);
+    if(!iso) continue;
+    const ms = new Date(iso).getTime();
+    if(!isFinite(ms) || ms >= targetDateMs) continue; // solo carreras anteriores
+    const diffDays = (targetDateMs - ms) / MS;
+    if(diffDays <= 7)  out.racesIn7++;
+    if(diffDays <= 14) out.racesIn14++;
+  }
+  // Penalización CONSERVADORA — solo si hay sobrecarga real
+  if(out.racesIn7 >= 4){ out.factor = 1.08; out.reason = `Sobrecarga: ${out.racesIn7} carreras en 7 días`; }
+  else if(out.racesIn7 >= 3){ out.factor = 1.04; out.reason = `Carga alta: ${out.racesIn7} carreras en 7 días`; }
+  else if(out.racesIn14 >= 6){ out.factor = 1.03; out.reason = `${out.racesIn14} carreras en 14 días`; }
+  return out;
+}
+
+// (3) Factor ESPECIALIZACIÓN: bonus/penalty según afinidad con el tipo de circuito actual
+// Usa media + desviación estándar para detectar especialistas REALES (no flukes).
+// Devuelve {factor, type, reason} o null si no aplica
+function _simSpecialtyFactor(riderName, currentCircuitProfile){
+  if(!riderName || !currentCircuitProfile || currentCircuitProfile === 'todo-terreno') return null;
+  const nk = normalizeForMatching(riderName);
+  if(!nk) return null;
+  const hist = _cachedHistory || [];
+  // Acumular posiciones por perfil de circuito
+  const byProfile = {};
+  let totalSum = 0, totalCount = 0;
+  for(const h of hist){
+    const r = (h.riders||[]).find(x => normalizeForMatching(x.name||'') === nk);
+    if(!r || !r.pos || r.pos <= 0) continue;
+    const prof = _simCircuitToProfile(h.circuitType||'');
+    if(!byProfile[prof]) byProfile[prof] = [];
+    byProfile[prof].push(r.pos);
+    totalSum += r.pos; totalCount++;
+  }
+  if(totalCount < 3) return null;
+  const overallMean = totalSum / totalCount;
+
+  const specialty = byProfile[currentCircuitProfile];
+  if(!specialty || specialty.length < 2) return null;
+  const specMean = specialty.reduce((a,b)=>a+b,0) / specialty.length;
+  const specVar  = specialty.reduce((s,p)=>s+(p-specMean)**2,0) / specialty.length;
+  const specStd  = Math.sqrt(specVar);
+
+  // Diferencia significativa: > 3 puestos respecto a la media global
+  const diff = specMean - overallMean;
+  // Coeficiente de variación: si > 0.4 los resultados son demasiado dispersos
+  const cv = specMean > 0 ? specStd / specMean : 1;
+
+  // ESPECIALISTA fuerte: rinde claramente mejor en este tipo Y de forma consistente
+  if(diff < -3 && cv < 0.35 && specialty.length >= 3){
+    return {factor: 0.95, type: currentCircuitProfile,
+      reason: `Especialista (${specMean.toFixed(1)}º en ${currentCircuitProfile}, σ=${specStd.toFixed(1)})`};
+  }
+  // NO ES LO SUYO: rinde claramente peor en este tipo
+  if(diff > 5 && specialty.length >= 3){
+    return {factor: 1.05, type: currentCircuitProfile,
+      reason: `Sufre en ${currentCircuitProfile} (${specMean.toFixed(1)}º vs ${overallMean.toFixed(1)}º global)`};
+  }
+  return null;
+}
+
 // — Acota una posición al rango físico [1, max] —
 function _simCapPos(p, max){
   if(p == null) return null;
@@ -21095,6 +21184,11 @@ function _simBuildData(raceId){
   // Para cada inscrito, calcular métricas
   const myTeamLower = (myTeam||'').toLowerCase().trim();
   const totalInsRef = inscritos.length || 60; // tamaño de pelotón de referencia
+  // — Tier 1 #2 (fatiga): fecha objetivo en ms para detectar carreras previas en ventana
+  const _targetIso = _parseSpanishDate(race.raceDate);
+  const _targetDateMs = _targetIso ? new Date(_targetIso).getTime() : null;
+  // — Tier 1 #3 (especialización): perfil del circuito de la carrera
+  const _currentCircuitProfile = _simCircuitToProfile(race.circuitType||'');
   const grid = inscritos.map((ins, idx)=>{
     const nk = normalizeForMatching(ins.name||'');
     // Resolver categoría específica desde el histórico si la del inscrito es genérica
@@ -21111,6 +21205,9 @@ function _simBuildData(raceId){
     let probTop10Raw=null, probPodiumRaw=null;
     // Factores aplicados (transparencia)
     let cadetFactor=1.0, relPenalty=1.0;
+    // Tier 1: variables de fatiga y especialización (inicializadas a "no aplica")
+    let fatigueInfo = {factor:1.0, racesIn7:0, racesIn14:0, reason:''};
+    let specialtyInfo = null;
 
     if(hits.length){
       const positions = hits.map(h=>h.pos).filter(p=>p>0);
@@ -21161,9 +21258,10 @@ function _simBuildData(raceId){
           treeNode.push('A0:base');
         }
 
-        // — Fórmula ponderada 60/40: 60% forma reciente + 40% histórico —
-        const recent3 = recentForm.slice(0,3);
-        const recentMean = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : null;
+        // — Fórmula ponderada 60/40 con DECAIMIENTO EXPONENCIAL (Tier 1 #1) —
+        // La media reciente ahora pondera más la última carrera ({0.50, 0.30, 0.20})
+        // Antes: las 3 últimas pesaban igual (1/3 cada una)
+        const recentMean = _simRecentWeightedMean(recentForm);
         predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
         predictedPos *= cadetFactor;
 
@@ -21175,6 +21273,22 @@ function _simBuildData(raceId){
                    : reliability >= 25 ? 1.06   // antes 1.10
                    : 1.10;                       // antes 1.15
         predictedPos *= relPenalty;
+
+        // — TIER 1 #2: FACTOR DE FATIGA (densidad competitiva) —
+        // Penaliza si el corredor ha competido mucho en los días previos.
+        fatigueInfo = _simFatigueFactor(hits, _targetDateMs);
+        if(fatigueInfo.factor !== 1.00){
+          predictedPos *= fatigueInfo.factor;
+          treeNode.push(`F:${fatigueInfo.reason}`);
+        }
+
+        // — TIER 1 #3: FACTOR DE ESPECIALIZACIÓN POR TIPO DE CIRCUITO —
+        // Solo aplica con muestra suficiente y desviación estándar baja.
+        specialtyInfo = _simSpecialtyFactor(ins.name, _currentCircuitProfile);
+        if(specialtyInfo){
+          predictedPos *= specialtyInfo.factor;
+          treeNode.push(`S:${specialtyInfo.reason}`);
+        }
 
         // — RAMA C: Fiabilidad → ajuste del intervalo de confianza —
         let relFactor;
@@ -21251,7 +21365,14 @@ function _simBuildData(raceId){
       // Bernoulli — brutas, ajustadas por dificultad en post-proceso
       probTop10Raw, probPodiumRaw,
       // Transparencia
-      cadetFactor, relPenalty
+      cadetFactor, relPenalty,
+      // Tier 1: factores nuevos (fatiga + especialización)
+      fatigueFactor: fatigueInfo.factor,
+      racesIn7: fatigueInfo.racesIn7,
+      racesIn14: fatigueInfo.racesIn14,
+      fatigueReason: fatigueInfo.reason,
+      specialtyFactor: specialtyInfo ? specialtyInfo.factor : 1.00,
+      specialtyReason: specialtyInfo ? specialtyInfo.reason : ''
     };
   });
 
@@ -23867,8 +23988,16 @@ function _simRunBacktest(){
             return db.localeCompare(da);
           });
           const recent3 = sorted.slice(0,3).map(h=>h.pos);
-          const recentMean = recent3.length ? recent3.reduce((s,p)=>s+p,0)/recent3.length : null;
+          // TIER 1 #1: decaimiento exponencial — coherente con el motor real
+          const recentMean = _simRecentWeightedMean(recent3);
           let predicted = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
+
+          // TIER 1 #2: factor fatiga (carreras en últimos 7/14 días previos al objetivo)
+          const targetMs = targetDate ? new Date(targetDate).getTime() : null;
+          // Convertir hits a formato compatible con _simFatigueFactor
+          const hitsForFatigue = hits.map(h => ({raceDate: h.raceDate}));
+          const fat = _simFatigueFactor(hitsForFatigue, targetMs);
+          if(fat.factor !== 1.00) predicted *= fat.factor;
 
           // Penalización por fiabilidad
           const reliability = _simReliability(positions, N) ?? 50;

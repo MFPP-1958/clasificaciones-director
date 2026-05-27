@@ -2323,14 +2323,16 @@
             <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#5b21b6;margin-bottom:6px">🧠 Motor Estadístico — Pesos y Fórmulas</div>
             <div style="font-size:11.5px;color:#374151;margin:0;line-height:1.55">
 
-              <div style="margin-bottom:8px"><b style="color:#7c3aed">🤖 Fase 1 — Árbol de Regresión</b> (Pos. IA) · <span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:800">v3 — recalibrado tras 2º backtest</span><br>
-                <code style="background:#ede9fe;padding:1px 5px;border-radius:4px;font-size:10.5px">pos = (0.60·recent3 + 0.40·media) × cadetFactor × relPenalty</code><br>
+              <div style="margin-bottom:8px"><b style="color:#7c3aed">🤖 Fase 1 — Árbol de Regresión</b> (Pos. IA) · <span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:800">v4 — Tier 1 (decay + fatiga + especialización)</span><br>
+                <code style="background:#ede9fe;padding:1px 5px;border-radius:4px;font-size:10.5px">pos = (0.60·recentDecay + 0.40·media) × cadetFactor × relPenalty × fatigueFactor × specialtyFactor</code><br>
+                · <b>recentDecay</b>: decaimiento exponencial sobre las 3 últimas — pesos {0.50, 0.30, 0.20}. La última carrera pesa 2.5× más que la 3ª<br>
                 · <b>cadetFactor</b>: 1er año con ≥3 carreras ×1.00 (su historial ya cubre) · 1er año novato (&lt;3) ×1.05 · 2º año novato ×1.03 · resto cadete ×1.00–1.05 según experiencia<br>
                 · <b>relPenalty</b>: rel ≥75% ×1.00 · ≥50% ×1.03 · ≥25% ×1.06 · &lt;25% ×1.10<br>
-                · <b>Filtros</b>: las <b>etapas de vuelta</b> y <b>contrarrelojes</b> se excluyen del histórico (introducen ruido por especialización)<br>
+                · <b>fatigueFactor 🥵</b>: ≥4 carreras en 7 días ×1.08 · ≥3 ×1.04 · ≥6 en 14 días ×1.03<br>
+                · <b>specialtyFactor 🎯</b>: ±5% si el corredor es especialista REAL del tipo (σ baja en ≥3 carreras del tipo) o si rinde claramente peor en este tipo<br>
+                · <b>Filtros</b>: las <b>etapas de vuelta</b> y <b>contrarrelojes</b> se excluyen del histórico<br>
                 · <b>Rama B</b>: si no hay historial → media del club (rango ±22%)<br>
-                · <b>Rama C</b>: intervalo σ × {0.6, 0.8, 1.4} según fiabilidad<br>
-                · <b>Posición predicha</b>: cruda para ordenación · "72+º" en display si excede el pelotón
+                · <b>Rama C</b>: intervalo σ × {0.6, 0.8, 1.4} según fiabilidad
               </div>
 
               <div style="margin-bottom:8px"><b style="color:#0369a1">🎯 Fase 2 — Bernoulli con suavizado</b> (Top 10)<br>
