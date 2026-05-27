@@ -20227,18 +20227,20 @@ function _renderTeamRankingMini(){
     return {team, isMy, count: rs.length, best, sumTop3, avg, spread, catSummary};
   })
   .sort((a,b)=>{
-    // Mi equipo siempre arriba
-    if(a.isMy && !b.isMy) return -1;
-    if(b.isMy && !a.isMy) return 1;
-    // Después por suma top 3 (los que tienen) y luego por best
+    // Orden REAL por Σ Top 3 (menor = mejor). Quien no tiene 3 corredores
+    // (sumTop3 == null) cae al final, ordenado por mejor posición.
+    // El equipo del usuario aparece en su posición real, destacado en azul.
     if(a.sumTop3!=null && b.sumTop3!=null) return a.sumTop3 - b.sumTop3;
     if(a.sumTop3!=null) return -1;
     if(b.sumTop3!=null) return 1;
     return a.best - b.best;
   });
+  // Encontrar la posición de mi equipo para destacarla en el pie
+  const myTeamRankIdx = rows.findIndex(r => r.isMy);
+  const myTeamRankPos = myTeamRankIdx >= 0 ? myTeamRankIdx + 1 : null;
   const trRows = rows.map((r,i)=>{
     const spreadClr = r.spread==null ? '#9ca3af' : (r.spread<=8 ? '#12b76a' : r.spread<=20 ? '#f59e0b' : '#dc2626');
-    return `<tr style="${r.isMy?'background:#dbeafe;font-weight:700':''}">
+    return `<tr data-my-team="${r.isMy?'1':'0'}" style="${r.isMy?'background:#dbeafe;font-weight:700':''}">
       <td style="padding:6px 9px;font-weight:800;color:#0b2f6b">${i+1}º</td>
       <td style="padding:6px 9px;${r.isMy?'color:#1e3a8a;font-weight:800':''}">${r.isMy?'🔵 ':''}${escapeHtml(r.team)}</td>
       <td style="padding:6px 9px;text-align:center">${r.count}</td>
@@ -20267,7 +20269,19 @@ function _renderTeamRankingMini(){
         <tbody>${trRows||'<tr><td colspan="8" class="empty">Sin datos.</td></tr>'}</tbody>
       </table>
     </div>
-    <p class="small" style="margin-top:8px;color:#6b7280">Ordenado por Σ Top 3 (menor = mejor); tu equipo siempre arriba. Filtrado por los filtros activos.</p>`;
+    <p class="small" style="margin-top:8px;color:#6b7280">
+      Ordenado por <b>Σ Top 3</b> (menor = mejor) · Equipos con &lt;3 corredores van al final por mejor posición · Filtrado por los filtros activos.
+      ${myTeamRankPos ? `<br><b style="color:#1e3a8a">🔵 Tu equipo aparece en la posición ${myTeamRankPos}º</b> (destacado en azul)` : ''}
+    </p>`;
+  // Auto-scroll a la fila de mi equipo si está fuera de la vista inicial
+  if(myTeamRankPos && myTeamRankPos > 5){
+    setTimeout(()=>{
+      try{
+        const myRow = body.querySelector('tr[data-my-team="1"]');
+        if(myRow) myRow.scrollIntoView({behavior:'smooth', block:'center'});
+      }catch(e){}
+    }, 150);
+  }
 }
 
 // ── E) KPIs AMPLIADOS CON INSCRITOS ───────────────────────────────────────
