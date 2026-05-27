@@ -21229,18 +21229,88 @@ function _simCapPos(p, max){
   return Math.max(1, Math.min(m, Math.round(p)));
 }
 
-// — Detecta si una carrera es una etapa de vuelta o una contrarreloj —
-// Las etapas y CRIs introducen ruido en el histórico porque sus puestos
-// reflejan especialización (escalador, cronoman, velocista…) no la forma
-// general del corredor. Mejor excluirlas del cálculo de avgPos.
+// — Detecta si una carrera es una etapa de vuelta de varios días —
+// Solo se usa internamente para distinguir formato; ya NO excluimos a ciegas.
 function _simIsStageRace(h){
   if(!h) return false;
   const name = (h.raceName||'').toLowerCase();
   const modal = (h.modalidad||'').toLowerCase();
   if(/\b(etapa|stage)\b/i.test(name)) return true;
-  if(/\b(cri|crono|contrarreloj|chrono|tt)\b/i.test(name)) return true;
-  if(/(etapa|stage|cri|crono)/i.test(modal)) return true;
+  if(/(etapa|stage)/i.test(modal)) return true;
   return false;
+}
+
+// — Detecta si una carrera es CRI / Cronoescalada / Contrarreloj —
+function _simIsTimeTrial(h){
+  if(!h) return false;
+  const name = (h.raceName||'').toLowerCase();
+  const ct   = (h.circuitType||'').toLowerCase();
+  const modal = (h.modalidad||'').toLowerCase();
+  // CRI / Crono / Contrarreloj / Cronoescalada / TT
+  if(/\b(cri|crono|contrarreloj|chrono|cronoesc|cronoescalada|\btt\b)\b/i.test(name)) return true;
+  if(/(crono|contrarreloj|chrono|tt)/i.test(ct))    return true;
+  if(/(crono|contrarreloj|chrono|tt)/i.test(modal)) return true;
+  return false;
+}
+
+// — Detecta si una carrera es Cronoescalada (subida cronometrada) —
+function _simIsHillClimb(h){
+  if(!h) return false;
+  const name = (h.raceName||'').toLowerCase();
+  const ct   = (h.circuitType||'').toLowerCase();
+  if(/cronoesc|cronoescalada|subida\s+a|hill\s*climb/i.test(name)) return true;
+  if(/cronoesc/i.test(ct)) return true;
+  return false;
+}
+
+// — Compatibilidad y peso de similitud entre carrera objetivo y carrera histórica —
+// Devuelve {compatible: bool, weight: number}:
+//   compatible=false → carrera incompatible (formato fundamentalmente distinto)
+//   weight = multiplicador adicional para los hits de esta carrera (0.8 - 1.6)
+//
+// REGLA CLAVE (idea del usuario, mayo 2026):
+// No excluir todas las etapas/CRIs. Solo excluir cuando los formatos son
+// REALMENTE incompatibles (CRI vs masivo). Para el resto, ponderar por similitud.
+function _simRaceCompatWeight(target, hist){
+  if(!target || !hist) return {compatible: true, weight: 1.0};
+
+  // — Filtro duro: cronos vs carreras masivas son incompatibles —
+  const targetIsTT = _simIsTimeTrial(target);
+  const histIsTT   = _simIsTimeTrial(hist);
+  if(targetIsTT !== histIsTT){
+    return {compatible: false, weight: 0};
+  }
+  // — Cronoescalada vs CRI plana: también distintos —
+  const targetIsHC = _simIsHillClimb(target);
+  const histIsHC   = _simIsHillClimb(hist);
+  if(targetIsTT && targetIsHC !== histIsHC){
+    return {compatible: false, weight: 0};
+  }
+
+  // — Resto: compatibles. Calculamos peso por similitud —
+  let w = 1.0;
+
+  // Bonus 1: Mismo circuitType (Circuito ↔ Circuito, En línea ↔ En línea)
+  const tCT = (target.circuitType||'').trim().toLowerCase();
+  const hCT = (hist.circuitType||'').trim().toLowerCase();
+  if(tCT && hCT && tCT === hCT) w *= 1.20;
+
+  // Bonus 2: Misma localidad → mismo perfil/terreno
+  const tLoc = (target.localidad||'').trim().toLowerCase();
+  const hLoc = (hist.localidad||'').trim().toLowerCase();
+  if(tLoc && hLoc && tLoc === hLoc) w *= 1.15;
+
+  // Bonus 3: Distancia similar (±25%) → carreras de longitud parecida
+  const tKm = parseFloat(String(target.km||'').replace(',', '.')) || 0;
+  const hKm = parseFloat(String(hist.km||'').replace(',', '.')) || 0;
+  if(tKm > 0 && hKm > 0){
+    const ratio = Math.min(tKm, hKm) / Math.max(tKm, hKm);
+    if(ratio >= 0.75) w *= 1.10;
+    else if(ratio < 0.50) w *= 0.85; // distancias muy distintas → penalizar suave
+  }
+
+  // Acotar para evitar pesos extremos
+  return {compatible: true, weight: Math.max(0.5, Math.min(1.6, w))};
 }
 
 // Construye el grid analizado: para cada inscrito, calcula sus métricas históricas
@@ -21250,12 +21320,19 @@ function _simBuildData(raceId){
   if(!race){ _simCurrentData = null; return; }
   const inscritos = race.inscritos || [];
   // Índices del histórico (excluyendo la propia prueba si no se ha disputado, para no contaminar)
-  // Excluimos etapas y CRIs del histórico: introducen ruido por especialización
-  const historicalRaces = hist.filter(h =>
-    h.id !== raceId &&
-    (h.riders||[]).length >= 3 &&
-    !_simIsStageRace(h)
-  );
+  // NUEVO ENFOQUE: en vez de excluir todas las etapas/CRIs, ponderamos por similitud
+  // con la carrera objetivo. Solo descartamos formatos REALMENTE incompatibles
+  // (p.ej. una CRI no sirve para predecir una carrera masiva en línea).
+  const _compatByRaceId = new Map();
+  const historicalRaces = hist.filter(h => {
+    if(h.id === raceId) return false;
+    if((h.riders||[]).length < 3) return false;
+    // Compatibilidad de formato: descartar solo si fundamentalmente incompatible
+    const compat = _simRaceCompatWeight(race, h);
+    if(!compat.compatible) return false;
+    _compatByRaceId.set(h.id, compat.weight);
+    return true;
+  });
   // Index: nameKey → array de {pos, total, raceDate, cat, team}
   const byRider = new Map();
   // Index: teamKey → array de posiciones de cualquier corredor
@@ -21310,14 +21387,21 @@ function _simBuildData(raceId){
       const validHits = hits.filter(h => h.pos > 0);
       const positions = validHits.map(h=>h.pos);
       if(positions.length){
-        // — TIER 2: Hits con sus pesos de calidad de carrera —
-        // hitsQ = array de {pos, w, raceDate, raceId}
-        const hitsQ = validHits.map(h => ({
-          pos: h.pos,
-          w: _raceQualityWeight.get(h.raceId) ?? 1.0,
-          raceDate: h.raceDate,
-          raceId: h.raceId
-        }));
+        // — TIER 2 + COMPATIBILIDAD: Hits con pesos combinados —
+        // Cada hit lleva un peso = qualityWeight × compatibilidadWeight
+        //   · qualityWeight: nivel del pelotón de esa carrera (Tier 2)
+        //   · compatWeight: similitud con la carrera objetivo (mismo tipo,
+        //     misma localidad, km parecidos)
+        const hitsQ = validHits.map(h => {
+          const qw = _raceQualityWeight.get(h.raceId) ?? 1.0;
+          const cw = _compatByRaceId.get(h.raceId) ?? 1.0;
+          return {
+            pos: h.pos,
+            w: qw * cw,        // peso combinado
+            raceDate: h.raceDate,
+            raceId: h.raceId
+          };
+        });
 
         // avgPos CRUDO (para display "Media hist." sin sorprender al usuario)
         avgPos  = positions.reduce((s,p)=>s+p,0)/positions.length;
@@ -21339,11 +21423,12 @@ function _simBuildData(raceId){
           return db.localeCompare(da);
         });
         recentForm = sorted.slice(0,5).map(h=>h.pos);
-        // recent3 con pesos de calidad (para el cálculo de la predicción)
-        var recent3Q = sorted.slice(0,3).map(h => ({
-          pos: h.pos,
-          w: _raceQualityWeight.get(h.raceId) ?? 1.0
-        }));
+        // recent3 con pesos combinados (calidad × compatibilidad)
+        var recent3Q = sorted.slice(0,3).map(h => {
+          const qw = _raceQualityWeight.get(h.raceId) ?? 1.0;
+          const cw = _compatByRaceId.get(h.raceId) ?? 1.0;
+          return { pos: h.pos, w: qw * cw };
+        });
         trend = _simTrend(recentForm);
 
         // ══ ÁRBOL DE REGRESIÓN ════════════════════════════════════════════════
@@ -24052,11 +24137,12 @@ function _simRunBacktest(){
     try{
       const t0 = performance.now();
       const hist = _cachedHistory || [];
-      // Filtros: con resultados, fecha válida, NO etapas/CRIs (que distorsionan)
+      // Filtro mínimo: solo descartamos las que NO se pueden simular
+      // (sin resultados o sin fecha). La compatibilidad por formato se aplica
+      // DENTRO del bucle según el tipo de la carrera objetivo (target).
       const past = hist.filter(h =>
         (h.riders||[]).length >= 3 &&
-        _parseSpanishDate(h.raceDate) &&
-        !_simIsStageRace(h)
+        _parseSpanishDate(h.raceDate)
       );
 
       if(past.length < 5){
@@ -24079,11 +24165,18 @@ function _simRunBacktest(){
         const targetDate = _parseSpanishDate(target.raceDate);
         if(!targetDate) continue;
 
-        // Histórico disponible: SOLO carreras estrictamente anteriores
+        // Histórico disponible: SOLO carreras estrictamente anteriores Y
+        // compatibles con el formato del objetivo (filtro CRI vs línea).
+        // Para cada carrera compatible guardamos su peso de similitud.
+        const compatByRaceId = new Map();
         const available = past.filter(h => {
           if(h.id === target.id) return false;
           const d = _parseSpanishDate(h.raceDate);
-          return d && d < targetDate;
+          if(!d || d >= targetDate) return false;
+          const compat = _simRaceCompatWeight(target, h);
+          if(!compat.compatible) return false;
+          compatByRaceId.set(h.id, compat.weight);
+          return true;
         });
         if(available.length < 3) continue; // Necesitamos un mínimo de muestras previas
 
@@ -24112,20 +24205,25 @@ function _simRunBacktest(){
           const positions = hits.map(h => h.pos);
           if(positions.length < 2) return; // Necesitamos ≥2 carreras previas
 
-          // Tier 2: hits con quality weights
-          const hitsQ = hits.map(h => ({pos: h.pos, w: raceQW.get(h.raceId) ?? 1.0}));
-          // avgPos ajustado por calidad (sustituye al crudo en la fórmula)
+          // Tier 2 + COMPAT: hits con pesos combinados (calidad × compatibilidad)
+          const hitsQ = hits.map(h => {
+            const qw = raceQW.get(h.raceId) ?? 1.0;
+            const cw = compatByRaceId.get(h.raceId) ?? 1.0;
+            return {pos: h.pos, w: qw * cw};
+          });
+          // avgPos ajustado por calidad+compatibilidad (sustituye al crudo)
           const avgPos = _simWeightedMean(hitsQ) ?? (positions.reduce((s,p)=>s+p,0) / positions.length);
           const sorted = hits.slice().sort((a,b)=>{
             const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
             const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
             return db.localeCompare(da);
           });
-          // recent3 con pesos de calidad de carrera (Tier 2)
-          const recent3Q = sorted.slice(0,3).map(h => ({
-            pos: h.pos,
-            w: raceQW.get(h.raceId) ?? 1.0
-          }));
+          // recent3 con pesos combinados (calidad × compatibilidad)
+          const recent3Q = sorted.slice(0,3).map(h => {
+            const qw = raceQW.get(h.raceId) ?? 1.0;
+            const cw = compatByRaceId.get(h.raceId) ?? 1.0;
+            return { pos: h.pos, w: qw * cw };
+          });
           // TIER 1 #1 + Tier 2: decay × calidad combinados
           let recSum = 0, recTotW = 0;
           const decayW = recent3Q.length === 3 ? [0.50, 0.30, 0.20]
