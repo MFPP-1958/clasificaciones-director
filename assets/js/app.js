@@ -21128,6 +21128,100 @@ function _simSpecialtyFactor(riderName, currentCircuitProfile){
   return null;
 }
 
+// ─── TIER 2 · CALIDAD DEL PELOTÓN HISTÓRICO ─────────────────────────────────
+// Pondera las muestras del histórico de un corredor según la "calidad" del
+// pelotón en cada carrera. Un 5º en una carrera con todos los favoritos
+// inscritos cuenta MÁS que un 5º en una carrera con pelotón irregular.
+//
+// Algoritmo en 2 pasadas:
+//  1) Rating de corredor = su avgPos crudo en TODAS sus carreras
+//  2) qualityIndex de cada carrera = media de los ratings de sus participantes
+//     · qualityIndex bajo → pelotón fuerte (muchos top-riders)
+//     · qualityIndex alto → pelotón irregular (riders de bajo rating)
+//  3) qualityWeight = media_global_qualityIndex / qualityIndex_de_la_carrera
+//     · raceQ fuerte (qualityIndex bajo): weight > 1 → su resultado cuenta MÁS
+//     · raceQ flojo (qualityIndex alto): weight < 1 → su resultado cuenta MENOS
+//
+// El parámetro alpha controla la "agresividad" del pesado (1.0 = lineal).
+// Usamos 0.7 (moderado) para no sobreajustar con muestras pequeñas.
+function _simComputeQualityIndex(historicalRaces, opts){
+  const alpha = (opts && opts.alpha) || 0.7;
+  if(!historicalRaces || !historicalRaces.length) return new Map();
+
+  // — Pasada 1: rating de corredor (avgPos crudo) —
+  const riderHits = new Map(); // nameKey → array de pos
+  historicalRaces.forEach(h => {
+    (h.riders||[]).forEach(r => {
+      if(!r.pos || r.pos <= 0) return;
+      const nk = normalizeForMatching(r.name||'');
+      if(!nk) return;
+      if(!riderHits.has(nk)) riderHits.set(nk, []);
+      riderHits.get(nk).push(r.pos);
+    });
+  });
+  const riderRating = new Map();
+  riderHits.forEach((arr, nk)=>{
+    if(arr.length < 2) return; // requiere al menos 2 carreras para tener "rating"
+    riderRating.set(nk, arr.reduce((s,p)=>s+p,0) / arr.length);
+  });
+
+  // — Pasada 2: qualityIndex por carrera —
+  // qualityIndex = media de ratings de sus participantes rateados.
+  // Si <3 participantes rateados, asignamos weight 1.0 (neutro, sin info).
+  const raceQuality = new Map(); // raceId → qualityIndex
+  let sumQI = 0, nQI = 0;
+  historicalRaces.forEach(h => {
+    if(!h.id) return;
+    const ratings = [];
+    (h.riders||[]).forEach(r => {
+      const nk = normalizeForMatching(r.name||'');
+      if(!nk) return;
+      const rating = riderRating.get(nk);
+      if(rating != null) ratings.push(rating);
+    });
+    if(ratings.length < 3) return;
+    const qi = ratings.reduce((s,r)=>s+r,0) / ratings.length;
+    raceQuality.set(h.id, qi);
+    sumQI += qi; nQI++;
+  });
+  if(!nQI) return new Map();
+  const meanQI = sumQI / nQI;
+
+  // — Pasada 3: weight normalizado —
+  // weight_i = (meanQI / qualityIndex_i)^alpha
+  // Acotado a [0.5, 1.5] para evitar pesos extremos con muestras pequeñas.
+  const raceWeight = new Map();
+  raceQuality.forEach((qi, raceId)=>{
+    const w = Math.pow(meanQI / qi, alpha);
+    raceWeight.set(raceId, Math.max(0.5, Math.min(1.5, w)));
+  });
+  return raceWeight;
+}
+
+// Helper: media ponderada de posiciones por sus pesos de calidad
+function _simWeightedMean(positionsWithWeights){
+  if(!positionsWithWeights || !positionsWithWeights.length) return null;
+  let s = 0, totW = 0;
+  for(const pw of positionsWithWeights){
+    const w = pw.w != null ? pw.w : 1;
+    s    += pw.pos * w;
+    totW += w;
+  }
+  return totW > 0 ? s / totW : null;
+}
+
+// Helper: varianza ponderada (para σ con quality weights)
+function _simWeightedVariance(positionsWithWeights, weightedMean){
+  if(!positionsWithWeights || !positionsWithWeights.length) return 0;
+  let s = 0, totW = 0;
+  for(const pw of positionsWithWeights){
+    const w = pw.w != null ? pw.w : 1;
+    s    += w * (pw.pos - weightedMean) ** 2;
+    totW += w;
+  }
+  return totW > 0 ? s / totW : 0;
+}
+
 // — Acota una posición al rango físico [1, max] —
 function _simCapPos(p, max){
   if(p == null) return null;
@@ -21171,7 +21265,7 @@ function _simBuildData(raceId){
       const nk = normalizeForMatching(r.name||'');
       if(nk){
         if(!byRider.has(nk)) byRider.set(nk, []);
-        byRider.get(nk).push({pos:r.pos, raceDate:h.raceDate, cat:r.cat, team:r.team});
+        byRider.get(nk).push({pos:r.pos, raceDate:h.raceDate, cat:r.cat, team:r.team, raceId:h.id});
       }
       const tk = (r.team||'').toLowerCase().trim();
       if(tk){
@@ -21189,6 +21283,9 @@ function _simBuildData(raceId){
   const _targetDateMs = _targetIso ? new Date(_targetIso).getTime() : null;
   // — Tier 1 #3 (especialización): perfil del circuito de la carrera
   const _currentCircuitProfile = _simCircuitToProfile(race.circuitType||'');
+  // — Tier 2: precomputar quality index por carrera del histórico
+  // Devuelve Map<raceId, qualityWeight>. Pesos > 1 = carrera fuerte, < 1 = floja
+  const _raceQualityWeight = _simComputeQualityIndex(historicalRaces);
   const grid = inscritos.map((ins, idx)=>{
     const nk = normalizeForMatching(ins.name||'');
     // Resolver categoría específica desde el histórico si la del inscrito es genérica
@@ -21210,9 +21307,22 @@ function _simBuildData(raceId){
     let specialtyInfo = null;
 
     if(hits.length){
-      const positions = hits.map(h=>h.pos).filter(p=>p>0);
+      const validHits = hits.filter(h => h.pos > 0);
+      const positions = validHits.map(h=>h.pos);
       if(positions.length){
+        // — TIER 2: Hits con sus pesos de calidad de carrera —
+        // hitsQ = array de {pos, w, raceDate, raceId}
+        const hitsQ = validHits.map(h => ({
+          pos: h.pos,
+          w: _raceQualityWeight.get(h.raceId) ?? 1.0,
+          raceDate: h.raceDate,
+          raceId: h.raceId
+        }));
+
+        // avgPos CRUDO (para display "Media hist." sin sorprender al usuario)
         avgPos  = positions.reduce((s,p)=>s+p,0)/positions.length;
+        // avgPos AJUSTADO POR CALIDAD (usado en la predicción)
+        var avgPosAdjusted = _simWeightedMean(hitsQ) ?? avgPos;
         bestPos = Math.min(...positions);
         reliability = _simReliability(positions, totalInsRef);
         confidence  = positions.length>=5 ? 'alta' : positions.length>=3 ? 'media' : 'baja';
@@ -21223,12 +21333,17 @@ function _simBuildData(raceId){
         probPodiumRaw = _simBernoulli(positions.filter(p=>p<=3).length,  positions.length);
 
         // Recent form: ordenar por fecha desc y coger 5
-        const sorted = hits.slice().sort((a,b)=>{
+        const sorted = validHits.slice().sort((a,b)=>{
           const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
           const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
           return db.localeCompare(da);
         });
-        recentForm = sorted.slice(0,5).map(h=>h.pos).filter(p=>p>0);
+        recentForm = sorted.slice(0,5).map(h=>h.pos);
+        // recent3 con pesos de calidad (para el cálculo de la predicción)
+        var recent3Q = sorted.slice(0,3).map(h => ({
+          pos: h.pos,
+          w: _raceQualityWeight.get(h.raceId) ?? 1.0
+        }));
         trend = _simTrend(recentForm);
 
         // ══ ÁRBOL DE REGRESIÓN ════════════════════════════════════════════════
@@ -21258,11 +21373,21 @@ function _simBuildData(raceId){
           treeNode.push('A0:base');
         }
 
-        // — Fórmula ponderada 60/40 con DECAIMIENTO EXPONENCIAL (Tier 1 #1) —
-        // La media reciente ahora pondera más la última carrera ({0.50, 0.30, 0.20})
-        // Antes: las 3 últimas pesaban igual (1/3 cada una)
-        const recentMean = _simRecentWeightedMean(recentForm);
-        predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
+        // — Fórmula 60/40 con DECAIMIENTO + CALIDAD DE PELOTÓN (Tier 1 #1 + Tier 2) —
+        // recent: decay {0.50, 0.30, 0.20} COMBINADO con pesos de calidad de carrera
+        // avgPos: ahora usa la versión ajustada por calidad (avgPosAdjusted)
+        // Resultado: un 5º en carrera fuerte vale más que un 5º en carrera floja.
+        const decayW = recent3Q.length === 3 ? [0.50, 0.30, 0.20]
+                     : recent3Q.length === 2 ? [0.60, 0.40]
+                     : [1.00];
+        let recSum = 0, recTotW = 0;
+        for(let i = 0; i < recent3Q.length; i++){
+          const combinedW = decayW[i] * recent3Q[i].w;
+          recSum    += recent3Q[i].pos * combinedW;
+          recTotW   += combinedW;
+        }
+        const recentMean = recTotW > 0 ? recSum / recTotW : null;
+        predictedPos = recentMean!=null ? 0.6*recentMean + 0.4*avgPosAdjusted : avgPosAdjusted;
         predictedPos *= cadetFactor;
 
         // — Penalización por fiabilidad (CALIBRADO v3) —
@@ -21304,7 +21429,8 @@ function _simBuildData(raceId){
         }
 
         if(positions.length >= 2){
-          const variance = positions.reduce((s,p)=>s+(p-avgPos)**2,0)/positions.length;
+          // Varianza ponderada por calidad (Tier 2): el rango respeta la incertidumbre real
+          const variance = _simWeightedVariance(hitsQ, avgPosAdjusted);
           const std = Math.sqrt(variance);
           predLower = predictedPos - std * relFactor;
           predUpper = predictedPos + std * relFactor;
@@ -21372,7 +21498,9 @@ function _simBuildData(raceId){
       racesIn14: fatigueInfo.racesIn14,
       fatigueReason: fatigueInfo.reason,
       specialtyFactor: specialtyInfo ? specialtyInfo.factor : 1.00,
-      specialtyReason: specialtyInfo ? specialtyInfo.reason : ''
+      specialtyReason: specialtyInfo ? specialtyInfo.reason : '',
+      // Tier 2: media ajustada por calidad del pelotón
+      avgPosAdjusted: (typeof avgPosAdjusted !== 'undefined') ? avgPosAdjusted : null
     };
   });
 
@@ -23959,17 +24087,21 @@ function _simRunBacktest(){
         });
         if(available.length < 3) continue; // Necesitamos un mínimo de muestras previas
 
-        // Índice por corredor con SOLO available
+        // Índice por corredor con SOLO available (incluye raceId para Tier 2)
         const byRider = new Map();
         available.forEach(h => {
           (h.riders||[]).forEach(r => {
             const nk = normalizeForMatching(r.name||'');
             if(nk && r.pos > 0){
               if(!byRider.has(nk)) byRider.set(nk, []);
-              byRider.get(nk).push({pos: r.pos, raceDate: h.raceDate});
+              byRider.get(nk).push({pos: r.pos, raceDate: h.raceDate, raceId: h.id});
             }
           });
         });
+
+        // Tier 2: precomputar quality weights con SOLO el histórico available
+        // (NO usar carreras posteriores → sin look-ahead bias)
+        const raceQW = _simComputeQualityIndex(available);
 
         const N = (target.riders||[]).length;
         const riderResults = [];
@@ -23980,16 +24112,30 @@ function _simRunBacktest(){
           const positions = hits.map(h => h.pos);
           if(positions.length < 2) return; // Necesitamos ≥2 carreras previas
 
-          // Predicción simplificada (misma fórmula del motor real, sin Árbol de Regresión completo)
-          const avgPos = positions.reduce((s,p)=>s+p,0) / positions.length;
+          // Tier 2: hits con quality weights
+          const hitsQ = hits.map(h => ({pos: h.pos, w: raceQW.get(h.raceId) ?? 1.0}));
+          // avgPos ajustado por calidad (sustituye al crudo en la fórmula)
+          const avgPos = _simWeightedMean(hitsQ) ?? (positions.reduce((s,p)=>s+p,0) / positions.length);
           const sorted = hits.slice().sort((a,b)=>{
             const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
             const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
             return db.localeCompare(da);
           });
-          const recent3 = sorted.slice(0,3).map(h=>h.pos);
-          // TIER 1 #1: decaimiento exponencial — coherente con el motor real
-          const recentMean = _simRecentWeightedMean(recent3);
+          // recent3 con pesos de calidad de carrera (Tier 2)
+          const recent3Q = sorted.slice(0,3).map(h => ({
+            pos: h.pos,
+            w: raceQW.get(h.raceId) ?? 1.0
+          }));
+          // TIER 1 #1 + Tier 2: decay × calidad combinados
+          let recSum = 0, recTotW = 0;
+          const decayW = recent3Q.length === 3 ? [0.50, 0.30, 0.20]
+                       : recent3Q.length === 2 ? [0.60, 0.40] : [1.00];
+          for(let j = 0; j < recent3Q.length; j++){
+            const combW = decayW[j] * recent3Q[j].w;
+            recSum    += recent3Q[j].pos * combW;
+            recTotW   += combW;
+          }
+          const recentMean = recTotW > 0 ? recSum / recTotW : null;
           let predicted = recentMean!=null ? 0.6*recentMean + 0.4*avgPos : avgPos;
 
           // TIER 1 #2: factor fatiga (carreras en últimos 7/14 días previos al objetivo)
