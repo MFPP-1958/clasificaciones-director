@@ -638,6 +638,13 @@
       <datalist id="analysisSuggestions"></datalist>
       <button class="btn" onclick="syncAnalysisSearchAndRun()" style="font-size:16px;padding:14px 24px;">🔍 Analizar</button>
     </div>
+    <div style="max-width:600px;margin:10px auto 0;display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+      <button class="btn light" id="aiDnfBtn" onclick="_aiOpenDNFModal()"
+        style="background:#dc2626;color:#fff;border:0;font-weight:800;font-size:13px;padding:8px 14px"
+        title="Listar pruebas en las que el ciclista se inscribió pero no terminó (DNF)">
+        🚫 DNFs de la temporada
+      </button>
+    </div>
     <p id="analysisTeamCount" class="help" style="margin:10px 0 0;font-size:12px"></p>
   </div>
 

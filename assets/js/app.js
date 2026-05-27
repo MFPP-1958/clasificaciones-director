@@ -28866,3 +28866,338 @@ function _simInjectPVRStyles(){
   `;
   document.head.appendChild(st);
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// ANÁLISIS INDIVIDUAL — DNFs de la temporada
+//   Lista las pruebas en las que un ciclista se inscribió (estaba en la
+//   startlist) pero NO terminó (no aparece con posición en la
+//   clasificación final). Permite filtrar por año, copiar como texto e
+//   imprimir / guardar como PDF con el logo MFPP.
+// ════════════════════════════════════════════════════════════════════════
+
+function _aiResolveRiderNameFromInputs(){
+  // Prioridad: input de análisis individual > tabla > último analizado
+  let q = '';
+  if(document.getElementById('analysisSearchInput')) q = document.getElementById('analysisSearchInput').value || '';
+  if(!q && document.getElementById('searchInput')) q = document.getElementById('searchInput').value || '';
+  q = (q||'').trim();
+  if(!q) return null;
+  // Si encontramos un rider en la prueba actual, devolvemos su nombre canónico
+  try{
+    if(typeof riders!=='undefined' && Array.isArray(riders) && riders.length){
+      const r = (typeof findRiderByQuery==='function') ? findRiderByQuery(q.toLowerCase()) : null;
+      if(r) return r.name;
+    }
+  }catch(e){}
+  return q;
+}
+
+function _aiBuildDNFList(riderName){
+  const out = { inscritoIn: [], dnfIn: [], finishedIn: [], allInscriptions: [] };
+  if(!riderName) return out;
+  if(!Array.isArray(_cachedHistory) || !_cachedHistory.length) return out;
+  const nkey = (typeof normalizeForMatching==='function')
+    ? (s)=>normalizeForMatching(s||'')
+    : (s)=>(s||'').toLowerCase().trim();
+  const ridKey = nkey(riderName);
+  for(const race of _cachedHistory){
+    const ins = Array.isArray(race.inscritos) ? race.inscritos : [];
+    if(!ins.length) continue;
+    const insMatch = ins.find(i => nkey(i.name||'') === ridKey);
+    if(!insMatch) continue;
+    const rs = Array.isArray(race.riders) ? race.riders : [];
+    const racePlayed = rs.length >= 3;
+    const finishMatch = rs.find(x => nkey(x.name||'') === ridKey && x.pos);
+    const entry = {
+      raceName: race.raceName || race.name || '?',
+      raceDate: race.raceDate || '',
+      localidad: race.localidad || '',
+      circuitType: race.circuitType || '',
+      categoria: insMatch.cat || (finishMatch && finishMatch.cat) || '',
+      team: insMatch.team || (finishMatch && finishMatch.team) || '',
+      bib: insMatch.bib || (finishMatch && finishMatch.bib) || '',
+      totalInscritos: ins.length,
+      totalAcabaron: rs.filter(x=>x.pos).length,
+      finishPos: finishMatch ? (parseInt(finishMatch.pos)||null) : null,
+      racePlayed,
+      raceId: race.id || ''
+    };
+    out.allInscriptions.push(entry);
+    out.inscritoIn.push(entry);
+    if(!racePlayed) continue; // si la prueba no se ha disputado todavía, no contamos como DNF ni como acabada
+    if(finishMatch) out.finishedIn.push(entry);
+    else out.dnfIn.push(entry);
+  }
+  // Ordenar por fecha desc
+  const dkey = (s)=>{
+    if(typeof _parseSpanishDate==='function'){
+      const x = _parseSpanishDate(s||'');
+      if(x) return x;
+    }
+    return s||'';
+  };
+  out.allInscriptions.sort((a,b)=>String(dkey(b.raceDate)).localeCompare(String(dkey(a.raceDate))));
+  out.inscritoIn.sort((a,b)=>String(dkey(b.raceDate)).localeCompare(String(dkey(a.raceDate))));
+  out.dnfIn.sort((a,b)=>String(dkey(b.raceDate)).localeCompare(String(dkey(a.raceDate))));
+  out.finishedIn.sort((a,b)=>String(dkey(b.raceDate)).localeCompare(String(dkey(a.raceDate))));
+  return out;
+}
+
+function _aiYearOfDate(raceDate){
+  if(typeof _parseSpanishDate==='function'){
+    const iso = _parseSpanishDate(raceDate||'');
+    if(iso) return iso.slice(0,4);
+  }
+  const m = String(raceDate||'').match(/\b(\d{4})\b/);
+  return m ? m[1] : '';
+}
+
+let _aiDnfState = { riderName: '', data: null, yearFilter: '' };
+
+function _aiOpenDNFModal(){
+  try{
+    const riderName = _aiResolveRiderNameFromInputs();
+    if(!riderName){ alert('Escribe primero el nombre o dorsal del ciclista en el buscador.'); return; }
+    if(!Array.isArray(_cachedHistory) || !_cachedHistory.length){
+      alert('El histórico aún no se ha cargado. Espera unos segundos y vuelve a intentarlo.');
+      return;
+    }
+    const data = _aiBuildDNFList(riderName);
+    if(!data.inscritoIn.length){
+      alert(`No se encontraron pruebas en el histórico donde "${riderName}" figure como inscrito.`);
+      return;
+    }
+    _aiDnfState = { riderName, data, yearFilter: '' };
+    _aiRenderDNFModal();
+  }catch(e){
+    console.warn('_aiOpenDNFModal', e);
+    alert('Error al abrir el listado: '+(e.message||e));
+  }
+}
+
+function _aiCloseDNFModal(){
+  const ov = document.getElementById('aiDnfOverlay');
+  if(ov) ov.remove();
+  document.body.style.overflow = '';
+}
+
+function _aiDnfChangeYear(val){
+  _aiDnfState.yearFilter = val || '';
+  _aiRenderDNFModal();
+}
+
+function _aiRenderDNFModal(){
+  const { riderName, data, yearFilter } = _aiDnfState;
+  const _pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
+
+  // Filtrar por año si procede
+  const yearFilterFn = (e) => !yearFilter || _aiYearOfDate(e.raceDate) === yearFilter;
+  const inscritoF = data.inscritoIn.filter(yearFilterFn);
+  const dnfF      = data.dnfIn.filter(yearFilterFn);
+  const finishedF = data.finishedIn.filter(yearFilterFn);
+  const allYears = [...new Set(data.inscritoIn.map(e=>_aiYearOfDate(e.raceDate)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
+
+  const totalIns = inscritoF.length;
+  const totalAcab = finishedF.length;
+  const totalDnf = dnfF.length;
+  const pendientes = inscritoF.filter(e=>!e.racePlayed).length;
+  const racesPlayed = totalAcab + totalDnf;
+  const dnfPct = racesPlayed ? Math.round((totalDnf/racesPlayed)*100) : 0;
+  const dnfColor = dnfPct >= 40 ? '#dc2626' : (dnfPct >= 20 ? '#f59e0b' : '#16a34a');
+
+  const yearSel = allYears.length > 1 ? `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#475467">
+      Año:
+      <select onchange="_aiDnfChangeYear(this.value)" style="padding:5px 9px;border:1px solid #d0d5dd;border-radius:8px;font-size:12px">
+        <option value="">— Todos —</option>
+        ${allYears.map(y=>`<option value="${y}" ${y===yearFilter?'selected':''}>${y}</option>`).join('')}
+      </select>
+    </label>` : '';
+
+  const dnfRows = dnfF.length
+    ? dnfF.map((e,i)=>`
+        <tr>
+          <td class="ai-dnf-num">${i+1}</td>
+          <td>${escapeHtml(e.raceDate||'—')}</td>
+          <td><b>${escapeHtml(e.raceName)}</b></td>
+          <td>${escapeHtml(e.localidad||'—')}</td>
+          <td>${escapeHtml(e.circuitType||'—')}</td>
+          <td>${escapeHtml(e.categoria||'—')}</td>
+          <td>${escapeHtml(e.team||'—')}</td>
+          <td>${e.bib?'<span class="ai-dnf-bib">'+escapeHtml(String(e.bib))+'</span>':'—'}</td>
+          <td>${e.totalAcabaron}/${e.totalInscritos}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="9" style="text-align:center;padding:20px;color:#6b7280">🎉 No se han encontrado DNFs${yearFilter?' en '+yearFilter:''}. ¡Ha terminado todas las pruebas en las que se inscribió!</td></tr>`;
+
+  const finishedRows = finishedF.length
+    ? finishedF.map((e,i)=>`
+        <tr>
+          <td class="ai-dnf-num">${i+1}</td>
+          <td>${escapeHtml(e.raceDate||'—')}</td>
+          <td><b>${escapeHtml(e.raceName)}</b></td>
+          <td>${escapeHtml(e.localidad||'—')}</td>
+          <td>${escapeHtml(e.categoria||'—')}</td>
+          <td style="font-weight:800;color:#0b2f6b">${e.finishPos}º</td>
+          <td>${e.totalAcabaron}/${e.totalInscritos}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="7" style="text-align:center;padding:14px;color:#6b7280">Sin pruebas terminadas en este filtro.</td></tr>`;
+
+  const pendRows = pendientes
+    ? inscritoF.filter(e=>!e.racePlayed).map(e=>`
+        <tr>
+          <td>${escapeHtml(e.raceDate||'—')}</td>
+          <td><b>${escapeHtml(e.raceName)}</b></td>
+          <td>${escapeHtml(e.localidad||'—')}</td>
+        </tr>`).join('')
+    : '';
+
+  let overlay = document.getElementById('aiDnfOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'aiDnfOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.addEventListener('click', (e)=>{ if(e.target===overlay) _aiCloseDNFModal(); });
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div id="aiDnfBox" style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div class="ai-dnf-header">
+        <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+          ${_pdfLogoSrc?`<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="ai-dnf-logo">`:''}
+          <div style="min-width:0">
+            <h2 style="margin:0;font-size:20px;color:#0b2f6b">🚫 DNFs de la temporada</h2>
+            <div style="font-size:13px;color:#374151;margin-top:3px">
+              Ciclista: <b>${escapeHtml(riderName)}</b>
+              ${yearFilter?`· Año <b>${escapeHtml(yearFilter)}</b>`:''}
+            </div>
+          </div>
+        </div>
+        <div class="ai-dnf-actions no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${yearSel}
+          <button class="btn light" onclick="_aiCopyDNF()" title="Copiar la lista al portapapeles">📋 Copiar</button>
+          <button class="btn" onclick="window.print()" style="background:#dc2626;color:#fff;font-weight:800">🖨️ Imprimir / PDF</button>
+          <button class="btn light" onclick="_aiCloseDNFModal()">✕</button>
+        </div>
+      </div>
+      <div class="ai-dnf-kpis">
+        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:#0b2f6b">${totalIns}</div><div class="ai-dnf-kpi-l">Pruebas<br><span class="small">inscrito</span></div></div>
+        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:#16a34a">${totalAcab}</div><div class="ai-dnf-kpi-l">Terminadas</div></div>
+        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:${dnfColor}">${totalDnf}</div><div class="ai-dnf-kpi-l">DNF</div></div>
+        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:${dnfColor}">${dnfPct}%</div><div class="ai-dnf-kpi-l">% DNF<br><span class="small">(s/disputadas)</span></div></div>
+        ${pendientes?`<div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:#9333ea">${pendientes}</div><div class="ai-dnf-kpi-l">Pendientes<br><span class="small">no disputadas</span></div></div>`:''}
+      </div>
+      <div class="ai-dnf-section">
+        <h3>🚫 Pruebas no terminadas (${dnfF.length})</h3>
+        <div class="ai-dnf-table-wrap">
+          <table class="ai-dnf-table">
+            <thead><tr>
+              <th>#</th><th>Fecha</th><th>Prueba</th><th>Localidad</th><th>Circuito</th><th>Cat.</th><th>Equipo</th><th>Dorsal</th><th>Acabaron</th>
+            </tr></thead>
+            <tbody>${dnfRows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="ai-dnf-section">
+        <h3>✅ Pruebas terminadas (${finishedF.length})</h3>
+        <div class="ai-dnf-table-wrap">
+          <table class="ai-dnf-table">
+            <thead><tr>
+              <th>#</th><th>Fecha</th><th>Prueba</th><th>Localidad</th><th>Cat.</th><th>Pos.</th><th>Acabaron</th>
+            </tr></thead>
+            <tbody>${finishedRows}</tbody>
+          </table>
+        </div>
+      </div>
+      ${pendientes?`
+        <div class="ai-dnf-section">
+          <h3>📋 Pendientes / sin disputar (${pendientes})</h3>
+          <div class="ai-dnf-table-wrap">
+            <table class="ai-dnf-table">
+              <thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th></tr></thead>
+              <tbody>${pendRows}</tbody>
+            </table>
+          </div>
+        </div>`:''}
+      <div class="ai-dnf-footer">
+        Informe generado por <b>Dashboard Director · MFPP Cycling Specialist</b> · ${new Date().toLocaleString('es-ES')}
+      </div>
+    </div>`;
+
+  _aiInjectDNFStyles();
+  document.body.style.overflow = 'hidden';
+}
+
+function _aiCopyDNF(){
+  try{
+    const { riderName, data, yearFilter } = _aiDnfState;
+    const yearFilterFn = (e) => !yearFilter || _aiYearOfDate(e.raceDate) === yearFilter;
+    const dnf = data.dnfIn.filter(yearFilterFn);
+    const fin = data.finishedIn.filter(yearFilterFn);
+    let text = `DNFs DE LA TEMPORADA — ${riderName}${yearFilter?' ('+yearFilter+')':''}\n`;
+    text += `Generado: ${new Date().toLocaleString('es-ES')}\n\n`;
+    text += `RESUMEN: inscrito en ${data.inscritoIn.filter(yearFilterFn).length} pruebas · terminó ${fin.length} · DNF ${dnf.length}\n\n`;
+    text += `🚫 DNFs (${dnf.length}):\n`;
+    if(!dnf.length) text += '  (Sin DNFs en este filtro)\n';
+    else dnf.forEach((e,i)=>{
+      text += `  ${i+1}. ${e.raceDate} · ${e.raceName}${e.localidad?' · '+e.localidad:''}${e.categoria?' · '+e.categoria:''}${e.team?' · '+e.team:''}${e.bib?' · dorsal '+e.bib:''}\n`;
+    });
+    text += `\n✅ Terminadas (${fin.length}):\n`;
+    fin.forEach((e,i)=>{
+      text += `  ${i+1}. ${e.raceDate} · ${e.raceName}${e.localidad?' · '+e.localidad:''} → ${e.finishPos}º\n`;
+    });
+    navigator.clipboard.writeText(text).then(()=>{
+      if(typeof showToast==='function') showToast('📋 Lista copiada al portapapeles','ok',2200);
+      else alert('Lista copiada al portapapeles.');
+    }).catch(()=>{
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); alert('Lista copiada.'); }catch(e){ alert('No se pudo copiar.'); }
+      ta.remove();
+    });
+  }catch(e){ alert('Error al copiar: '+(e.message||e)); }
+}
+
+function _aiInjectDNFStyles(){
+  if(document.getElementById('ai-dnf-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'ai-dnf-styles';
+  st.textContent = `
+    .ai-dnf-logo{height:46px;width:auto;flex-shrink:0;object-fit:contain}
+    .ai-dnf-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
+    .ai-dnf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;padding:14px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
+    .ai-dnf-kpi{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center}
+    .ai-dnf-kpi-v{font-size:24px;font-weight:900;line-height:1.1}
+    .ai-dnf-kpi-l{font-size:11px;color:#6b7280;margin-top:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+    .ai-dnf-kpi-l .small{font-size:10px;text-transform:none;letter-spacing:0;color:#9ca3af;font-weight:600}
+    .ai-dnf-section{padding:8px 20px 0}
+    .ai-dnf-section h3{margin:14px 0 6px;font-size:14px;color:#0b2f6b}
+    .ai-dnf-table-wrap{overflow-x:auto}
+    .ai-dnf-table{width:100%;border-collapse:collapse;font-size:12px}
+    .ai-dnf-table th,.ai-dnf-table td{padding:6px 8px;border:1px solid #e5e7eb;text-align:left;vertical-align:top}
+    .ai-dnf-table th{background:#f3f4f6;font-size:11px;color:#374151;text-transform:uppercase;letter-spacing:.3px}
+    .ai-dnf-num{font-weight:800;color:#6b7280;text-align:center;width:34px}
+    .ai-dnf-bib{display:inline-block;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:6px;padding:1px 6px;font-weight:800;font-size:11px}
+    .ai-dnf-footer{padding:12px 20px 18px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#6b7280;margin-top:14px}
+    @media print {
+      body * { visibility: hidden !important; }
+      #aiDnfOverlay, #aiDnfOverlay * { visibility: visible !important; }
+      #aiDnfOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
+      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; padding: 6mm 4mm !important; }
+      .no-print { display: none !important; }
+      .ai-dnf-header { border-bottom: 2px solid #0b2f6b !important; padding: 10px 14px !important; }
+      .ai-dnf-logo { height: 52px !important; }
+      .ai-dnf-kpis { background: #fff !important; padding: 10px 14px !important; }
+      .ai-dnf-kpi { border: 1px solid #999 !important; }
+      .ai-dnf-table-wrap { padding: 0 !important; }
+      .ai-dnf-section { padding: 6px 14px 0 !important; }
+      .ai-dnf-table th, .ai-dnf-table td { border: 1px solid #999 !important; }
+      .ai-dnf-table { font-size: 10.5px !important; }
+      .ai-dnf-footer { padding: 10px 14px !important; }
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      @page { margin: 20mm 18mm 18mm 18mm; size: A4; }
+    }
+  `;
+  document.head.appendChild(st);
+}
