@@ -28755,12 +28755,16 @@ function _simOpenPredVsReal(){
       overlay.addEventListener('click', (e)=>{ if(e.target===overlay) _simClosePredVsReal(); });
       document.body.appendChild(overlay);
     }
+    const _pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
     overlay.innerHTML = `
       <div id="pvrModalBox" style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
         <div class="pvr-header">
-          <div>
-            <h2 style="margin:0;font-size:20px;color:#0b2f6b">🎯 Predicho vs Real</h2>
-            ${meta}
+          <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+            ${_pdfLogoSrc ? `<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="pvr-logo">` : ''}
+            <div style="min-width:0">
+              <h2 style="margin:0;font-size:20px;color:#0b2f6b">🎯 Predicho vs Real</h2>
+              ${meta}
+            </div>
           </div>
           <div class="pvr-actions no-print">
             <button class="btn" onclick="_simPrintPredVsReal()" style="background:#dc2626;color:#fff;font-weight:800">🖨️ Imprimir / PDF</button>
@@ -28786,9 +28790,9 @@ function _simOpenPredVsReal(){
             <tbody>${rowsHtml.join('')}</tbody>
           </table>
         </div>
-        <div class="pvr-footer no-print">
+        <div class="pvr-footer">
           <div style="font-size:11px;color:#6b7280;text-align:center">
-            Generado por Clasificaciones Director · ${new Date().toLocaleString('es-ES')}
+            Informe generado por <b>Dashboard Director · MFPP Cycling Specialist</b> · ${new Date().toLocaleString('es-ES')}
           </div>
         </div>
       </div>`;
@@ -28817,6 +28821,7 @@ function _simInjectPVRStyles(){
   const st = document.createElement('style');
   st.id = 'pvr-styles';
   st.textContent = `
+    .pvr-logo{height:46px;width:auto;flex-shrink:0;object-fit:contain}
     .pvr-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
     .pvr-race-meta{font-size:12px;color:#374151;margin-top:4px}
     .pvr-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -28844,14 +28849,19 @@ function _simInjectPVRStyles(){
       body * { visibility: hidden !important; }
       #pvrModalOverlay, #pvrModalOverlay * { visibility: visible !important; }
       #pvrModalOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; }
+      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; padding: 6mm 4mm !important; }
       .no-print { display: none !important; }
-      .pvr-header { border-bottom: 2px solid #0b2f6b !important; }
-      .pvr-kpis { background: #fff !important; }
+      .pvr-header { border-bottom: 2px solid #0b2f6b !important; padding: 10px 14px !important; }
+      .pvr-logo { height: 52px !important; }
+      .pvr-kpis { background: #fff !important; padding: 10px 14px !important; }
       .pvr-kpi { border: 1px solid #999 !important; }
+      .pvr-table-wrap { padding: 0 14px 10px !important; }
       .pvr-table th, .pvr-table td { border: 1px solid #999 !important; }
-      .pvr-table { font-size: 11px !important; }
-      @page { margin: 12mm; size: A4; }
+      .pvr-table { font-size: 10.5px !important; }
+      .pvr-footer { padding: 10px 14px !important; }
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      @page { margin: 20mm 18mm 18mm 18mm; size: A4; }
     }
   `;
   document.head.appendChild(st);
