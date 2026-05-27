@@ -25523,3 +25523,247 @@ function _simPrintGrid(){
   w.document.write(html);
   w.document.close();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO TABLA Y FILTROS — Opción A (3 mejoras)
+// 1. Persistencia de filtros en localStorage
+// 2. Exportar Excel/CSV con filtros aplicados
+// 3. Botón "Analizar en Simulador"
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _TABLA_FILTERS_KEY = '_tabla_filters_v1';
+
+// ─── 1. PERSISTENCIA DE FILTROS ────────────────────────────────────────────
+function _tablaSaveFilters(){
+  try{
+    const state = {
+      search: document.getElementById('searchInput')?.value || '',
+      team:   document.getElementById('teamFilter')?.value || '',
+      region: document.getElementById('regionFilter')?.value || '',
+      top:    document.getElementById('topFilter')?.value || '',
+      topCat: document.getElementById('topCatFilter')?.value || '',
+      onlyMyTeam: (typeof onlyMyTeam !== 'undefined') ? !!onlyMyTeam : false,
+      cats:   (typeof selectedCatChips !== 'undefined' && selectedCatChips) ? [...selectedCatChips] : []
+    };
+    localStorage.setItem(_TABLA_FILTERS_KEY, JSON.stringify(state));
+  }catch(e){ console.warn('[tabla] save filters:', e); }
+}
+
+function _tablaRestoreFilters(){
+  try{
+    const raw = localStorage.getItem(_TABLA_FILTERS_KEY);
+    if(!raw) return false;
+    const state = JSON.parse(raw);
+    if(!state || typeof state !== 'object') return false;
+
+    // Inputs y selects
+    const ids = {search:'searchInput', team:'teamFilter', region:'regionFilter', top:'topFilter', topCat:'topCatFilter'};
+    Object.entries(ids).forEach(([k, id])=>{
+      const el = document.getElementById(id);
+      if(el && state[k] !== undefined){
+        // Para select, solo aplicar si la opción existe
+        if(el.tagName === 'SELECT'){
+          if([...el.options].some(o=>o.value === state[k])) el.value = state[k];
+        } else {
+          el.value = state[k];
+        }
+      }
+    });
+
+    // Toggle "Solo mi equipo"
+    if(state.onlyMyTeam && typeof onlyMyTeam !== 'undefined' && !onlyMyTeam){
+      onlyMyTeam = true;
+      const btn = document.getElementById('toggleMyTeam');
+      if(btn){
+        btn.classList.add('active');
+        const ic = document.getElementById('toggleIcon');
+        if(ic) ic.textContent = '🟢';
+      }
+    }
+    // Chips de categoría
+    if(Array.isArray(state.cats) && typeof selectedCatChips !== 'undefined'){
+      selectedCatChips.clear();
+      state.cats.forEach(c => selectedCatChips.add(c));
+    }
+    return true;
+  }catch(e){ console.warn('[tabla] restore filters:', e); return false; }
+}
+
+// Resetea el localStorage de filtros (llamado desde clearAllFilters)
+function _tablaResetFilters(){
+  try{ localStorage.removeItem(_TABLA_FILTERS_KEY); }catch{}
+}
+
+// Hook en applyFilters — debounce ligero para no saturar localStorage
+let _tablaSaveTimer = null;
+function _tablaScheduleSave(){
+  if(_tablaSaveTimer) clearTimeout(_tablaSaveTimer);
+  _tablaSaveTimer = setTimeout(()=>_tablaSaveFilters(), 250);
+}
+// Wrap applyFilters con un hook que guarda (nombres únicos para no colisionar
+// con wraps previos en el archivo, p.ej. del módulo de ordenación)
+const _tablaPrevApply_persistencia = (typeof window.applyFilters === 'function') ? window.applyFilters : null;
+if(_tablaPrevApply_persistencia){
+  window.applyFilters = function(){
+    _tablaPrevApply_persistencia();
+    _tablaScheduleSave();
+  };
+}
+// Wrap clearAllFilters para que también borre el storage
+const _tablaPrevClear_persistencia = (typeof window.clearAllFilters === 'function') ? window.clearAllFilters : null;
+if(_tablaPrevClear_persistencia){
+  window.clearAllFilters = function(){
+    _tablaPrevClear_persistencia();
+    _tablaResetFilters();
+  };
+}
+
+// Restaurar filtros al ENTRAR a view-tabla (hook en showView)
+const _tablaPrevShowView_persistencia = (typeof window.showView === 'function') ? window.showView : null;
+if(_tablaPrevShowView_persistencia){
+  window.showView = function(id){
+    _tablaPrevShowView_persistencia(id);
+    if(id === 'view-tabla'){
+      // Esperar un tick para que la vista esté visible y los selects poblados
+      setTimeout(()=>{
+        const restored = _tablaRestoreFilters();
+        if(restored && typeof window.applyFilters === 'function'){
+          // Re-render con los filtros restaurados
+          try{ window.applyFilters(); }catch(e){}
+          // Re-pintar chips de categoría
+          try{ if(typeof populateFilters === 'function') populateFilters(); }catch(e){}
+        }
+      }, 80);
+    }
+  };
+}
+
+// ─── 2. EXPORTAR EXCEL/CSV CON FILTROS APLICADOS ───────────────────────────
+function _tablaExportFiltered(format){
+  // format: 'xlsx' o 'csv'
+  if(typeof filtered === 'undefined' || !Array.isArray(filtered) || !filtered.length){
+    if(typeof showToast === 'function') showToast('No hay corredores que exportar (revisa los filtros)','warn');
+    else alert('No hay corredores que exportar (revisa los filtros).');
+    return;
+  }
+  // Metadatos de la carrera (los que tenemos en memoria)
+  const raceName = (document.getElementById('raceName')?.value || 'Clasificacion').trim();
+  const raceDate = (document.getElementById('raceDate')?.value || '').trim();
+  const raceLoc  = (document.getElementById('raceLocalidad')?.value || '').trim();
+  const raceCT   = (document.getElementById('raceCircuitType')?.value || '').trim();
+  // Resumen de filtros activos para el header
+  const filtersActive = [];
+  const sv = document.getElementById('searchInput')?.value?.trim(); if(sv) filtersActive.push(`Búsqueda: "${sv}"`);
+  const tv = document.getElementById('teamFilter')?.value?.trim(); if(tv) filtersActive.push(`Equipo: ${tv}`);
+  const rv = document.getElementById('regionFilter')?.value?.trim(); if(rv) filtersActive.push(`CCAA: ${rv}`);
+  const topv = document.getElementById('topFilter')?.value?.trim(); if(topv) filtersActive.push(`Top ${topv}`);
+  const tcv = document.getElementById('topCatFilter')?.value?.trim(); if(tcv) filtersActive.push(`Top ${tcv} por cat`);
+  if(typeof onlyMyTeam !== 'undefined' && onlyMyTeam) filtersActive.push('Solo mi equipo');
+  if(typeof selectedCatChips !== 'undefined' && selectedCatChips.size) filtersActive.push(`Categorías: ${[...selectedCatChips].join(', ')}`);
+
+  // Columnas de la exportación
+  const rows = filtered.map(r=>({
+    'Pos': r.pos,
+    'Dorsal': r.bib || '',
+    'Nombre': r.name || '',
+    'Equipo': r.team || '',
+    'Categoría': r.cat || '',
+    'CCAA': r.region || '',
+    'Tiempo': r.time || '',
+    'Diferencia': r.gap || ''
+  }));
+
+  if(format === 'csv'){
+    // CSV simple con metadatos como comentarios
+    const sep = ';';
+    const escapeCSV = s => `"${String(s||'').replace(/"/g,'""')}"`;
+    const lines = [];
+    lines.push(`# ${raceName}`);
+    if(raceDate) lines.push(`# Fecha: ${raceDate}`);
+    if(raceLoc)  lines.push(`# Localidad: ${raceLoc}`);
+    if(raceCT)   lines.push(`# Tipo: ${raceCT}`);
+    if(filtersActive.length) lines.push(`# Filtros: ${filtersActive.join(' · ')}`);
+    lines.push(`# Exportado: ${new Date().toLocaleString('es-ES')} · ${filtered.length} corredores`);
+    lines.push('');
+    lines.push(Object.keys(rows[0]).map(escapeCSV).join(sep));
+    rows.forEach(r => lines.push(Object.values(r).map(escapeCSV).join(sep)));
+    const blob = new Blob(['﻿'+lines.join('\n')], {type:'text/csv;charset=utf-8'}); // BOM para Excel ES
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${raceName.replace(/[^\w\s-]/g,'').replace(/\s+/g,'_')}_filtrada.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } else {
+    // XLSX usando la librería ya cargada (window.XLSX)
+    if(typeof XLSX === 'undefined'){
+      alert('La librería XLSX no está disponible. Usa exportación CSV.');
+      return;
+    }
+    // Construir hoja con bloque de metadatos arriba + tabla
+    const meta = [
+      [raceName],
+      raceDate ? [`Fecha: ${raceDate}`] : null,
+      raceLoc  ? [`Localidad: ${raceLoc}`] : null,
+      raceCT   ? [`Tipo: ${raceCT}`] : null,
+      filtersActive.length ? [`Filtros: ${filtersActive.join(' · ')}`] : null,
+      [`Exportado: ${new Date().toLocaleString('es-ES')} · ${filtered.length} corredores`],
+      []  // fila en blanco
+    ].filter(Boolean);
+    const aoa = [
+      ...meta,
+      Object.keys(rows[0]),
+      ...rows.map(r => Object.values(r))
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // Anchuras razonables
+    ws['!cols'] = [{wch:5},{wch:8},{wch:30},{wch:30},{wch:14},{wch:18},{wch:10},{wch:10}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Clasificacion');
+    XLSX.writeFile(wb, `${raceName.replace(/[^\w\s-]/g,'').replace(/\s+/g,'_')}_filtrada.xlsx`);
+  }
+  if(typeof showToast === 'function') showToast(`✅ ${filtered.length} corredores exportados (${format.toUpperCase()})`, 'ok');
+}
+
+// ─── 3. BOTÓN "ANALIZAR EN SIMULADOR" ──────────────────────────────────────
+// Si la carrera actual está en _cachedHistory y tiene inscritos, abre el
+// simulador con ella pre-seleccionada. Si no, intenta cargar el id desde
+// la última carrera abierta del historial.
+function _tablaOpenInSimulator(){
+  // Intentar identificar la carrera actual por fecha+nombre
+  const raceName = (document.getElementById('raceName')?.value || '').trim();
+  const raceDateStr = (document.getElementById('raceDate')?.value || '').trim();
+  const isoTarget = typeof _parseSpanishDate === 'function' ? _parseSpanishDate(raceDateStr) : '';
+  let match = null;
+  if(Array.isArray(_cachedHistory) && _cachedHistory.length){
+    match = _cachedHistory.find(h => {
+      const isoH = typeof _parseSpanishDate === 'function' ? _parseSpanishDate(h.raceDate) : '';
+      if(isoTarget && isoH && isoTarget === isoH){
+        // Mismo día. Si los nombres coinciden, mejor
+        if(!raceName || (h.raceName||'').toLowerCase().trim() === raceName.toLowerCase().trim()) return true;
+        return true; // mismo día basta
+      }
+      return false;
+    });
+  }
+  if(!match){
+    if(typeof showToast === 'function') showToast('Carga primero la carrera desde el Historial para analizarla en el simulador', 'warn', 4500);
+    showView('view-historial');
+    return;
+  }
+  if(!Array.isArray(match.inscritos) || !match.inscritos.length){
+    if(typeof showToast === 'function') showToast('Esta carrera no tiene lista de inscritos guardada. Súbele una desde Historial.', 'warn', 4500);
+    showView('view-historial');
+    return;
+  }
+  // Tenemos match con inscritos → abrir simulador con esta carrera
+  if(typeof _inicioOpenSimulator === 'function'){
+    _inicioOpenSimulator(match.id);
+  } else {
+    showView('view-simulador');
+    setTimeout(()=>{
+      const sel = document.getElementById('simRaceSelect');
+      if(sel){ sel.value = match.id; if(typeof _simOnRaceChange === 'function') _simOnRaceChange(); }
+    }, 200);
+  }
+}
