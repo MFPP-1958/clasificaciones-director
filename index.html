@@ -577,7 +577,10 @@
 <section id="teamRankingMini" class="panel" style="display:none;margin-top:14px">
   <div class="section-title">
     <h2 style="margin:0">🏆 Ranking compacto por equipos</h2>
-    <span class="small" id="trMiniHint">Resumen rápido del rendimiento por equipo en esta prueba</span>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="small" id="trMiniHint">Resumen rápido del rendimiento por equipo en esta prueba</span>
+      <button class="btn light" onclick="toggleTeamRankingPanel()" title="Cerrar este bloque" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;padding:5px 11px;font-size:12px;font-weight:800">✕ Cerrar</button>
+    </div>
   </div>
   <div id="teamRankingMiniBody"></div>
 </section>
