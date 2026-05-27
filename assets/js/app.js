@@ -13098,12 +13098,18 @@ function renderComparativo(){
 
   const filled=_compFilled();
   if(resultsEl) resultsEl.style.display=filled.length?'block':'none';
+  // Opción B — barra de cabecera (grupos guardados + sugerencias + columnas)
+  // Se renderiza SIEMPRE (incluso sin riders seleccionados), para que el director
+  // pueda cargar un grupo guardado desde el inicio sin tener que seleccionar primero
+  try{ if(typeof _compRenderHeaderBar === 'function') _compRenderHeaderBar(); }catch(e){ console.warn('[comp] headerBar error',e); }
   if(filled.length){
     renderComparativoTable();
     renderComparativoCharts();
     renderComparativoConclusion();
     // Opción A — inyecta Ranking interno + Δ grupo + CVG + H2H + exportar
     try{ if(typeof _compInjectTierA === 'function') _compInjectTierA(); }catch(e){ console.warn('[comp] tierA inject error',e); }
+    // Opción B — aplicar visibilidad de columnas configurables
+    try{ if(typeof _compApplyColumnVisibility === 'function') _compApplyColumnVisibility(); }catch(e){ console.warn('[comp] col visibility',e); }
   }
 }
 
@@ -27087,3 +27093,330 @@ ${h2hHtml}
   w.document.close();
   if(typeof showToast === 'function') showToast('✅ Comparativa abierta para imprimir/guardar PDF','ok');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MENÚ COMPARATIVO · Opción B (3 mejoras adicionales del Tier MEDIO)
+// 6. Grupos guardados (localStorage)
+// 7. Sugerencias contextuales (compañeros, rivales)
+// 8. Columnas configurables (checkboxes para mostrar/ocultar)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 6. GRUPOS GUARDADOS ───────────────────────────────────────────────────
+const _COMP_GROUPS_KEY = '_comp_saved_groups_v1';
+
+function _compGetGroups(){
+  try{
+    const raw = localStorage.getItem(_COMP_GROUPS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch{ return {}; }
+}
+function _compSaveGroups(g){
+  try{ localStorage.setItem(_COMP_GROUPS_KEY, JSON.stringify(g)); }catch{}
+}
+
+// Identificador estable de un corredor (independiente de pos/race)
+// Usa nombre normalizado + bib si está
+function _compRiderId(r){
+  if(!r) return null;
+  const nm = (typeof normalizeRiderName === 'function' ? normalizeRiderName(r.name||'') : (r.name||'')).toLowerCase();
+  return `${nm}|${r.bib||''}`;
+}
+function _compFindRiderById(id){
+  if(!id || !Array.isArray(riders)) return null;
+  return riders.find(r => _compRiderId(r) === id) || null;
+}
+
+// Acción: guardar grupo actual
+function _compSaveCurrentGroup(){
+  const filled = _compFilled();
+  if(!filled.length){
+    if(typeof showToast === 'function') showToast('Selecciona al menos un corredor antes de guardar','warn');
+    return;
+  }
+  const name = prompt('Nombre del grupo (ej. "Mi top3 Cadetes"):');
+  if(!name || !name.trim()) return;
+  const groups = _compGetGroups();
+  groups[name.trim()] = {
+    ids: filled.map(_compRiderId),
+    updated: new Date().toISOString()
+  };
+  _compSaveGroups(groups);
+  _compRenderHeaderBar();
+  if(typeof showToast === 'function') showToast(`✅ Grupo "${name}" guardado`,'ok');
+}
+
+// Acción: cargar grupo guardado
+function _compLoadGroup(name){
+  const groups = _compGetGroups();
+  const g = groups[name];
+  if(!g || !Array.isArray(g.ids) || !g.ids.length){
+    if(typeof showToast === 'function') showToast('Grupo vacío o no encontrado','warn');
+    return;
+  }
+  // Resolver cada id al corredor actual
+  const found = g.ids.map(_compFindRiderById).filter(Boolean);
+  const missing = g.ids.length - found.length;
+  if(!found.length){
+    if(typeof showToast === 'function') showToast('Ningún corredor del grupo está en esta clasificación','warn',4500);
+    return;
+  }
+  // Cargar en comparativoRiders
+  comparativoRiders = Array(6).fill(null);
+  found.slice(0, 6).forEach((r, i) => { comparativoRiders[i] = r; });
+  _destroyCompCharts && _destroyCompCharts();
+  renderComparativo();
+  const msg = missing > 0
+    ? `✅ Grupo "${name}" cargado (${found.length} corredores, ${missing} no encontrados en esta carrera)`
+    : `✅ Grupo "${name}" cargado (${found.length} corredores)`;
+  if(typeof showToast === 'function') showToast(msg, missing > 0 ? 'warn' : 'ok', 4500);
+}
+
+// Acción: eliminar grupo guardado
+function _compDeleteGroup(name){
+  if(!confirm(`¿Eliminar el grupo "${name}"?`)) return;
+  const groups = _compGetGroups();
+  delete groups[name];
+  _compSaveGroups(groups);
+  _compRenderHeaderBar();
+  if(typeof showToast === 'function') showToast(`🗑️ Grupo "${name}" eliminado`,'ok');
+}
+
+// ─── 7. SUGERENCIAS CONTEXTUALES ───────────────────────────────────────────
+// Genera sugerencias basadas en los corredores ya seleccionados
+function _compBuildSuggestions(){
+  const filled = _compFilled();
+  if(!Array.isArray(riders) || !riders.length) return [];
+  const selectedKeys = new Set(filled.map(r => _compRiderId(r)));
+  const suggestions = [];
+
+  // Sug 1: Compañeros de equipo del ÚLTIMO seleccionado
+  if(filled.length){
+    const lastRider = filled[filled.length - 1];
+    if(lastRider.team){
+      const mates = riders
+        .filter(r => r.team === lastRider.team && !selectedKeys.has(_compRiderId(r)))
+        .sort((a,b)=>a.pos-b.pos)
+        .slice(0, 2);
+      mates.forEach(m => {
+        suggestions.push({
+          label: `🚴 ${m.name.split(',')[0]} (compañero de ${lastRider.name.split(',')[0]})`,
+          tooltip: `${m.team} · ${m.pos}º`,
+          rider: m,
+          color: '#1e40af'
+        });
+      });
+    }
+  }
+
+  // Sug 2: Rivales inmediatos del primero (posición ±1, ±2)
+  if(filled.length){
+    const first = filled[0];
+    [-2, -1, 1, 2].forEach(offset => {
+      const target = riders.find(r => r.pos === first.pos + offset && !selectedKeys.has(_compRiderId(r)));
+      if(target){
+        const label = offset < 0
+          ? `⬆️ ${target.name.split(',')[0]} (${Math.abs(offset)} puesto${Math.abs(offset)>1?'s':''} por delante)`
+          : `⬇️ ${target.name.split(',')[0]} (${offset} puesto${offset>1?'s':''} por detrás)`;
+        suggestions.push({
+          label: label,
+          tooltip: `${target.team} · ${target.pos}º`,
+          rider: target,
+          color: '#92400e'
+        });
+      }
+    });
+  }
+
+  // Sug 3: Si hay equipo configurado, corredores de Mi Equipo no añadidos
+  if(typeof myTeam !== 'undefined' && myTeam && filled.length < 6){
+    const myKey = (typeof teamKey === 'function' ? teamKey(myTeam) : myTeam.toLowerCase().trim());
+    const myRiders = riders
+      .filter(r => {
+        const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+        return tk === myKey && !selectedKeys.has(_compRiderId(r));
+      })
+      .sort((a,b)=>a.pos-b.pos)
+      .slice(0, 2);
+    myRiders.forEach(m => {
+      suggestions.push({
+        label: `🔵 ${m.name.split(',')[0]} (mi equipo · ${m.pos}º)`,
+        tooltip: `${m.team}`,
+        rider: m,
+        color: '#15803d'
+      });
+    });
+  }
+
+  // Sug 4: Top 3 absoluto si no están añadidos
+  if(filled.length < 6){
+    const top3 = riders.filter(r => r.pos <= 3 && !selectedKeys.has(_compRiderId(r))).sort((a,b)=>a.pos-b.pos);
+    top3.forEach(r => {
+      const medal = r.pos===1?'🥇':r.pos===2?'🥈':'🥉';
+      suggestions.push({
+        label: `${medal} ${r.name.split(',')[0]} (podio)`,
+        tooltip: `${r.team} · ${r.pos}º`,
+        rider: r,
+        color: '#92400e'
+      });
+    });
+  }
+
+  // Eliminar duplicados (mismo rider sugerido por varios motivos)
+  const seen = new Set();
+  return suggestions.filter(s => {
+    const k = _compRiderId(s.rider);
+    if(seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 6);
+}
+
+function _compAddSuggested(riderId){
+  const r = _compFindRiderById(riderId);
+  if(!r) return;
+  const emptyIdx = comparativoRiders.findIndex(x => x === null);
+  if(emptyIdx < 0){
+    if(typeof showToast === 'function') showToast('No hay slots libres (máx. 6 corredores)','warn');
+    return;
+  }
+  // Comprobar no duplicado
+  if(_compFilled().some(x => _compRiderId(x) === riderId)){
+    if(typeof showToast === 'function') showToast('Ya está en la comparativa','warn');
+    return;
+  }
+  comparativoRiders[emptyIdx] = r;
+  _destroyCompCharts && _destroyCompCharts();
+  renderComparativo();
+}
+
+// ─── 8. COLUMNAS CONFIGURABLES ─────────────────────────────────────────────
+const _COMP_COLS_KEY = '_comp_visible_cols_v1';
+const _COMP_DEFAULT_COLS = {
+  pos: true, dPos: true, cat: true, catPos: true,
+  time: true, gap: true, pace: true, percentile: true, dPct: true, region: true
+};
+
+function _compGetVisibleCols(){
+  try{
+    const raw = localStorage.getItem(_COMP_COLS_KEY);
+    if(!raw) return {..._COMP_DEFAULT_COLS};
+    const saved = JSON.parse(raw);
+    return {..._COMP_DEFAULT_COLS, ...saved};
+  }catch{ return {..._COMP_DEFAULT_COLS}; }
+}
+function _compSetVisibleCols(cols){
+  try{ localStorage.setItem(_COMP_COLS_KEY, JSON.stringify(cols)); }catch{}
+}
+
+function _compToggleCol(colKey, checked){
+  const cols = _compGetVisibleCols();
+  cols[colKey] = checked;
+  _compSetVisibleCols(cols);
+  _compApplyColumnVisibility();
+}
+function _compApplyColumnVisibility(){
+  const cols = _compGetVisibleCols();
+  // Cada columna está marcada con data-col en TH y TD de la tabla del ranking
+  document.querySelectorAll('#compRankingPanel [data-col]').forEach(el => {
+    const key = el.getAttribute('data-col');
+    el.style.display = cols[key] === false ? 'none' : '';
+  });
+  // Para la tabla clásica, mapear sus columnas por orden (no tiene data-col):
+  // 0=color · 1=ciclista · 2=equipo · 3=posGen · 4=cat · 5=catPos · 6=tiempo
+  // 7=gap · 8=pace · 9=percentil · 10=ccaa
+  const tableMap = {
+    pos: [3],
+    cat: [4],
+    catPos: [5],
+    time: [6],
+    gap: [7],
+    pace: [8],
+    percentile: [9],
+    region: [10]
+  };
+  const classicTable = document.querySelector('#compTable table');
+  if(classicTable){
+    Object.entries(tableMap).forEach(([key, idxs])=>{
+      const visible = cols[key] !== false;
+      idxs.forEach(idx => {
+        classicTable.querySelectorAll(`tr > *:nth-child(${idx+1})`).forEach(cell => {
+          cell.style.display = visible ? '' : 'none';
+        });
+      });
+    });
+  }
+}
+
+// ─── HEADER BAR del comparativo: grupos + sugerencias + columnas ──────────
+function _compRenderHeaderBar(){
+  // Buscar contenedor o crearlo
+  let bar = document.getElementById('compHeaderExtraBar');
+  const grid = document.getElementById('compSlotGrid');
+  if(!grid) return;
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'compHeaderExtraBar';
+    bar.style.cssText = 'margin-bottom:14px;display:flex;flex-direction:column;gap:10px';
+    grid.parentNode.insertBefore(bar, grid);
+  }
+
+  const groups = _compGetGroups();
+  const groupNames = Object.keys(groups).sort();
+  const suggestions = _compBuildSuggestions();
+  const cols = _compGetVisibleCols();
+
+  // Bloque 1: Grupos guardados
+  const groupsHtml = `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 12px;background:linear-gradient(135deg,#eef2ff,#f8fafc);border:1px solid #c7d2fe;border-radius:10px">
+    <span style="font-size:11px;font-weight:800;text-transform:uppercase;color:#3730a3;letter-spacing:.5px">📁 Grupos:</span>
+    ${groupNames.length
+      ? groupNames.map(n => `
+        <span style="display:inline-flex;align-items:center;background:#fff;border:1px solid #c7d2fe;border-radius:8px;padding:3px 4px 3px 10px;font-size:12px">
+          <span style="cursor:pointer;color:#1e3a8a;font-weight:700" onclick="_compLoadGroup('${escapeAttr(n)}')" title="Click para cargar este grupo">${escapeHtml(n)}</span>
+          <button onclick="_compDeleteGroup('${escapeAttr(n)}')" title="Eliminar grupo" style="background:none;border:0;color:#991b1b;cursor:pointer;padding:0 6px;font-size:13px">✕</button>
+        </span>`).join('')
+      : '<span class="small" style="color:#6b7280">Aún no has guardado ningún grupo</span>'
+    }
+    <button class="btn light" onclick="_compSaveCurrentGroup()" style="margin-left:auto;background:#3730a3;color:#fff;font-size:11.5px;padding:5px 11px;font-weight:700">💾 Guardar grupo actual</button>
+  </div>`;
+
+  // Bloque 2: Sugerencias contextuales
+  const suggestionsHtml = suggestions.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:9px 12px;background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #fde68a;border-radius:10px">
+    <span style="font-size:11px;font-weight:800;text-transform:uppercase;color:#92400e;letter-spacing:.5px">💡 Sugerencias:</span>
+    ${suggestions.map(s => `<button onclick="_compAddSuggested('${escapeAttr(_compRiderId(s.rider))}')" title="${escapeAttr(s.tooltip)}" style="background:#fff;border:1px solid ${s.color}40;color:${s.color};border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s" onmouseenter="this.style.background='${s.color}15'" onmouseleave="this.style.background='#fff'">+ ${escapeHtml(s.label)}</button>`).join('')}
+  </div>` : '';
+
+  // Bloque 3: Columnas configurables (solo se muestra si hay alguna selección)
+  const filled = _compFilled();
+  const colsHtml = filled.length ? `<details style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0">
+    <summary style="cursor:pointer;padding:9px 12px;font-size:11px;font-weight:800;text-transform:uppercase;color:#475569;letter-spacing:.5px;user-select:none">⚙️ Configurar columnas visibles</summary>
+    <div style="padding:0 12px 10px;display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px">
+      ${[
+        ['pos','Pos. General'],['dPos','Δ Pos'],['cat','Categoría'],['catPos','Pos. Cat.'],
+        ['time','Tiempo'],['gap','Diferencia'],['pace','Seg/km'],
+        ['percentile','Percentil'],['dPct','Δ Pct'],['region','CCAA']
+      ].map(([k, label]) => `
+        <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:#475569">
+          <input type="checkbox" ${cols[k] !== false ? 'checked' : ''} onchange="_compToggleCol('${k}', this.checked)" style="cursor:pointer">
+          ${escapeHtml(label)}
+        </label>
+      `).join('')}
+    </div>
+  </details>` : '';
+
+  bar.innerHTML = groupsHtml + suggestionsHtml + colsHtml;
+}
+
+// El hook de renderComparativo no funciona vía wrap (hay múltiples call
+// sites con binding local). En su lugar, se llama directamente desde
+// renderComparativo() — modificación al código original más abajo.
+
+// Asegurar render al entrar a la vista (cubre el caso de carga inicial)
+document.addEventListener('DOMContentLoaded', ()=>{
+  setTimeout(()=>{
+    try{
+      if(typeof riders !== 'undefined' && Array.isArray(riders) && riders.length){
+        _compRenderHeaderBar();
+      }
+    }catch{}
+  }, 800);
+});
