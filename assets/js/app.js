@@ -21382,6 +21382,8 @@ function _simShowEmpty(customMsg){
   document.getElementById('simRaceMeta').style.display = 'none';
   document.getElementById('simCatPickerWrap').style.display = 'none';
   document.getElementById('simExportBtn').style.display = 'none';
+  const _pvrBtn2 = document.getElementById('simPredVsRealBtn');
+  if(_pvrBtn2) _pvrBtn2.style.display = 'none';
   if(customMsg){
     const empty = document.getElementById('simEmptyPanel');
     empty.querySelector('p').textContent = customMsg;
@@ -22235,6 +22237,14 @@ function _simRenderCurrent(){
   document.getElementById('simGridPanel').style.display = '';
   document.getElementById('simRaceMeta').style.display = 'flex';
   document.getElementById('simExportBtn').style.display = 'inline-block';
+  // Mostrar botón "Predicho vs Real" solo si la carrera ya se ha disputado (riders cargados)
+  try{
+    const _pvrBtn = document.getElementById('simPredVsRealBtn');
+    if(_pvrBtn){
+      const _hasResults = (race.riders||[]).length >= 3;
+      _pvrBtn.style.display = _hasResults ? 'inline-block' : 'none';
+    }
+  }catch(e){}
   // Meta de la carrera
   const ridersN = (race.riders||[]).length;
   const isPre = ridersN < 3;
@@ -28612,4 +28622,237 @@ function _t10B_postRender(top, base){
     _t10B_expandedTo20 = false;
     _t10B_toggle20();
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// SIMULADOR — Predicho vs Real
+//   Modal que compara el Top 10 predicho por el simulador con el Top 10
+//   real de la prueba ya disputada. Incluye:
+//     - Tabla lado a lado con resaltado de aciertos
+//     - Estadísticas: aciertos en presencia, aciertos exactos, error medio
+//     - Botón Imprimir/PDF (window.print con CSS de impresión inyectado)
+// ════════════════════════════════════════════════════════════════════════
+
+function _simOpenPredVsReal(){
+  try{
+    if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+    const { race, grid } = _simCurrentData;
+    const actualRiders = (race.riders||[]).slice().filter(r=>r.pos).sort((a,b)=>(parseInt(a.pos)||999)-(parseInt(b.pos)||999));
+    if(actualRiders.length < 3){
+      alert('Esta prueba aún no tiene clasificación final cargada.');
+      return;
+    }
+    // Predicho: top 10 según predictedPos (asc) entre los que tienen predicción
+    const predRanked = grid.filter(g=>g.predictedPos!=null)
+                           .slice()
+                           .sort((a,b)=>{
+                             const ap = a.predictedPosRaw!=null?a.predictedPosRaw:a.predictedPos;
+                             const bp = b.predictedPosRaw!=null?b.predictedPosRaw:b.predictedPos;
+                             return ap - bp;
+                           });
+    const top10Pred = predRanked.slice(0, 10);
+    const top10Real = actualRiders.slice(0, 10);
+
+    const nkey = (s) => (typeof normalizeForMatching==='function')
+      ? normalizeForMatching(s||'')
+      : (s||'').toLowerCase().trim();
+    const realByName = new Map();
+    actualRiders.forEach(r => realByName.set(nkey(r.name), { pos: parseInt(r.pos)||0, team: r.team||'', cat: r.cat||'' }));
+    const predByName = new Map();
+    predRanked.forEach((g, i) => predByName.set(nkey(g.name), { predPos: i+1, team: g.team||'', isMyTeam: !!g.isMyTeam }));
+
+    // Estadísticas
+    let hitsPresence = 0;          // del predicho top 10, cuántos están en el real top 10
+    let hitsExact = 0;             // misma posición exacta
+    let positionErrors = [];       // diferencia absoluta para los que están en ambos
+    top10Pred.forEach((g, i) => {
+      const real = realByName.get(nkey(g.name));
+      if(real){
+        if(real.pos <= 10) hitsPresence++;
+        if(real.pos === (i+1)) hitsExact++;
+        positionErrors.push(Math.abs(real.pos - (i+1)));
+      }
+    });
+    const avgErr = positionErrors.length ? (positionErrors.reduce((s,v)=>s+v,0)/positionErrors.length) : null;
+
+    // Construir filas pareadas
+    const rowsHtml = [];
+    for(let i=0;i<10;i++){
+      const p = top10Pred[i];
+      const r = top10Real[i];
+      let pName='—', pTeam='—', pCat='', pHit='', pExtra='', pMyTeam='', pUncertainty='';
+      if(p){
+        pName = p.name; pTeam = p.team||''; pCat = p.cat||'';
+        const realOfP = realByName.get(nkey(p.name));
+        if(realOfP){
+          if(realOfP.pos === (i+1)){ pHit='exact'; pExtra=`<span class="pvr-tag pvr-tag-ok">✅ Exacto · ${realOfP.pos}º real</span>`; }
+          else if(realOfP.pos <= 10){ pHit='top10';  pExtra=`<span class="pvr-tag pvr-tag-near">🎯 Entró ${realOfP.pos}º (Δ ${Math.abs(realOfP.pos-(i+1))})</span>`; }
+          else { pHit='out'; pExtra=`<span class="pvr-tag pvr-tag-miss">⚠️ Acabó ${realOfP.pos}º</span>`; }
+        } else {
+          pHit='nf'; pExtra=`<span class="pvr-tag pvr-tag-bad">❌ No clasificó / DNF</span>`;
+        }
+        if(p.isMyTeam) pMyTeam=' <span style="color:#1f6feb;font-weight:800">★</span>';
+        if(p.predLower!=null && p.predUpper!=null && p.predLower!==p.predUpper){
+          pUncertainty = `<span class="pvr-rng">(${p.predLower}–${p.predUpper})</span>`;
+        }
+      }
+      let rName='—', rTeam='—', rCat='', rHit='', rExtra='';
+      if(r){
+        rName = r.name; rTeam = r.team||''; rCat = r.cat||'';
+        const predOfR = predByName.get(nkey(r.name));
+        if(predOfR){
+          if(predOfR.predPos === (i+1)){ rHit='exact'; rExtra=`<span class="pvr-tag pvr-tag-ok">✅ Predicho ${predOfR.predPos}º</span>`; }
+          else if(predOfR.predPos <= 10){ rHit='top10'; rExtra=`<span class="pvr-tag pvr-tag-near">🎯 Predicho ${predOfR.predPos}º (Δ ${Math.abs(predOfR.predPos-(i+1))})</span>`; }
+          else { rHit='out'; rExtra=`<span class="pvr-tag pvr-tag-miss">😮 Sorpresa · predicho ${predOfR.predPos}º</span>`; }
+        } else {
+          rHit='nf'; rExtra=`<span class="pvr-tag pvr-tag-bad">💎 Sin predicción (debutante / sin histórico)</span>`;
+        }
+      }
+      const bgL = pHit==='exact' ? '#dcfce7' : (pHit==='top10' ? '#fef9c3' : (pHit==='out'||pHit==='nf' ? '#fee2e2' : '#f9fafb'));
+      const bgR = rHit==='exact' ? '#dcfce7' : (rHit==='top10' ? '#fef9c3' : (rHit==='out'||rHit==='nf' ? '#fee2e2' : '#f9fafb'));
+      rowsHtml.push(`
+        <tr>
+          <td class="pvr-pos">${i+1}</td>
+          <td style="background:${bgL}">
+            <div class="pvr-name">${escapeHtml(pName)}${pMyTeam} ${pUncertainty}</div>
+            <div class="pvr-meta">${escapeHtml(pTeam)}${pCat?' · '+escapeHtml(pCat):''}</div>
+            <div class="pvr-extra">${pExtra}</div>
+          </td>
+          <td class="pvr-pos">${i+1}</td>
+          <td style="background:${bgR}">
+            <div class="pvr-name">${escapeHtml(rName)}</div>
+            <div class="pvr-meta">${escapeHtml(rTeam)}${rCat?' · '+escapeHtml(rCat):''}</div>
+            <div class="pvr-extra">${rExtra}</div>
+          </td>
+        </tr>`);
+    }
+
+    // KPIs cabecera
+    const pct = (n) => Math.round((n/10)*100);
+    const accColor = (n) => n>=7?'#16a34a':n>=4?'#f59e0b':'#dc2626';
+    const summaryHtml = `
+      <div class="pvr-kpis">
+        <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${accColor(hitsPresence)}">${hitsPresence}/10</div><div class="pvr-kpi-l">Aciertos en Top&nbsp;10<br><span class="small">(${pct(hitsPresence)}%)</span></div></div>
+        <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${accColor(hitsExact*2)}">${hitsExact}/10</div><div class="pvr-kpi-l">Aciertos exactos<br><span class="small">(${pct(hitsExact)}%)</span></div></div>
+        <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${avgErr==null?'#9ca3af':(avgErr<=2?'#16a34a':avgErr<=5?'#f59e0b':'#dc2626')}">${avgErr==null?'—':avgErr.toFixed(1)}</div><div class="pvr-kpi-l">Error medio<br><span class="small">posiciones</span></div></div>
+        <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:#0b2f6b">${top10Real.length}</div><div class="pvr-kpi-l">Reales en cabeza<br><span class="small">cargados</span></div></div>
+      </div>`;
+
+    const meta = `
+      <div class="pvr-race-meta">
+        <b>${escapeHtml(race.raceName||'')}</b>
+        ${race.raceDate?` · 📅 ${escapeHtml(race.raceDate)}`:''}
+        ${race.localidad?` · 📍 ${escapeHtml(race.localidad)}`:''}
+        ${race.circuitType?` · 🛣️ ${escapeHtml(race.circuitType)}`:''}
+      </div>`;
+
+    // Inyectar overlay si no existe
+    let overlay = document.getElementById('pvrModalOverlay');
+    if(!overlay){
+      overlay = document.createElement('div');
+      overlay.id = 'pvrModalOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+      overlay.addEventListener('click', (e)=>{ if(e.target===overlay) _simClosePredVsReal(); });
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+      <div id="pvrModalBox" style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div class="pvr-header">
+          <div>
+            <h2 style="margin:0;font-size:20px;color:#0b2f6b">🎯 Predicho vs Real</h2>
+            ${meta}
+          </div>
+          <div class="pvr-actions no-print">
+            <button class="btn" onclick="_simPrintPredVsReal()" style="background:#dc2626;color:#fff;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="_simClosePredVsReal()">✕ Cerrar</button>
+          </div>
+        </div>
+        ${summaryHtml}
+        <div style="padding:0 20px 4px;font-size:11px;color:#6b7280">
+          ★ = ciclista de mi equipo · 🟩 verde = posición exacta · 🟨 amarillo = entró en Top 10 (otra pos.) · 🟥 rojo = fuera del Top 10 o sin predicción
+        </div>
+        <div class="pvr-table-wrap">
+          <table class="pvr-table">
+            <thead>
+              <tr>
+                <th colspan="2" style="background:#1f6feb;color:#fff">🔮 Top 10 Predicho (Simulador)</th>
+                <th colspan="2" style="background:#16a34a;color:#fff">🏁 Top 10 Real (Clasificación)</th>
+              </tr>
+              <tr>
+                <th style="width:38px">#</th><th>Ciclista · Equipo</th>
+                <th style="width:38px">#</th><th>Ciclista · Equipo</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml.join('')}</tbody>
+          </table>
+        </div>
+        <div class="pvr-footer no-print">
+          <div style="font-size:11px;color:#6b7280;text-align:center">
+            Generado por Clasificaciones Director · ${new Date().toLocaleString('es-ES')}
+          </div>
+        </div>
+      </div>`;
+
+    _simInjectPVRStyles();
+    document.body.style.overflow = 'hidden';
+  }catch(e){
+    console.warn('_simOpenPredVsReal', e);
+    alert('Error al abrir el comparador: '+(e.message||e));
+  }
+}
+
+function _simClosePredVsReal(){
+  const overlay = document.getElementById('pvrModalOverlay');
+  if(overlay) overlay.remove();
+  document.body.style.overflow = '';
+}
+
+function _simPrintPredVsReal(){
+  // window.print con CSS de impresión que oculta todo excepto el modal
+  window.print();
+}
+
+function _simInjectPVRStyles(){
+  if(document.getElementById('pvr-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'pvr-styles';
+  st.textContent = `
+    .pvr-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
+    .pvr-race-meta{font-size:12px;color:#374151;margin-top:4px}
+    .pvr-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .pvr-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
+    .pvr-kpi{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center}
+    .pvr-kpi-v{font-size:24px;font-weight:900;line-height:1.1}
+    .pvr-kpi-l{font-size:11px;color:#6b7280;margin-top:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+    .pvr-kpi-l .small{font-size:10px;text-transform:none;letter-spacing:0;color:#9ca3af;font-weight:600}
+    .pvr-table-wrap{padding:0 16px 16px;overflow-x:auto}
+    .pvr-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+    .pvr-table th,.pvr-table td{padding:6px 8px;border:1px solid #e5e7eb;vertical-align:top}
+    .pvr-table th{background:#f3f4f6;font-size:11px;text-align:center;color:#374151}
+    .pvr-pos{font-weight:900;font-size:14px;text-align:center;color:#0b2f6b;background:#f9fafb;width:38px}
+    .pvr-name{font-weight:700;color:#111827}
+    .pvr-meta{font-size:10px;color:#6b7280;margin-top:1px}
+    .pvr-extra{margin-top:4px}
+    .pvr-tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px}
+    .pvr-tag-ok{background:#16a34a;color:#fff}
+    .pvr-tag-near{background:#f59e0b;color:#fff}
+    .pvr-tag-miss{background:#9ca3af;color:#fff}
+    .pvr-tag-bad{background:#dc2626;color:#fff}
+    .pvr-rng{font-size:10px;color:#9ca3af;font-weight:600;margin-left:4px}
+    .pvr-footer{padding:10px 20px 16px;border-top:1px solid #e5e7eb}
+    @media print {
+      body * { visibility: hidden !important; }
+      #pvrModalOverlay, #pvrModalOverlay * { visibility: visible !important; }
+      #pvrModalOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
+      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; }
+      .no-print { display: none !important; }
+      .pvr-header { border-bottom: 2px solid #0b2f6b !important; }
+      .pvr-kpis { background: #fff !important; }
+      .pvr-kpi { border: 1px solid #999 !important; }
+      .pvr-table th, .pvr-table td { border: 1px solid #999 !important; }
+      .pvr-table { font-size: 11px !important; }
+      @page { margin: 12mm; size: A4; }
+    }
+  `;
+  document.head.appendChild(st);
 }
