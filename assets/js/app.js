@@ -8822,7 +8822,9 @@ function analyseSelectedRider(){
   const histFilters = histEntries.length >= 2 ? _aiBuildHistoryFilters(histEntries) : null;
   // Guardar histEntries en variable global para que los hooks de filtros lo encuentren
   window._aiCurrentRiderHistory = histEntries;
+  window._aiCurrentRiderName = r.name; // para exportación de selección (Opción B #8)
   _aiHistoryFilters = {year: '', localidad: ''};
+  _aiHistorySelection = new Set(); // reset al cambiar de corredor
   const filtersHtml = histFilters && (histFilters.years.length > 1 || histFilters.locs.length > 1) ? `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:12px">
       ${histFilters.years.length > 1 ? `
@@ -8845,25 +8847,41 @@ function analyseSelectedRider(){
     <div class="rider-history-block">
       <div class="rider-history-title">📈 Evolución en histórico (${histEntries.length} carreras)</div>
       ${filtersHtml}
+      <!-- Opción B #8: Barra de selección múltiple -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px">
+        <button class="btn light" onclick="_aiSelectAllHistory(true)" style="padding:4px 9px;font-size:11.5px">✓ Todas</button>
+        <button class="btn light" onclick="_aiSelectAllHistory(false)" style="padding:4px 9px;font-size:11.5px">✗ Ninguna</button>
+        <span id="aiHistorySelectionBar" style="display:none;align-items:center;gap:8px;flex:1;justify-content:flex-end">
+          <span id="aiHistorySelectionCount" style="font-weight:700;color:#1e40af">0 seleccionadas</span>
+          <button class="btn" onclick="_aiExportSelectedHistory()" style="background:#15803d;color:#fff;padding:5px 11px;font-size:11.5px;font-weight:800">📥 Exportar CSV</button>
+        </span>
+      </div>
       <div id="aiHistoryFilteredBody">
       ${histEntries.map((he,i)=>{
         const prev2=i>0?histEntries[i-1]:null;
         const trend=prev2?(he.pos<prev2.pos?'🔼':he.pos>prev2.pos?'🔽':'➡️'):'';
-        return `<div class="history-race-row">
-          <div>${escapeHtml(he.raceName||'—')} <span class="small">${escapeHtml(he.raceDate||'')}${he.localidad?' · 📍 '+escapeHtml(he.localidad):''}</span></div>
+        const id = _aiRaceCheckboxId(he);
+        const safeId = escapeAttr(id);
+        return `<div class="history-race-row" style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" onchange="_aiToggleHistorySelection('${safeId}', this.checked)" style="cursor:pointer;width:16px;height:16px" title="Marcar para exportar">
+          <div style="flex:1;min-width:0">${escapeHtml(he.raceName||'—')} <span class="small">${escapeHtml(he.raceDate||'')}${he.localidad?' · 📍 '+escapeHtml(he.localidad):''}</span></div>
           <div class="history-pos">${he.pos}º<span class="history-pos-trend">${trend}</span></div>
           <div class="small">de ${he.total}</div>
         </div>`;
       }).join('')}
       </div>
     </div>
+    <!-- Opción B #9: Distribución P25 / P50 / P75 -->
+    ${_aiBuildPercentilesBlock(histEntries)}
     <!-- Análisis Individual · Opción A #5: H2H integrado -->
     <div class="rider-history-block" style="margin-top:14px">
       <div class="rider-history-title">⚔️ Rivales más enfrentados (Top 5)</div>
       <div id="aiH2HBlock">${_aiBuildH2HBlock(_aiFindRivals(r.name, histEntries, 5))}</div>
       <p class="small" style="margin:6px 0 0;color:#6b7280">Récord directo de esta corredora vs cada rival · Solo rivales con ≥2 encuentros</p>
-    </div>`:
-    (hist.length>0?'<div class="small" style="margin-top:8px;color:#9ca3af">💡 Guarda más carreras en el histórico para ver la evolución de este ciclista.</div>':'');
+    </div>
+    <!-- Opción B #7: Notas manuales del director -->
+    ${_aiBuildNotesBlock(r)}`:
+    (hist.length>0?'<div class="small" style="margin-top:8px;color:#9ca3af">💡 Guarda más carreras en el histórico para ver la evolución de este ciclista.</div>':_aiBuildNotesBlock(r));
 
   // ── Perfil de Rendimiento IA ─────────────────────────────────────────────
   let iaProfile='—', iaColor='#667085', iaIcon='📊', iaDesc='Datos insuficientes (min. 3 carreras)';
@@ -26373,4 +26391,257 @@ function _aiOnHistoryFilterChange(){
   _aiHistoryFilters.year = document.getElementById('aiHistoryYear')?.value || '';
   _aiHistoryFilters.localidad = document.getElementById('aiHistoryLoc')?.value || '';
   _aiRenderHistoryTable();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MENÚ ANÁLISIS INDIVIDUAL · Opción B (3 mejoras adicionales)
+// 7. Notas manuales del director (persistencia localStorage)
+// 8. Selección múltiple en historial para exportar (checkboxes)
+// 9. Distribución [P25, P50, P75] del corredor
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 7. NOTAS MANUALES DEL DIRECTOR ────────────────────────────────────────
+const _AI_NOTES_KEY = '_ai_rider_notes_v1';
+
+function _aiGetNotes(){
+  try{
+    const raw = localStorage.getItem(_AI_NOTES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch{ return {}; }
+}
+function _aiSaveNotes(map){
+  try{ localStorage.setItem(_AI_NOTES_KEY, JSON.stringify(map)); }catch{}
+}
+// Clave estable para identificar al corredor: nombre normalizado
+function _aiRiderNoteKey(name){
+  return (typeof normalizeRiderName === 'function' ? normalizeRiderName(name||'') : (name||'')).toLowerCase();
+}
+
+function _aiGetRiderNote(name){
+  const key = _aiRiderNoteKey(name);
+  if(!key) return '';
+  return _aiGetNotes()[key] || '';
+}
+function _aiSetRiderNote(name, text){
+  const key = _aiRiderNoteKey(name);
+  if(!key) return;
+  const all = _aiGetNotes();
+  if(text && text.trim()){
+    all[key] = {text: text.trim(), updated: new Date().toISOString()};
+  } else {
+    delete all[key]; // borrar si vacío
+  }
+  _aiSaveNotes(all);
+}
+// Versión "lectura" que devuelve solo el texto, no el objeto completo
+function _aiReadRiderNote(name){
+  const key = _aiRiderNoteKey(name);
+  if(!key) return null;
+  const entry = _aiGetNotes()[key];
+  if(!entry) return null;
+  // Compatibilidad: si es string (versión antigua), promover a objeto
+  if(typeof entry === 'string') return {text: entry, updated: null};
+  return entry;
+}
+
+// Handler del botón Guardar
+function _aiSaveNoteFromInput(safeName){
+  const ta = document.getElementById('aiRiderNoteTextarea');
+  if(!ta) return;
+  // Decodificar el atributo HTML del nombre
+  const div = document.createElement('div');
+  div.innerHTML = safeName;
+  const name = div.textContent;
+  _aiSetRiderNote(name, ta.value);
+  // Feedback visual
+  const status = document.getElementById('aiRiderNoteStatus');
+  if(status){
+    status.textContent = '✅ Guardado · ' + new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    status.style.color = '#15803d';
+    setTimeout(()=>{ if(status) status.textContent = ''; }, 4000);
+  }
+}
+
+function _aiBuildNotesBlock(rider){
+  if(!rider) return '';
+  const safe = escapeAttr(rider.name||'');
+  const note = _aiReadRiderNote(rider.name);
+  const existing = note ? note.text : '';
+  const updatedTxt = (note && note.updated)
+    ? `Última actualización: ${new Date(note.updated).toLocaleString('es-ES',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}`
+    : '';
+  return `<div class="rider-history-block" style="margin-top:14px">
+    <div class="rider-history-title">📝 Notas del director sobre ${escapeHtml(rider.name||'')}</div>
+    <p class="small" style="margin:0 0 8px;color:#6b7280">Información contextual del corredor: lesiones, observaciones, eventos clave… Las notas se guardan localmente en este dispositivo.</p>
+    <textarea id="aiRiderNoteTextarea" placeholder="Escribe aquí tus notas. Ej: 'Lesionado del 5 al 12 de mayo', 'Pinchazo en Trofeo X', 'Bueno en circuitos cortos'…" style="width:100%;min-height:90px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px;line-height:1.5;resize:vertical">${escapeHtml(existing)}</textarea>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+      <button class="btn" onclick="_aiSaveNoteFromInput('${safe}')" style="background:#1e40af;color:#fff;font-size:13px;padding:7px 15px">💾 Guardar nota</button>
+      <span id="aiRiderNoteStatus" class="small" style="color:#6b7280">${updatedTxt}</span>
+    </div>
+  </div>`;
+}
+
+// ─── 8. SELECCIÓN MÚLTIPLE EN HISTORIAL ────────────────────────────────────
+// Permite marcar carreras del historial filtrado y exportar solo las marcadas.
+let _aiHistorySelection = new Set(); // raceIDs marcados (composición: raceName|raceDate)
+
+function _aiRaceCheckboxId(he){
+  return `${he.raceName||''}|${he.raceDate||''}`;
+}
+
+function _aiToggleHistorySelection(id, checked){
+  if(checked) _aiHistorySelection.add(id);
+  else _aiHistorySelection.delete(id);
+  _aiUpdateSelectionBar();
+}
+
+function _aiSelectAllHistory(checked){
+  const items = window._aiCurrentRiderHistory || [];
+  const filtered = _aiFilterHistory(items, _aiHistoryFilters);
+  if(checked){
+    filtered.forEach(he => _aiHistorySelection.add(_aiRaceCheckboxId(he)));
+  } else {
+    _aiHistorySelection.clear();
+  }
+  _aiRenderHistoryTable();
+  _aiUpdateSelectionBar();
+}
+
+function _aiUpdateSelectionBar(){
+  const bar = document.getElementById('aiHistorySelectionBar');
+  if(!bar) return;
+  const n = _aiHistorySelection.size;
+  bar.style.display = n > 0 ? 'flex' : 'none';
+  const lbl = document.getElementById('aiHistorySelectionCount');
+  if(lbl) lbl.textContent = `${n} carrera${n!==1?'s':''} seleccionada${n!==1?'s':''}`;
+}
+
+function _aiExportSelectedHistory(){
+  const items = window._aiCurrentRiderHistory || [];
+  const selected = items.filter(he => _aiHistorySelection.has(_aiRaceCheckboxId(he)));
+  if(!selected.length){
+    if(typeof showToast === 'function') showToast('Selecciona al menos una carrera','warn');
+    return;
+  }
+  const riderName = window._aiCurrentRiderName || 'Corredor';
+  const escapeCSV = s => `"${String(s||'').replace(/"/g,'""')}"`;
+  const sep = ';';
+  const lines = [];
+  lines.push(`# Historial de ${riderName}`);
+  lines.push(`# ${selected.length} carreras seleccionadas · Exportado ${new Date().toLocaleString('es-ES')}`);
+  lines.push('');
+  lines.push(['Fecha','Carrera','Localidad','Categoría','Posición','Total inscritos'].map(escapeCSV).join(sep));
+  selected.forEach(he => {
+    lines.push([
+      he.raceDate||'',
+      he.raceName||'',
+      he.localidad||'',
+      he.cat||'',
+      he.pos||'',
+      he.total||''
+    ].map(escapeCSV).join(sep));
+  });
+  const blob = new Blob(['﻿'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${riderName.replace(/[^\w\s-]/g,'').replace(/\s+/g,'_')}_historial.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  if(typeof showToast === 'function') showToast(`✅ ${selected.length} carreras exportadas`, 'ok');
+}
+
+// Sobrescribimos _aiRenderHistoryTable para incluir checkboxes
+function _aiRenderHistoryTable(){
+  const box = document.getElementById('aiHistoryFilteredBody');
+  if(!box) return;
+  const fullData = window._aiCurrentRiderHistory || [];
+  const filtered = _aiFilterHistory(fullData, _aiHistoryFilters);
+  if(!filtered.length){
+    box.innerHTML = '<div class="small" style="color:#9ca3af;padding:8px">Ningún resultado con esos filtros internos.</div>';
+    return;
+  }
+  // Mostrar con tendencia + checkbox para Opción B #8
+  box.innerHTML = filtered.map((he,i)=>{
+    const prev = i>0?filtered[i-1]:null;
+    const trend = prev?(he.pos<prev.pos?'🔼':he.pos>prev.pos?'🔽':'➡️'):'';
+    const id = _aiRaceCheckboxId(he);
+    const safeId = escapeAttr(id);
+    const checked = _aiHistorySelection.has(id) ? 'checked' : '';
+    return `<div class="history-race-row" style="display:flex;align-items:center;gap:8px">
+      <input type="checkbox" ${checked} onchange="_aiToggleHistorySelection('${safeId}', this.checked)" style="cursor:pointer;width:16px;height:16px" title="Marcar para exportar">
+      <div style="flex:1;min-width:0">${escapeHtml(he.raceName||'—')} <span class="small">${escapeHtml(he.raceDate||'')}${he.localidad?' · 📍 '+escapeHtml(he.localidad):''}</span></div>
+      <div class="history-pos">${he.pos}º<span class="history-pos-trend">${trend}</span></div>
+      <div class="small">de ${he.total}</div>
+    </div>`;
+  }).join('');
+  _aiUpdateSelectionBar();
+}
+
+// ─── 9. DISTRIBUCIÓN P25 / P50 / P75 ───────────────────────────────────────
+function _aiPercentiles(positions){
+  const valid = (positions||[]).filter(p => p > 0);
+  if(valid.length < 4) return null;
+  const sorted = [...valid].sort((a,b)=>a-b);
+  // Función helper para calcular percentil con interpolación lineal
+  const p = (q) => {
+    const idx = (sorted.length - 1) * q;
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    if(lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  };
+  return {
+    p25: Math.round(p(0.25) * 10) / 10,
+    p50: Math.round(p(0.50) * 10) / 10,
+    p75: Math.round(p(0.75) * 10) / 10,
+    min: sorted[0],
+    max: sorted[sorted.length-1],
+    n: valid.length
+  };
+}
+
+function _aiBuildPercentilesBlock(histEntries){
+  if(!histEntries || histEntries.length < 4) return '';
+  const positions = histEntries.map(h => h.pos).filter(p => p > 0);
+  const pct = _aiPercentiles(positions);
+  if(!pct) return '';
+
+  // Mini "box plot" SVG horizontal:
+  // [min] ──── [P25 ── P50 ── P75] ──── [max]
+  const width = 320, height = 60, pad = 25;
+  const range = pct.max - pct.min || 1;
+  const scale = (v) => pad + ((v - pct.min) / range) * (width - 2*pad);
+  const yMid = height / 2;
+  const boxH = 18;
+
+  const svg = `<svg viewBox="0 0 ${width} ${height}" style="max-width:100%;height:auto;display:block">
+    <!-- Línea base -->
+    <line x1="${pad}" y1="${yMid}" x2="${width-pad}" y2="${yMid}" stroke="#cbd5e1" stroke-width="1.5"/>
+    <!-- Whisker izquierdo -->
+    <line x1="${scale(pct.min)}" y1="${yMid-7}" x2="${scale(pct.min)}" y2="${yMid+7}" stroke="#0b2f6b" stroke-width="2"/>
+    <!-- Whisker derecho -->
+    <line x1="${scale(pct.max)}" y1="${yMid-7}" x2="${scale(pct.max)}" y2="${yMid+7}" stroke="#dc2626" stroke-width="2"/>
+    <!-- Caja P25-P75 -->
+    <rect x="${scale(pct.p25)}" y="${yMid - boxH/2}" width="${scale(pct.p75) - scale(pct.p25)}" height="${boxH}" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5" rx="3"/>
+    <!-- Mediana P50 -->
+    <line x1="${scale(pct.p50)}" y1="${yMid - boxH/2}" x2="${scale(pct.p50)}" y2="${yMid + boxH/2}" stroke="#dc2626" stroke-width="2.5"/>
+    <!-- Labels -->
+    <text x="${scale(pct.min)}" y="${height-3}" text-anchor="middle" font-size="10" fill="#0b2f6b" font-weight="700">${pct.min}º</text>
+    <text x="${scale(pct.p25)}" y="9" text-anchor="middle" font-size="10" fill="#1d4ed8" font-weight="700">P25: ${pct.p25}</text>
+    <text x="${scale(pct.p50)}" y="9" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="800">P50: ${pct.p50}</text>
+    <text x="${scale(pct.p75)}" y="9" text-anchor="middle" font-size="10" fill="#1d4ed8" font-weight="700">P75: ${pct.p75}</text>
+    <text x="${scale(pct.max)}" y="${height-3}" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="700">${pct.max}º</text>
+  </svg>`;
+
+  return `<div class="rider-history-block" style="margin-top:14px">
+    <div class="rider-history-title">📦 Distribución típica de posiciones <button class="help-btn" data-help="&lt;strong&gt;📦 Distribución típica&lt;/strong&gt;Cómo se reparten las posiciones del corredor en sus carreras (excluyendo extremos):&lt;ul&gt;&lt;li&gt;&lt;b&gt;P25&lt;/b&gt;: en el 25% de sus mejores carreras acaba en esta posición o mejor&lt;/li&gt;&lt;li&gt;&lt;b&gt;P50 (mediana)&lt;/b&gt;: la mitad de las veces acaba en esta posición o mejor&lt;/li&gt;&lt;li&gt;&lt;b&gt;P75&lt;/b&gt;: en el 25% de sus peores carreras acaba aquí o peor&lt;/li&gt;&lt;li&gt;La caja azul (P25-P75) es donde rinde &quot;normalmente&quot; el 50% de las veces&lt;/li&gt;&lt;/ul&gt;">?</button></div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:8px 4px">
+      <div style="flex:0 0 auto">${svg}</div>
+      <div style="flex:1;min-width:200px;font-size:12.5px;color:#475569;line-height:1.6">
+        <div>📌 <b>Rango típico</b>: entre <b style="color:#1d4ed8">${pct.p25}º</b> y <b style="color:#1d4ed8">${pct.p75}º</b> (50% central)</div>
+        <div>🎯 <b>Mediana</b>: <b style="color:#dc2626">${pct.p50}º</b> (50% de las veces acaba aquí o mejor)</div>
+        <div>📊 Calculado sobre ${pct.n} carreras · Mejor ${pct.min}º · Peor ${pct.max}º</div>
+      </div>
+    </div>
+  </div>`;
 }
