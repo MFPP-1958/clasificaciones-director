@@ -1435,3 +1435,62 @@ details.sim-help .sim-help-body .tip{
 .acceso-btn.acceso-highlight:hover{
   background:linear-gradient(135deg,#ddd6fe,#c4b5fd);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TABLA Y FILTROS · Opción B — Codificación de color por posición
+   ═══════════════════════════════════════════════════════════════════════ */
+/* Podio (1-3): fondo dorado suave con borde izquierdo dorado */
+.row-podium td{background:linear-gradient(90deg,rgba(254,243,199,.55),rgba(254,249,195,.2))}
+.row-podium{border-left:3px solid #f59e0b}
+.row-podium:hover td{background:linear-gradient(90deg,rgba(253,224,71,.45),rgba(254,243,199,.25))}
+/* Top 10 (4-10): fondo azulado muy suave */
+.row-top10 td{background:linear-gradient(90deg,rgba(219,234,254,.4),rgba(239,246,255,.15))}
+.row-top10{border-left:3px solid #60a5fa}
+.row-top10:hover td{background:linear-gradient(90deg,rgba(191,219,254,.6),rgba(219,234,254,.25))}
+/* Si mi equipo Y podio/top10 → mi equipo prevalece pero conserva el borde */
+.my-team-row.row-podium{border-left:3px solid #f59e0b}
+.my-team-row.row-top10{border-left:3px solid #12b76a}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TABLA Y FILTROS · Opción B — Tooltip enriquecido al hacer hover
+   ═══════════════════════════════════════════════════════════════════════ */
+#tablaRowTooltip{
+  position:fixed;
+  z-index:9999;
+  background:#0f172a;
+  color:#fff;
+  border-radius:10px;
+  padding:10px 14px;
+  font-size:12px;
+  line-height:1.5;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  pointer-events:none;
+  max-width:280px;
+  opacity:0;
+  transition:opacity .12s;
+  display:none;
+}
+#tablaRowTooltip.active{opacity:1;display:block}
+#tablaRowTooltip .tt-title{font-weight:800;color:#fcd34d;margin-bottom:5px;font-size:13px}
+#tablaRowTooltip .tt-row{display:flex;justify-content:space-between;gap:14px;margin:1px 0}
+#tablaRowTooltip .tt-row b{color:#a7f3d0}
+#tablaRowTooltip .tt-divider{border-top:1px solid rgba(255,255,255,.15);margin:6px 0}
+#tablaRowTooltip .tt-sub{color:#94a3b8;font-size:11px;margin-top:4px}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TABLA Y FILTROS · Opción B — Badge contador de filtros activos
+   ═══════════════════════════════════════════════════════════════════════ */
+.filter-count-badge{
+  display:inline-block;
+  background:#dc2626;
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  padding:1px 7px;
+  border-radius:999px;
+  margin-left:6px;
+  vertical-align:middle;
+  min-width:18px;
+  text-align:center;
+  line-height:1.4;
+}

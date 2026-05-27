@@ -6246,7 +6246,12 @@ function renderTable(){
     else if(r.catPos===1) medal='🥇'; else if(r.catPos===2) medal='🥈'; else if(r.catPos===3) medal='🥉';
     
     const rkey=escapeAttr(getRiderKey(r));
-    return `<tr data-rkey="${rkey}" onclick="selectAndAnalyzeRiderByKey('${rkey}')" class="${isOwnTeam?'my-team-row':''}" style="cursor:pointer">
+    // Opción B #4: codificación de color por posición
+    const posClasses = [];
+    if(isOwnTeam) posClasses.push('my-team-row');
+    if(r.pos >= 1 && r.pos <= 3) posClasses.push('row-podium');
+    else if(r.pos >= 4 && r.pos <= 10) posClasses.push('row-top10');
+    return `<tr data-rkey="${rkey}" onclick="selectAndAnalyzeRiderByKey('${rkey}')" class="${posClasses.join(' ')}" style="cursor:pointer">
       <td onclick="event.stopPropagation()" style="text-align:center;padding:4px">
         <button class="edit-btn" onclick="editTableRow('${rkey}')" title="Editar fila">✏️</button>
       </td>
@@ -25767,3 +25772,178 @@ function _tablaOpenInSimulator(){
     }, 200);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLA Y FILTROS — Opción B (3 mejoras adicionales)
+// 4. Codificación color expandida → ya aplicado en renderTable()
+// 5. Hover enriquecido con tooltip
+// 6. Contador de filtros activos
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 5. TOOLTIP ENRIQUECIDO AL HACER HOVER ─────────────────────────────────
+// Al pasar el ratón sobre una fila, muestra un tooltip con info histórica
+// del corredor: nº de podios totales, mejor pos, equipos previos, últimas
+// 3 carreras. Reutiliza _cachedHistory.
+let _tablaTooltipEl = null;
+let _tablaTooltipTimer = null;
+
+function _tablaEnsureTooltip(){
+  if(_tablaTooltipEl) return _tablaTooltipEl;
+  const el = document.createElement('div');
+  el.id = 'tablaRowTooltip';
+  document.body.appendChild(el);
+  _tablaTooltipEl = el;
+  return el;
+}
+
+function _tablaBuildTooltipContent(rider){
+  if(!rider) return '';
+  const nk = typeof normalizeRiderName === 'function'
+    ? normalizeRiderName(rider.name||'').toLowerCase()
+    : (rider.name||'').toLowerCase();
+  if(!nk) return '';
+  const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  // Recoger todas las apariciones del corredor
+  const apparitions = [];
+  hist.forEach(race => {
+    (race.riders||[]).forEach(r => {
+      const k = typeof normalizeRiderName === 'function'
+        ? normalizeRiderName(r.name||'').toLowerCase()
+        : (r.name||'').toLowerCase();
+      if(k === nk){
+        apparitions.push({
+          raceName: race.raceName||'',
+          raceDate: race.raceDate||'',
+          pos: r.pos,
+          team: r.team||'',
+          total: (race.riders||[]).length
+        });
+      }
+    });
+  });
+  if(!apparitions.length){
+    return `<div class="tt-title">${escapeHtml(rider.name||'')}</div>
+            <div class="tt-sub">Sin histórico previo en la app</div>`;
+  }
+  // Ordenar por fecha desc
+  apparitions.sort((a,b)=>{
+    const da = (typeof _parseSpanishDate === 'function' ? _parseSpanishDate(a.raceDate) : '') || '';
+    const db = (typeof _parseSpanishDate === 'function' ? _parseSpanishDate(b.raceDate) : '') || '';
+    return db.localeCompare(da);
+  });
+  const validPos = apparitions.filter(a=>a.pos > 0).map(a=>a.pos);
+  const totalApp = apparitions.length;
+  const dnfs   = apparitions.filter(a=>!a.pos || a.pos === 0).length;
+  const finish = validPos.length;
+  const avgPos = finish ? (validPos.reduce((s,p)=>s+p,0) / finish).toFixed(1) : '—';
+  const best   = finish ? Math.min(...validPos) : '—';
+  const podios = validPos.filter(p=>p<=3).length;
+  const top10  = validPos.filter(p=>p<=10).length;
+  const teams  = [...new Set(apparitions.map(a=>a.team).filter(Boolean))];
+  const last3  = apparitions.slice(0,3);
+
+  return `
+    <div class="tt-title">${escapeHtml(rider.name||'')}</div>
+    <div class="tt-row"><span>Apariciones</span><b>${totalApp}</b></div>
+    <div class="tt-row"><span>Finalizadas</span><b>${finish}${dnfs?` (+${dnfs} DNF)`:''}</b></div>
+    <div class="tt-row"><span>Media histórica</span><b>${avgPos}${avgPos!=='—'?'º':''}</b></div>
+    <div class="tt-row"><span>Mejor posición</span><b>${best}${best!=='—'?'º':''}</b></div>
+    <div class="tt-row"><span>Podios totales</span><b>${podios}</b></div>
+    <div class="tt-row"><span>Top 10 totales</span><b>${top10}</b></div>
+    ${teams.length > 1 ? `<div class="tt-divider"></div><div class="tt-sub">Equipos: ${teams.slice(0,3).map(escapeHtml).join(', ')}${teams.length>3?` +${teams.length-3}`:''}</div>` : ''}
+    ${last3.length ? `<div class="tt-divider"></div><div class="tt-sub" style="color:#cbd5e1">Últimas: ${last3.map(a => `${a.pos||'DNF'}º${a.raceName?' · '+escapeHtml(a.raceName.slice(0,18)):''}`).join(' · ')}</div>` : ''}
+  `;
+}
+
+function _tablaPositionTooltip(ev){
+  if(!_tablaTooltipEl) return;
+  const margin = 14;
+  const w = _tablaTooltipEl.offsetWidth || 260;
+  const h = _tablaTooltipEl.offsetHeight || 160;
+  let x = ev.clientX + margin;
+  let y = ev.clientY + margin;
+  if(x + w > window.innerWidth - 10) x = ev.clientX - w - margin;
+  if(y + h > window.innerHeight - 10) y = ev.clientY - h - margin;
+  _tablaTooltipEl.style.left = `${Math.max(8, x)}px`;
+  _tablaTooltipEl.style.top  = `${Math.max(8, y)}px`;
+}
+
+// Listener delegado en document para capturar hover sobre filas de resultsBody
+document.addEventListener('DOMContentLoaded', ()=>{
+  const root = document.body;
+  root.addEventListener('mouseover', (ev)=>{
+    const tr = ev.target.closest('tr[data-rkey]');
+    if(!tr) return;
+    // Solo en la tabla principal de resultados (no en otras tablas con data-rkey)
+    if(!tr.closest('#resultsBody')) return;
+    const key = tr.getAttribute('data-rkey');
+    if(!key || typeof riders === 'undefined') return;
+    const r = riders.find(x => typeof getRiderKey === 'function' && getRiderKey(x) === key);
+    if(!r) return;
+    // Debounce: solo abrir tooltip si el ratón se queda 250ms
+    if(_tablaTooltipTimer) clearTimeout(_tablaTooltipTimer);
+    _tablaTooltipTimer = setTimeout(()=>{
+      const tt = _tablaEnsureTooltip();
+      tt.innerHTML = _tablaBuildTooltipContent(r);
+      tt.classList.add('active');
+      _tablaPositionTooltip(ev);
+    }, 250);
+  });
+  root.addEventListener('mousemove', (ev)=>{
+    if(_tablaTooltipEl && _tablaTooltipEl.classList.contains('active')){
+      const tr = ev.target.closest('tr[data-rkey]');
+      if(tr && tr.closest('#resultsBody')) _tablaPositionTooltip(ev);
+    }
+  });
+  root.addEventListener('mouseout', (ev)=>{
+    const tr = ev.target.closest('tr[data-rkey]');
+    if(!tr || !tr.closest('#resultsBody')) return;
+    // Cerrar al salir del tr (a otro elemento que no sea un hijo)
+    const toEl = ev.relatedTarget;
+    if(toEl && tr.contains(toEl)) return;
+    if(_tablaTooltipTimer){ clearTimeout(_tablaTooltipTimer); _tablaTooltipTimer = null; }
+    if(_tablaTooltipEl) _tablaTooltipEl.classList.remove('active');
+  });
+});
+
+// ─── 6. CONTADOR DE FILTROS ACTIVOS ────────────────────────────────────────
+// Actualiza el botón "🧹 Limpiar filtros" con un badge mostrando el nº
+// de filtros aplicados. 0 = sin badge.
+function _tablaCountActiveFilters(){
+  let n = 0;
+  const s = (document.getElementById('searchInput')?.value || '').trim();
+  if(s) n++;
+  if(document.getElementById('teamFilter')?.value)   n++;
+  if(document.getElementById('regionFilter')?.value) n++;
+  if(document.getElementById('topFilter')?.value)    n++;
+  if(document.getElementById('topCatFilter')?.value) n++;
+  if(typeof onlyMyTeam !== 'undefined' && onlyMyTeam) n++;
+  if(typeof selectedCatChips !== 'undefined' && selectedCatChips.size > 0) n += selectedCatChips.size;
+  return n;
+}
+
+function _tablaUpdateFilterCount(){
+  const clearBtn = document.querySelector('[onclick="clearAllFilters()"]');
+  if(!clearBtn) return;
+  // Texto base (sin badge anterior)
+  const baseText = '🧹 Limpiar filtros';
+  const n = _tablaCountActiveFilters();
+  if(n === 0){
+    clearBtn.innerHTML = baseText;
+  } else {
+    clearBtn.innerHTML = `${baseText}<span class="filter-count-badge">${n}</span>`;
+  }
+}
+
+// Hook en applyFilters para actualizar el contador cada vez que se aplican
+const _tablaPrevApply_count = (typeof window.applyFilters === 'function') ? window.applyFilters : null;
+if(_tablaPrevApply_count){
+  window.applyFilters = function(){
+    _tablaPrevApply_count();
+    try{ _tablaUpdateFilterCount(); }catch(e){}
+  };
+}
+// También actualizar al entrar a la vista (por si los filtros fueron restaurados)
+document.addEventListener('DOMContentLoaded', ()=>{
+  setTimeout(()=>{ try{ _tablaUpdateFilterCount(); }catch(e){} }, 500);
+});
