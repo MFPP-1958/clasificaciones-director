@@ -6004,8 +6004,21 @@ function populateFilters(){
   if($('regionFilter'))$('regionFilter').innerHTML='<option value="">Todas las CCAA</option>'+regions.map(r=>`<option>${escapeHtml(r)}</option>`).join('');
   
   // Desplegable de equipos del buscador de Análisis Individual
+  // Incluye equipos de la carrera actual + equipos del histórico (inscritos o clasificados),
+  // así un equipo cuyos corredores no se han clasificado en la prueba actual sigue siendo
+  // seleccionable para el informe de DNFs.
   if($('analysisTeamFilter')){
-    const teams=[...new Set(riders.map(r=>r.team).filter(Boolean))].sort();
+    const teamsSet = new Set();
+    riders.forEach(r=>{ if(r.team) teamsSet.add(r.team); });
+    try{
+      if(Array.isArray(_cachedHistory)){
+        for(const race of _cachedHistory){
+          (race.inscritos||[]).forEach(i=>{ if(i.team) teamsSet.add(i.team); });
+          (race.riders||[]).forEach(r=>{ if(r.team) teamsSet.add(r.team); });
+        }
+      }
+    }catch(e){}
+    const teams=[...teamsSet].sort();
     $('analysisTeamFilter').innerHTML='<option value="">— Todos los equipos —</option>'+
       teams.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
   }
@@ -8606,19 +8619,47 @@ function getPercentileColor(percentile){
 function updateAnalysisSuggestions(){
   const teamFilter=$('analysisTeamFilter')?.value||'';
   const base=teamFilter ? riders.filter(r=>r.team===teamFilter) : riders;
+  // Enriquecer con ciclistas que SOLO aparecen en histórico (inscritos o clasificados en otras carreras)
+  // — pensado sobre todo para el botón "DNFs de la temporada" cuando un ciclista no se ha clasificado
+  // en la prueba actual pero sí ha estado inscrito en otras.
+  let extraHist = [];
+  try{
+    if(Array.isArray(_cachedHistory) && _cachedHistory.length){
+      const nkey = (typeof normalizeForMatching==='function') ? (s)=>normalizeForMatching(s||'') : (s)=>(s||'').toLowerCase().trim();
+      const known = new Set(base.map(r=>nkey(r.name||'')));
+      const acc = new Map(); // key -> { name, team, bib }
+      for(const race of _cachedHistory){
+        const insArr = Array.isArray(race.inscritos) ? race.inscritos : [];
+        const ridArr = Array.isArray(race.riders) ? race.riders : [];
+        const pushIfMatch = (x)=>{
+          const k = nkey(x.name||''); if(!k || known.has(k) || acc.has(k)) return;
+          if(teamFilter && (x.team||'').trim() !== teamFilter) return;
+          acc.set(k, { name: x.name||'', team: x.team||'', bib: x.bib||'' });
+        };
+        insArr.forEach(pushIfMatch);
+        ridArr.forEach(pushIfMatch);
+      }
+      extraHist = [...acc.values()].sort((a,b)=>a.name.localeCompare(b.name,'es'));
+    }
+  }catch(e){}
   if($('analysisSuggestions')){
-    $('analysisSuggestions').innerHTML=base.map(r=>
+    const baseHtml = base.map(r=>
       `<option value="${escapeHtml(r.name)}">Dorsal ${r.bib} · ${escapeHtml(r.team)}</option>`
     ).join('');
+    const extraHtml = extraHist.map(r=>
+      `<option value="${escapeHtml(r.name)}">${r.bib?'Dorsal '+escapeHtml(String(r.bib))+' · ':''}${escapeHtml(r.team||'')} · solo histórico</option>`
+    ).join('');
+    $('analysisSuggestions').innerHTML = baseHtml + extraHtml;
   }
   // Contador informativo
   const counter=$('analysisTeamCount');
   if(counter){
+    const extraTxt = extraHist.length ? ` · +${extraHist.length} solo histórico (para DNFs)` : '';
     if(teamFilter){
-      counter.textContent=`Mostrando ${base.length} ciclista${base.length!==1?'s':''} de ${escapeHtml(teamFilter)}`;
+      counter.textContent=`Mostrando ${base.length} ciclista${base.length!==1?'s':''} de ${escapeHtml(teamFilter)}${extraTxt}`;
       counter.style.color='#1f6feb';
     } else {
-      counter.textContent=base.length ? `${base.length} ciclistas en total` : '';
+      counter.textContent=base.length ? `${base.length} ciclistas en total${extraTxt}` : '';
       counter.style.color='';
     }
   }
@@ -29008,6 +29049,15 @@ function _aiBuildAllRidersFromHistory(){
 
 function _aiOpenDNFPicker(initialQuery){
   _aiDnfAllRiders = _aiBuildAllRidersFromHistory();
+  // Si hay filtro de equipo activo en Análisis Individual, pre-filtra el picker
+  const teamSel = document.getElementById('analysisTeamFilter');
+  const teamFilter = teamSel ? (teamSel.value||'') : '';
+  if(teamFilter){
+    _aiDnfAllRiders = _aiDnfAllRiders.filter(r => {
+      for(const t of r.teams){ if((t||'').trim() === teamFilter) return true; }
+      return false;
+    });
+  }
   let overlay = document.getElementById('aiDnfPickerOverlay');
   if(!overlay){
     overlay = document.createElement('div');
