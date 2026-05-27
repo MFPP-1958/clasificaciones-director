@@ -4955,8 +4955,34 @@ function processPastedText(){
   // COMENTARIO: permite analizar una clasificación pegada como texto, sin PDF/CSV/Excel.
   const text=$('pastedText') ? $('pastedText').value : '';
   if(!cleanSpaces(text)){alert('Pega primero una clasificación en el recuadro de texto.');return}
+  // Opción A · Mejora #1: validación previa rápida
+  const validation = _cargaValidatePastedText(text);
+  if(!validation.ok){
+    const proceed = confirm(`⚠️ El texto pegado NO parece una clasificación válida.\n\nMotivo: ${validation.reason}\n\n¿Procesarlo de todos modos?`);
+    if(!proceed) return;
+  }
   $('fileName').textContent='Clasificación cargada desde texto pegado';
   parseText(text);
+}
+
+// Validación previa: detecta si el texto parece una clasificación
+function _cargaValidatePastedText(text){
+  const lines = (text||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(lines.length < 3) return {ok:false, reason: 'menos de 3 líneas no vacías'};
+  // Contar líneas que tienen formato "número ... texto"
+  let likelyDataLines = 0;
+  for(const line of lines){
+    if(/^\s*\d{1,3}[\s\.,;:\t]+\S/.test(line)) likelyDataLines++;
+  }
+  if(likelyDataLines < 2){
+    return {ok:false, reason: 'no se detectan posiciones numéricas seguidas de texto'};
+  }
+  // ¿Hay nombres? (al menos 2 palabras alfabéticas en alguna línea)
+  const hasNames = lines.some(l => /[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}.*[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}/.test(l));
+  if(!hasNames){
+    return {ok:false, reason: 'no se detectan nombres de corredores (al menos 2 palabras)'};
+  }
+  return {ok:true, lines: likelyDataLines};
 }
 
 async function handleFile(file){if(!file)return;$('fileName').textContent='Archivo cargado: '+file.name;const ext=file.name.split('.').pop().toLowerCase();showLoading('Procesando '+file.name,'Leyendo y ordenando la clasificación…');try{let text=''; if(ext==='pdf') text=await readPDF(file); else if(ext==='csv') text=await file.text(); else text=await readExcel(file); parseText(text); }catch(err){alert('No he podido leer el archivo. Prueba con CSV o Excel. Error: '+err.message)}finally{hideLoading();}}
@@ -10044,7 +10070,12 @@ async function saveHistory(){
   }
   _cachedHistory=null; _prFiltersReady=false; _trendFiltersReady=false;
   await renderHistory();
-  alert(accion==='actualizar'?'Carrera actualizada en el histórico (Supabase).':'Carrera guardada en el histórico (Supabase).');
+  // Opción A · Mejora #3: toast clickable con enlace al Historial (en vez de alert)
+  if(typeof _cargaShowSaveToast === 'function'){
+    _cargaShowSaveToast(accion);
+  } else {
+    alert(accion==='actualizar'?'Carrera actualizada en el histórico (Supabase).':'Carrera guardada en el histórico (Supabase).');
+  }
   // ── Captura asíncrona del clima histórico (no bloquea, no muestra error si falla)
   if(localidad && raceDateStr && typeof _wxAutoCaptureForRace === 'function'){
     _wxAutoCaptureForRace(raceId, localidad, raceDateStr, horaInicio)
@@ -27420,3 +27451,216 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }catch{}
   }, 800);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MENÚ CARGA Y RESUMEN · Opción A (5 mejoras)
+// 1. Validación previa del texto pegado → en processPastedText (arriba)
+// 2. Autocompletado de Localidad desde histórico
+// 3. Toast de éxito al guardar con enlace al Historial
+// 4. Validación de fecha en vivo
+// 5. Alertas de consistencia post-carga
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 2. AUTOCOMPLETADO DE LOCALIDAD ───────────────────────────────────────
+function _cargaPopulateLocalidadDatalist(){
+  const inp = document.getElementById('raceLocalidad');
+  if(!inp) return;
+  let dl = document.getElementById('cargaLocalidadList');
+  if(!dl){
+    dl = document.createElement('datalist');
+    dl.id = 'cargaLocalidadList';
+    document.body.appendChild(dl);
+    inp.setAttribute('list', 'cargaLocalidadList');
+  }
+  const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  const locs = new Set();
+  hist.forEach(h => { if(h.localidad) locs.add(h.localidad.trim()); });
+  dl.innerHTML = [...locs].sort().map(l => `<option value="${escapeAttr(l)}">`).join('');
+}
+
+// ─── 4. VALIDACIÓN DE FECHA EN VIVO ────────────────────────────────────────
+function _cargaValidateDateLive(){
+  const inp = document.getElementById('raceDate');
+  const hint = document.getElementById('raceDateHint');
+  if(!inp || !hint) return;
+  const val = (inp.value||'').trim();
+  if(!val){ hint.textContent = ''; return; }
+  // Aceptamos varios formatos: dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd
+  const iso = typeof _parseSpanishDate === 'function' ? _parseSpanishDate(val) : null;
+  if(iso){
+    const d = new Date(iso + 'T12:00:00');
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    if(d > today){
+      hint.innerHTML = `<span style="color:#0369a1;font-weight:700">🔮 Fecha futura — prueba planificada</span>`;
+    } else if(d.getTime() === today.getTime()){
+      hint.innerHTML = `<span style="color:#7c2d12;font-weight:700">🏁 Hoy</span>`;
+    } else {
+      const dayDiff = Math.round((today - d) / 86400000);
+      hint.innerHTML = `<span style="color:#15803d;font-weight:700">✅ Fecha válida${dayDiff === 1 ? ' · ayer' : dayDiff < 7 ? ' · hace ' + dayDiff + ' días' : ''}</span>`;
+    }
+  } else {
+    hint.innerHTML = `<span style="color:#dc2626;font-weight:700">⚠️ Formato incorrecto · usa dd/mm/aaaa</span>`;
+  }
+}
+
+// ─── 5. ALERTAS DE CONSISTENCIA POST-CARGA ────────────────────────────────
+function _cargaAnalyzeConsistency(){
+  if(!Array.isArray(riders) || !riders.length) return [];
+  const alerts = [];
+  // 1. Pocos clasificados (puede ser CRI corta o error)
+  if(riders.length < 5){
+    alerts.push({type:'warn', icon:'⚠️', msg: `Solo ${riders.length} clasificados. Inusualmente bajo — comprueba si es correcto o falta gente del PDF`});
+  }
+  // 2. Posiciones duplicadas
+  const posCount = {};
+  riders.forEach(r => { posCount[r.pos] = (posCount[r.pos]||0) + 1; });
+  const duplicates = Object.entries(posCount).filter(([_,n]) => n > 1);
+  if(duplicates.length){
+    alerts.push({type:'err', icon:'❌', msg: `Posiciones duplicadas: ${duplicates.map(([p,n]) => `${p}º (${n} corredores)`).join(', ')}`});
+  }
+  // 3. Posiciones no consecutivas (hay huecos grandes)
+  const positionsSorted = riders.map(r=>r.pos).filter(p=>p>0).sort((a,b)=>a-b);
+  if(positionsSorted.length){
+    const lastPos = positionsSorted[positionsSorted.length-1];
+    if(lastPos > positionsSorted.length * 1.5){
+      alerts.push({type:'warn', icon:'⚠️', msg: `Última posición ${lastPos}º pero solo ${positionsSorted.length} clasificados. Puede que falten corredores`});
+    }
+  }
+  // 4. Ganador sin historial
+  const winner = riders.find(r => r.pos === 1);
+  if(winner && Array.isArray(_cachedHistory) && _cachedHistory.length){
+    const nameKey = (typeof normalizeRiderName === 'function' ? normalizeRiderName(winner.name||'') : (winner.name||'')).toLowerCase();
+    const hasHistory = _cachedHistory.some(h => (h.riders||[]).some(x => (typeof normalizeRiderName === 'function' ? normalizeRiderName(x.name||'') : (x.name||'')).toLowerCase() === nameKey));
+    if(!hasHistory){
+      alerts.push({type:'info', icon:'ℹ️', msg: `Ganador <b>${winner.name}</b> sin historial previo en la app — debutante o nombre nuevo`});
+    }
+  }
+  // 5. Demasiados sin tiempo
+  const noTime = riders.filter(r => !r.totalSeconds || r.totalSeconds === 0).length;
+  if(noTime > 0 && (noTime / riders.length) >= 0.3){
+    alerts.push({type:'warn', icon:'⏱️', msg: `${noTime} corredores (${Math.round(noTime/riders.length*100)}%) sin tiempo detectado — revisa el PDF original`});
+  }
+  // 6. Equipos sin nombre
+  const noTeam = riders.filter(r => !r.team || !r.team.trim()).length;
+  if(noTeam > 0 && (noTeam / riders.length) >= 0.2){
+    alerts.push({type:'warn', icon:'🚴', msg: `${noTeam} corredores (${Math.round(noTeam/riders.length*100)}%) sin equipo asignado`});
+  }
+  // 7. Sin categorías
+  const noCat = riders.filter(r => !r.cat || !r.cat.trim()).length;
+  if(noCat === riders.length){
+    alerts.push({type:'info', icon:'🎽', msg: `Ninguno tiene categoría asignada. Usa "🔍 Completar datos con historial" en Tabla y filtros`});
+  }
+  // 8. Fecha futura con clasificación cargada
+  const raceDateVal = (document.getElementById('raceDate')?.value || '').trim();
+  if(raceDateVal){
+    const iso = _parseSpanishDate(raceDateVal);
+    if(iso){
+      const d = new Date(iso + 'T12:00:00');
+      if(d > new Date()){
+        alerts.push({type:'warn', icon:'📅', msg: `Fecha futura ${raceDateVal} con resultados cargados. Si es predicción, está bien; si no, revisa la fecha`});
+      }
+    }
+  }
+  return alerts;
+}
+
+function _cargaRenderConsistencyAlerts(){
+  // Buscar o crear el contenedor (justo después del successBanner)
+  let box = document.getElementById('cargaConsistencyAlerts');
+  const banner = document.getElementById('successBanner');
+  if(!box && banner){
+    box = document.createElement('div');
+    box.id = 'cargaConsistencyAlerts';
+    box.style.cssText = 'margin-bottom:14px';
+    banner.parentNode.insertBefore(box, banner.nextSibling);
+  }
+  if(!box) return;
+  const alerts = _cargaAnalyzeConsistency();
+  if(!alerts.length){
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  box.style.display = '';
+  // Si hay errores → rojo, si solo warnings → ámbar, si solo info → azul
+  const hasErr = alerts.some(a => a.type === 'err');
+  const hasWarn = alerts.some(a => a.type === 'warn');
+  const headerBg = hasErr ? '#fee2e2' : hasWarn ? '#fef3c7' : '#dbeafe';
+  const headerCol = hasErr ? '#991b1b' : hasWarn ? '#92400e' : '#1e40af';
+  const headerBorder = hasErr ? '#fca5a5' : hasWarn ? '#fcd34d' : '#93c5fd';
+  const headerIcon = hasErr ? '❌' : hasWarn ? '⚠️' : 'ℹ️';
+  const headerTitle = hasErr ? 'Errores detectados — revisa la clasificación'
+                    : hasWarn ? `${alerts.length} aviso${alerts.length>1?'s':''} de consistencia`
+                    : 'Información sobre la carga';
+  box.innerHTML = `<div style="background:${headerBg};border:1.5px solid ${headerBorder};border-radius:10px;padding:10px 14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+      <div style="font-weight:800;color:${headerCol};font-size:13px">${headerIcon} ${headerTitle}</div>
+      <button onclick="document.getElementById('cargaConsistencyAlerts').style.display='none'" style="background:none;border:0;color:${headerCol};cursor:pointer;font-size:16px;padding:0 4px" title="Ocultar avisos">✕</button>
+    </div>
+    <ul style="margin:0;padding-left:22px;font-size:12.5px;color:#374151;line-height:1.65">
+      ${alerts.map(a => `<li>${a.icon} ${a.msg}</li>`).join('')}
+    </ul>
+  </div>`;
+}
+
+// ─── 3. TOAST DE ÉXITO AL GUARDAR CON ENLACE AL HISTORIAL ──────────────────
+// Hook NO INVASIVO: detectar cuando saveHistory hace el alert clásico
+// y mostrarlo como toast estilizado. Se mantiene el alert por compatibilidad
+// pero se intercepta antes de mostrarlo.
+function _cargaShowSaveToast(action){
+  if(typeof showToast !== 'function') return;
+  const msg = action === 'actualizar'
+    ? '✅ Carrera ACTUALIZADA en el histórico'
+    : '✅ Carrera GUARDADA en el histórico';
+  showToast(msg + ' · Toca aquí para verla', 'ok', 5500);
+  // Click handler para abrir el historial (toast clickable)
+  setTimeout(()=>{
+    const toastEl = document.querySelector('.toast-message, .toast');
+    if(toastEl){
+      toastEl.style.cursor = 'pointer';
+      toastEl.addEventListener('click', ()=>{
+        if(typeof showView === 'function') showView('view-historial');
+      }, {once:true});
+    }
+  }, 80);
+}
+
+// ─── HOOKS DE INICIALIZACIÓN ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Listener para validación de fecha en vivo
+  const dateInp = document.getElementById('raceDate');
+  if(dateInp){
+    dateInp.addEventListener('input',  _cargaValidateDateLive);
+    dateInp.addEventListener('change', _cargaValidateDateLive);
+    dateInp.addEventListener('blur',   _cargaValidateDateLive);
+  }
+  // Poblar datalist de Localidad cuando el histórico esté disponible
+  const tryPopulateLoc = () => {
+    if(Array.isArray(_cachedHistory) && _cachedHistory.length){
+      _cargaPopulateLocalidadDatalist();
+      return true;
+    }
+    return false;
+  };
+  if(!tryPopulateLoc()){
+    let attempts = 0;
+    const iv = setInterval(()=>{
+      attempts++;
+      if(tryPopulateLoc() || attempts > 30) clearInterval(iv);
+    }, 800);
+  }
+});
+
+// Hook en parseText (función que carga la clasificación) para mostrar alertas
+const _origParseText = (typeof parseText === 'function') ? parseText : null;
+if(_origParseText){
+  window.parseText = function(text){
+    const ret = _origParseText(text);
+    // Tras parsear, mostrar alertas de consistencia (con delay para que renderAll acabe)
+    setTimeout(()=>{
+      try{ _cargaRenderConsistencyAlerts(); }catch(e){ console.warn('[carga] consistency',e); }
+    }, 300);
+    return ret;
+  };
+}
