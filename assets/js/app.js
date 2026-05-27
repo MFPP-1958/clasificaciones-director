@@ -6026,19 +6026,27 @@ function selectCatChip(cat){
   applyFilters();
 }
 function clearAllFilters(){
-  $('searchInput').value = '';
-  $('teamFilter').value = '';
+  // Limpiar TODOS los filtros (no solo los clásicos)
+  const inp = $('searchInput');
+  if(inp){
+    inp.value = '';
+    // Forzar dispatch para que cualquier listener input/change se entere
+    try{
+      inp.dispatchEvent(new Event('input',  {bubbles:true}));
+      inp.dispatchEvent(new Event('change', {bubbles:true}));
+    }catch(e){}
+  }
+  if($('teamFilter'))   $('teamFilter').value = '';
   if($('regionFilter')) $('regionFilter').value = '';
-  $('topFilter').value = '';
-  selectedCatChips.clear();
+  if($('topFilter'))    $('topFilter').value = '';
+  if($('topCatFilter')) $('topCatFilter').value = '';
+  if(typeof selectedCatChips !== 'undefined' && selectedCatChips) selectedCatChips.clear();
   onlyMyTeam = false;
-  
   const btn = $('toggleMyTeam');
   if(btn){
     btn.classList.remove('active');
-    $('toggleIcon').textContent = '⚪';
+    const ic = $('toggleIcon'); if(ic) ic.textContent = '⚪';
   }
-  
   populateFilters();
   applyFilters();
 }
@@ -13094,6 +13102,8 @@ function renderComparativo(){
     renderComparativoTable();
     renderComparativoCharts();
     renderComparativoConclusion();
+    // Opción A — inyecta Ranking interno + Δ grupo + CVG + H2H + exportar
+    try{ if(typeof _compInjectTierA === 'function') _compInjectTierA(); }catch(e){ console.warn('[comp] tierA inject error',e); }
   }
 }
 
@@ -26808,115 +26818,107 @@ function _compBuildGroupMetricsHtml(filledRiders){
   </div>`;
 }
 
-// ─── Ranking interno + Δ vs grupo: re-render extendido de la tabla ────────
-// Sobrescribimos renderComparativoTable para añadir badges y columnas Δ
-const _origRenderComparativoTable = (typeof renderComparativoTable === 'function') ? renderComparativoTable : null;
-if(_origRenderComparativoTable){
-  window.renderComparativoTable = function(){
-    const el = document.getElementById('compTable');
-    if(!el) return;
-    const sorted = _compFilled().slice().sort((a,b)=>a.pos-b.pos);
-    if(!sorted.length){ el.innerHTML = ''; return; }
-    const best = sorted[0];
-    // Métricas para ranking y Δ
-    const positions  = sorted.map(r => r.pos);
-    const paces      = sorted.map(r => r.secPerKm);
-    const percentiles= sorted.map(r => ((riders.length - r.pos) / Math.max(1, riders.length - 1)) * 100);
-    const posMean    = positions.reduce((s,v)=>s+v,0) / positions.length;
-    const pctMean    = percentiles.reduce((s,v)=>s+v,0) / percentiles.length;
-    // Rankings internos: para pos y pace, menor es mejor; para percentil, mayor es mejor
-    const posRank  = _compInternalRanking(positions,  true);
-    const paceRank = _compInternalRanking(paces,      true);
-    const pctRank  = _compInternalRanking(percentiles,false);
+// ─── INYECTA los bloques del Tier ALTO al DOM tras renderComparativo ─────────
+// Llamado DIRECTAMENTE desde renderComparativo() (no por wrap, que no funciona
+// con function declarations globales — el callsite usa el binding local).
+function _compInjectTierA(){
+  const compResults = document.getElementById('compResults');
+  if(!compResults) return;
+  // Limpiar inyecciones previas (importante al re-renderizar)
+  document.getElementById('compRankingPanel')?.remove();
+  document.getElementById('compGroupMetrics')?.remove();
+  document.getElementById('compH2HMatrix')?.remove();
+  document.getElementById('compExportBar')?.remove();
 
-    const rows = sorted.map((r, idx) => {
-      const isLeader = getRiderKey(r) === getRiderKey(best);
-      const pct      = percentiles[idx];
-      const sameCat  = riders.filter(x => x.cat === r.cat).sort((a,b)=>a.pos-b.pos);
-      const catPos   = sameCat.findIndex(x => getRiderKey(x) === getRiderKey(r)) + 1;
-      const cIdx     = comparativoRiders.findIndex(x => x && getRiderKey(x) === getRiderKey(r));
-      const c        = COMP_COLORS[cIdx] || '#475467';
-      // Δ vs grupo (posición): si - = mejor que la media, si + = peor
-      const dPos     = r.pos - posMean;
-      const dPosStr  = dPos === 0 ? '=' : (dPos > 0 ? `+${dPos.toFixed(1)}` : dPos.toFixed(1));
-      const dPosCol  = dPos < 0 ? '#15803d' : dPos > 0 ? '#b91c1c' : '#64748b';
-      const dPct     = pct - pctMean;
-      const dPctStr  = Math.abs(dPct) < 0.05 ? '=' : (dPct > 0 ? `+${dPct.toFixed(1)}%` : dPct.toFixed(1) + '%');
-      const dPctCol  = dPct > 0 ? '#15803d' : dPct < 0 ? '#b91c1c' : '#64748b';
-      return `<tr class="${isLeader?'compare-leader':''}">
-        <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${c};flex-shrink:0"></span></td>
-        <td><b>${escapeHtml(r.name)}</b>${isLeader?' ✅':''}</td>
-        <td>${escapeHtml(r.team)}</td>
-        <td><b>${_compMedal(posRank[idx])} ${r.pos}º</b> de ${riders.length}</td>
-        <td style="color:${dPosCol};font-weight:700">${dPosStr}</td>
-        <td><span class="pill"><span class="cat-dot" style="background:${getColorForCategory(r.cat)}"></span>${escapeHtml(r.cat)}</span></td>
-        <td>${catPos}º de ${sameCat.length}</td>
-        <td>${formatSeconds(r.totalSeconds)}</td>
-        <td>${formatSeconds(r.gapSeconds)}</td>
-        <td>${r.secPerKm!=null?_compMedal(paceRank[idx])+' '+r.secPerKm.toFixed(1)+' s/km':'—'}</td>
-        <td>${_compMedal(pctRank[idx])} ${pct.toFixed(1)}%</td>
-        <td style="color:${dPctCol};font-weight:700">${dPctStr}</td>
-        <td>${escapeHtml(r.region||'—')}</td>
-      </tr>`;
-    }).join('');
+  const filled = _compFilled();
+  if(!filled.length) return;
 
-    el.innerHTML = `<div class="table-wrap" style="max-height:none;margin-bottom:16px">
-      <table class="compare-table">
-        <thead><tr>
-          <th></th><th>Ciclista</th><th>Equipo</th>
-          <th>Pos. General</th><th title="Δ respecto a la media de posiciones del grupo">Δ Pos</th>
-          <th>Categoría</th><th>Pos. Cat.</th>
-          <th>Tiempo</th><th>Diferencia</th>
-          <th>Seg/km</th><th>Percentil</th>
-          <th title="Δ percentil vs media del grupo">Δ Pct</th>
-          <th>CCAA</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <p class="small" style="margin:-10px 0 12px;color:#6b7280">🥇🥈🥉 = ranking interno del grupo en esa métrica · <b>Δ Pos</b>/<b>Δ Pct</b> = diferencia vs media del grupo (verde mejor, rojo peor)</p>`;
-  };
-}
+  const sorted = filled.slice().sort((a,b)=>a.pos-b.pos);
 
-// ─── Re-render extendido de la conclusión: añade bloque de métricas grupales + H2H ──
-const _origRenderComparativoConclusion = (typeof renderComparativoConclusion === 'function') ? renderComparativoConclusion : null;
-if(_origRenderComparativoConclusion){
-  window.renderComparativoConclusion = function(){
-    _origRenderComparativoConclusion();
-    const filled = _compFilled();
-    if(!filled.length) return;
-    // Buscar contenedor donde inyectar (después de #compConclusion)
-    const compResults = document.getElementById('compResults');
-    if(!compResults) return;
-    // Eliminar bloques previos si existen
-    document.getElementById('compGroupMetrics')?.remove();
-    document.getElementById('compH2HMatrix')?.remove();
-    document.getElementById('compExportBar')?.remove();
-    // Crear bloques
-    const wrap = document.createElement('div');
-    wrap.innerHTML = `
-      <div id="compGroupMetrics">${_compBuildGroupMetricsHtml(filled)}</div>
-      <div id="compH2HMatrix" class="panel" style="margin-top:14px;border-left:4px solid #9a3412">
-        <div class="section-title">
-          <h2 style="margin:0;color:#9a3412">⚔️ H2H entre seleccionados</h2>
-          <span class="small">Récord directo en histórico</span>
-        </div>
-        ${filled.length >= 2 ? _compBuildH2HMatrixHtml(filled, _compH2HMatrix(filled)) : '<p class="small" style="color:#9ca3af">Selecciona al menos 2 corredores.</p>'}
+  // ─── #1 Δ vs grupo + #2 Ranking interno (panel resumen visual) ─────────
+  const positions  = sorted.map(r => r.pos);
+  const paces      = sorted.map(r => r.secPerKm);
+  const percentiles= sorted.map(r => ((riders.length - r.pos) / Math.max(1, riders.length - 1)) * 100);
+  const posMean    = positions.reduce((s,v)=>s+v,0) / positions.length;
+  const pctMean    = percentiles.reduce((s,v)=>s+v,0) / percentiles.length;
+  const validPaces = paces.filter(p => p != null);
+  const paceMean   = validPaces.length ? validPaces.reduce((s,v)=>s+v,0) / validPaces.length : null;
+  const posRank  = _compInternalRanking(positions,  true);
+  const paceRank = _compInternalRanking(paces,      true);
+  const pctRank  = _compInternalRanking(percentiles,false);
+
+  // Panel con cada corredor y su ranking en cada métrica + Δ
+  const rankingRows = sorted.map((r, idx) => {
+    const cIdx = comparativoRiders.findIndex(x => x && getRiderKey(x) === getRiderKey(r));
+    const c    = COMP_COLORS[cIdx] || '#475467';
+    const dPos    = r.pos - posMean;
+    const dPosStr = dPos === 0 ? '=' : (dPos > 0 ? `+${dPos.toFixed(1)}` : dPos.toFixed(1));
+    const dPosCol = dPos < 0 ? '#15803d' : dPos > 0 ? '#b91c1c' : '#64748b';
+    const dPct    = percentiles[idx] - pctMean;
+    const dPctStr = Math.abs(dPct) < 0.05 ? '=' : (dPct > 0 ? `+${dPct.toFixed(1)}%` : dPct.toFixed(1) + '%');
+    const dPctCol = dPct > 0 ? '#15803d' : dPct < 0 ? '#b91c1c' : '#64748b';
+    const dPace   = (paceMean != null && paces[idx] != null) ? paces[idx] - paceMean : null;
+    const dPaceStr = dPace == null ? '—' : (Math.abs(dPace) < 0.05 ? '=' : (dPace > 0 ? `+${dPace.toFixed(2)}` : dPace.toFixed(2)));
+    const dPaceCol = dPace == null ? '#64748b' : dPace < 0 ? '#15803d' : '#b91c1c';
+    return `<tr>
+      <td style="padding:7px 9px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c};vertical-align:middle"></span> <b>${escapeHtml(r.name)}</b></td>
+      <td style="padding:7px 9px;text-align:center"><b>${_compMedal(posRank[idx])} ${r.pos}º</b></td>
+      <td style="padding:7px 9px;text-align:center;color:${dPosCol};font-weight:700">${dPosStr}</td>
+      <td style="padding:7px 9px;text-align:center">${r.secPerKm != null ? _compMedal(paceRank[idx]) + ' ' + r.secPerKm.toFixed(1) : '—'}</td>
+      <td style="padding:7px 9px;text-align:center;color:${dPaceCol};font-weight:700">${dPaceStr}</td>
+      <td style="padding:7px 9px;text-align:center">${_compMedal(pctRank[idx])} ${percentiles[idx].toFixed(1)}%</td>
+      <td style="padding:7px 9px;text-align:center;color:${dPctCol};font-weight:700">${dPctStr}</td>
+    </tr>`;
+  }).join('');
+
+  // Crear los bloques nuevos como elementos
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div id="compRankingPanel" class="panel" style="margin-top:14px;border-left:4px solid #f59e0b">
+      <div class="section-title">
+        <h2 style="margin:0;color:#92400e">🥇 Ranking interno + Δ vs grupo</h2>
+        <span class="small">Medallas por métrica · Δ respecto a la media del grupo</span>
       </div>
-      <div id="compExportBar" class="panel" style="margin-top:14px;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
-          <div>
-            <b style="color:#3730a3">📥 Exportar comparativa</b>
-            <p class="small" style="margin:2px 0 0;color:#475569">Descarga la comparativa completa con métricas, Δ y H2H</p>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn" onclick="_compExport('csv')" style="background:#16a34a;color:#fff;font-weight:800;padding:8px 14px">📄 CSV</button>
-            <button class="btn" onclick="_compExport('pdf')" style="background:#3730a3;color:#fff;font-weight:800;padding:8px 14px">🖨️ PDF imprimible</button>
-          </div>
+      <div class="table-wrap" style="overflow:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead style="background:#fffbeb">
+            <tr>
+              <th style="padding:8px 9px;text-align:left;font-size:11px;text-transform:uppercase;color:#92400e;letter-spacing:.4px">Ciclista</th>
+              <th style="padding:8px 9px;text-align:center;font-size:11px;text-transform:uppercase;color:#92400e;letter-spacing:.4px">Pos.</th>
+              <th style="padding:8px 9px;text-align:center;font-size:11px;text-transform:uppercase;color:#92400e;letter-spacing:.4px" title="Δ posición vs media del grupo">Δ Pos</th>
+              <th style="padding:8px 9px;text-align:center;font-size:11px;text-transform:uppercase;color:#92400e;letter-spacing:.4px">Seg/km</th>
+              <th style="padding:8px 9px;text-align:center;font-size:11px;text-transform:uppercase;color:#92400e;letter-spacing:.4px" title="Δ ritmo vs media del grupo">Δ s/km</th>
+              <th style="padding:8px 9px;text-align:center;font-size:11px;text-transform:uppercase;color:#92400e;letter-spacing:.4px">Percentil</th>
+              <th style="padding:8px 9px;text-align:center;font-size:11px;text-transform:uppercase;color:#92400e;letter-spacing:.4px" title="Δ percentil vs media del grupo">Δ Pct</th>
+            </tr>
+          </thead>
+          <tbody>${rankingRows}</tbody>
+        </table>
+      </div>
+      <p class="small" style="margin:8px 0 0;color:#6b7280">🥇🥈🥉 = ranking interno del grupo en esa métrica · <b>Δ</b> en verde = mejor que la media del grupo · rojo = peor</p>
+    </div>
+    <div id="compGroupMetrics">${_compBuildGroupMetricsHtml(filled)}</div>
+    <div id="compH2HMatrix" class="panel" style="margin-top:14px;border-left:4px solid #9a3412">
+      <div class="section-title">
+        <h2 style="margin:0;color:#9a3412">⚔️ H2H entre seleccionados</h2>
+        <span class="small">Récord directo en histórico</span>
+      </div>
+      ${filled.length >= 2 ? _compBuildH2HMatrixHtml(filled, _compH2HMatrix(filled)) : '<p class="small" style="color:#9ca3af">Selecciona al menos 2 corredores.</p>'}
+    </div>
+    <div id="compExportBar" class="panel" style="margin-top:14px;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+        <div>
+          <b style="color:#3730a3">📥 Exportar comparativa</b>
+          <p class="small" style="margin:2px 0 0;color:#475569">Descarga la comparativa completa con métricas, Δ y H2H</p>
         </div>
-      </div>`;
-    compResults.appendChild(wrap);
-  };
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="_compExport('csv')" style="background:#16a34a;color:#fff;font-weight:800;padding:8px 14px">📄 CSV</button>
+          <button class="btn" onclick="_compExport('pdf')" style="background:#3730a3;color:#fff;font-weight:800;padding:8px 14px">🖨️ PDF imprimible</button>
+        </div>
+      </div>
+    </div>`;
+  // Mover hijos del wrap a compResults (mantenemos compResults como contenedor)
+  while(wrap.firstChild) compResults.appendChild(wrap.firstChild);
 }
 
 // ─── #5 EXPORTACIÓN PDF / CSV ──────────────────────────────────────────────
