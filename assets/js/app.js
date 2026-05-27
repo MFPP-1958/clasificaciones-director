@@ -10775,6 +10775,79 @@ async function renderInicio(){
       if(!currentRiders.length && history.length>0){
         pendings.push({icon:'📤', color:'#0b2f6b', bg:'#f0f9ff', border:'#bae6fd', label:'No hay prueba cargada en memoria — abre una desde el Historial', action:"showView('view-historial')"});
       }
+
+      // ─── ALERTAS PROACTIVAS (Tier 2 #B) ────────────────────────────────
+      // Detectamos automáticamente patrones interesantes en el equipo:
+      //  · Corredor en racha ⬆️ (3+ carreras mejorando)
+      //  · Corredor en bajón ⬇️ (3+ carreras empeorando)
+      //  · Próxima carrera sin lista de inscritos (urgente si <7 días)
+      //  · Carrera con datos incompletos (sin localidad)
+      if(team){
+        const myTeamKeyAlert = typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim();
+        // Construir histórico por corredor del equipo
+        const riderTimeline = new Map(); // nameKey → [{pos, date}]
+        history.forEach(race => {
+          const iso = _parseSpanishDate(race.raceDate);
+          (race.riders||[]).forEach(r => {
+            const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
+            if(tk !== myTeamKeyAlert) return;
+            if(!r.pos || r.pos <= 0) return;
+            const nk = normalizeRiderName(r.name||'').toLowerCase();
+            if(!nk) return;
+            if(!riderTimeline.has(nk)) riderTimeline.set(nk, {name:r.name, hits:[]});
+            riderTimeline.get(nk).hits.push({pos:r.pos, date:iso||'0000-00-00'});
+          });
+        });
+        // Para cada corredor con ≥4 carreras, comparar últimas 3 vs anteriores
+        const upRiders = [], downRiders = [];
+        riderTimeline.forEach(d => {
+          if(d.hits.length < 4) return;
+          const sorted = d.hits.slice().sort((a,b)=>b.date.localeCompare(a.date));
+          const recent3 = sorted.slice(0,3).map(h=>h.pos);
+          const older = sorted.slice(3,6).map(h=>h.pos);
+          if(!older.length) return;
+          const recentAvg = recent3.reduce((s,p)=>s+p,0)/recent3.length;
+          const olderAvg  = older.reduce((s,p)=>s+p,0)/older.length;
+          const delta = olderAvg - recentAvg;
+          const nm = (d.name||'').split(',')[0].trim();
+          if(delta > 3 && recentAvg <= 30) upRiders.push({nm, delta:delta.toFixed(1), recent:recentAvg.toFixed(1)});
+          else if(delta < -4) downRiders.push({nm, delta:Math.abs(delta).toFixed(1), recent:recentAvg.toFixed(1)});
+        });
+        // Top 1 de cada tipo (no saturar pendientes)
+        upRiders.sort((a,b)=>parseFloat(b.delta)-parseFloat(a.delta));
+        downRiders.sort((a,b)=>parseFloat(b.delta)-parseFloat(a.delta));
+        if(upRiders.length){
+          const u = upRiders[0];
+          pendings.push({icon:'🔥', color:'#166534', bg:'#dcfce7', border:'#86efac', label:`${u.nm} en RACHA ASCENDENTE — mejora ${u.delta} puestos (media reciente ${u.recent}º)`, action:`_inicioOpenRider('${escapeAttr(u.nm)}')`});
+        }
+        if(downRiders.length){
+          const d = downRiders[0];
+          pendings.push({icon:'📉', color:'#92400e', bg:'#fef3c7', border:'#fcd34d', label:`${d.nm} en BAJÓN — empeora ${d.delta} puestos (media reciente ${d.recent}º)`, action:`_inicioOpenRider('${escapeAttr(d.nm)}')`});
+        }
+
+        // Próxima carrera SIN inscritos cargados — urgente si es esta semana
+        if(typeof _calPlanned !== 'undefined' && Array.isArray(_calPlanned)){
+          const todayMs = new Date().setHours(0,0,0,0);
+          const week7 = todayMs + 7*86400000;
+          const planNoInscritos = _calPlanned
+            .map(p => ({...p, iso: p.dateStr || (p.date instanceof Date ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}-${String(p.date.getDate()).padStart(2,'0')}` : '')}))
+            .filter(p => {
+              if(!p.iso) return false;
+              const t = new Date(p.iso+'T12:00:00').getTime();
+              if(t < todayMs) return false;
+              if(t > week7) return false;
+              // ¿Tiene inscritos en _cachedHistory?
+              const match = history.find(h => _parseSpanishDate(h.raceDate) === p.iso);
+              return !(match && Array.isArray(match.inscritos) && match.inscritos.length > 0);
+            })
+            .sort((a,b)=>a.iso.localeCompare(b.iso));
+          if(planNoInscritos.length){
+            const p = planNoInscritos[0];
+            const daysLeft = Math.ceil((new Date(p.iso+'T12:00:00').getTime() - todayMs)/86400000);
+            pendings.push({icon:'📋', color:'#7c2d12', bg:'#ffedd5', border:'#fdba74', label:`Falta startlist de "${(p.name||'').slice(0,40)}" (${daysLeft} día${daysLeft!==1?'s':''}) — necesaria para simular`, action:"showView('view-historial')"});
+          }
+        }
+      }
     }catch(e){ console.warn('[Inicio] detección de pendientes falló:', e); }
 
     if(pendings.length){
@@ -11147,23 +11220,47 @@ async function renderInicio(){
       if(!filtered5.length){
         recBox.innerHTML = `<div class="inicio-empty">No hay carreras del filtro actual en el historial.</div>`;
       } else {
-        // Tier 1 Dashboard #10-#11: mostrar mejor resultado del equipo + botones de acción
+        // Tier 1 #10-#11 + Tier 2 #D: mejor resultado + resumen táctico del día
         const myTeamKeyRec = team ? (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim()) : '';
         recBox.innerHTML = filtered5.map(race=>{
           const nRiders = (race.riders||[]).length;
-          // Mejor resultado del equipo en esta carrera
+          // Riders del equipo en esta carrera con posición válida
+          let myRiders = [];
           let bestTeamResult = null;
+          let teamSumTop3 = null;
           if(team){
-            const myRiders = (race.riders||[]).filter(r => {
+            myRiders = (race.riders||[]).filter(r => {
               const tk = typeof teamKey === 'function' ? teamKey(r.team||'') : (r.team||'').toLowerCase().trim();
               return tk === myTeamKeyRec && r.pos > 0;
-            });
+            }).sort((a,b)=>a.pos-b.pos);
             if(myRiders.length){
-              myRiders.sort((a,b)=>a.pos-b.pos);
               bestTeamResult = myRiders[0];
+              if(myRiders.length >= 3){
+                teamSumTop3 = myRiders.slice(0,3).reduce((s,r)=>s+r.pos,0);
+              }
             }
           }
-          // Color del badge según el resultado
+          // — Tier 2 #D · RESUMEN TÁCTICO DEL DÍA —
+          // Criterios para clasificar el día del equipo:
+          //   🟢 Buen día: alguien en podio (≤3) O 2+ corredores en Top 10
+          //   🟡 Normal: alguien en Top 10 pero sin podio Y menos de 2 en Top 10
+          //   🔴 Mal día: nadie en Top 10 (todos > 10) Y al menos 3 corredores
+          //   ⚪ Sin datos: no había corredores del equipo
+          let tacticIcon = '', tacticTxt = '', tacticColor = '#9ca3af';
+          if(team && myRiders.length){
+            const inPodium = myRiders.filter(r => r.pos <= 3).length;
+            const inTop10  = myRiders.filter(r => r.pos <= 10).length;
+            if(inPodium >= 1 || inTop10 >= 2){
+              tacticIcon = '🟢'; tacticTxt = 'Buen día'; tacticColor = '#15803d';
+            } else if(inTop10 >= 1){
+              tacticIcon = '🟡'; tacticTxt = 'Día regular'; tacticColor = '#92400e';
+            } else if(myRiders.length >= 3){
+              tacticIcon = '🔴'; tacticTxt = 'Mal día'; tacticColor = '#b91c1c';
+            } else {
+              tacticIcon = '⚪'; tacticTxt = 'Pocas referencias'; tacticColor = '#64748b';
+            }
+          }
+          // Badge resultado individual del mejor
           let resultBadge = '';
           if(bestTeamResult){
             const p = bestTeamResult.pos;
@@ -11171,11 +11268,17 @@ async function renderInicio(){
             const col= p<=3 ? '#15803d' : p<=10 ? '#1d4ed8' : p<=20 ? '#92400e' : '#475569';
             const ic = p===1 ? '🥇' : p===2 ? '🥈' : p===3 ? '🥉' : '🔵';
             const nm = (bestTeamResult.name||'').split(',')[0].trim();
-            resultBadge = `<div style="display:inline-flex;align-items:center;gap:5px;background:${bg};color:${col};padding:2px 7px;border-radius:6px;font-size:11px;font-weight:800;margin-top:3px"><span>${ic} ${p}º</span><span style="font-weight:600">${escapeHtml(nm.slice(0,18))}</span></div>`;
+            const sumPart = teamSumTop3 != null ? ` · Σ top3: ${teamSumTop3}` : '';
+            resultBadge = `<div style="display:inline-flex;align-items:center;gap:5px;background:${bg};color:${col};padding:2px 7px;border-radius:6px;font-size:11px;font-weight:800;margin-top:3px"><span>${ic} ${p}º</span><span style="font-weight:600">${escapeHtml(nm.slice(0,18))}</span><span style="font-weight:500">${sumPart}</span></div>`;
           }
           const raceId = race.id || '';
+          // Header con icono táctico si aplica
+          const tacticHeader = tacticIcon
+            ? `<div style="font-size:11px;font-weight:800;color:${tacticColor};margin-bottom:3px"><span style="font-size:13px">${tacticIcon}</span> ${escapeHtml(tacticTxt)}${myRiders.length?` · ${myRiders.length} corredor${myRiders.length!==1?'es':''}`:''}</div>`
+            : '';
           return `<div class="inicio-race-row" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 11px" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
             <div style="flex:1;min-width:0" onclick="_inicioOpenRaceAnalysis('${escapeAttr(raceId)}','${escapeAttr(race.raceName||'')}')">
+              ${tacticHeader}
               <div style="font-weight:700;color:#0b2f6b">${escapeHtml((race.raceName||'').slice(0,50))}</div>
               <div style="font-size:12px;color:#6b7280">${race.raceDate||'—'}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''} · ${nRiders} corredores</div>
               ${resultBadge}

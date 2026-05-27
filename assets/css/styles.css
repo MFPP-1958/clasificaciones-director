@@ -1403,3 +1403,35 @@ details.sim-help .sim-help-body .tip{
 .wx-warn{background:#fef3c7;color:#92400e;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;margin-left:auto}
 .wx-loading{padding:16px;text-align:center;color:#64748b;font-size:13px}
 .wx-error{padding:14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;color:#991b1b;font-size:12.5px}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ACCESOS DIRECTOS AGRUPADOS — Tier 2 Dashboard (#C)
+   ═══════════════════════════════════════════════════════════════════════ */
+.inicio-accesos-grouped{display:flex;flex-direction:column;gap:14px}
+.acceso-group{display:flex;flex-direction:column;gap:6px}
+.acceso-group-title{
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  color:#3730a3;
+  padding:0 2px 4px;
+  border-bottom:1.5px solid #e0e7ff;
+}
+.acceso-group-btns{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:7px;
+}
+@media(max-width:700px){
+  .acceso-group-btns{grid-template-columns:repeat(2,1fr)}
+}
+.acceso-btn.acceso-highlight{
+  background:linear-gradient(135deg,#ede9fe,#ddd6fe);
+  border-color:#a78bfa;
+  color:#5b21b6;
+  font-weight:800;
+}
+.acceso-btn.acceso-highlight:hover{
+  background:linear-gradient(135deg,#ddd6fe,#c4b5fd);
+}
