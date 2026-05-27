@@ -26645,3 +26645,443 @@ function _aiBuildPercentilesBlock(histEntries){
     </div>
   </div>`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MENÚ COMPARATIVO · Opción A (5 mejoras)
+// 1. Δ Relativo al Grupo
+// 2. Ranking interno dinámico (badges por métrica)
+// 3. CVG (Coeficiente de Variación Grupal)
+// 4. H2H extendido entre seleccionados
+// 5. Exportar comparativa (PDF + CSV)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Helper: estadísticas grupales sobre array de números ──────────────────
+function _compGroupStats(values){
+  const valid = values.filter(v => v != null && isFinite(v));
+  if(!valid.length) return null;
+  const n = valid.length;
+  const mean = valid.reduce((s,v)=>s+v,0) / n;
+  const variance = valid.reduce((s,v)=>s+(v-mean)**2,0) / n;
+  const std = Math.sqrt(variance);
+  const cv = mean !== 0 ? Math.abs(std / mean) * 100 : 0;
+  return {n, mean, std, cv, min: Math.min(...valid), max: Math.max(...valid)};
+}
+
+// ─── #2 Ranking interno: devuelve {1: idx_mejor, 2: idx_2do, 3: idx_3ro} ──
+// Para una métrica donde "menor = mejor" (pos), pasar asc=true.
+// Para "mayor = mejor" (percentil), pasar asc=false.
+function _compInternalRanking(values, asc=true){
+  const indexed = values.map((v, i) => ({v, i})).filter(x => x.v != null && isFinite(x.v));
+  indexed.sort((a,b) => asc ? (a.v - b.v) : (b.v - a.v));
+  const ranking = {};
+  if(indexed[0]) ranking[indexed[0].i] = 1;
+  if(indexed[1]) ranking[indexed[1].i] = 2;
+  if(indexed[2]) ranking[indexed[2].i] = 3;
+  return ranking;
+}
+
+// Medalla según ranking
+function _compMedal(rank){
+  if(rank === 1) return '🥇';
+  if(rank === 2) return '🥈';
+  if(rank === 3) return '🥉';
+  return '';
+}
+
+// ─── #4 H2H entre los seleccionados: matriz NxN ────────────────────────────
+// Para cada par (A,B), cuenta cuántas veces A acabó por delante de B en el histórico
+function _compH2HMatrix(filledRiders){
+  const hist = _cachedHistory || [];
+  const N = filledRiders.length;
+  // Matriz: matrix[i][j] = {wins, losses, ties, encounters}
+  const matrix = Array.from({length: N}, () => Array.from({length: N}, () => ({wins:0, losses:0, ties:0, encounters:0})));
+  const nameKeys = filledRiders.map(r => normalizeForMatching(r.name||''));
+  for(const race of hist){
+    if(!race.riders || !race.riders.length) continue;
+    // Para cada par (i,j), comprobar si ambos aparecen en esta carrera
+    for(let i = 0; i < N; i++){
+      const ri = race.riders.find(x => normalizeForMatching(x.name||'') === nameKeys[i]);
+      if(!ri || !ri.pos) continue;
+      for(let j = i+1; j < N; j++){
+        const rj = race.riders.find(x => normalizeForMatching(x.name||'') === nameKeys[j]);
+        if(!rj || !rj.pos) continue;
+        // Ambos en la misma carrera
+        const cell = matrix[i][j];
+        const cellRev = matrix[j][i];
+        cell.encounters++;
+        cellRev.encounters++;
+        if(ri.pos < rj.pos){ cell.wins++; cellRev.losses++; }
+        else if(ri.pos > rj.pos){ cell.losses++; cellRev.wins++; }
+        else { cell.ties++; cellRev.ties++; }
+      }
+    }
+  }
+  return matrix;
+}
+
+function _compBuildH2HMatrixHtml(filledRiders, matrix){
+  const N = filledRiders.length;
+  if(N < 2) return '<div class="small" style="color:#9ca3af;padding:10px">Selecciona al menos 2 corredores para ver enfrentamientos.</div>';
+  // Construir tabla
+  const headerCells = ['<th style="padding:6px 8px"></th>']
+    .concat(filledRiders.map((r,i)=>`<th style="padding:6px 8px;text-align:center;color:${COMP_COLORS[i]||'#475569'};font-size:11px">${escapeHtml((r.name||'').split(',')[0])}</th>`))
+    .join('');
+  const rows = filledRiders.map((rowRider, i)=>{
+    const cells = [`<td style="padding:6px 8px;font-weight:700;color:${COMP_COLORS[i]||'#475569'};white-space:nowrap;font-size:12px">${escapeHtml((rowRider.name||'').split(',')[0])}</td>`];
+    for(let j = 0; j < N; j++){
+      if(i === j){
+        cells.push(`<td style="padding:6px 8px;text-align:center;background:#f1f5f9;color:#94a3b8">—</td>`);
+        continue;
+      }
+      const c = matrix[i][j];
+      if(c.encounters === 0){
+        cells.push(`<td style="padding:6px 8px;text-align:center;color:#cbd5e1;font-size:11px">sin datos</td>`);
+        continue;
+      }
+      const cls = c.wins > c.losses ? 'win' : c.losses > c.wins ? 'loss' : 'draw';
+      const bg  = cls === 'win' ? '#dcfce7' : cls === 'loss' ? '#fee2e2' : '#f1f5f9';
+      const col = cls === 'win' ? '#15803d' : cls === 'loss' ? '#991b1b' : '#475569';
+      const ties = c.ties > 0 ? ` (${c.ties}e)` : '';
+      cells.push(`<td style="padding:6px 8px;text-align:center;background:${bg};color:${col};font-weight:800;font-size:12px" title="${c.encounters} encuentros · ${rowRider.name} vs ${filledRiders[j].name}">${c.wins}–${c.losses}${ties}</td>`);
+    }
+    return `<tr>${cells.join('')}</tr>`;
+  }).join('');
+  return `<div class="table-wrap" style="overflow:auto;max-width:100%">
+    <table style="border-collapse:collapse;font-size:12px">
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  <p class="small" style="margin:6px 0 0;color:#6b7280">Leer fila vs columna: "fila 3–1 columna" = la fila ganó 3 veces y perdió 1. 🟢 dominio · 🔴 dominado · ⚪ empatado.</p>`;
+}
+
+// ─── #1 + #3: Sección de métricas grupales (Δ + CVG) ───────────────────────
+function _compBuildGroupMetricsHtml(filledRiders){
+  if(filledRiders.length < 2) return '';
+  const posStats   = _compGroupStats(filledRiders.map(r => r.pos));
+  const gapStats   = _compGroupStats(filledRiders.map(r => r.gapSeconds));
+  const paceStats  = _compGroupStats(filledRiders.map(r => r.secPerKm));
+  const percentiles= filledRiders.map(r => ((riders.length - r.pos) / Math.max(1, riders.length - 1)) * 100);
+  const pctStats   = _compGroupStats(percentiles);
+
+  // CVG cualitativo
+  const cvLabel = (cv) => {
+    if(cv == null || isNaN(cv)) return {label:'—', color:'#94a3b8'};
+    if(cv < 15)  return {label:'Muy homogéneo', color:'#15803d'};
+    if(cv < 35)  return {label:'Homogéneo',     color:'#0369a1'};
+    if(cv < 60)  return {label:'Mixto',         color:'#d97706'};
+    return {label:'Heterogéneo', color:'#b91c1c'};
+  };
+  const posCV = cvLabel(posStats?.cv);
+
+  return `<div class="panel" style="margin-top:14px;border-left:4px solid #0369a1">
+    <div class="section-title">
+      <h2 style="margin:0;color:#075985">📐 Métricas del grupo (Δ + CVG)</h2>
+      <span class="small">Análisis del conjunto seleccionado</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:8px">
+      <div style="padding:11px 14px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:10px">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:#0369a1;margin-bottom:4px">Posición media</div>
+        <div style="font-size:22px;font-weight:900;color:#075985">${posStats ? posStats.mean.toFixed(1) + 'º' : '—'}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px">Rango: ${posStats ? posStats.min + 'º – ' + posStats.max + 'º' : '—'}</div>
+      </div>
+      <div style="padding:11px 14px;background:#fef3c7;border:1.5px solid #fde68a;border-radius:10px">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:#92400e;margin-bottom:4px">CVG (homogeneidad)</div>
+        <div style="font-size:22px;font-weight:900;color:${posCV.color}">${posStats ? posStats.cv.toFixed(1) + '%' : '—'}</div>
+        <div style="font-size:11px;color:${posCV.color};margin-top:2px;font-weight:700">${posCV.label}</div>
+      </div>
+      <div style="padding:11px 14px;background:#dcfce7;border:1.5px solid #86efac;border-radius:10px">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:#166534;margin-bottom:4px">Percentil medio</div>
+        <div style="font-size:22px;font-weight:900;color:#15803d">${pctStats ? pctStats.mean.toFixed(1) + '%' : '—'}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px">σ = ${pctStats ? pctStats.std.toFixed(1) : '—'}</div>
+      </div>
+      ${paceStats ? `<div style="padding:11px 14px;background:#ede9fe;border:1.5px solid #c4b5fd;border-radius:10px">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:#5b21b6;margin-bottom:4px">Ritmo medio (s/km)</div>
+        <div style="font-size:22px;font-weight:900;color:#6d28d9">${paceStats.mean.toFixed(2)}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px">Δ: ${(paceStats.max - paceStats.min).toFixed(2)} s/km</div>
+      </div>` : ''}
+    </div>
+    <p class="small" style="margin:10px 0 0;color:#6b7280">
+      <b>CVG</b> = Coeficiente de Variación Grupal · &lt;15% muy homogéneo, &lt;35% homogéneo, &lt;60% mixto, ≥60% heterogéneo.
+      Cuanto MENOR es el CVG, más similares son los corredores entre sí.
+    </p>
+  </div>`;
+}
+
+// ─── Ranking interno + Δ vs grupo: re-render extendido de la tabla ────────
+// Sobrescribimos renderComparativoTable para añadir badges y columnas Δ
+const _origRenderComparativoTable = (typeof renderComparativoTable === 'function') ? renderComparativoTable : null;
+if(_origRenderComparativoTable){
+  window.renderComparativoTable = function(){
+    const el = document.getElementById('compTable');
+    if(!el) return;
+    const sorted = _compFilled().slice().sort((a,b)=>a.pos-b.pos);
+    if(!sorted.length){ el.innerHTML = ''; return; }
+    const best = sorted[0];
+    // Métricas para ranking y Δ
+    const positions  = sorted.map(r => r.pos);
+    const paces      = sorted.map(r => r.secPerKm);
+    const percentiles= sorted.map(r => ((riders.length - r.pos) / Math.max(1, riders.length - 1)) * 100);
+    const posMean    = positions.reduce((s,v)=>s+v,0) / positions.length;
+    const pctMean    = percentiles.reduce((s,v)=>s+v,0) / percentiles.length;
+    // Rankings internos: para pos y pace, menor es mejor; para percentil, mayor es mejor
+    const posRank  = _compInternalRanking(positions,  true);
+    const paceRank = _compInternalRanking(paces,      true);
+    const pctRank  = _compInternalRanking(percentiles,false);
+
+    const rows = sorted.map((r, idx) => {
+      const isLeader = getRiderKey(r) === getRiderKey(best);
+      const pct      = percentiles[idx];
+      const sameCat  = riders.filter(x => x.cat === r.cat).sort((a,b)=>a.pos-b.pos);
+      const catPos   = sameCat.findIndex(x => getRiderKey(x) === getRiderKey(r)) + 1;
+      const cIdx     = comparativoRiders.findIndex(x => x && getRiderKey(x) === getRiderKey(r));
+      const c        = COMP_COLORS[cIdx] || '#475467';
+      // Δ vs grupo (posición): si - = mejor que la media, si + = peor
+      const dPos     = r.pos - posMean;
+      const dPosStr  = dPos === 0 ? '=' : (dPos > 0 ? `+${dPos.toFixed(1)}` : dPos.toFixed(1));
+      const dPosCol  = dPos < 0 ? '#15803d' : dPos > 0 ? '#b91c1c' : '#64748b';
+      const dPct     = pct - pctMean;
+      const dPctStr  = Math.abs(dPct) < 0.05 ? '=' : (dPct > 0 ? `+${dPct.toFixed(1)}%` : dPct.toFixed(1) + '%');
+      const dPctCol  = dPct > 0 ? '#15803d' : dPct < 0 ? '#b91c1c' : '#64748b';
+      return `<tr class="${isLeader?'compare-leader':''}">
+        <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${c};flex-shrink:0"></span></td>
+        <td><b>${escapeHtml(r.name)}</b>${isLeader?' ✅':''}</td>
+        <td>${escapeHtml(r.team)}</td>
+        <td><b>${_compMedal(posRank[idx])} ${r.pos}º</b> de ${riders.length}</td>
+        <td style="color:${dPosCol};font-weight:700">${dPosStr}</td>
+        <td><span class="pill"><span class="cat-dot" style="background:${getColorForCategory(r.cat)}"></span>${escapeHtml(r.cat)}</span></td>
+        <td>${catPos}º de ${sameCat.length}</td>
+        <td>${formatSeconds(r.totalSeconds)}</td>
+        <td>${formatSeconds(r.gapSeconds)}</td>
+        <td>${r.secPerKm!=null?_compMedal(paceRank[idx])+' '+r.secPerKm.toFixed(1)+' s/km':'—'}</td>
+        <td>${_compMedal(pctRank[idx])} ${pct.toFixed(1)}%</td>
+        <td style="color:${dPctCol};font-weight:700">${dPctStr}</td>
+        <td>${escapeHtml(r.region||'—')}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `<div class="table-wrap" style="max-height:none;margin-bottom:16px">
+      <table class="compare-table">
+        <thead><tr>
+          <th></th><th>Ciclista</th><th>Equipo</th>
+          <th>Pos. General</th><th title="Δ respecto a la media de posiciones del grupo">Δ Pos</th>
+          <th>Categoría</th><th>Pos. Cat.</th>
+          <th>Tiempo</th><th>Diferencia</th>
+          <th>Seg/km</th><th>Percentil</th>
+          <th title="Δ percentil vs media del grupo">Δ Pct</th>
+          <th>CCAA</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p class="small" style="margin:-10px 0 12px;color:#6b7280">🥇🥈🥉 = ranking interno del grupo en esa métrica · <b>Δ Pos</b>/<b>Δ Pct</b> = diferencia vs media del grupo (verde mejor, rojo peor)</p>`;
+  };
+}
+
+// ─── Re-render extendido de la conclusión: añade bloque de métricas grupales + H2H ──
+const _origRenderComparativoConclusion = (typeof renderComparativoConclusion === 'function') ? renderComparativoConclusion : null;
+if(_origRenderComparativoConclusion){
+  window.renderComparativoConclusion = function(){
+    _origRenderComparativoConclusion();
+    const filled = _compFilled();
+    if(!filled.length) return;
+    // Buscar contenedor donde inyectar (después de #compConclusion)
+    const compResults = document.getElementById('compResults');
+    if(!compResults) return;
+    // Eliminar bloques previos si existen
+    document.getElementById('compGroupMetrics')?.remove();
+    document.getElementById('compH2HMatrix')?.remove();
+    document.getElementById('compExportBar')?.remove();
+    // Crear bloques
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div id="compGroupMetrics">${_compBuildGroupMetricsHtml(filled)}</div>
+      <div id="compH2HMatrix" class="panel" style="margin-top:14px;border-left:4px solid #9a3412">
+        <div class="section-title">
+          <h2 style="margin:0;color:#9a3412">⚔️ H2H entre seleccionados</h2>
+          <span class="small">Récord directo en histórico</span>
+        </div>
+        ${filled.length >= 2 ? _compBuildH2HMatrixHtml(filled, _compH2HMatrix(filled)) : '<p class="small" style="color:#9ca3af">Selecciona al menos 2 corredores.</p>'}
+      </div>
+      <div id="compExportBar" class="panel" style="margin-top:14px;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+          <div>
+            <b style="color:#3730a3">📥 Exportar comparativa</b>
+            <p class="small" style="margin:2px 0 0;color:#475569">Descarga la comparativa completa con métricas, Δ y H2H</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="_compExport('csv')" style="background:#16a34a;color:#fff;font-weight:800;padding:8px 14px">📄 CSV</button>
+            <button class="btn" onclick="_compExport('pdf')" style="background:#3730a3;color:#fff;font-weight:800;padding:8px 14px">🖨️ PDF imprimible</button>
+          </div>
+        </div>
+      </div>`;
+    compResults.appendChild(wrap);
+  };
+}
+
+// ─── #5 EXPORTACIÓN PDF / CSV ──────────────────────────────────────────────
+function _compExport(format){
+  const filled = _compFilled().slice().sort((a,b)=>a.pos-b.pos);
+  if(!filled.length){
+    if(typeof showToast === 'function') showToast('Selecciona al menos un corredor','warn');
+    return;
+  }
+  const raceName = (document.getElementById('raceName')?.value || 'Comparativa').trim();
+  const raceDate = (document.getElementById('raceDate')?.value || '').trim();
+
+  if(format === 'csv'){
+    const escapeCSV = s => `"${String(s||'').replace(/"/g,'""')}"`;
+    const sep = ';';
+    const lines = [];
+    lines.push(`# Análisis Comparativo · ${raceName}`);
+    if(raceDate) lines.push(`# Fecha: ${raceDate}`);
+    lines.push(`# ${filled.length} corredores · Exportado ${new Date().toLocaleString('es-ES')}`);
+    lines.push('');
+    lines.push(['Ciclista','Equipo','Pos','Categoría','Pos Cat','Tiempo','Diferencia','Seg/km','Percentil','CCAA'].map(escapeCSV).join(sep));
+    filled.forEach(r => {
+      const sameCat = riders.filter(x => x.cat === r.cat).sort((a,b)=>a.pos-b.pos);
+      const catPos = sameCat.findIndex(x => getRiderKey(x) === getRiderKey(r)) + 1;
+      const pct = ((riders.length - r.pos) / Math.max(1, riders.length - 1) * 100).toFixed(1);
+      lines.push([
+        r.name||'',
+        r.team||'',
+        r.pos||'',
+        r.cat||'',
+        `${catPos}/${sameCat.length}`,
+        formatSeconds(r.totalSeconds)||'',
+        formatSeconds(r.gapSeconds)||'',
+        r.secPerKm != null ? r.secPerKm.toFixed(1) : '',
+        pct + '%',
+        r.region||''
+      ].map(escapeCSV).join(sep));
+    });
+    // H2H section
+    if(filled.length >= 2){
+      lines.push('');
+      lines.push('# H2H — Enfrentamientos directos en histórico');
+      const matrix = _compH2HMatrix(filled);
+      const header = [''].concat(filled.map(r => (r.name||'').split(',')[0]));
+      lines.push(header.map(escapeCSV).join(sep));
+      filled.forEach((rRow, i) => {
+        const row = [(rRow.name||'').split(',')[0]];
+        for(let j = 0; j < filled.length; j++){
+          if(i === j){ row.push('—'); continue; }
+          const c = matrix[i][j];
+          if(c.encounters === 0){ row.push('sin datos'); continue; }
+          const ties = c.ties > 0 ? ` (${c.ties}e)` : '';
+          row.push(`${c.wins}-${c.losses}${ties}`);
+        }
+        lines.push(row.map(escapeCSV).join(sep));
+      });
+    }
+    const blob = new Blob(['﻿' + lines.join('\n')], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `comparativa_${raceName.replace(/[^\w\s-]/g,'').replace(/\s+/g,'_')}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    if(typeof showToast === 'function') showToast(`✅ Comparativa exportada (CSV · ${filled.length} corredores)`,'ok');
+    return;
+  }
+
+  // PDF imprimible (ventana nueva con la comparativa)
+  const logoSrc = document.querySelector('img.brand-logo')?.src || '';
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const now = new Date().toLocaleString('es-ES');
+  const matrix = filled.length >= 2 ? _compH2HMatrix(filled) : null;
+  // Construir tabla
+  const tableRows = filled.map(r => {
+    const sameCat = riders.filter(x => x.cat === r.cat).sort((a,b)=>a.pos-b.pos);
+    const catPos = sameCat.findIndex(x => getRiderKey(x) === getRiderKey(r)) + 1;
+    const pct = ((riders.length - r.pos) / Math.max(1, riders.length - 1) * 100).toFixed(1);
+    return `<tr>
+      <td style="font-weight:700">${esc(r.name)}</td>
+      <td>${esc(r.team)}</td>
+      <td style="text-align:center"><b>${r.pos}º</b></td>
+      <td>${esc(r.cat)}</td>
+      <td style="text-align:center">${catPos}º/${sameCat.length}</td>
+      <td style="text-align:center">${formatSeconds(r.totalSeconds)}</td>
+      <td style="text-align:center">${formatSeconds(r.gapSeconds)}</td>
+      <td style="text-align:center">${r.secPerKm != null ? r.secPerKm.toFixed(1) : '—'}</td>
+      <td style="text-align:center">${pct}%</td>
+    </tr>`;
+  }).join('');
+  // H2H table
+  let h2hHtml = '';
+  if(matrix){
+    const headerCells = ['<th></th>'].concat(filled.map(r => `<th style="text-align:center;font-size:10px">${esc((r.name||'').split(',')[0])}</th>`)).join('');
+    const matrixRows = filled.map((rRow, i) => {
+      const cells = [`<td style="font-weight:700">${esc((rRow.name||'').split(',')[0])}</td>`];
+      for(let j = 0; j < filled.length; j++){
+        if(i === j){ cells.push('<td style="text-align:center;background:#f1f5f9">—</td>'); continue; }
+        const c = matrix[i][j];
+        if(c.encounters === 0){ cells.push('<td style="text-align:center;color:#cbd5e1">—</td>'); continue; }
+        const cls = c.wins > c.losses ? '#dcfce7' : c.losses > c.wins ? '#fee2e2' : '#f1f5f9';
+        const ties = c.ties > 0 ? ` (${c.ties}e)` : '';
+        cells.push(`<td style="text-align:center;background:${cls};font-weight:700">${c.wins}-${c.losses}${ties}</td>`);
+      }
+      return `<tr>${cells.join('')}</tr>`;
+    }).join('');
+    h2hHtml = `<h2 class="section">⚔️ H2H entre seleccionados</h2>
+      <table style="font-size:11px"><thead><tr>${headerCells}</tr></thead><tbody>${matrixRows}</tbody></table>`;
+  }
+  // Métricas grupales
+  const posStats = _compGroupStats(filled.map(r => r.pos));
+  const metricsHtml = posStats ? `<div style="display:flex;gap:14px;margin:8px 0 14px">
+    <div><b>Posición media:</b> ${posStats.mean.toFixed(1)}º (rango ${posStats.min}-${posStats.max})</div>
+    <div><b>CVG:</b> ${posStats.cv.toFixed(1)}%</div>
+  </div>` : '';
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Comparativa · ${esc(raceName)}</title>
+<style>
+  @page{size:A4;margin:14mm}
+  body{margin:0;font-family:'Helvetica Neue',Arial,sans-serif;color:#0f172a;font-size:11px}
+  .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #3730a3;padding-bottom:6mm;margin-bottom:6mm}
+  .header h1{margin:0 0 1mm;font-size:18px;color:#3730a3}
+  .header .sub{margin:0;color:#6b7280;font-size:11px}
+  .brand img{height:30px}
+  h2.section{font-size:13px;color:#3730a3;margin:8mm 0 3mm;padding-bottom:2mm;border-bottom:1px solid #c7d2fe}
+  table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:4mm}
+  th{background:#f3f6fb;text-align:left;padding:5px 7px;font-size:9px;text-transform:uppercase;color:#475569}
+  td{padding:5px 7px;border-bottom:1px solid #eee}
+  .tb{position:fixed;top:0;left:0;right:0;padding:8px 14px;background:#3730a3;color:#fff;display:flex;justify-content:space-between;z-index:9999}
+  .tb button{background:#fff;color:#3730a3;border:0;border-radius:6px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:13px;margin-left:6px}
+  body.has-tb{padding-top:48px}
+  @media print{.tb{display:none}body{padding-top:0}}
+</style>
+</head><body class="has-tb">
+<div class="tb"><span>⚔️ Comparativa · ${esc(raceName)}</span><span><button onclick="window.print()">🖨️ Imprimir</button><button onclick="window.close()" style="background:#c7d2fe">✕ Cerrar</button></span></div>
+<div class="header">
+  <div>
+    <h1>⚔️ Análisis Comparativo de Ciclistas</h1>
+    <p class="sub">${esc(raceName)}${raceDate?' · '+esc(raceDate):''} · ${filled.length} corredores · ${esc(now)}</p>
+  </div>
+  ${logoSrc?`<div class="brand"><img src="${logoSrc}" alt="MFPP"></div>`:''}
+</div>
+
+${metricsHtml}
+
+<h2 class="section">📊 Métricas individuales</h2>
+<table>
+  <thead><tr>
+    <th>Ciclista</th><th>Equipo</th><th>Pos</th><th>Cat</th><th>Pos cat</th>
+    <th>Tiempo</th><th>Dif</th><th>s/km</th><th>Percentil</th>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+</table>
+
+${h2hHtml}
+
+<div style="margin-top:8mm;padding-top:3mm;border-top:1px solid #e2e8f0;font-size:9px;color:#94a3b8;display:flex;justify-content:space-between">
+  <span>MFPP Cycling · Uso técnico interno</span>
+  <span>Generado: ${esc(now)}</span>
+</div>
+</body></html>`;
+  const w = window.open('', '_blank', 'width=1100,height=850');
+  if(!w){ alert('Permite ventanas emergentes para abrir el PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+  if(typeof showToast === 'function') showToast('✅ Comparativa abierta para imprimir/guardar PDF','ok');
+}
