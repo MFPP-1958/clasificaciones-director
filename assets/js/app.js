@@ -20987,6 +20987,42 @@ function _simBernoulli(hits, total){
 
 // — Categoría cadete: detecta año por la cadena, sin solaparse con experiencia —
 // Devuelve {isCadet, year:1|2|null}
+// — Resuelve la categoría más específica de un corredor consultando el histórico —
+// Si la categoría del inscrito es genérica ("CADETE", "JUVENIL", vacía…) y en
+// el histórico aparece con una variante específica (CAD-1, CAD-2, JUV-1…),
+// devuelve la más reciente con ese matiz. Si no encuentra nada mejor, devuelve
+// la original.
+function _simResolveSpecificCat(riderName, rawCat){
+  const raw = String(rawCat || '').trim();
+  // Si ya es específica (contiene un dígito), no tocamos
+  if(/\d/.test(raw)) return raw;
+  if(!riderName) return raw;
+  const nk = normalizeForMatching(riderName);
+  const hist = _cachedHistory || [];
+  // Recorrer histórico DESCENDENTE por fecha (más reciente primero)
+  const sorted = hist.slice().sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+    return db.localeCompare(da);
+  });
+  // Contar ocurrencias de cada cat específica en el histórico
+  const counts = new Map();
+  let mostRecent = null;
+  for(const h of sorted){
+    const r = (h.riders||[]).find(x => normalizeForMatching(x.name||'') === nk);
+    if(!r || !r.cat) continue;
+    const c = String(r.cat).trim();
+    if(!c || !/\d/.test(c)) continue;  // saltar genéricos
+    counts.set(c, (counts.get(c)||0) + 1);
+    if(!mostRecent) mostRecent = c;
+  }
+  if(!counts.size) return raw;  // no se encontró nada específico
+  // Devolver la más frecuente; en empate, la más reciente
+  let best = mostRecent, bestN = counts.get(mostRecent) || 0;
+  counts.forEach((n, c)=>{ if(n > bestN){ best = c; bestN = n; } });
+  return best;
+}
+
 function _simCadetCategory(catStr){
   const c = String(catStr||'').toLowerCase();
   const isCadet = /cad(ete|et)?/.test(c);
@@ -21061,6 +21097,8 @@ function _simBuildData(raceId){
   const totalInsRef = inscritos.length || 60; // tamaño de pelotón de referencia
   const grid = inscritos.map((ins, idx)=>{
     const nk = normalizeForMatching(ins.name||'');
+    // Resolver categoría específica desde el histórico si la del inscrito es genérica
+    const resolvedCat = _simResolveSpecificCat(ins.name||'', ins.cat) || ins.cat || '';
     const hits = nk ? (byRider.get(nk)||[]) : [];
     const tkey = (ins.team||'').toLowerCase().trim();
     const isMyTeam = myTeamLower && tkey === myTeamLower;
@@ -21102,7 +21140,7 @@ function _simBuildData(raceId){
         // reflejan su nivel real como cadete. Aplicar una penalización extra
         // "porque es cadete" cuenta dos veces la misma información.
         // Mantenemos penalización SOLO cuando faltan datos (novato real).
-        const {isCadet, year} = _simCadetCategory(ins.cat);
+        const {isCadet, year} = _simCadetCategory(resolvedCat);
         if(isCadet && year === 1 && hits.length < 3){
           cadetFactor = 1.05;            // antes 1.10 — solo si 1er año con poco historial
           treeNode.push('A1n:cadete-1er-novato');
@@ -21198,7 +21236,10 @@ function _simBuildData(raceId){
       bib: ins.bib || '',
       name: ins.name || '',
       team: ins.team || '',
-      cat: ins.cat || '',
+      // Categoría: si la del inscrito es genérica (p.ej. "CADETE"), buscar
+      // en el histórico la específica más reciente (CAD-1 / CAD-2). Esto
+      // alimenta también el cadetFactor del Árbol de Regresión.
+      cat: resolvedCat,
       isMyTeam,
       hasHistory: hits.length > 0,
       avgPos, bestPos, reliability, status, source, confidence,
@@ -24552,3 +24593,180 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPRIMIR PARRILLA DE SALIDA ANALIZADA
+// Genera una vista impresa A4 con logo MFPP, encabezado de la carrera y
+// la tabla completa con todos los colores (Pos. IA, fiabilidad, Top10,
+// Podio, Riesgo, tendencia, forma reciente).
+// ═══════════════════════════════════════════════════════════════════════════
+function _simPrintGrid(){
+  if(!_simCurrentData){
+    if(typeof showToast==='function') showToast('Selecciona una prueba primero','warn');
+    return;
+  }
+  const {race, grid, kpis} = _simCurrentData;
+  const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const now = new Date().toLocaleString('es-ES');
+
+  // Ordenar grid por predictedPos asc (igual que pantalla)
+  const sorted = grid.slice().sort((a,b)=>{
+    const pa = a.predictedPos ?? (a.avgPos!=null?a.avgPos*1.5:null);
+    const pb = b.predictedPos ?? (b.avgPos!=null?b.avgPos*1.5:null);
+    if(pa==null&&pb==null) return 0;
+    if(pa==null) return 1;
+    if(pb==null) return -1;
+    return pa - pb;
+  });
+
+  // Helpers de formato (mismos colores que la pantalla)
+  const probChip = (p, type) => {
+    if(p==null) return '<span style="color:#bbb">—</span>';
+    let c, bg, icon='';
+    if(type==='top10'){ c=p>=70?'#15803d':p>=40?'#92400e':'#475569'; bg=p>=70?'#dcfce7':p>=40?'#fef3c7':'#f1f5f9'; }
+    else if(type==='podium'){ c=p>=60?'#15803d':p>=30?'#92400e':'#475569'; bg=p>=60?'#dcfce7':p>=30?'#fef3c7':'#f1f5f9'; if(p>=60) icon=' 🥇'; }
+    else /* risk */ { c=p>50?'#991b1b':p>25?'#92400e':'#475569'; bg=p>50?'#fee2e2':p>25?'#fef3c7':'#f1f5f9'; if(p>50) icon=' ⚠️'; }
+    return `<span style="background:${bg};color:${c};padding:1px 4px;border-radius:3px;font-weight:800">${p}%${icon}</span>`;
+  };
+  const trendIc = (t, hasForm) =>
+    t==='up' ? '<span style="color:#16a34a;font-size:13px">⬆</span>'
+    : t==='down' ? '<span style="color:#dc2626;font-size:13px">⬇</span>'
+    : hasForm ? '<span style="color:#94a3b8">→</span>' : '—';
+  const rangeFmt = g => {
+    const c = g.rangeClass==='stable'?'#16a34a':g.rangeClass==='unstable'?'#d97706':g.rangeClass==='club-fb'?'#2563eb':'#7c3aed';
+    const ic = g.rangeClass==='stable'?'🔒':g.rangeClass==='unstable'?'⚠️':g.rangeClass==='club-fb'?'📊':'';
+    if(g.predLower!=null && g.predUpper!=null) return `<b style="color:${c}">${ic} ${g.predLower}º–${g.predUpper}º</b>`;
+    if(g.predictedPos!=null) return `<b style="color:${c}">${ic} ${Math.round(g.predictedPos)}º</b>`;
+    return '<span style="color:#bbb">—</span>';
+  };
+  const formBalls = (rf) => {
+    if(!rf || !rf.length) return '<span style="color:#bbb">—</span>';
+    return rf.map(p=>{
+      const c = p<=3?'#fbbf24':p<=10?'#3b82f6':p<=20?'#9ca3af':'#475569';
+      return `<span style="display:inline-block;background:${c};color:#fff;border-radius:50%;width:18px;height:18px;line-height:18px;text-align:center;font-size:9px;font-weight:800;margin-right:1.5px">${p}</span>`;
+    }).join('');
+  };
+  const relColor = r => r==null?'#9ca3af':r>=75?'#16a34a':r>=50?'#f59e0b':'#dc2626';
+  const statusBadge = g => {
+    if(g.status==='known')   return '<span style="background:#dcfce7;color:#166534;padding:1px 5px;border-radius:8px;font-size:9.5px;font-weight:800">✓ Sí</span>';
+    if(g.status==='team-fb') return '<span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:8px;font-size:9.5px;font-weight:800">📊 Equipo</span>';
+    return '<span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:8px;font-size:9.5px;font-weight:800">🆕 Deb</span>';
+  };
+  const confDot = g => {
+    const map = {alta:'#16a34a', media:'#f59e0b', baja:'#f97316', nula:'#cbd5e1'};
+    const col = map[g.confidence||'nula'] || '#cbd5e1';
+    return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>`;
+  };
+
+  const tbody = sorted.map((g,i)=>`<tr ${g.isMyTeam?'style="background:#dbeafe"':''}>
+    <td style="text-align:center;color:#94a3b8;font-size:9px;font-weight:700">${i+1}</td>
+    <td>${confDot(g)}${g.isMyTeam?'🔵 ':''}<b>${esc(g.name)}</b>${g.bib?` <span style="color:#94a3b8;font-size:9px">#${esc(g.bib)}</span>`:''}</td>
+    <td style="font-size:10px;color:#475569">${esc(g.team||'')}</td>
+    <td><span style="background:#f3f6fb;padding:1px 5px;border-radius:8px;font-size:9.5px;font-weight:700">${esc(g.cat||'—')}</span></td>
+    <td style="text-align:center">${statusBadge(g)}</td>
+    <td style="text-align:center">${rangeFmt(g)}${g.climateIcon?' '+g.climateIcon:''}</td>
+    <td style="text-align:center;font-size:14px">${trendIc(g.trend, g.recentForm && g.recentForm.length>=2)}</td>
+    <td style="text-align:center;color:#475569">${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}</td>
+    <td style="text-align:center;color:#475569">${g.bestPos!=null?g.bestPos+'º':'—'}</td>
+    <td style="text-align:center"><b style="color:${relColor(g.reliability)}">${g.reliability!=null?g.reliability+'%':'—'}</b></td>
+    <td style="text-align:center;color:#64748b">${g.raceCount||0}</td>
+    <td style="text-align:center">${probChip(g.probTop10Poisson,'top10')}</td>
+    <td style="text-align:center">${probChip(g.probPodiumLogistic,'podium')}</td>
+    <td style="text-align:center">${probChip(g.probCutLogistic,'risk')}</td>
+    <td>${formBalls(g.recentForm)}</td>
+  </tr>`).join('');
+
+  const diffColor = kpis.difficulty<30?'#16a34a':kpis.difficulty<60?'#f59e0b':'#dc2626';
+  const predColor = kpis.predictability>=70?'#16a34a':kpis.predictability>=40?'#f59e0b':'#dc2626';
+
+  // Clima si está disponible
+  const wx = race.weather || (race._extraNotes && race._extraNotes.weather);
+  const wxChip = wx ? `<span style="background:#f0f9ff;color:#075985;padding:3px 9px;border-radius:8px;font-size:10.5px;font-weight:700;border:1px solid #bae6fd;display:inline-flex;gap:6px;align-items:center"><span>🌤️</span><span>${wx.temp}ºC · 💨 ${wx.wind} km/h${wx.rain!=null?' · 🌧️ '+wx.rain+'%':''}</span></span>` : '';
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Parrilla de salida · ${esc(race.raceName||'')}</title>
+<style>
+  @page{size:A4 landscape;margin:0}
+  html,body{margin:0;padding:0;background:#e2e8f0;font-family:'Helvetica Neue',Arial,sans-serif;color:#0f172a}
+  .page{box-sizing:border-box;width:297mm;min-height:210mm;padding:10mm 12mm 14mm;background:#fff;margin:0 auto 8mm;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+  .header{display:flex;align-items:center;justify-content:space-between;gap:10mm;border-bottom:3px solid #6366f1;padding-bottom:4mm;margin-bottom:4mm}
+  .header h1{margin:0 0 1mm;font-size:18px;color:#3730a3}
+  .header .sub{margin:0;font-size:11px;color:#6366f1;font-weight:800}
+  .header .sub2{margin:1mm 0 0;font-size:10px;color:#64748b;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .brand{display:flex;align-items:center;gap:6px;background:#eef2ff;padding:5px 10px;border-radius:8px}
+  .brand img{height:28px;width:auto}
+  .brand span{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#3730a3}
+  .kpis{display:flex;gap:8px;margin-bottom:4mm;flex-wrap:wrap}
+  .kpi{padding:3mm 6mm;border-radius:8px;border:1px solid #e5e7eb;background:#fff;font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;min-width:80px}
+  .kpi .l{font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:#64748b;font-weight:800}
+  .kpi .v{font-size:16px;font-weight:900;margin-top:1px}
+  table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:3mm}
+  th{background:#f3f6fb;text-align:left;padding:2mm 2mm;font-size:7.5px;text-transform:uppercase;letter-spacing:.3px;color:#475569;border-bottom:2px solid #e5e7eb;font-weight:800}
+  td{padding:1.4mm 2mm;border-bottom:1px solid #f1f5f9;font-size:9.5px}
+  tr:nth-child(even) td{background:#fafbfc}
+  tr{break-inside:avoid;page-break-inside:avoid}
+  .footer{margin-top:3mm;padding-top:2mm;border-top:1px solid #e2e8f0;font-size:8.5px;color:#64748b;display:flex;justify-content:space-between}
+  @media print{html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{box-shadow:none;margin:0}.tb{display:none!important}}
+  .tb{position:fixed;top:0;left:0;right:0;padding:8px 14px;background:#3730a3;color:#fff;display:flex;justify-content:space-between;align-items:center;z-index:9999;font-family:Helvetica,Arial,sans-serif}
+  .tb button{background:#fff;color:#3730a3;border:0;border-radius:6px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:13px;margin-left:6px}
+  body.has-tb{padding-top:46px}
+</style>
+</head><body class="has-tb">
+<div class="tb">
+  <span>🚴 Parrilla · ${esc(race.raceName||'')}</span>
+  <span><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button> <button onclick="window.close()" style="background:#c7d2fe">✕ Cerrar</button></span>
+</div>
+<div class="page">
+  <div class="header">
+    <div>
+      <h1>🚴 Parrilla de salida analizada</h1>
+      <p class="sub">${esc(race.raceName||'')}</p>
+      <p class="sub2">
+        <span>📅 ${esc(race.raceDate||'')}</span>
+        ${race.localidad?'<span>· 📍 '+esc(race.localidad)+'</span>':''}
+        ${race.circuitType?'<span>· 🛣️ '+esc(race.circuitType)+'</span>':''}
+        <span>· 📋 ${grid.length} inscritos</span>
+        ${wxChip?'<span>·</span>'+wxChip:''}
+      </p>
+    </div>
+    ${logoSrc?`<div class="brand"><img src="${logoSrc}" alt="MFPP"><span>MFPP Cycling</span></div>`:''}
+  </div>
+  <div class="kpis">
+    <div class="kpi"><span class="l">Dificultad</span><span class="v" style="color:${diffColor}">${kpis.difficulty}%</span></div>
+    <div class="kpi"><span class="l">Predictibilidad</span><span class="v" style="color:${predColor}">${kpis.predictability}%</span></div>
+    <div class="kpi"><span class="l">Cobertura</span><span class="v" style="color:#3730a3">${kpis.coverage}%</span></div>
+    <div class="kpi"><span class="l">Fiab. media</span><span class="v" style="color:#475569">${kpis.avgReliability}%</span></div>
+    ${myTeam ? `<div class="kpi" style="border-color:#3b82f6;background:#eff6ff"><span class="l">🔵 Mi equipo</span><span class="v" style="color:#1d4ed8">${kpis.myTeamCount}</span></div>` : ''}
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>#</th><th>Corredor</th><th>Club</th><th>Cat.</th>
+      <th style="text-align:center">Hist.</th>
+      <th style="text-align:center">🤖 Pos. IA</th>
+      <th style="text-align:center">Tend.</th>
+      <th style="text-align:center">Media</th>
+      <th style="text-align:center">Mejor</th>
+      <th style="text-align:center">Fiab.</th>
+      <th style="text-align:center">C.</th>
+      <th style="text-align:center">🎯 Top10</th>
+      <th style="text-align:center">🥇 Podio</th>
+      <th style="text-align:center">🚨 Riesgo</th>
+      <th>Forma reciente</th>
+    </tr></thead>
+    <tbody>${tbody}</tbody>
+  </table>
+
+  <div class="footer">
+    <span><b>Generado:</b> ${esc(now)} · Motor estadístico v3 (Árbol + Bernoulli + Logística)</span>
+    <span>🚴 Parrilla analizada · MFPP Cycling · Uso técnico interno</span>
+  </div>
+</div>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=1200,height=850');
+  if(!w){ alert('Permite ventanas emergentes para imprimir.'); return; }
+  w.document.write(html);
+  w.document.close();
+}

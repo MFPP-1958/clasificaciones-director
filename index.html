@@ -2235,7 +2235,10 @@
       <section class="panel" id="simGridPanel" style="display:none">
         <div class="section-title">
           <h2 style="margin:0">🚴 Parrilla de salida analizada</h2>
-          <span class="small" id="simGridCount"></span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="small" id="simGridCount"></span>
+            <button class="btn light" onclick="_simPrintGrid()" style="background:#0369a1;color:#fff;border:0;font-weight:800;padding:6px 13px;font-size:13px" title="Abre una ventana imprimible (A4 horizontal) con logo MFPP, encabezado y la parrilla completa con colores">🖨️ Imprimir parrilla</button>
+          </div>
         </div>
 
         <details class="sim-help">
