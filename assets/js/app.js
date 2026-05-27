@@ -28900,10 +28900,9 @@ function _simInjectPVRStyles(){
       .pvr-table th, .pvr-table td { border: 1px solid #999 !important; }
       .pvr-table { font-size: 10.5px !important; }
       .pvr-footer { padding: 10px 14px !important; }
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      @page { margin: 20mm 18mm 18mm 18mm; size: A4; }
+      #pvrModalBox, #pvrModalBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
+    @page { margin: 28mm 22mm 22mm 22mm; size: A4; }
   `;
   document.head.appendChild(st);
 }
@@ -29382,10 +29381,9 @@ function _aiInjectDNFStyles(){
       .ai-dnf-table th, .ai-dnf-table td { border: 1px solid #999 !important; }
       .ai-dnf-table { font-size: 10.5px !important; }
       .ai-dnf-footer { padding: 10px 4mm 4px !important; }
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      @page { margin: 28mm 22mm 22mm 22mm; size: A4; }
+      #aiDnfBox, #aiDnfBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
+    @page { margin: 28mm 22mm 22mm 22mm; size: A4; }
   `;
   document.head.appendChild(st);
 }
