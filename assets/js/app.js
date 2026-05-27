@@ -28956,23 +28956,151 @@ let _aiDnfState = { riderName: '', data: null, yearFilter: '' };
 
 function _aiOpenDNFModal(){
   try{
-    const riderName = _aiResolveRiderNameFromInputs();
-    if(!riderName){ alert('Escribe primero el nombre o dorsal del ciclista en el buscador.'); return; }
     if(!Array.isArray(_cachedHistory) || !_cachedHistory.length){
       alert('El histórico aún no se ha cargado. Espera unos segundos y vuelve a intentarlo.');
       return;
     }
-    const data = _aiBuildDNFList(riderName);
-    if(!data.inscritoIn.length){
-      alert(`No se encontraron pruebas en el histórico donde "${riderName}" figure como inscrito.`);
-      return;
+    const typed = _aiResolveRiderNameFromInputs();
+    if(typed){
+      const data = _aiBuildDNFList(typed);
+      if(data.inscritoIn.length){
+        _aiDnfState = { riderName: typed, data, yearFilter: '' };
+        _aiRenderDNFModal();
+        return;
+      }
     }
-    _aiDnfState = { riderName, data, yearFilter: '' };
-    _aiRenderDNFModal();
+    // Sin coincidencia clara → abrir picker con todos los ciclistas del histórico
+    _aiOpenDNFPicker(typed||'');
   }catch(e){
     console.warn('_aiOpenDNFModal', e);
     alert('Error al abrir el listado: '+(e.message||e));
   }
+}
+
+// ── Picker buscable con TODOS los ciclistas del histórico (inscritos + clasificados) ──
+let _aiDnfAllRiders = null; // cache: [{ name, displayName, teams:Set, hasInscritos, hasFinishes }]
+
+function _aiBuildAllRidersFromHistory(){
+  const map = new Map();
+  const nkey = (typeof normalizeForMatching==='function')
+    ? (s)=>normalizeForMatching(s||'')
+    : (s)=>(s||'').toLowerCase().trim();
+  for(const race of (_cachedHistory||[])){
+    const insArr = Array.isArray(race.inscritos) ? race.inscritos : [];
+    const ridArr = Array.isArray(race.riders) ? race.riders : [];
+    for(const i of insArr){
+      const k = nkey(i.name||''); if(!k) continue;
+      let rec = map.get(k);
+      if(!rec){ rec = { key:k, name:i.name||'', teams:new Set(), insCount:0, finCount:0 }; map.set(k, rec); }
+      if(i.team) rec.teams.add(i.team);
+      rec.insCount++;
+    }
+    for(const r of ridArr){
+      const k = nkey(r.name||''); if(!k) continue;
+      let rec = map.get(k);
+      if(!rec){ rec = { key:k, name:r.name||'', teams:new Set(), insCount:0, finCount:0 }; map.set(k, rec); }
+      if(r.team) rec.teams.add(r.team);
+      if(r.pos) rec.finCount++;
+    }
+  }
+  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,'es'));
+}
+
+function _aiOpenDNFPicker(initialQuery){
+  _aiDnfAllRiders = _aiBuildAllRidersFromHistory();
+  let overlay = document.getElementById('aiDnfPickerOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'aiDnfPickerOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.addEventListener('click',(e)=>{ if(e.target===overlay) _aiCloseDNFPicker(); });
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div>
+          <div style="font-weight:800;font-size:16px;color:#0b2f6b">🚫 Selecciona un ciclista</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">Lista todos los ciclistas que aparecen en el histórico (inscritos o clasificados)</div>
+        </div>
+        <button class="btn light" onclick="_aiCloseDNFPicker()" style="font-size:12px;padding:5px 10px">✕</button>
+      </div>
+      <div style="padding:10px 18px;border-bottom:1px solid #e5e7eb">
+        <input id="aiDnfPickerInput" type="text" oninput="_aiFilterDNFPicker()" placeholder="Buscar nombre, apellido o equipo..."
+          value="${escapeHtml(initialQuery||'')}"
+          style="width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:14px">
+        <div style="font-size:11px;color:#9ca3af;margin-top:4px">${_aiDnfAllRiders.length} ciclistas en el histórico</div>
+      </div>
+      <div id="aiDnfPickerList" style="flex:1;overflow:auto;padding:6px 0"></div>
+    </div>`;
+  setTimeout(()=>{
+    const inp = document.getElementById('aiDnfPickerInput');
+    if(inp){ inp.focus(); inp.select(); }
+    _aiFilterDNFPicker();
+  }, 30);
+}
+
+function _aiCloseDNFPicker(){
+  const ov = document.getElementById('aiDnfPickerOverlay');
+  if(ov) ov.remove();
+}
+
+function _aiFilterDNFPicker(){
+  const inp = document.getElementById('aiDnfPickerInput');
+  const list = document.getElementById('aiDnfPickerList');
+  if(!inp || !list || !_aiDnfAllRiders) return;
+  const nkey = (typeof normalizeForMatching==='function')
+    ? (s)=>normalizeForMatching(s||'')
+    : (s)=>(s||'').toLowerCase().trim();
+  const q = nkey(inp.value||'');
+  const tq = (inp.value||'').toLowerCase().trim();
+  let items = _aiDnfAllRiders;
+  if(q){
+    items = items.filter(r => {
+      if(nkey(r.name).includes(q)) return true;
+      for(const t of r.teams){ if((t||'').toLowerCase().includes(tq)) return true; }
+      return false;
+    });
+  }
+  const max = 200;
+  const shown = items.slice(0, max);
+  if(!shown.length){
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px">Sin resultados.</div>';
+    return;
+  }
+  list.innerHTML = shown.map(r=>{
+    const teams = [...r.teams].slice(0,2).join(' · ');
+    const onlyIns = r.finCount===0 && r.insCount>0;
+    const flag = onlyIns
+      ? '<span style="display:inline-block;background:#fee2e2;color:#991b1b;border-radius:6px;font-size:10px;padding:1px 6px;font-weight:800;margin-left:6px">SOLO INSC.</span>'
+      : '';
+    return `<div onclick='_aiPickerSelect(${JSON.stringify(r.name)})'
+      style="padding:8px 18px;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;gap:10px;align-items:center"
+      onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'">
+      <div style="min-width:0;flex:1">
+        <div style="font-weight:700;color:#111827">${escapeHtml(r.name)}${flag}</div>
+        <div style="font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis">${escapeHtml(teams||'(sin equipo)')}</div>
+      </div>
+      <div style="font-size:11px;color:#6b7280;text-align:right;white-space:nowrap">
+        ${r.insCount} insc · ${r.finCount} fin
+      </div>
+    </div>`;
+  }).join('') + (items.length > max ? `<div style="padding:10px;text-align:center;color:#9ca3af;font-size:11px">Mostrando ${max} de ${items.length}. Refina la búsqueda.</div>` : '');
+}
+
+function _aiPickerSelect(name){
+  _aiCloseDNFPicker();
+  if(!name) return;
+  const data = _aiBuildDNFList(name);
+  if(!data.inscritoIn.length){
+    alert(`"${name}" no figura como inscrito en ninguna prueba del histórico.`);
+    return;
+  }
+  // Reflejar en el input del buscador para que quede como referencia
+  const inp = document.getElementById('analysisSearchInput');
+  if(inp) inp.value = name;
+  _aiDnfState = { riderName: name, data, yearFilter: '' };
+  _aiRenderDNFModal();
 }
 
 function _aiCloseDNFModal(){
