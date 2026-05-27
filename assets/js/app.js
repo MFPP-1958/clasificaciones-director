@@ -21309,8 +21309,27 @@ function _simRaceCompatWeight(target, hist){
     else if(ratio < 0.50) w *= 0.85; // distancias muy distintas → penalizar suave
   }
 
-  // Acotar para evitar pesos extremos
-  return {compatible: true, weight: Math.max(0.5, Math.min(1.6, w))};
+  // RUTA A: ATENUACIÓN POR FORMATO ETAPA/UN-DÍA
+  // Las etapas son inherentemente más variables (perfil de etapa concreta
+  // ≠ rendimiento general). NO las excluimos (mantenemos información) pero
+  // reducimos su influencia cuando el objetivo es otro formato.
+  const targetIsStage = _simIsStageRace(target);
+  const histIsStage   = _simIsStageRace(hist);
+  if(!targetIsStage && histIsStage){
+    // Objetivo es una carrera de un día (Trofeo/Memorial), histórico es etapa
+    // → atenuamos fuerte: el resultado de etapa no es indicativo del nivel
+    //   general en una carrera de un día
+    w *= 0.60;
+  } else if(targetIsStage && !histIsStage){
+    // Objetivo es etapa, histórico es carrera de un día
+    // → atenuamos algo menos: el corredor de un día sí da info, pero
+    //   la etapa tiene perfil específico
+    w *= 0.75;
+  }
+  // Si ambos son etapas o ambos son carreras de un día → sin cambio
+
+  // Acotar para evitar pesos extremos (rango ampliado por la atenuación)
+  return {compatible: true, weight: Math.max(0.3, Math.min(1.6, w))};
 }
 
 // Construye el grid analizado: para cada inscrito, calcula sus métricas históricas
