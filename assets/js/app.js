@@ -9441,7 +9441,7 @@ function renderTeamTimeRanking(){
       const allTeamRiders=map[x.team]||[];
       const avgPos=allTeamRiders.length?(allTeamRiders.reduce((s,r)=>s+r.pos,0)/allTeamRiders.length).toFixed(1):'—';
       const riderLinks=x.top3.map(r=>`<button class="team-ranking-rider-link" onclick="event.stopPropagation();selectAndAnalyzeRiderByKey(getRiderKey(${JSON.stringify(r)}))">${r.pos}. ${escapeHtml(r.name)}</button>`).join(' · ');
-      return `<div class="team-ranking-row ${isHighlighted?'highlight-team':''}">
+      return `<div class="team-ranking-row ${isHighlighted?'highlight-team':''}" data-team-row="${escapeHtml(x.team)}">
         <div class="team-ranking-pos">${i+1}</div>
         <div style="min-width:0;flex:1">
           <div class="team-ranking-name">${escapeHtml(x.team)}</div>
@@ -9454,6 +9454,7 @@ function renderTeamTimeRanking(){
         <div class="team-ranking-time">${x.points} ptos<br><span class="small">${diff}</span></div>
       </div>`;
     }).join('')+'</div><div class="team-ranking-note">Modo puntos: suma de puestos de los 3 mejores corredores del equipo dentro de <b>'+escapeHtml(getTeamRankingCategoryLabel())+'</b>. Se muestran todos los equipos con 3 corredores válidos; si filtras por equipo, queda resaltado.</div>';
+    try{ _eqB_postRanking(); }catch(e){}
     return;
   }
 
@@ -9479,7 +9480,7 @@ function renderTeamTimeRanking(){
     const allTeamRiders2=map[x.team]||[];
     const avgPos2=allTeamRiders2.length?(allTeamRiders2.reduce((s,r)=>s+r.pos,0)/allTeamRiders2.length).toFixed(1):'—';
     const riderLinks2=x.top3.map(r=>`<button class="team-ranking-rider-link" onclick="event.stopPropagation();selectAndAnalyzeRiderByKey(getRiderKey(${JSON.stringify(r)}))">${r.pos}. ${escapeHtml(r.name)}</button>`).join(' · ');
-    return `<div class="team-ranking-row ${isHighlighted?'highlight-team':''}">
+    return `<div class="team-ranking-row ${isHighlighted?'highlight-team':''}" data-team-row="${escapeHtml(x.team)}">
       <div class="team-ranking-pos">${i+1}</div>
       <div style="min-width:0;flex:1">
         <div class="team-ranking-name">${escapeHtml(x.team)}</div>
@@ -9492,6 +9493,7 @@ function renderTeamTimeRanking(){
       <div class="team-ranking-time">${formatTeamTotalSeconds(x.total)}<br><span class="small">${diff}</span></div>
     </div>`;
   }).join('')+'</div><div class="team-ranking-note">Modo tiempos: suma del tiempo total de los 3 mejores corredores del equipo dentro de <b>'+escapeHtml(getTeamRankingCategoryLabel())+'</b>. Se muestran todos los equipos con 3 corredores válidos; si filtras por equipo, queda resaltado.</div>';
+  try{ _eqB_postRanking(); }catch(e){}
 }
 function teamMetrics(team){
   const rs=riders.filter(r=>r.team===team);
@@ -9586,6 +9588,9 @@ function renderTeamComparison(manual){
   if($('teamCmpRadarWrap')&&$('teamCmpRadarWrap').style.display!=='none'){
     _teamRenderRadar(A,B);
   }
+
+  // EQUIPOS Opción B: Δ + media de prueba + H2H histórico + botón simular
+  try{ _eqB_postCompare(A, B); }catch(e){ console.warn('eqB_postCompare', e); }
 
   }catch(err){console.warn('COMENTARIO: no se pudo renderizar la comparativa de equipos',err);}
 }
@@ -27935,3 +27940,348 @@ if(_origOpenHistoryModal){
 //  _mostrarDialogoDuplicado. No la duplicamos aquí.)
 // Lo que mejoramos: mostrar un toast al detectar duplicado para que el
 // director vea claro que se ha disparado el diálogo (no es un freeze).
+
+// ════════════════════════════════════════════════════════════════════════
+// EQUIPOS — Opción B (Tier ALTO + MEDIO)
+//   1. "Solo mi equipo" highlight + scroll
+//   2. "Δ" diferencia A vs B en tabla de comparativa
+//   3. Botón "Simular con estos equipos"
+//   4. Tendencia ▲/▼ por equipo en ranking
+//   5. Historial enfrentamientos directos A vs B
+//   6. Columna "Media prueba" en comparativa
+// ════════════════════════════════════════════════════════════════════════
+
+// ── Inyección de controles UI (toolbar) sobre la sección de ranking ──
+function _eqB_injectToolbar(){
+  try{
+    const sec = document.querySelector('.team-ranking-full .section-title');
+    if(!sec || sec.querySelector('#eqB_myTeamBtn')) return;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;width:100%';
+    wrap.innerHTML = `
+      <button id="eqB_myTeamBtn" class="btn light" style="font-size:11px;padding:5px 10px"
+              onclick="_eqB_focusMyTeam()" title="Resaltar y enfocar mi equipo">
+        🎯 Solo mi equipo
+      </button>
+      <span id="eqB_myTeamStatus" style="font-size:11px;color:#6b7280;align-self:center"></span>`;
+    sec.appendChild(wrap);
+  }catch(e){}
+}
+
+function _eqB_getMyTeam(){
+  try{
+    return (typeof getPersistentTeam==='function' && getPersistentTeam()) ||
+           (localStorage.getItem('myPersistentTeam')||'').trim() ||
+           '';
+  }catch(e){ return ''; }
+}
+
+function _eqB_focusMyTeam(){
+  const mt = _eqB_getMyTeam();
+  const status = document.getElementById('eqB_myTeamStatus');
+  if(!mt){
+    if(status) status.textContent = '⚠️ Define primero "Mi equipo" en Carga y Resumen';
+    return;
+  }
+  const canon = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(mt) : mt;
+  const rows = document.querySelectorAll('#teamTimeRanking [data-team-row]');
+  let found = null;
+  rows.forEach(r=>{
+    const t = r.getAttribute('data-team-row')||'';
+    const tCanon = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(t) : t;
+    if(tCanon.toLowerCase() === canon.toLowerCase()){
+      r.classList.add('highlight-team');
+      r.style.outline = '3px solid #fbbf24';
+      r.style.background = '#fffbeb';
+      found = r;
+    } else {
+      r.style.opacity = '0.45';
+    }
+  });
+  if(found){
+    found.scrollIntoView({behavior:'smooth', block:'center'});
+    if(status) status.innerHTML = `✅ Resaltando <b>${mt}</b> · <button class="btn light" style="font-size:10px;padding:2px 6px" onclick="_eqB_clearMyTeamFocus()">Quitar</button>`;
+  } else {
+    if(status) status.textContent = `⚠️ "${mt}" no tiene 3 clasificados en esta categoría`;
+  }
+}
+
+function _eqB_clearMyTeamFocus(){
+  const rows = document.querySelectorAll('#teamTimeRanking [data-team-row]');
+  rows.forEach(r=>{
+    r.style.opacity = '';
+    r.style.outline = '';
+    r.style.background = '';
+    if(!r.classList.contains('highlight-team-orig')) r.classList.remove('highlight-team');
+  });
+  const status = document.getElementById('eqB_myTeamStatus');
+  if(status) status.textContent = '';
+}
+
+// ── Tendencia ▲/▼ por equipo basado en historial ──
+function _eqB_computeTeamTrend(team){
+  try{
+    if(!Array.isArray(_cachedHistory) || !_cachedHistory.length) return null;
+    if(!team) return null;
+    const tCanon = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(team).toLowerCase() : team.toLowerCase();
+    // Posición media del equipo en cada carrera histórica (orden cronológico inverso)
+    const hist = _cachedHistory.slice().sort((a,b)=>{
+      const da=(typeof _parseSpanishDate==='function'? _parseSpanishDate(a.raceDate):'')||'';
+      const db=(typeof _parseSpanishDate==='function'? _parseSpanishDate(b.raceDate):'')||'';
+      return db.localeCompare(da);
+    });
+    const avgsRecent = [];
+    for(const race of hist){
+      if(avgsRecent.length>=3) break;
+      const rs = (race.riders||[]).filter(r=>{
+        const rt = r.team || '';
+        const rtC = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(rt).toLowerCase() : rt.toLowerCase();
+        return rtC === tCanon;
+      });
+      if(rs.length>=2){
+        const avg = rs.reduce((s,r)=>s+(parseInt(r.pos)||0),0)/rs.length;
+        avgsRecent.push(avg);
+      }
+    }
+    if(avgsRecent.length<2) return null;
+    const histAvg = avgsRecent.reduce((s,v)=>s+v,0)/avgsRecent.length;
+    // Posición media actual del equipo en la prueba mostrada
+    const currentRs = (typeof riders!=='undefined'?riders:[]).filter(r=>{
+      const rt = r.team || '';
+      const rtC = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(rt).toLowerCase() : rt.toLowerCase();
+      return rtC === tCanon;
+    });
+    if(!currentRs.length) return null;
+    const currentAvg = currentRs.reduce((s,r)=>s+r.pos,0)/currentRs.length;
+    const delta = currentAvg - histAvg;  // negativo = ha mejorado (posiciones más bajas)
+    return { delta, histAvg, currentAvg, n: avgsRecent.length };
+  }catch(e){ return null; }
+}
+
+function _eqB_trendBadge(team){
+  const t = _eqB_computeTeamTrend(team);
+  if(!t) return '';
+  const d = t.delta;
+  if(Math.abs(d) < 1.5) return `<span title="Estable vs media de últimas ${t.n} carreras (${t.histAvg.toFixed(1)})" style="font-size:10px;color:#6b7280;font-weight:700">▬ estable</span>`;
+  if(d < 0) return `<span title="Mejora ${Math.abs(d).toFixed(1)} posiciones vs media histórica (${t.histAvg.toFixed(1)})" style="font-size:10px;color:#059669;font-weight:800">▲ +${Math.abs(d).toFixed(1)}</span>`;
+  return `<span title="Empeora ${d.toFixed(1)} posiciones vs media histórica (${t.histAvg.toFixed(1)})" style="font-size:10px;color:#dc2626;font-weight:800">▼ -${d.toFixed(1)}</span>`;
+}
+
+function _eqB_postRanking(){
+  _eqB_injectToolbar();
+  // Añadir badge de tendencia a cada fila
+  const rows = document.querySelectorAll('#teamTimeRanking [data-team-row]');
+  rows.forEach(row=>{
+    if(row.querySelector('.eqB-trend')) return;
+    const team = row.getAttribute('data-team-row')||'';
+    const badge = _eqB_trendBadge(team);
+    if(!badge) return;
+    const statsBox = row.querySelector('.team-ranking-stats');
+    if(statsBox){
+      const span = document.createElement('span');
+      span.className = 'team-ranking-stat eqB-trend';
+      span.innerHTML = badge;
+      statsBox.appendChild(span);
+    }
+  });
+}
+
+// ── Media de la prueba (baseline para comparativa) ──
+function _eqB_pruebaBaseline(){
+  try{
+    if(!Array.isArray(riders) || !riders.length) return null;
+    const valid = riders.filter(r=>r.pos);
+    const avgPos = valid.reduce((s,r)=>s+r.pos,0)/valid.length;
+    const gaps = valid.map(r=>r.gapSeconds).filter(v=>v!=null);
+    const avgGap = gaps.length ? gaps.reduce((s,v)=>s+v,0)/gaps.length : null;
+    // media de clasificados por equipo
+    const byTeam = {};
+    valid.forEach(r=>{ if(r.team){ (byTeam[r.team]=byTeam[r.team]||[]).push(r); } });
+    const counts = Object.values(byTeam).map(arr=>arr.length);
+    const avgCount = counts.length ? counts.reduce((s,v)=>s+v,0)/counts.length : 0;
+    return { avgPos, avgGap, avgCount, nTeams: counts.length };
+  }catch(e){ return null; }
+}
+
+// ── Historial de enfrentamientos directos A vs B ──
+function _eqB_h2hAB(teamA, teamB){
+  try{
+    if(!Array.isArray(_cachedHistory) || !_cachedHistory.length) return [];
+    const tA = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(teamA).toLowerCase() : teamA.toLowerCase();
+    const tB = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(teamB).toLowerCase() : teamB.toLowerCase();
+    const out = [];
+    const hist = _cachedHistory.slice().sort((a,b)=>{
+      const da=(typeof _parseSpanishDate==='function'? _parseSpanishDate(a.raceDate):'')||'';
+      const db=(typeof _parseSpanishDate==='function'? _parseSpanishDate(b.raceDate):'')||'';
+      return db.localeCompare(da);
+    });
+    for(const race of hist){
+      if(out.length>=5) break;
+      const rsA = (race.riders||[]).filter(r=>{
+        const rt=r.team||''; const c=(typeof getCanonicalTeam==='function')?getCanonicalTeam(rt).toLowerCase():rt.toLowerCase();
+        return c===tA;
+      });
+      const rsB = (race.riders||[]).filter(r=>{
+        const rt=r.team||''; const c=(typeof getCanonicalTeam==='function')?getCanonicalTeam(rt).toLowerCase():rt.toLowerCase();
+        return c===tB;
+      });
+      if(rsA.length>=2 && rsB.length>=2){
+        const bestA = Math.min(...rsA.map(r=>parseInt(r.pos)||999));
+        const bestB = Math.min(...rsB.map(r=>parseInt(r.pos)||999));
+        const avgA = rsA.reduce((s,r)=>s+(parseInt(r.pos)||0),0)/rsA.length;
+        const avgB = rsB.reduce((s,r)=>s+(parseInt(r.pos)||0),0)/rsB.length;
+        out.push({ raceName: race.raceName||race.name||'?', raceDate: race.raceDate||'', bestA, bestB, avgA, avgB });
+      }
+    }
+    return out;
+  }catch(e){ return []; }
+}
+
+function _eqB_postCompare(A, B){
+  if(!A || !B) return;
+
+  // 1. Añadir columna "Δ" y "Media prueba" a la tabla de comparativa
+  const summary = document.getElementById('teamCompareSummary');
+  if(summary){
+    const baseline = _eqB_pruebaBaseline();
+    const rowsTpl = [
+      { label:'Clasificados',     a:A.count, b:B.count, lower:false, base: baseline?baseline.avgCount.toFixed(1):'—', fmt:v=>v },
+      { label:'Mejor puesto',     a:A.best,  b:B.best,  lower:true,  base:'—', fmt:v=>v },
+      { label:'Posición media',   a:A.avg,   b:B.avg,   lower:true,  base: baseline?baseline.avgPos.toFixed(1):'—', fmt:v=>(typeof v==='number'?v.toFixed(1):v) },
+      { label:'Top 10',           a:A.top10, b:B.top10, lower:false, base:'—', fmt:v=>v },
+      { label:'Top 20',           a:A.top20, b:B.top20, lower:false, base:'—', fmt:v=>v },
+      { label:'Consistencia (σ)', a:A.stdDev,b:B.stdDev,lower:true,  base:'—', fmt:v=>(typeof v==='number'?v.toFixed(1):v) },
+      { label:'Gap medio',        a:A.avgGap,b:B.avgGap,lower:true,  base: baseline&&baseline.avgGap!=null?(typeof formatSeconds==='function'?formatSeconds(baseline.avgGap):baseline.avgGap.toFixed(0)):'—',
+                                  fmt:v=>v==null?'—':(typeof formatSeconds==='function'?formatSeconds(v):String(v)) }
+    ];
+    const tableHtml = `
+      <div style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px">
+        <div style="font-weight:800;font-size:12px;color:#0b2f6b;margin-bottom:6px">
+          📊 Detalle con Δ y baseline de la prueba
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:#f9fafb">
+            <th style="padding:4px 6px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280">Métrica</th>
+            <th style="padding:4px 6px;text-align:center;font-size:10px;color:#1f6feb">A</th>
+            <th style="padding:4px 6px;text-align:center;font-size:10px;color:#12b76a">B</th>
+            <th style="padding:4px 6px;text-align:center;font-size:10px;color:#7c3aed">Δ (A−B)</th>
+            <th style="padding:4px 6px;text-align:center;font-size:10px;color:#6b7280">Media prueba</th>
+          </tr></thead>
+          <tbody>
+            ${rowsTpl.map(r=>{
+              const aVal = (r.a==null)?null:Number(r.a);
+              const bVal = (r.b==null)?null:Number(r.b);
+              let dTxt='—', dColor='#6b7280';
+              if(aVal!=null && bVal!=null && !isNaN(aVal) && !isNaN(bVal)){
+                const d = aVal - bVal;
+                if(Math.abs(d)<0.05){ dTxt='0'; dColor='#6b7280'; }
+                else {
+                  const sign = d>0?'+':'';
+                  const aBetter = r.lower ? (d<0) : (d>0);
+                  dTxt = sign + (Number.isInteger(d)?d:d.toFixed(1));
+                  dColor = aBetter ? '#1f6feb' : '#12b76a';
+                }
+              }
+              return `<tr>
+                <td style="padding:4px 6px;color:#374151">${r.label}</td>
+                <td style="padding:4px 6px;text-align:center;font-weight:700;color:#1f6feb">${r.fmt(r.a)}</td>
+                <td style="padding:4px 6px;text-align:center;font-weight:700;color:#12b76a">${r.fmt(r.b)}</td>
+                <td style="padding:4px 6px;text-align:center;font-weight:800;color:${dColor}">${dTxt}</td>
+                <td style="padding:4px 6px;text-align:center;color:#6b7280">${r.base}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        <div style="font-size:10px;color:#9ca3af;margin-top:4px">Δ&nbsp;positivo en métricas donde "mayor es mejor" favorece a A; en métricas donde "menor es mejor" (posición, σ, gap) Δ&nbsp;negativo favorece a A. El color verde/azul indica qué equipo gana esa métrica.</div>
+      </div>`;
+
+    // H2H histórico
+    const h2h = _eqB_h2hAB(A.team, B.team);
+    let h2hHtml = '';
+    if(h2h.length){
+      const winsA = h2h.filter(x=>x.avgA < x.avgB).length;
+      const winsB = h2h.filter(x=>x.avgB < x.avgA).length;
+      h2hHtml = `
+        <div style="margin-top:14px;border-top:1px solid #e5e7eb;padding-top:10px">
+          <div style="font-weight:800;font-size:12px;color:#0b2f6b;margin-bottom:6px">
+            ⚔️ Últimos enfrentamientos directos (${h2h.length})
+            <span style="font-weight:700;color:#1f6feb;margin-left:8px">A ${winsA}</span>
+            <span style="color:#9ca3af">·</span>
+            <span style="font-weight:700;color:#12b76a">${winsB} B</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="background:#f9fafb">
+              <th style="padding:3px 5px;text-align:left;color:#6b7280;font-size:10px">Carrera</th>
+              <th style="padding:3px 5px;text-align:center;color:#1f6feb;font-size:10px">A mejor</th>
+              <th style="padding:3px 5px;text-align:center;color:#1f6feb;font-size:10px">A media</th>
+              <th style="padding:3px 5px;text-align:center;color:#12b76a;font-size:10px">B mejor</th>
+              <th style="padding:3px 5px;text-align:center;color:#12b76a;font-size:10px">B media</th>
+              <th style="padding:3px 5px;text-align:center;color:#374151;font-size:10px">Gana</th>
+            </tr></thead>
+            <tbody>
+              ${h2h.map(x=>{
+                const winner = x.avgA < x.avgB ? 'A' : (x.avgB < x.avgA ? 'B' : '=');
+                const wColor = winner==='A'?'#1f6feb':(winner==='B'?'#12b76a':'#6b7280');
+                return `<tr>
+                  <td style="padding:3px 5px;color:#374151">${escapeHtml(x.raceName)} <span style="color:#9ca3af">· ${escapeHtml(x.raceDate||'')}</span></td>
+                  <td style="padding:3px 5px;text-align:center">${x.bestA}º</td>
+                  <td style="padding:3px 5px;text-align:center">${x.avgA.toFixed(1)}</td>
+                  <td style="padding:3px 5px;text-align:center">${x.bestB}º</td>
+                  <td style="padding:3px 5px;text-align:center">${x.avgB.toFixed(1)}</td>
+                  <td style="padding:3px 5px;text-align:center;font-weight:800;color:${wColor}">${winner}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          <div style="font-size:10px;color:#9ca3af;margin-top:4px">Solo se cuentan carreras donde ambos equipos tenían ≥ 2 corredores. "Gana" = equipo con menor posición media.</div>
+        </div>`;
+    } else {
+      h2hHtml = `<div style="margin-top:14px;padding:8px;background:#f9fafb;border-radius:6px;font-size:11px;color:#6b7280;text-align:center">⚔️ No hay enfrentamientos directos previos en el histórico</div>`;
+    }
+
+    // Botón simular
+    const simBtn = `
+      <div style="margin-top:14px;text-align:center">
+        <button class="btn primary" style="font-size:12px;padding:8px 14px" onclick='_eqB_simulateAB(${JSON.stringify(A.team)}, ${JSON.stringify(B.team)})'>
+          🎲 Simular próxima carrera con ${escapeHtml(A.team)} vs ${escapeHtml(B.team)}
+        </button>
+      </div>`;
+
+    // Sólo añadir si no existe ya
+    if(!summary.querySelector('[data-eqb-extra]')){
+      const extra = document.createElement('div');
+      extra.setAttribute('data-eqb-extra','1');
+      extra.innerHTML = tableHtml + h2hHtml + simBtn;
+      summary.appendChild(extra);
+    } else {
+      const extra = summary.querySelector('[data-eqb-extra]');
+      extra.innerHTML = tableHtml + h2hHtml + simBtn;
+    }
+  }
+}
+
+// ── Lanzar simulador con equipos preseleccionados ──
+function _eqB_simulateAB(teamA, teamB){
+  try{
+    sessionStorage.setItem('_eqB_simRivalTeams', JSON.stringify({a:teamA, b:teamB, ts:Date.now()}));
+    if(typeof showView==='function'){
+      showView('view-simulador');
+      setTimeout(()=>{
+        try{
+          const banner = document.createElement('div');
+          banner.id = 'eqB_simBanner';
+          banner.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;color:#92400e;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,0.15)';
+          banner.innerHTML = `🎲 Foco sugerido para simulación: <span style="color:#1f6feb">${escapeHtml(teamA)}</span> vs <span style="color:#12b76a">${escapeHtml(teamB)}</span> &nbsp; <button onclick="this.parentNode.remove()" style="background:none;border:0;cursor:pointer;font-size:14px">✕</button>`;
+          const old = document.getElementById('eqB_simBanner'); if(old) old.remove();
+          document.body.appendChild(banner);
+          setTimeout(()=>{ const b=document.getElementById('eqB_simBanner'); if(b) b.remove(); }, 12000);
+        }catch(e){}
+      }, 250);
+    }
+  }catch(e){ console.warn('_eqB_simulateAB', e); }
+}
+
+// Auto-inyectar la toolbar al abrir la vista (por si la primera carga no llamó al ranking)
+document.addEventListener('DOMContentLoaded', ()=>{
+  setTimeout(_eqB_injectToolbar, 500);
+});
