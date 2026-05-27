@@ -29243,10 +29243,11 @@ function _aiRenderDNFModal(){
         <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
           ${_pdfLogoSrc?`<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="ai-dnf-logo">`:''}
           <div style="min-width:0">
-            <h2 style="margin:0;font-size:20px;color:#0b2f6b">🚫 DNFs de la temporada</h2>
-            <div style="font-size:13px;color:#374151;margin-top:3px">
-              Ciclista: <b>${escapeHtml(riderName)}</b>
-              ${yearFilter?`· Año <b>${escapeHtml(yearFilter)}</b>`:''}
+            <h2 class="ai-dnf-title" style="margin:0;color:#0b2f6b">🚫 DNFs de la temporada</h2>
+            <div class="ai-dnf-rider">
+              <span class="ai-dnf-rider-label">Ciclista:</span>
+              <span class="ai-dnf-rider-name">${escapeHtml(riderName)}</span>
+              ${yearFilter?`<span class="ai-dnf-rider-year">· Año <b>${escapeHtml(yearFilter)}</b></span>`:''}
             </div>
           </div>
         </div>
@@ -29342,6 +29343,11 @@ function _aiInjectDNFStyles(){
   st.id = 'ai-dnf-styles';
   st.textContent = `
     .ai-dnf-logo{height:46px;width:auto;flex-shrink:0;object-fit:contain}
+    .ai-dnf-title{font-size:20px}
+    .ai-dnf-rider{font-size:13px;color:#374151;margin-top:4px;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+    .ai-dnf-rider-label{color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+    .ai-dnf-rider-name{font-size:22px;font-weight:900;color:#0b2f6b;letter-spacing:.2px;line-height:1.1}
+    .ai-dnf-rider-year{font-size:13px;color:#374151}
     .ai-dnf-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
     .ai-dnf-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;padding:14px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
     .ai-dnf-kpi{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center}
@@ -29361,20 +29367,24 @@ function _aiInjectDNFStyles(){
       body * { visibility: hidden !important; }
       #aiDnfOverlay, #aiDnfOverlay * { visibility: visible !important; }
       #aiDnfOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; padding: 6mm 4mm !important; }
+      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; border-radius: 0 !important; padding: 0 !important; }
       .no-print { display: none !important; }
-      .ai-dnf-header { border-bottom: 2px solid #0b2f6b !important; padding: 10px 14px !important; }
-      .ai-dnf-logo { height: 52px !important; }
-      .ai-dnf-kpis { background: #fff !important; padding: 10px 14px !important; }
+      .ai-dnf-header { border-bottom: 2px solid #0b2f6b !important; padding: 14px 4mm 12px !important; }
+      .ai-dnf-logo { height: 58px !important; }
+      .ai-dnf-title { font-size: 22px !important; }
+      .ai-dnf-rider-name { font-size: 26px !important; }
+      .ai-dnf-rider-label { font-size: 13px !important; }
+      .ai-dnf-kpis { background: #fff !important; padding: 12px 4mm !important; }
       .ai-dnf-kpi { border: 1px solid #999 !important; }
       .ai-dnf-table-wrap { padding: 0 !important; }
-      .ai-dnf-section { padding: 6px 14px 0 !important; }
+      .ai-dnf-section { padding: 8px 4mm 0 !important; }
+      .ai-dnf-section h3 { margin: 12px 0 6px !important; font-size: 15px !important; }
       .ai-dnf-table th, .ai-dnf-table td { border: 1px solid #999 !important; }
       .ai-dnf-table { font-size: 10.5px !important; }
-      .ai-dnf-footer { padding: 10px 14px !important; }
+      .ai-dnf-footer { padding: 10px 4mm 4px !important; }
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      @page { margin: 20mm 18mm 18mm 18mm; size: A4; }
+      @page { margin: 28mm 22mm 22mm 22mm; size: A4; }
     }
   `;
   document.head.appendChild(st);
