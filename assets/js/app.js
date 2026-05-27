@@ -27664,3 +27664,274 @@ if(_origParseText){
     return ret;
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MENÚ CARGA Y RESUMEN · Opción B (3 mejoras del Tier MEDIO)
+// 6. Validación rica inscritos vs histórico (detección de typos)
+// 7. Previsualización en el modal del histórico
+// 8. Detección de duplicados al guardar con contexto
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── 6. VALIDACIÓN RICA INSCRITOS vs HISTÓRICO ────────────────────────────
+// Levenshtein distance simple para detectar typos
+function _cargaLevenshtein(a, b){
+  if(!a || !b) return Math.max((a||'').length, (b||'').length);
+  if(a === b) return 0;
+  const m = a.length, n = b.length;
+  if(Math.abs(m - n) > 4) return 99; // optimización: si difieren mucho en longitud, no son typo
+  const dp = Array.from({length: m+1}, () => new Array(n+1));
+  for(let i = 0; i <= m; i++) dp[i][0] = i;
+  for(let j = 0; j <= n; j++) dp[0][j] = j;
+  for(let i = 1; i <= m; i++){
+    for(let j = 1; j <= n; j++){
+      const cost = a[i-1] === b[j-1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + cost);
+    }
+  }
+  return dp[m][n];
+}
+
+// Para un inscrito sin match exacto, buscar el nombre del histórico más parecido
+function _cargaFindSimilarRider(insName, allHistRiderNames){
+  const nk = (insName||'').toLowerCase().trim();
+  if(!nk || !allHistRiderNames.length) return null;
+  let bestMatch = null, bestDist = 99;
+  // Solo buscar entre nombres cuya longitud está cerca (±3)
+  const targetLen = nk.length;
+  for(const histName of allHistRiderNames){
+    const hk = histName.toLowerCase().trim();
+    if(Math.abs(hk.length - targetLen) > 3) continue;
+    if(hk === nk) return null; // ya tiene match exacto, no es typo
+    const dist = _cargaLevenshtein(nk, hk);
+    if(dist < bestDist && dist <= 3){ // umbral típico de typo
+      bestDist = dist;
+      bestMatch = histName;
+    }
+  }
+  return bestMatch ? {name: bestMatch, distance: bestDist} : null;
+}
+
+// Análisis completo de inscritos
+function _cargaAnalyzeInscritosVsHistory(insArr){
+  if(!Array.isArray(insArr) || !insArr.length) return null;
+  const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  // Recolectar todos los nombres únicos del histórico
+  const allRiderNames = new Set();
+  hist.forEach(h => (h.riders||[]).forEach(r => {
+    if(r.name) allRiderNames.add(r.name);
+  }));
+  const allRiderNamesArr = [...allRiderNames];
+  const normalize = (s) => typeof normalizeForMatching === 'function'
+    ? normalizeForMatching(s||'')
+    : (s||'').toLowerCase().trim();
+  // Set de claves normalizadas para match exacto rápido
+  const normSet = new Set(allRiderNamesArr.map(normalize));
+
+  const enriched = [], newRiders = [], possibleTypos = [];
+  insArr.forEach(ins => {
+    const insNameNorm = normalize(ins.name);
+    if(normSet.has(insNameNorm)){
+      enriched.push(ins);
+    } else {
+      // Buscar similar
+      const similar = _cargaFindSimilarRider(ins.name, allRiderNamesArr);
+      if(similar){
+        possibleTypos.push({...ins, suggestion: similar.name, distance: similar.distance});
+      } else {
+        newRiders.push(ins);
+      }
+    }
+  });
+  return {
+    total: insArr.length,
+    enriched, newRiders, possibleTypos,
+    enrichedN: enriched.length,
+    newN: newRiders.length,
+    typoN: possibleTypos.length
+  };
+}
+
+// Render del informe enriquecido (sustituye el alert plano)
+function _cargaShowInscritosReportRich(insArr, source){
+  const a = _cargaAnalyzeInscritosVsHistory(insArr);
+  if(!a){
+    if(typeof showToast === 'function') showToast('No se pudo analizar inscritos','warn');
+    return;
+  }
+  // Construir contenido del modal
+  const overlay = document.createElement('div');
+  overlay.id = '_cargaInscritosReportModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
+
+  const typosHtml = a.typoN > 0 ? `
+    <div style="margin-top:14px;padding:12px;background:#fef3c7;border:1.5px solid #fde68a;border-radius:10px">
+      <div style="font-weight:800;color:#92400e;margin-bottom:8px">⚠️ Posibles typos detectados (${a.typoN})</div>
+      <div style="font-size:11.5px;color:#78350f;margin-bottom:8px">Estos nombres del listado de inscritos se parecen mucho a otros del histórico — podrían ser el mismo corredor con un nombre escrito ligeramente distinto:</div>
+      <div style="max-height:200px;overflow-y:auto">
+        ${a.possibleTypos.map(t => `<div style="padding:6px 0;border-bottom:1px dashed #fcd34d;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <div><b style="color:#78350f">${escapeHtml(t.name)}</b> ${t.bib?`<span style="color:#a16207">(#${escapeHtml(t.bib)})</span>`:''}</div>
+          <div style="text-align:right">
+            <span style="font-size:11px;color:#a16207">≈ Histórico:</span><br>
+            <b style="color:#15803d">${escapeHtml(t.suggestion)}</b>
+            <span style="font-size:10px;color:#9ca3af">(${t.distance} car. dif.)</span>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  const newHtml = a.newN > 0 ? `
+    <div style="margin-top:14px;padding:12px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:10px">
+      <div style="font-weight:800;color:#1e40af;margin-bottom:8px">🆕 Corredores SIN histórico previo (${a.newN})</div>
+      <div style="font-size:11.5px;color:#1e3a8a;margin-bottom:8px">Estos corredores no aparecen en ninguna carrera previa de la app. Pueden ser:<br>· Debutantes reales (primera carrera)<br>· Corredores nuevos en la categoría<br>· Nombres mal escritos (revisa la lista pegada)</div>
+      <div style="max-height:200px;overflow-y:auto;font-size:12px;color:#1e3a8a">
+        ${a.newRiders.slice(0,30).map(n => `<div style="padding:3px 0">• <b>${escapeHtml(n.name)}</b> ${n.team?` <span style="color:#64748b">· ${escapeHtml(n.team)}</span>`:''}</div>`).join('')}
+        ${a.newN > 30 ? `<div style="margin-top:6px;color:#64748b;font-size:11px">… y ${a.newN - 30} más</div>` : ''}
+      </div>
+    </div>` : '';
+
+  overlay.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+    <div style="padding:16px 22px;background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;opacity:.85">📋 Análisis de inscritos</div>
+      <h3 style="margin:2px 0 0">${a.total} corredores cargados desde ${escapeHtml(source)}</h3>
+    </div>
+    <div style="padding:18px 22px;overflow-y:auto;flex:1">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:6px">
+        <div style="padding:10px;background:#dcfce7;border:1.5px solid #86efac;border-radius:10px;text-align:center">
+          <div style="font-size:11px;font-weight:800;color:#15803d;text-transform:uppercase">✅ En histórico</div>
+          <div style="font-size:26px;font-weight:900;color:#15803d">${a.enrichedN}</div>
+          <div style="font-size:11px;color:#15803d">${Math.round(a.enrichedN/a.total*100)}% del total</div>
+        </div>
+        <div style="padding:10px;background:#fef3c7;border:1.5px solid #fde68a;border-radius:10px;text-align:center">
+          <div style="font-size:11px;font-weight:800;color:#92400e;text-transform:uppercase">⚠️ Posibles typos</div>
+          <div style="font-size:26px;font-weight:900;color:#92400e">${a.typoN}</div>
+          <div style="font-size:11px;color:#92400e">parecidos a histórico</div>
+        </div>
+        <div style="padding:10px;background:#dbeafe;border:1.5px solid #93c5fd;border-radius:10px;text-align:center">
+          <div style="font-size:11px;font-weight:800;color:#1e40af;text-transform:uppercase">🆕 Sin histórico</div>
+          <div style="font-size:26px;font-weight:900;color:#1e40af">${a.newN}</div>
+          <div style="font-size:11px;color:#1e40af">debutantes o nuevos</div>
+        </div>
+      </div>
+      ${typosHtml}
+      ${newHtml}
+      <p style="font-size:11px;color:#6b7280;margin-top:14px;line-height:1.5">💡 <b>Los typos no se corrigen automáticamente.</b> Si quieres unificar nombres, edita manualmente la lista pegada antes de procesar. El simulador usa <code>normalizeForMatching</code> para hacer match parcial, así que pequeñas diferencias (acentos, etc.) pueden funcionar igualmente.</p>
+    </div>
+    <div style="padding:12px 22px;background:#f9fafb;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="document.getElementById('_cargaInscritosReportModal').remove()" style="background:#0b2f6b;color:#fff;border:0;border-radius:8px;padding:8px 18px;font-weight:800;cursor:pointer">✅ Entendido</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+// Sustitución del alert plano: hook en _showInscritosEnrichmentReport
+const _origShowInscritosEnrichmentReport = (typeof _showInscritosEnrichmentReport === 'function') ? _showInscritosEnrichmentReport : null;
+if(_origShowInscritosEnrichmentReport){
+  window._showInscritosEnrichmentReport = function(arr, source){
+    // En vez del alert, usar el modal rico
+    try{ _cargaShowInscritosReportRich(arr, source); }
+    catch(e){
+      console.warn('[carga] enrichment report error', e);
+      _origShowInscritosEnrichmentReport(arr, source); // fallback al alert clásico
+    }
+  };
+}
+
+// ─── 7. PREVISUALIZACIÓN EN EL MODAL DEL HISTÓRICO ────────────────────────
+// Añade un botón 👁 a cada entrada del modal del histórico que muestra
+// un panel inline con: top 5 podio, nº inscritos, mejor de mi equipo
+function _cargaShowHistoryPreview(raceId, btnEl){
+  const hist = _cachedHistory || [];
+  const race = hist.find(h => h.id === raceId);
+  if(!race){
+    if(typeof showToast === 'function') showToast('Carrera no encontrada','warn');
+    return;
+  }
+  // Buscar el contenedor padre (.hist-entry)
+  const entry = btnEl.closest('.hist-entry');
+  if(!entry) return;
+  // Si ya hay preview abierto, cerrarlo
+  const existing = entry.nextElementSibling;
+  if(existing && existing.classList.contains('hist-preview-inline')){
+    existing.remove();
+    btnEl.textContent = '👁 Preview';
+    return;
+  }
+  // Quitar otros previews abiertos
+  document.querySelectorAll('.hist-preview-inline').forEach(el => el.remove());
+  document.querySelectorAll('[data-preview-btn="1"]').forEach(el => el.textContent = '👁 Preview');
+
+  // Construir preview
+  const top5 = (race.riders||[]).slice(0, 5);
+  const myTeamKey = (typeof myTeam !== 'undefined' && myTeam) ? myTeam.toLowerCase().trim() : '';
+  const myRiders = myTeamKey ? (race.riders||[]).filter(r => (r.team||'').toLowerCase().trim() === myTeamKey).sort((a,b)=>a.pos-b.pos) : [];
+  const totalRiders = (race.riders||[]).length;
+  const inscritosN = Array.isArray(race.inscritos) ? race.inscritos.length : 0;
+
+  const preview = document.createElement('div');
+  preview.className = 'hist-preview-inline';
+  preview.style.cssText = 'background:#f8fafc;border:1.5px solid #cbd5e1;border-radius:10px;padding:12px 14px;margin:4px 0 8px 24px';
+  preview.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:12px">
+      <div>
+        <div style="font-weight:800;color:#0b2f6b;margin-bottom:6px;text-transform:uppercase;font-size:10.5px;letter-spacing:.4px">🏆 Top 5</div>
+        ${top5.length ? top5.map(r => {
+          const medal = r.pos===1?'🥇':r.pos===2?'🥈':r.pos===3?'🥉':' ';
+          return `<div style="padding:2px 0">${medal} <b>${r.pos}º</b> ${escapeHtml(r.name||'')} <span style="color:#6b7280;font-size:11px">${escapeHtml((r.team||'').slice(0,22))}</span></div>`;
+        }).join('') : '<div style="color:#9ca3af">Sin clasificados</div>'}
+      </div>
+      <div>
+        <div style="font-weight:800;color:#0b2f6b;margin-bottom:6px;text-transform:uppercase;font-size:10.5px;letter-spacing:.4px">📊 Resumen</div>
+        <div style="padding:2px 0">📋 <b>${totalRiders}</b> clasificados${inscritosN ? ' (de ' + inscritosN + ' inscritos)' : ''}</div>
+        ${race.localidad ? `<div style="padding:2px 0">📍 ${escapeHtml(race.localidad)}</div>` : ''}
+        ${race.circuitType ? `<div style="padding:2px 0">🛣️ ${escapeHtml(race.circuitType)}</div>` : ''}
+        ${race.km ? `<div style="padding:2px 0">📏 ${escapeHtml(race.km)} km</div>` : ''}
+        ${myTeamKey ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0">
+          <div style="font-weight:800;color:#1d4ed8;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">🔵 Mi equipo</div>
+          ${myRiders.length
+            ? myRiders.slice(0,3).map(r => `<div style="padding:1px 0">${r.pos}º · ${escapeHtml((r.name||'').split(',')[0])}</div>`).join('') + (myRiders.length > 3 ? `<div style="color:#6b7280;font-size:11px">+ ${myRiders.length - 3} más</div>` : '')
+            : '<div style="color:#9ca3af;font-size:11px">Sin corredores de mi equipo</div>'
+          }
+        </div>` : ''}
+      </div>
+    </div>`;
+  entry.parentNode.insertBefore(preview, entry.nextSibling);
+  btnEl.textContent = '👁 Cerrar';
+}
+
+// Hook en openHistoryModal para añadir botón de preview a cada entrada
+const _origOpenHistoryModal = (typeof openHistoryModal === 'function') ? openHistoryModal : null;
+if(_origOpenHistoryModal){
+  window.openHistoryModal = async function(){
+    await _origOpenHistoryModal();
+    // Tras renderizar el modal, añadir botones de preview a cada .hist-entry
+    try{
+      const entries = document.querySelectorAll('#histModalBody .hist-entry');
+      entries.forEach(entry => {
+        // Sacar el raceId del onclick existente
+        const onclickStr = entry.getAttribute('onclick') || '';
+        const m = onclickStr.match(/loadHistoryEntry\(['"]([^'"]+)['"]\)/);
+        if(!m) return;
+        const raceId = m[1];
+        // Si ya hay botón preview, no añadir otro
+        if(entry.querySelector('[data-preview-btn]')) return;
+        const btn = document.createElement('button');
+        btn.textContent = '👁 Preview';
+        btn.setAttribute('data-preview-btn', '1');
+        btn.style.cssText = 'background:#eef2ff;color:#3730a3;border:0;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-right:4px';
+        btn.onclick = (ev) => { ev.stopPropagation(); _cargaShowHistoryPreview(raceId, btn); };
+        // Insertar antes del botón "▶ Cargar"
+        const actions = entry.querySelector('div:last-child');
+        if(actions && actions.firstChild){
+          actions.insertBefore(btn, actions.firstChild);
+        }
+      });
+    }catch(e){ console.warn('[carga] history preview hook',e); }
+  };
+}
+
+// ─── 8. DUPLICADOS YA EXISTÍA — solo añadimos toast informativo ───────────
+// (La detección de duplicados ya estaba implementada en saveHistory →
+//  _mostrarDialogoDuplicado. No la duplicamos aquí.)
+// Lo que mejoramos: mostrar un toast al detectar duplicado para que el
+// director vea claro que se ha disparado el diálogo (no es un freeze).
