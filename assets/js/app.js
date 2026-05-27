@@ -10255,11 +10255,36 @@ async function _inicioAddAllUpcoming(){
 // hay prueba cargada) o redirigimos al Análisis genérico para que el usuario
 // elija manualmente.
 // Abre el simulador con una carrera concreta pre-seleccionada
+// Si la carrera NO tiene inscritos guardados, lleva al usuario a Historial
+// con instrucción clara, porque el simulador SOLO acepta pruebas con startlist.
 function _inicioOpenSimulator(raceId){
+  // Comprobar primero si la carrera tiene inscritos
+  let hasInscritos = false;
+  let raceName = '';
+  if(raceId && Array.isArray(_cachedHistory)){
+    const race = _cachedHistory.find(h => h.id === raceId);
+    if(race){
+      raceName = race.raceName || '';
+      hasInscritos = Array.isArray(race.inscritos) && race.inscritos.length > 0;
+    }
+  }
+  if(!hasInscritos){
+    // No podemos simular sin inscritos — explicar y llevar a Historial
+    const msg = raceName
+      ? `La prueba "${raceName}" aún no tiene lista de inscritos guardada.\n\nPara poder simularla, primero sube la startlist desde el Historial.`
+      : 'Esta prueba aún no tiene lista de inscritos guardada. Súbele una startlist desde Historial para poder simularla.';
+    if(typeof showToast === 'function'){
+      showToast('⚠️ Sin lista de inscritos para esta prueba', 'warn', 4500);
+    } else {
+      alert(msg);
+    }
+    showView('view-historial');
+    return;
+  }
+  // Caso normal: hay inscritos → cargar en el simulador
   showView('view-simulador');
   setTimeout(()=>{
     try{
-      if(!raceId) return;
       const sel = document.getElementById('simRaceSelect');
       if(sel){
         sel.value = raceId;
@@ -10551,7 +10576,9 @@ async function renderInicio(){
         const icon = typeof _wxIcon === 'function' ? _wxIcon(w) : '🌤️';
         return `<span style="background:#f0f9ff;color:#075985;padding:3px 8px;border-radius:6px;font-size:11.5px;font-weight:700;border:1px solid #bae6fd">${icon} ${w.temp}ºC · 💨${w.wind}km/h${w.rain!=null?' · 🌧️'+w.rain+'%':''}</span>`;
       })();
-      // Función para abrir el simulador con esta prueba seleccionada
+      // Función para abrir el simulador con esta prueba seleccionada.
+      // Si no encontramos match en cachedHistory, llevamos al simulador
+      // sin pre-cargar (el usuario verá el selector).
       const simulateHandler = (r) => {
         if(!Array.isArray(_cachedHistory)) return `showView('view-simulador')`;
         const match = _cachedHistory.find(h => {
@@ -10561,6 +10588,18 @@ async function renderInicio(){
         });
         if(match) return `_inicioOpenSimulator('${escapeAttr(match.id||'')}')`;
         return `showView('view-simulador')`;
+      };
+      // Comprueba si la próxima prueba tiene inscritos cargados (necesarios
+      // para poder simular). Si NO los tiene, el botón cambia a "📋 Subir
+      // inscritos" y lleva al Historial directamente.
+      const hasInscritos = (r) => {
+        if(!Array.isArray(_cachedHistory)) return false;
+        const m = _cachedHistory.find(h => {
+          if(!h.raceDate) return false;
+          return _parseSpanishDate(h.raceDate) === r.iso &&
+                 (!r.localidad || !h.localidad || h.localidad.toLowerCase() === r.localidad.toLowerCase());
+        });
+        return !!(m && Array.isArray(m.inscritos) && m.inscritos.length > 0);
       };
 
       lastBox.innerHTML = `
@@ -10579,7 +10618,10 @@ async function renderInicio(){
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-            <button class="btn" onclick="${simulateHandler(next)}" style="background:#7c3aed;color:#fff;font-size:12px;padding:7px 13px;font-weight:800">🔮 Simular</button>
+            ${hasInscritos(next)
+              ? `<button class="btn" onclick="${simulateHandler(next)}" style="background:#7c3aed;color:#fff;font-size:12px;padding:7px 13px;font-weight:800" title="Abrir esta prueba en el simulador">🔮 Simular</button>`
+              : `<button class="btn" onclick="showView('view-historial')" style="background:#f59e0b;color:#fff;font-size:12px;padding:7px 13px;font-weight:800" title="Necesita lista de inscritos para poder simular">📋 Subir inscritos</button>`
+            }
             <button class="btn light" onclick="${handlerFor(next)}" style="font-size:12px;padding:7px 13px">📋 Ver detalle</button>
           </div>
         </div>
@@ -10590,7 +10632,10 @@ async function renderInicio(){
           return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:#f9fafb;border:1px solid #f3f4f6;margin-bottom:5px;transition:background .15s" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background='#f9fafb'">
             <div style="background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:11px;padding:3px 8px;border-radius:6px;min-width:48px;text-align:center">${fmtDate(r.iso).slice(0,5)}</div>
             <div style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0b2f6b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="${handlerFor(r)}">${escapeHtml(r.name)}</div>
-            <button onclick="${simulateHandler(r)}" title="Simular esta prueba" style="background:#ede9fe;color:#5b21b6;border:0;border-radius:5px;padding:3px 7px;font-size:10.5px;font-weight:800;cursor:pointer">🔮</button>
+            ${hasInscritos(r)
+              ? `<button onclick="${simulateHandler(r)}" title="Simular esta prueba" style="background:#ede9fe;color:#5b21b6;border:0;border-radius:5px;padding:3px 7px;font-size:10.5px;font-weight:800;cursor:pointer">🔮</button>`
+              : `<button onclick="showView('view-historial')" title="Esta prueba aún no tiene inscritos cargados" style="background:#fef3c7;color:#92400e;border:0;border-radius:5px;padding:3px 7px;font-size:10.5px;font-weight:800;cursor:pointer">📋</button>`
+            }
             <div style="font-size:10.5px;color:#6b7280">${dn===0?'hoy':dn===1?'mañana':`+${dn}d`}</div>
           </div>`;
         }).join('')}
