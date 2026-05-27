@@ -19110,12 +19110,22 @@ function showInscritosModal(){
     const isDnf = dnfKeys.has(key);
     // Si acabó: localizar pos en riders
     let pos = '—';
+    let classifiedCat = null;
     if(!isDnf){
       const r = (riders||[]).find(x=>String(x.bib)===String(i.bib)) ||
                 (riders||[]).find(x=>normalizeForMatching(x.name)===normalizeForMatching(i.name||''));
-      if(r) pos = r.pos;
+      if(r){
+        pos = r.pos;
+        classifiedCat = r.cat; // categoría en la clasificación oficial (suele estar bien)
+      }
     }
-    return {...i, status: isDnf ? 'DNF' : 'OK', pos};
+    // FIX: si la categoría es genérica ("CADETE", "JUVENIL"…), resolver desde el histórico
+    // Prioridad: cat de la clasificación > resuelta del histórico > cat del inscrito
+    let cat = classifiedCat || i.cat || '';
+    if(cat && !/\d/.test(cat) && typeof _simResolveSpecificCat === 'function'){
+      cat = _simResolveSpecificCat(i.name||'', cat) || cat;
+    }
+    return {...i, status: isDnf ? 'DNF' : 'OK', pos, cat};
   });
   // Ordenar: primero clasificados por pos, luego DNF alfabéticamente
   rows.sort((a,b)=>{
