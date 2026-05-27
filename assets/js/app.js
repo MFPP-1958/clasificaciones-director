@@ -21328,10 +21328,18 @@ function _simBuildData(raceId){
     if(h.id === raceId) return false;
     if((h.riders||[]).length < 3) return false;
     // Compatibilidad de formato: descartar solo si fundamentalmente incompatible
-    const compat = _simRaceCompatWeight(race, h);
-    if(!compat.compatible) return false;
-    _compatByRaceId.set(h.id, compat.weight);
-    return true;
+    // try/catch defensivo: si _simRaceCompatWeight fallara por cualquier motivo,
+    // mantenemos la carrera en el histórico con peso neutro 1.0 (sin romper la app)
+    try {
+      const compat = _simRaceCompatWeight(race, h);
+      if(!compat.compatible) return false;
+      _compatByRaceId.set(h.id, compat.weight);
+      return true;
+    } catch(e) {
+      console.warn('[sim] compat error en', h.raceName, e);
+      _compatByRaceId.set(h.id, 1.0);
+      return true; // mantener carrera con peso neutro
+    }
   });
   // Index: nameKey → array de {pos, total, raceDate, cat, team}
   const byRider = new Map();
