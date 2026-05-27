@@ -8818,9 +8818,34 @@ function analyseSelectedRider(){
   const adnObj = _computeADN(histEntries.map(x=>x.pos), histEntries);
   const adnHtml = histEntries.length>=2 ? _adnBadgeHtml(adnObj) : '';
 
+  // Análisis Individual · Opción A #4: filtros internos del historial
+  const histFilters = histEntries.length >= 2 ? _aiBuildHistoryFilters(histEntries) : null;
+  // Guardar histEntries en variable global para que los hooks de filtros lo encuentren
+  window._aiCurrentRiderHistory = histEntries;
+  _aiHistoryFilters = {year: '', localidad: ''};
+  const filtersHtml = histFilters && (histFilters.years.length > 1 || histFilters.locs.length > 1) ? `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:12px">
+      ${histFilters.years.length > 1 ? `
+        <label style="display:flex;align-items:center;gap:4px"><span style="color:#6b7280">Año:</span>
+          <select id="aiHistoryYear" onchange="_aiOnHistoryFilterChange()" style="padding:3px 6px;border:1px solid #d0d5dd;border-radius:6px;font-size:12px">
+            <option value="">Todos</option>
+            ${histFilters.years.map(y => `<option value="${y}">${y}</option>`).join('')}
+          </select>
+        </label>` : ''}
+      ${histFilters.locs.length > 1 ? `
+        <label style="display:flex;align-items:center;gap:4px"><span style="color:#6b7280">Localidad:</span>
+          <select id="aiHistoryLoc" onchange="_aiOnHistoryFilterChange()" style="padding:3px 6px;border:1px solid #d0d5dd;border-radius:6px;font-size:12px;max-width:160px">
+            <option value="">Todas</option>
+            ${histFilters.locs.map(l => `<option value="${escapeAttr(l)}">${escapeHtml(l)}</option>`).join('')}
+          </select>
+        </label>` : ''}
+    </div>` : '';
+
   const histHtml=histEntries.length>=2?`
     <div class="rider-history-block">
       <div class="rider-history-title">📈 Evolución en histórico (${histEntries.length} carreras)</div>
+      ${filtersHtml}
+      <div id="aiHistoryFilteredBody">
       ${histEntries.map((he,i)=>{
         const prev2=i>0?histEntries[i-1]:null;
         const trend=prev2?(he.pos<prev2.pos?'🔼':he.pos>prev2.pos?'🔽':'➡️'):'';
@@ -8830,6 +8855,13 @@ function analyseSelectedRider(){
           <div class="small">de ${he.total}</div>
         </div>`;
       }).join('')}
+      </div>
+    </div>
+    <!-- Análisis Individual · Opción A #5: H2H integrado -->
+    <div class="rider-history-block" style="margin-top:14px">
+      <div class="rider-history-title">⚔️ Rivales más enfrentados (Top 5)</div>
+      <div id="aiH2HBlock">${_aiBuildH2HBlock(_aiFindRivals(r.name, histEntries, 5))}</div>
+      <p class="small" style="margin:6px 0 0;color:#6b7280">Récord directo de esta corredora vs cada rival · Solo rivales con ≥2 encuentros</p>
     </div>`:
     (hist.length>0?'<div class="small" style="margin-top:8px;color:#9ca3af">💡 Guarda más carreras en el histórico para ver la evolución de este ciclista.</div>':'');
 
@@ -8931,7 +8963,18 @@ function analyseSelectedRider(){
       </div>`;
     })():''}
     ${typeof renderFinishRateStatCard==='function'?renderFinishRateStatCard(r):''}
+    ${_aiBuildExtraStats(r, histEntries)}
   </div>
+
+  ${histEntries.length>=2?`
+  <!-- Análisis Individual · Opción A #1: Gráfico de evolución temporal -->
+  <div class="rider-history-block" style="margin-top:14px">
+    <div class="rider-history-title">📊 Gráfico de evolución temporal</div>
+    <div style="position:relative;height:240px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px">
+      <canvas id="aiEvolutionChart"></canvas>
+    </div>
+    <p class="small" style="margin:6px 0 0;color:#6b7280">🟡 podio · 🔵 top 10 · ⬜ resto · línea roja discontinua = media histórica</p>
+  </div>` : ''}
 
   <!-- Percentil + Compañeros -->
   <div class="rider-blocks">
@@ -8981,6 +9024,14 @@ function analyseSelectedRider(){
   </div>
 
   ${histHtml}`;
+
+  // Análisis Individual · Opción A #1: pintar el gráfico de evolución
+  if(histEntries.length >= 2){
+    setTimeout(()=>{
+      try{ _aiRenderEvolutionChart('aiEvolutionChart', histEntries); }
+      catch(e){ console.warn('[ai] chart render error:', e); }
+    }, 50);
+  }
 }
 
 function simulateObjective(key){
@@ -25961,3 +26012,337 @@ if(_tablaPrevApply_count){
 document.addEventListener('DOMContentLoaded', ()=>{
   setTimeout(()=>{ try{ _tablaUpdateFilterCount(); }catch(e){} }, 500);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MENÚ ANÁLISIS INDIVIDUAL · Opción A (6 mejoras)
+// 1. Gráfico de evolución temporal (Chart.js)
+// 2. Tendencia EWMA-3 visible (decaimiento exponencial)
+// 3. Pico de Rendimiento PR95
+// 4. Filtros internos en historial
+// 5. H2H integrado en la ficha
+// 6. Curva de fatiga visible
+// ═══════════════════════════════════════════════════════════════════════════
+
+// — EWMA-3: media ponderada de últimas 3 carreras con decay exponencial —
+// Devuelve {ewma, recent: [p1,p2,p3], compares}
+// histEntries debe estar ordenado ASCENDENTE por fecha (oldest first)
+function _aiEWMA3(histEntries){
+  if(!histEntries || histEntries.length < 2) return null;
+  // Tomar últimas 3 carreras (las más recientes están al final si están sorted asc)
+  const lastN = histEntries.slice(-3).map(h => h.pos).filter(p => p > 0);
+  if(!lastN.length) return null;
+  // Pesos: la MÁS RECIENTE (último elemento) lleva el peso mayor
+  // lastN[lastN.length-1] = más reciente
+  const reversed = [...lastN].reverse(); // ahora reversed[0] = más reciente
+  const W = reversed.length === 3 ? [0.50, 0.30, 0.20]
+          : reversed.length === 2 ? [0.60, 0.40]
+          : [1.00];
+  let s = 0, totW = 0;
+  for(let i = 0; i < reversed.length; i++){
+    s    += reversed[i] * W[i];
+    totW += W[i];
+  }
+  const ewma = s / totW;
+  // Comparar con media histórica
+  const allPos = histEntries.map(h => h.pos).filter(p => p > 0);
+  const overall = allPos.length ? allPos.reduce((a,b)=>a+b,0)/allPos.length : null;
+  const delta = (overall != null) ? overall - ewma : 0;
+  // delta > 0 → ewma es MENOR que la media (forma mejorando)
+  // delta < 0 → ewma es MAYOR que la media (forma empeorando)
+  return {ewma, recent: lastN, overall, delta};
+}
+
+// — Pico de Rendimiento PR95: percentil 95 (techo realista) —
+// Descarta el 5% mejor como outliers para evitar "días perfectos"
+function _aiPR95(positions){
+  const valid = (positions||[]).filter(p => p > 0);
+  if(valid.length < 5) return null;
+  const sorted = [...valid].sort((a,b)=>a-b); // ascendente (mejor → peor)
+  // PR95 = posición que el corredor consigue o supera el 5% del tiempo
+  // Es decir, su MEJOR posición realista descartando outliers (top 5%)
+  const cutoff = Math.max(1, Math.floor(valid.length * 0.05));
+  const realisticBest = sorted[cutoff]; // ej. con 20 carreras, descarta la mejor y devuelve la 2ª
+  return {pr95: realisticBest, total: valid.length};
+}
+
+// — Fatiga en ventana de 14 días previos a una fecha (o "hoy") —
+function _aiFatigueWindow(histEntries, refDateStr){
+  if(!histEntries || !histEntries.length) return {count: 0, races: []};
+  const refIso = refDateStr ? _parseSpanishDate(refDateStr) : new Date().toISOString().slice(0,10);
+  if(!refIso) return {count: 0, races: []};
+  const refMs = new Date(refIso + 'T12:00:00').getTime();
+  const MS14 = 14 * 86400 * 1000;
+  const MS7  = 7  * 86400 * 1000;
+  const racesIn14 = [], racesIn7 = [];
+  histEntries.forEach(h => {
+    const iso = _parseSpanishDate(h.raceDate);
+    if(!iso) return;
+    const ms = new Date(iso + 'T12:00:00').getTime();
+    if(ms >= refMs) return; // solo carreras anteriores
+    const diff = refMs - ms;
+    if(diff <= MS14) racesIn14.push(h);
+    if(diff <= MS7)  racesIn7.push(h);
+  });
+  return {
+    count: racesIn14.length,
+    racesIn7: racesIn7.length,
+    racesIn14: racesIn14.length,
+    races: racesIn14
+  };
+}
+
+// — Construye HTML de los chips del Tier ALTO (EWMA, PR95, fatiga) —
+function _aiBuildExtraStats(r, histEntries){
+  if(!histEntries || histEntries.length < 3) return '';
+
+  // Ordenar ASC por fecha (oldest → newest) si no lo está ya
+  const sortedAsc = [...histEntries].sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+    return da.localeCompare(db);
+  });
+
+  const ewmaInfo = _aiEWMA3(sortedAsc);
+  const allPos   = sortedAsc.map(h=>h.pos).filter(p=>p>0);
+  const pr95Info = _aiPR95(allPos);
+  // Fatiga: relativo a la última carrera del histórico (la más reciente)
+  const lastRaceDate = sortedAsc[sortedAsc.length-1]?.raceDate || '';
+  const fatigue  = _aiFatigueWindow(sortedAsc.slice(0,-1), lastRaceDate); // excluye la última (es la referencia)
+
+  const cards = [];
+
+  // EWMA-3
+  if(ewmaInfo){
+    const trendCol = ewmaInfo.delta > 1.5 ? '#16a34a'
+                    : ewmaInfo.delta < -1.5 ? '#dc2626'
+                    : '#64748b';
+    const trendIc  = ewmaInfo.delta > 1.5 ? '⬆️'
+                    : ewmaInfo.delta < -1.5 ? '⬇️'
+                    : '➡️';
+    const trendTxt = ewmaInfo.delta > 1.5 ? 'mejorando'
+                    : ewmaInfo.delta < -1.5 ? 'empeorando'
+                    : 'estable';
+    cards.push(`<div class="rider-stat">
+      <div class="stat-label" style="display:flex;align-items:center;gap:5px">Tendencia EWMA-3 <button class="help-btn" data-help="&lt;strong&gt;📊 Tendencia EWMA-3&lt;/strong&gt;Media móvil exponencial sobre las últimas 3 carreras con pesos {0.5, 0.3, 0.2} (la más reciente cuenta más).&lt;br&gt;&lt;br&gt;Compara con la media histórica:&lt;ul&gt;&lt;li&gt;⬆️ mejorando: ahora rinde mejor que su media&lt;/li&gt;&lt;li&gt;⬇️ empeorando: peor que su media&lt;/li&gt;&lt;li&gt;➡️ estable: igual&lt;/li&gt;&lt;/ul&gt;">?</button></div>
+      <div class="stat-value" style="font-size:22px;color:${trendCol}">${ewmaInfo.ewma.toFixed(1)}º <span style="font-size:14px">${trendIc}</span></div>
+      <div class="stat-sub" style="color:${trendCol}">${trendTxt} · media histórica ${ewmaInfo.overall.toFixed(1)}º</div>
+    </div>`);
+  }
+
+  // PR95 (Pico de rendimiento)
+  if(pr95Info){
+    cards.push(`<div class="rider-stat">
+      <div class="stat-label" style="display:flex;align-items:center;gap:5px">Techo realista (PR95) <button class="help-btn" data-help="&lt;strong&gt;🎯 Techo realista PR95&lt;/strong&gt;La mejor posición que el corredor puede esperar consistentemente, descartando el 5% de resultados extremos (&quot;días perfectos&quot;).&lt;br&gt;&lt;br&gt;Útil para fijar objetivos REALISTAS de carrera. Si su PR95 es 8º, pedirle podio es ambicioso pero pedirle Top 10 es razonable.">?</button></div>
+      <div class="stat-value" style="font-size:22px;color:#7c3aed">${pr95Info.pr95}º</div>
+      <div class="stat-sub">Sin contar los 5% mejores (sobre ${pr95Info.total} carreras)</div>
+    </div>`);
+  }
+
+  // Fatiga
+  if(fatigue.racesIn14 > 0){
+    const fatCol = fatigue.racesIn7 >= 3 ? '#dc2626'
+                  : fatigue.racesIn14 >= 4 ? '#f59e0b'
+                  : '#64748b';
+    const fatTxt = fatigue.racesIn7 >= 3 ? 'sobrecarga'
+                  : fatigue.racesIn14 >= 4 ? 'alta'
+                  : 'normal';
+    cards.push(`<div class="rider-stat">
+      <div class="stat-label" style="display:flex;align-items:center;gap:5px">Carga competitiva <button class="help-btn" data-help="&lt;strong&gt;🥵 Carga competitiva&lt;/strong&gt;Número de carreras disputadas en los días previos a la última carrera del histórico.&lt;br&gt;&lt;br&gt;⚠️ ≥3 carreras en 7 días = sobrecarga (riesgo de fatiga)&lt;br&gt;⚠️ ≥4 carreras en 14 días = carga alta&lt;br&gt;✅ Resto = normal">?</button></div>
+      <div class="stat-value" style="font-size:22px;color:${fatCol}">${fatigue.racesIn14}</div>
+      <div class="stat-sub" style="color:${fatCol}">${fatigue.racesIn7} en 7d · ${fatigue.racesIn14} en 14d · <b>${fatTxt}</b></div>
+    </div>`);
+  }
+
+  return cards.join('');
+}
+
+// — Genera el gráfico de evolución temporal con Chart.js —
+let _aiEvolChart = null;
+function _aiRenderEvolutionChart(canvasId, histEntries){
+  if(typeof Chart === 'undefined') return;
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || !histEntries || histEntries.length < 2) return;
+  // Destruir chart anterior si existe
+  try{ if(_aiEvolChart){ _aiEvolChart.destroy(); _aiEvolChart = null; } }catch(e){}
+
+  const sortedAsc = [...histEntries].sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+    return da.localeCompare(db);
+  });
+  const labels = sortedAsc.map(h => {
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    return iso.slice(5).replace('-', '/'); // MM/DD
+  });
+  const positions = sortedAsc.map(h => h.pos > 0 ? h.pos : null);
+  const avg = positions.filter(p=>p!=null).reduce((s,p)=>s+p,0) / Math.max(1, positions.filter(p=>p!=null).length);
+
+  const ctx = canvas.getContext('2d');
+  _aiEvolChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Posición',
+          data: positions,
+          borderColor: '#1f6feb',
+          backgroundColor: 'rgba(31,111,235,.15)',
+          fill: true,
+          tension: 0.25,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: positions.map(p => p == null ? '#cbd5e1' : p <= 3 ? '#f59e0b' : p <= 10 ? '#3b82f6' : '#94a3b8'),
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          spanGaps: true
+        },
+        {
+          label: `Media (${avg.toFixed(1)}º)`,
+          data: positions.map(()=>avg),
+          borderColor: '#ef4444',
+          borderDash: [6, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'top', labels: { font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const i = items[0].dataIndex;
+              const h = sortedAsc[i];
+              return h.raceName || labels[i];
+            },
+            label: (item) => {
+              const i = item.dataIndex;
+              const h = sortedAsc[i];
+              if(item.dataset.label === 'Posición'){
+                return `${h.pos}º de ${h.total}${h.localidad?' · '+h.localidad:''}`;
+              }
+              return item.dataset.label;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          reverse: true, // posición 1 arriba
+          beginAtZero: false,
+          title: { display: true, text: 'Posición' },
+          ticks: { precision: 0 }
+        },
+        x: {
+          ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0 }
+        }
+      }
+    }
+  });
+}
+
+// — Filtros internos para el historial del corredor —
+// Devuelve {years, locs, raceTypes} con valores únicos del histórico
+function _aiBuildHistoryFilters(histEntries){
+  const years = new Set(), locs = new Set();
+  histEntries.forEach(h => {
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    if(iso) years.add(iso.slice(0,4));
+    if(h.localidad) locs.add(h.localidad);
+  });
+  return {
+    years: [...years].sort().reverse(),
+    locs:  [...locs].sort()
+  };
+}
+
+// Aplica los filtros internos sobre el array completo
+function _aiFilterHistory(histEntries, filters){
+  return histEntries.filter(h => {
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    if(filters.year && iso.slice(0,4) !== filters.year) return false;
+    if(filters.localidad && h.localidad !== filters.localidad) return false;
+    return true;
+  });
+}
+
+// — H2H integrado: encuentra los rivales más enfrentados —
+function _aiFindRivals(riderName, histEntries, limit=5){
+  if(!riderName || !histEntries || !histEntries.length) return [];
+  const nk = (riderName||'').trim().toLowerCase();
+  const rivalsMap = new Map(); // rivalName → {name, team, encounters, wins, losses, ties}
+  const hist = _cachedHistory || [];
+  // Para cada carrera del histórico del corredor, mirar contra quién corrió
+  hist.forEach(race => {
+    const me = (race.riders||[]).find(r => (r.name||'').trim().toLowerCase() === nk);
+    if(!me || !me.pos) return;
+    (race.riders||[]).forEach(r => {
+      const k = (r.name||'').trim().toLowerCase();
+      if(!k || k === nk || !r.pos) return;
+      if(!rivalsMap.has(k)) rivalsMap.set(k, {name: r.name, team: r.team||'', encounters:0, wins:0, losses:0, ties:0});
+      const rec = rivalsMap.get(k);
+      rec.encounters++;
+      if(me.pos < r.pos) rec.wins++;
+      else if(me.pos > r.pos) rec.losses++;
+      else rec.ties++;
+    });
+  });
+  return [...rivalsMap.values()]
+    .filter(r => r.encounters >= 2)
+    .sort((a,b) => b.encounters - a.encounters)
+    .slice(0, limit);
+}
+
+function _aiBuildH2HBlock(rivalList){
+  if(!rivalList.length) return '<div class="small" style="color:#9ca3af">Sin rivales enfrentados ≥2 veces en el histórico.</div>';
+  return rivalList.map(r => {
+    const cls = r.wins > r.losses ? 'win' : r.losses > r.wins ? 'loss' : 'draw';
+    const bg = cls==='win'?'#dcfce7':cls==='loss'?'#fee2e2':'#f1f5f9';
+    const col = cls==='win'?'#15803d':cls==='loss'?'#991b1b':'#475569';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed #e2e8f0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px;color:#0b2f6b">${escapeHtml(r.name)}</div>
+        <div style="font-size:11px;color:#6b7280">${escapeHtml(r.team)} · ${r.encounters} carreras</div>
+      </div>
+      <div style="background:${bg};color:${col};padding:3px 8px;border-radius:6px;font-weight:800;font-size:12px;white-space:nowrap">${r.wins} - ${r.losses}${r.ties?' (' + r.ties + 'e)':''}</div>
+    </div>`;
+  }).join('');
+}
+
+// — Estado de filtros internos del historial (por rider) —
+let _aiHistoryFilters = {year: '', localidad: ''};
+let _aiCurrentRiderKey = null;
+
+// Renderiza el historial filtrado (llamado al cambiar filtros)
+function _aiRenderHistoryTable(){
+  const box = document.getElementById('aiHistoryFilteredBody');
+  if(!box) return;
+  const fullData = window._aiCurrentRiderHistory || [];
+  const filtered = _aiFilterHistory(fullData, _aiHistoryFilters);
+  if(!filtered.length){
+    box.innerHTML = '<div class="small" style="color:#9ca3af;padding:8px">Ningún resultado con esos filtros internos.</div>';
+    return;
+  }
+  // Mostrar con tendencia
+  box.innerHTML = filtered.map((he,i)=>{
+    const prev = i>0?filtered[i-1]:null;
+    const trend = prev?(he.pos<prev.pos?'🔼':he.pos>prev.pos?'🔽':'➡️'):'';
+    return `<div class="history-race-row">
+      <div>${escapeHtml(he.raceName||'—')} <span class="small">${escapeHtml(he.raceDate||'')}${he.localidad?' · 📍 '+escapeHtml(he.localidad):''}</span></div>
+      <div class="history-pos">${he.pos}º<span class="history-pos-trend">${trend}</span></div>
+      <div class="small">de ${he.total}</div>
+    </div>`;
+  }).join('');
+}
+
+// Hook: cambio en select de año
+function _aiOnHistoryFilterChange(){
+  _aiHistoryFilters.year = document.getElementById('aiHistoryYear')?.value || '';
+  _aiHistoryFilters.localidad = document.getElementById('aiHistoryLoc')?.value || '';
+  _aiRenderHistoryTable();
+}
