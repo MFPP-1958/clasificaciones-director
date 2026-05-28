@@ -31305,3 +31305,139 @@ async function _fccvGenerarAmbos(){
   await _fccvGenerarAutorizacion();
   _fccvGenStatus('✅ Los dos documentos se han generado y descargado', true);
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// MÓDULO FCCV — Inscripción Contrarreloj por equipos (CRI)
+//   Tercer documento, independiente del Boletín y la Autorización.
+//   18 plazas, datos: prueba, equipo, categoría, matrículas coches
+//   seguidores, director, ciclistas con dorsal+nombre+licencia.
+// ════════════════════════════════════════════════════════════════════════
+
+const FCCV_TPL_CRI = 'assets/templates/cri-fccv.pdf';
+
+// Resuelve el dorsal más reciente conocido del ciclista. Como el Excel
+// no trae dorsal (solo DNI = licencia), miramos en _cachedHistory: tanto
+// inscritos como riders de carreras previas. Si nunca se ha visto su
+// dorsal en la app, devolvemos cadena vacía y el director lo escribirá
+// a mano en el PDF generado.
+function _fccvResolveBib(lic){
+  if(!lic) return '';
+  try{
+    const hist = (typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+    if(!hist.length) return '';
+    const key = (typeof normalizeForMatching==='function')
+      ? normalizeForMatching(`${lic.apellidos||''}, ${lic.nombre||''}`)
+      : `${(lic.apellidos||'').toLowerCase()}, ${(lic.nombre||'').toLowerCase()}`;
+    if(!key) return '';
+    let bestBib = '', bestDate = '0000-00-00';
+    const check = (r, raceDate) => {
+      if(!r || !r.bib) return;
+      const nk = (typeof normalizeForMatching==='function') ? normalizeForMatching(r.name||'') : (r.name||'').toLowerCase();
+      if(nk !== key) return;
+      const iso = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(raceDate||'') : '') || '';
+      if(iso >= bestDate){
+        bestDate = iso;
+        bestBib = String(r.bib);
+      }
+    };
+    for(const race of hist){
+      (race.riders||[]).forEach(r => check(r, race.raceDate));
+      (race.inscritos||[]).forEach(r => check(r, race.raceDate));
+    }
+    return bestBib;
+  }catch(e){
+    console.warn('_fccvResolveBib', e);
+    return '';
+  }
+}
+
+// Validación específica para CRI: requiere algunos campos diferentes del
+// Boletín/Autorización (no se necesita email/teléfono del firmante).
+function _fccvValidateCRI(){
+  const errors = [];
+  const missingFields = [];
+  const add = (msg, id) => { errors.push(msg); if(id) missingFields.push(id); };
+
+  const firm = _fccvGetFirmante();
+  if(!firm.nombre)    add('Falta el NOMBRE del firmante (ve a "Licencias y firmante")', null);
+  if(!firm.equipo)    add('Falta el EQUIPO del firmante', null);
+
+  if(!document.getElementById('fccvPRname')?.value.trim())      add('Falta el NOMBRE de la prueba', 'fccvPRname');
+  if(!document.getElementById('fccvPRfecha')?.value.trim())     add('Falta la FECHA de la prueba', 'fccvPRfecha');
+  if(!document.getElementById('fccvPRlugar')?.value.trim())     add('Falta el LUGAR/Localidad de la prueba', 'fccvPRlugar');
+  if(!document.getElementById('fccvPRcategoria')?.value.trim()) add('Falta la CATEGORÍA (Cadete, Juvenil…)', 'fccvPRcategoria');
+
+  if(!document.getElementById('fccvStaffDir')?.value) add('Falta el DIRECTOR DEPORTIVO', 'fccvStaffDir');
+
+  if(!_fccvSel.titulares.length) add('No hay ningún ciclista TITULAR seleccionado', 'fccvAvailList');
+
+  return { errors, fields: missingFields };
+}
+
+function _fccvSplitFecha(s){
+  if(!s) return { dia:'', mes:'', anio:'' };
+  let m = String(s).match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if(m){
+    let [_,d,mo,y] = m;
+    if(y.length===2) y = (parseInt(y)>30?'19':'20')+y;
+    return { dia:String(parseInt(d)), mes:String(parseInt(mo)), anio:y };
+  }
+  m = String(s).match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+  if(m){
+    return { dia:String(parseInt(m[3])), mes:String(parseInt(m[2])), anio:m[1] };
+  }
+  return { dia:'', mes:'', anio:'' };
+}
+
+async function _fccvGenerarCRI(){
+  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
+  const v = _fccvValidateCRI();
+  if(_fccvShowValidationErrors(v, 'la Inscripción CRI')) return;
+  _fccvFlagFields(null);
+  _fccvGenStatus('⏳ Generando Inscripción CRI…', true);
+  try{
+    const buf = await _fccvLoadTemplate(FCCV_TPL_CRI);
+    const pdf = await PDFLib.PDFDocument.load(buf);
+    const form = pdf.getForm();
+    const firm = _fccvGetFirmante();
+
+    _fccvSetField(form, 'Nombre de la Prueba', document.getElementById('fccvPRname').value);
+    _fccvSetField(form, 'Localidad',           document.getElementById('fccvPRlugar').value);
+    const f = _fccvSplitFecha(document.getElementById('fccvPRfecha').value);
+    _fccvSetField(form, 'Día', f.dia);
+    _fccvSetField(form, 'Mes', f.mes);
+    _fccvSetField(form, 'Año', f.anio);
+    _fccvSetField(form, 'Equipo/Club',          firm.equipo||'');
+    _fccvSetField(form, 'Categoría del equipo', document.getElementById('fccvPRcategoria').value);
+    _fccvSetField(form, 'Matrículas Coches Seguidoras Campeonato', firm.matriculas||'');
+
+    const dirLic = _fccvDniToLic(document.getElementById('fccvStaffDir').value);
+    if(dirLic){
+      _fccvSetField(form, 'Nombre director deportivo', _fccvFullName(dirLic));
+    }
+
+    const todos = [..._fccvSel.titulares, ..._fccvSel.reservas].slice(0,18);
+    todos.forEach((dni, i)=>{
+      const lic = _fccvDniToLic(dni); if(!lic) return;
+      const row = i+1;
+      _fccvSetField(form, `Nombre y apellidos ${row}`, _fccvFullName(lic));
+      _fccvSetField(form, `Nº LICENCIA ${row}`,        lic.dni);
+      _fccvSetField(form, `Dorsal ${row}`,             _fccvResolveBib(lic));
+    });
+
+    _fccvSetField(form, 'Nombre Firma', firm.nombre||'');
+
+    try{ form.updateFieldAppearances(); }catch(e){}
+    if(document.getElementById('fccvFlatten')?.checked){
+      try{ form.flatten(); }catch(e){ console.warn('flatten falló', e); }
+    }
+    const bytes = await pdf.save();
+    const dateTag = _fccvSanitizeFileName(document.getElementById('fccvPRfecha').value);
+    const nameTag = _fccvSanitizeFileName(document.getElementById('fccvPRname').value);
+    _fccvDownloadPdf(bytes, `CRI_${dateTag}_${nameTag}.pdf`);
+    _fccvGenStatus('✅ Inscripción CRI generada · revisa los dorsales (se prerellenan desde el histórico cuando hay datos)', true);
+  }catch(e){
+    console.warn('_fccvGenerarCRI', e);
+    _fccvGenStatus('❌ Error: '+(e.message||e), false);
+  }
+}
