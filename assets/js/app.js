@@ -31004,13 +31004,79 @@ function _fccvDownloadPdf(bytes, filename){
   setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
 }
 
-function _fccvValidateBasics(){
+// Marca un campo con borde rojo y mensaje. ids puede ser string o array.
+function _fccvFlagFields(ids){
+  // Limpiar marcas previas
+  document.querySelectorAll('.fccv-error-field').forEach(el=>{
+    el.classList.remove('fccv-error-field');
+    el.style.boxShadow = '';
+    el.style.borderColor = '';
+  });
+  if(!ids || !ids.length) return;
+  const arr = Array.isArray(ids) ? ids : [ids];
+  let firstEl = null;
+  arr.forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.add('fccv-error-field');
+    el.style.boxShadow = '0 0 0 3px rgba(220,38,38,.25)';
+    el.style.borderColor = '#dc2626';
+    if(!firstEl) firstEl = el;
+  });
+  if(firstEl){
+    firstEl.scrollIntoView({behavior:'smooth', block:'center'});
+    setTimeout(()=>{ try{ firstEl.focus(); }catch(e){} }, 350);
+  }
+}
+
+// Devuelve { errors:[texto…], fields:[ids…] } con todos los campos obligatorios
+// que faltan. Si hay errores, además los muestra con alerta visible Y los
+// resalta con borde rojo en el formulario, haciendo scroll al primero.
+function _fccvValidateBasics(opts){
+  const reqAutoriz = !opts || opts.doc !== 'boletin';
+  // (los dos PDFs comparten los mismos campos obligatorios; mantengo el flag
+  //  por si en el futuro alguno tiene requerimientos distintos)
   const errors = [];
-  if(!document.getElementById('fccvPRname')?.value.trim()) errors.push('Falta el nombre de la prueba');
-  if(!document.getElementById('fccvPRfecha')?.value.trim()) errors.push('Falta la fecha');
-  if(!document.getElementById('fccvStaffDir')?.value) errors.push('Falta el director deportivo');
-  if(!_fccvSel.titulares.length) errors.push('No hay ningún ciclista titular seleccionado');
-  return errors;
+  const missingFields = [];
+  const add = (msg, id) => { errors.push(msg); if(id) missingFields.push(id); };
+
+  // Firmante (común a ambos documentos)
+  const firm = _fccvGetFirmante();
+  if(!firm.nombre)    { add('Falta el NOMBRE del firmante (ve a "Licencias y firmante")', null); }
+  if(!firm.cargo)     { add('Falta el CARGO del firmante (Presidenta/Presidente…)', null); }
+  if(!firm.equipo)    { add('Falta el EQUIPO del firmante', null); }
+  if(!firm.localidad) { add('Falta la LOCALIDAD del firmante', null); }
+  if(reqAutoriz){
+    if(!firm.telefono) { add('Falta el TELÉFONO del firmante (necesario para la Autorización)', null); }
+    if(!firm.email)    { add('Falta el EMAIL del firmante (necesario para la Autorización)', null); }
+  }
+
+  // Datos de la prueba
+  if(!document.getElementById('fccvPRname')?.value.trim())     add('Falta el NOMBRE de la prueba', 'fccvPRname');
+  if(!document.getElementById('fccvPRfecha')?.value.trim())    add('Falta la FECHA de la prueba', 'fccvPRfecha');
+  if(reqAutoriz && !document.getElementById('fccvPRlugar')?.value.trim()) add('Falta el LUGAR/Localidad de la prueba', 'fccvPRlugar');
+  if(reqAutoriz && !document.getElementById('fccvPRmodalidad')?.value.trim()) add('Falta la MODALIDAD (carretera, BTT…) — requerida para la Autorización', 'fccvPRmodalidad');
+  if(!document.getElementById('fccvPRclase')?.value.trim())    add('Falta la CLASE (open, CRI…)', 'fccvPRclase');
+  if(!document.getElementById('fccvPRcategoria')?.value.trim()) add('Falta la CATEGORÍA (Cadete, Juvenil…)', 'fccvPRcategoria');
+
+  // Staff
+  if(!document.getElementById('fccvStaffDir')?.value) add('Falta el DIRECTOR DEPORTIVO', 'fccvStaffDir');
+
+  // Ciclistas
+  if(!_fccvSel.titulares.length) add('No hay ningún ciclista TITULAR seleccionado', 'fccvAvailList');
+
+  return { errors, fields: missingFields };
+}
+
+// Muestra los errores de validación: alerta + borde rojo + scroll.
+function _fccvShowValidationErrors(result, docLabel){
+  const { errors, fields } = result;
+  if(!errors.length) return false;
+  _fccvFlagFields(fields);
+  const list = errors.map(e => '  • ' + e).join('\n');
+  alert(`No se puede generar ${docLabel || 'el documento'}.\n\nFalta rellenar:\n\n${list}\n\nLos campos vacíos en rojo en el formulario son los que faltan.\nLos datos del firmante se rellenan en la pestaña "🪪 Licencias y firmante".`);
+  _fccvGenStatus(`❌ Faltan ${errors.length} campo${errors.length===1?'':'s'} por rellenar (mira la alerta)`, false);
+  return true;
 }
 
 function _fccvGenStatus(msg, ok){
@@ -31019,9 +31085,10 @@ function _fccvGenStatus(msg, ok){
 }
 
 async function _fccvGenerarBoletin(){
-  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página.'); return; }
-  const errs = _fccvValidateBasics();
-  if(errs.length){ _fccvGenStatus('❌ '+errs.join(' · '), false); return; }
+  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
+  const v = _fccvValidateBasics({doc:'boletin'});
+  if(_fccvShowValidationErrors(v, 'el Boletín de inscripción')) return;
+  _fccvFlagFields(null); // limpiar bordes rojos previos si los hubiera
   _fccvGenStatus('⏳ Generando Boletín…', true);
   try{
     const buf = await _fccvLoadTemplate(FCCV_TPL_BOLETIN);
@@ -31110,9 +31177,10 @@ async function _fccvGenerarBoletin(){
 }
 
 async function _fccvGenerarAutorizacion(){
-  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página.'); return; }
-  const errs = _fccvValidateBasics();
-  if(errs.length){ _fccvGenStatus('❌ '+errs.join(' · '), false); return; }
+  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
+  const v = _fccvValidateBasics({doc:'autorizacion'});
+  if(_fccvShowValidationErrors(v, 'la Autorización de desplazamiento')) return;
+  _fccvFlagFields(null);
   _fccvGenStatus('⏳ Generando Autorización…', true);
   try{
     const buf = await _fccvLoadTemplate(FCCV_TPL_AUTORIZ);
