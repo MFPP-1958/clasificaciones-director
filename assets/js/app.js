@@ -10175,6 +10175,18 @@ ${podiumRef?`<div class="block" style="border-color:#fde68a;background:#fffbeb">
   setTimeout(()=>w.print(),800);
 }
 async function saveHistory(){
+  // Si solo hay pre-inscripción cargada (sin clasificación final), delegamos
+  // en saveInscritosOnly para que el director no tenga que distinguir entre
+  // los dos botones. Antes el botón "Guardar en historial" se cancelaba con
+  // un alert y los campos rellenados (hora, tipo de prueba, challenge…) se
+  // quedaban en el formulario sin persistir nunca.
+  const _hasIns = (typeof inscritos !== 'undefined' && Array.isArray(inscritos) && inscritos.length > 0);
+  const _hasRiders = Array.isArray(riders) && riders.length >= 3 && hasValidData;
+  if(!_hasRiders && _hasIns){
+    if(typeof saveInscritosOnly === 'function'){
+      return saveInscritosOnly();
+    }
+  }
   if(!hasValidData||!riders.length){alert('Carga primero una clasificación válida.');return;}
   if(!_sb){alert('Supabase no disponible. Verifica la conexión y las políticas RLS.');return;}
 
