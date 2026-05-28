@@ -41,6 +41,7 @@ function openLoadPanelForNew(){
   ['raceName','raceDate','raceKm','raceAvg','raceLocalidad','raceCircuitType','pastedText','pastedInscritos'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
+  if($('raceChallengeCV')) $('raceChallengeCV').checked = false;
   const fn=$('fileName'); if(fn) fn.textContent='';
   const fnI=$('fileNameInscritos'); if(fnI) fnI.textContent='';
   // Reset inscritos (Tier 1)
@@ -4615,6 +4616,7 @@ async function _sbLoadHistory(){
       avg: extra.avg || '',
       localidad: extra.localidad || '',
       circuitType: extra.circuitType || '',
+      challengeCV: !!extra.challengeCV,
       // Meteo (Open-Meteo) — opcionales, leídos desde notes
       hora_inicio: extra.hora_inicio || '',
       weather: extra.weather || null,
@@ -9760,6 +9762,7 @@ async function loadPlanificadaToCarga(id){
     if($('raceLocalidad'))   $('raceLocalidad').value   = extra.localidad || '';
     if($('raceCircuitType')) $('raceCircuitType').value = extra.circuitType || '';
     if($('raceStartTime'))   $('raceStartTime').value   = extra.hora_inicio || '';
+    if($('raceChallengeCV')) $('raceChallengeCV').checked = !!extra.challengeCV;
     // Limpiar riders/inscritos: esta prueba aún no tiene datos
     if(Array.isArray(riders)) riders.length = 0;
     inscritos = [];
@@ -9870,6 +9873,7 @@ async function loadHistoryEntry(id){
   if($('raceLocalidad')) $('raceLocalidad').value = h.localidad||'';
   if($('raceCircuitType')) $('raceCircuitType').value = h.circuitType||'';
   if($('raceStartTime'))  $('raceStartTime').value  = h.hora_inicio||'';
+  if($('raceChallengeCV')) $('raceChallengeCV').checked = !!h.challengeCV;
   // Refrescar chip meteorológico (si hay weather guardada de esta carrera)
   try{ if(typeof _wxRenderLoadedRaceChip === 'function') _wxRenderLoadedRaceChip(); }catch{}
   // Restaurar inscritos (Tier 1)
@@ -10180,6 +10184,7 @@ async function saveHistory(){
   const avg=$('raceAvg').value||'';
   const localidad=($('raceLocalidad')?.value||'').trim();
   const circuitType=($('raceCircuitType')?.value||'').trim();
+  const challengeCV = !!($('raceChallengeCV')?.checked);
   const parsedDate=_parseSpanishDate(raceDateStr);
   if(!parsedDate && raceDateStr){
     const cont=confirm(`⚠️ La fecha "${raceDateStr}" no se reconoce como fecha válida.\n\nFormatos aceptados: DD/MM/AAAA · D-M-AA · D-M-AAAA\n\n¿Guardar igualmente con la fecha de hoy?`);
@@ -10192,7 +10197,7 @@ async function saveHistory(){
   const inscritosToSave = (typeof inscritos !== 'undefined' && Array.isArray(inscritos) && inscritos.length) ? inscritos : [];
   // Hora de inicio (Open-Meteo) — leída del formulario; opcional pero recomendado
   const horaInicio = (document.getElementById('raceStartTime')?.value || '').trim();
-  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio});
+  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV});
 
   // ── Buscar duplicados por fecha ──────────────────────────────────────────
   const {data:existing,error:dupErr}=await _sb
@@ -19857,6 +19862,7 @@ async function saveInscritosOnly(){
   const avg = ($('raceAvg')?.value||'').trim();
   const localidad = ($('raceLocalidad')?.value||'').trim();
   const circuitType = ($('raceCircuitType')?.value||'').trim();
+  const challengeCV = !!($('raceChallengeCV')?.checked);
 
   console.log('[saveInscritosOnly] datos:', {raceName, raceDateStr, parsedDate, inscritosCount: inscritos.length});
 
@@ -19890,6 +19896,7 @@ async function saveInscritosOnly(){
     if(avg) extra.avg = avg;
     if(localidad) extra.localidad = localidad;
     if(circuitType) extra.circuitType = circuitType;
+    extra.challengeCV = challengeCV;
     const {error:updErr,data:updData} = await _sb.from('races')
       .update({notes: JSON.stringify(extra)})
       .eq('id', dupClasif.id)
@@ -19921,6 +19928,7 @@ async function saveInscritosOnly(){
     if(avg) extra.avg = avg;
     if(localidad) extra.localidad = localidad;
     if(circuitType) extra.circuitType = circuitType;
+    extra.challengeCV = challengeCV;
     const {error:convErr,data:convData} = await _sb.from('races')
       .update({race_type:'clasificacion', notes: JSON.stringify(extra)})
       .eq('id', dupPlanif.id)
@@ -19943,7 +19951,7 @@ async function saveInscritosOnly(){
 
   // ── No existe nada en esa fecha → crear entrada nueva
   const extra = {
-    raceDate:raceDateStr, km, avg, localidad, circuitType,
+    raceDate:raceDateStr, km, avg, localidad, circuitType, challengeCV,
     regions:{}, inscritos
   };
   const payload = {
