@@ -19012,7 +19012,12 @@ function parseInscritos(text){
 }
 
 function parseInscritosCSVLike(text){
-  const rawLines = text.split(/\n/).map(l=>l.trim()).filter(Boolean);
+  // IMPORTANTE: NO hacemos trim() de la línea completa antes de split.
+  // Si la primera columna (dorsal) está vacía, la línea empieza con tab.
+  // trim() borraría ese tab inicial y al hacer split desaparecería la
+  // primera celda, desplazando TODAS las columnas una posición a la
+  // izquierda. Sólo quitamos espacios al final y filtramos vacías.
+  const rawLines = text.split(/\n/).map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim().length>0);
   if(!rawLines.length) return [];
   const seps = [',',';','\t','|'];
   let bestSep=';', bestScore=-1;
@@ -19027,6 +19032,24 @@ function parseInscritosCSVLike(text){
   let rows = rawLines.map(l=>l.split(bestSep).map(c=>c.trim()));
   if(bestScore<4){
     rows = rawLines.map(l=>l.split(/\s{2,}/).map(c=>c.trim()));
+  }
+  // Padding defensivo: si la mayoría de las filas tienen N columnas pero
+  // alguna tiene N-1, asumimos que es porque la primera celda (dorsal)
+  // estaba vacía y un trim previo la eliminó. Rellenamos al principio
+  // con celdas vacías para alinear las columnas.
+  if(rows.length > 2){
+    const lens = rows.map(r=>r.length);
+    const maxLen = Math.max(...lens);
+    const countMax = lens.filter(n=>n===maxLen).length;
+    if(countMax >= Math.ceil(rows.length * 0.6)){
+      rows = rows.map(r => {
+        const diff = maxLen - r.length;
+        if(diff > 0 && diff <= 2){
+          return Array(diff).fill('').concat(r);
+        }
+        return r;
+      });
+    }
   }
   const normH = s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   // Buscar fila de cabecera (basta con encontrar "nombre"|"apellido"|"ciclista"; el dorsal es OPCIONAL)
