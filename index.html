@@ -2098,7 +2098,14 @@
       <section class="panel" id="simTeamsPanel" style="display:none">
         <div class="section-title">
           <h2 style="margin:0;color:#854d0e">🏅 Predicción por equipos · Top 3 esperado</h2>
-          <span class="small">Suma de las 3 mejores predicciones individuales (Σ menor = mejor equipo)</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="small">Suma de las 3 mejores predicciones individuales (Σ menor = mejor equipo)</span>
+            <button class="btn light" onclick="_simOpenTeamsReport()" id="simTeamsReportBtn"
+              style="background:#7c3aed;color:#fff;border:0;font-weight:800;font-size:12px;padding:7px 13px"
+              title="Abrir informe imprimible de la predicción por equipos (PDF)">
+              📤 Compartir / PDF
+            </button>
+          </div>
         </div>
 
         <details class="sim-help">

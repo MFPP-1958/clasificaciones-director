@@ -30090,3 +30090,188 @@ function _simInjectTop10Styles(){
   `;
   document.head.appendChild(st);
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// SIMULADOR — Informe Predicción por Equipos (compartir / PDF)
+//   Modal independiente con la predicción colectiva (suma Top 3 esperado
+//   por equipo). Pensado para enviar al jefe de equipo o al segundo
+//   director junto con el Top 10 individual.
+// ════════════════════════════════════════════════════════════════════════
+
+function _simOpenTeamsReport(){
+  try{
+    if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+    const { race, grid } = _simCurrentData;
+    if(typeof _simComputeTeamPredictions !== 'function'){
+      alert('Función de cálculo de equipos no disponible.');
+      return;
+    }
+    const teams = _simComputeTeamPredictions(grid);
+    if(!teams.length){ alert('No hay equipos con al menos 3 corredores con predicción.'); return; }
+    const top = teams.slice(0, 10); // limitar a top 10 equipos para A4
+    const _pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
+    const myTeamIn = top.find(t => t.isMyTeam);
+    const myPos = myTeamIn ? (top.indexOf(myTeamIn)+1) : null;
+    const avgPodium = (() => {
+      const vals = top.map(t => t.avgPodiumProb).filter(v => v != null);
+      return vals.length ? Math.round(vals.reduce((s,v)=>s+v,0)/vals.length) : null;
+    })();
+
+    const meta = `
+      <div class="stm-race-meta">
+        <b>${escapeHtml(race.raceName||'')}</b>
+        ${race.raceDate?` · 📅 ${escapeHtml(race.raceDate)}`:''}
+        ${race.localidad?` · 📍 ${escapeHtml(race.localidad)}`:''}
+        ${race.circuitType?` · 🛣️ ${escapeHtml(race.circuitType)}`:''}
+      </div>`;
+
+    const cardsHtml = top.map((t, i) => {
+      const pos = i+1;
+      const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':`${pos}º`;
+      const sigma = (typeof t.sumTop3==='number') ? t.sumTop3.toFixed(1) : '—';
+      const best  = (typeof t.best==='number') ? t.best.toFixed(1) : '—';
+      const ridersHtml = t.top3.map((r, idx) => {
+        const dot = idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':'•';
+        const predPos = (typeof r._teamScore==='number') ? r._teamScore.toFixed(1)+'º' : '—';
+        const cat = r.cat ? ' · '+escapeHtml(r.cat) : '';
+        const bib = r.bib ? ' · #'+escapeHtml(String(r.bib)) : '';
+        return `<div class="stm-rider">
+          <span class="stm-rider-medal">${dot}</span>
+          <span class="stm-rider-name">${escapeHtml(r.name)}</span>
+          <span class="stm-rider-meta">${cat}${bib}</span>
+          <span class="stm-rider-pred">${predPos}</span>
+        </div>`;
+      }).join('');
+      const podiumChip = (t.anyPodiumProb!=null && t.anyPodiumProb>0)
+        ? `<span class="stm-chip stm-chip-medal" title="Probabilidad de que alguno del top3 acabe en podio (1−∏(1−p_i))">🏅 Podio ${t.anyPodiumProb}%</span>`
+        : '';
+      const cutChip = (t.avgCutRisk!=null && t.avgCutRisk>0)
+        ? `<span class="stm-chip stm-chip-risk" title="Riesgo medio de corte del top3 del equipo">⚠️ Corte ${t.avgCutRisk}%</span>`
+        : '';
+      const top10Chip = (t.expectedTop10!=null)
+        ? `<span class="stm-chip stm-chip-top10" title="Suma de probabilidades Top 10 del top3">🎯 ${t.expectedTop10} esperados Top10</span>`
+        : '';
+      const myMark = t.isMyTeam ? ' <span class="stm-mine">★ MI EQUIPO</span>' : '';
+      const cardBg = t.isMyTeam ? '#dbeafe' : (pos<=3 ? '#fef9c3' : '#fff');
+      const cardBorder = t.isMyTeam ? '#1f6feb' : (pos<=3 ? '#fbbf24' : '#e5e7eb');
+      return `<div class="stm-card" style="background:${cardBg};border-color:${cardBorder}">
+        <div class="stm-card-head">
+          <div class="stm-card-pos">${medal}</div>
+          <div class="stm-card-title">
+            <div class="stm-card-team">${escapeHtml(t.team)}${myMark}</div>
+            <div class="stm-card-stats">Σ <b>${sigma}</b> · Mejor ${best}º · ${t.count} corredores con datos</div>
+          </div>
+        </div>
+        <div class="stm-card-riders">${ridersHtml}</div>
+        ${(podiumChip || cutChip || top10Chip) ? `<div class="stm-card-chips">${podiumChip}${top10Chip}${cutChip}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    let overlay = document.getElementById('simTeamsOverlay');
+    if(!overlay){
+      overlay = document.createElement('div');
+      overlay.id = 'simTeamsOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+      overlay.addEventListener('click',(e)=>{ if(e.target===overlay) _simCloseTeamsReport(); });
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+      <div id="simTeamsBox">
+        <div class="stm-header">
+          <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+            ${_pdfLogoSrc?`<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="stm-logo">`:''}
+            <div style="min-width:0">
+              <h2 class="stm-title">🏅 Predicción por equipos · Top 3 esperado</h2>
+              ${meta}
+            </div>
+          </div>
+          <div class="stm-actions no-print">
+            <button class="btn" onclick="window.print()" style="background:#dc2626;color:#fff;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="_simCloseTeamsReport()">✕</button>
+          </div>
+        </div>
+        <div class="stm-kpis">
+          <div class="stm-kpi"><div class="stm-kpi-v" style="color:#0b2f6b">${top.length}</div><div class="stm-kpi-l">Equipos predichos</div></div>
+          ${myPos?`<div class="stm-kpi"><div class="stm-kpi-v" style="color:#1f6feb">${myPos}º</div><div class="stm-kpi-l">Mi equipo</div></div>`:''}
+          ${avgPodium!=null?`<div class="stm-kpi"><div class="stm-kpi-v" style="color:#16a34a">${avgPodium}%</div><div class="stm-kpi-l">Prob. podio media Top 10</div></div>`:''}
+          <div class="stm-kpi"><div class="stm-kpi-v" style="color:#7c3aed">${top[0]?top[0].sumTop3.toFixed(1):'—'}</div><div class="stm-kpi-l">Σ del favorito</div></div>
+        </div>
+        <div style="padding:0 20px 4px;font-size:11px;color:#6b7280;text-align:center">
+          Ranking por <b>Σ del Top 3 esperado</b> (suma de las 3 mejores predicciones individuales). <b>Menor = mejor equipo.</b>
+        </div>
+        <div class="stm-cards-wrap">${cardsHtml}</div>
+        <div class="stm-footer">
+          <div>Σ = suma de las predicciones individuales del top3 · 🏅 = prob. de podio individual (alguno del top3) · 🎯 = nº esperado de finishers en Top 10 · ⚠️ = riesgo medio de corte</div>
+          <div style="margin-top:8px">Informe generado por <b>Dashboard Director · MFPP Cycling Specialist</b> · ${new Date().toLocaleString('es-ES')}</div>
+        </div>
+      </div>`;
+
+    _simInjectTeamsStyles();
+    document.body.style.overflow = 'hidden';
+  }catch(e){
+    console.warn('_simOpenTeamsReport', e);
+    alert('Error al abrir el informe: '+(e.message||e));
+  }
+}
+
+function _simCloseTeamsReport(){
+  const ov = document.getElementById('simTeamsOverlay');
+  if(ov) ov.remove();
+  document.body.style.overflow = '';
+}
+
+function _simInjectTeamsStyles(){
+  if(document.getElementById('sim-teams-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'sim-teams-styles';
+  st.textContent = `
+    #simTeamsBox{background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+    .stm-logo{height:48px;width:auto;flex-shrink:0;object-fit:contain}
+    .stm-title{margin:0;font-size:20px;color:#854d0e}
+    .stm-race-meta{font-size:13px;color:#374151;margin-top:4px}
+    .stm-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .stm-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
+    .stm-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:14px 20px;background:#fffbeb;border-bottom:1px solid #fde68a}
+    .stm-kpi{background:#fff;border:1px solid #fde68a;border-radius:10px;padding:10px;text-align:center}
+    .stm-kpi-v{font-size:24px;font-weight:900;line-height:1.1}
+    .stm-kpi-l{font-size:11px;color:#6b7280;margin-top:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+    .stm-cards-wrap{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:14px 20px}
+    .stm-card{border:1.5px solid;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+    .stm-card-head{display:flex;gap:10px;align-items:flex-start}
+    .stm-card-pos{font-size:22px;font-weight:900;color:#854d0e;min-width:42px;text-align:center;line-height:1}
+    .stm-card-title{flex:1;min-width:0}
+    .stm-card-team{font-weight:800;color:#0b2f6b;font-size:14px;line-height:1.2;word-break:break-word}
+    .stm-card-stats{font-size:11px;color:#6b7280;margin-top:3px}
+    .stm-mine{display:inline-block;background:#1f6feb;color:#fff;font-size:10px;font-weight:800;padding:1px 7px;border-radius:8px;margin-left:6px;vertical-align:middle;letter-spacing:.3px}
+    .stm-card-riders{display:flex;flex-direction:column;gap:3px;border-top:1px dashed #d1d5db;padding-top:6px}
+    .stm-rider{display:flex;align-items:baseline;gap:6px;font-size:12px}
+    .stm-rider-medal{font-size:13px;width:18px;flex-shrink:0;text-align:center}
+    .stm-rider-name{font-weight:700;color:#111827}
+    .stm-rider-meta{color:#6b7280;font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .stm-rider-pred{font-weight:800;color:#7c3aed;font-variant-numeric:tabular-nums}
+    .stm-card-chips{display:flex;gap:5px;flex-wrap:wrap;border-top:1px dashed #d1d5db;padding-top:6px}
+    .stm-chip{font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;letter-spacing:.2px}
+    .stm-chip-medal{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+    .stm-chip-top10{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
+    .stm-chip-risk{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+    .stm-footer{padding:14px 20px 18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;text-align:center;line-height:1.55}
+    @media print {
+      body * { visibility: hidden !important; }
+      #simTeamsOverlay, #simTeamsOverlay * { visibility: visible !important; }
+      #simTeamsOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
+      #simTeamsBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
+      .no-print { display: none !important; }
+      .stm-header { border-bottom: 2px solid #854d0e !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
+      .stm-logo { height: 56px !important; }
+      .stm-title { font-size: 22px !important; }
+      .stm-kpis { background: #fff !important; border-bottom: 0 !important; padding: 0 !important; margin-bottom: 8px !important; }
+      .stm-kpi { border: 1px solid #999 !important; }
+      .stm-cards-wrap { padding: 0 !important; gap: 8px !important; }
+      .stm-card { page-break-inside: avoid !important; }
+      .stm-footer { padding: 10px 0 0 !important; margin-top: 12px !important; }
+      #simTeamsBox, #simTeamsBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    }
+    @page { margin: 0; size: A4; }
+  `;
+  document.head.appendChild(st);
+}
