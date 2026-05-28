@@ -19149,10 +19149,19 @@ function _buildYearRiderIndex(year){
 }
 
 function _dedupeInscritos(arr){
+  // Clave de deduplicación = bib | apellido,nombre (sin 2º apellido) | equipo.
+  // Por qué incluir el EQUIPO: dos corredores diferentes pueden compartir
+  // primer apellido y nombre (p.ej. "Ivan Sanchez Toral" del TBG-WIXUM y
+  // "Ivan Sanchez Lopez" de otro equipo). Sin el equipo en la clave, y si
+  // la startlist no trae dorsal para uno de los dos, se colapsaban como
+  // duplicado y desaparecía un corredor real. Con el equipo en la clave,
+  // distinguimos ambos sin penalizar el caso legítimo (misma persona
+  // duplicada por error en el pegado → bib + name + team idénticos).
+  const teamK = (t) => (t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
   const seen = new Set();
   const out = [];
   for(const i of arr){
-    const key = (i.bib||'') + '|' + normalizeForMatching(i.name||'');
+    const key = (i.bib||'') + '|' + normalizeForMatching(i.name||'') + '|' + teamK(i.team);
     if(seen.has(key)) continue;
     seen.add(key);
     out.push(i);
