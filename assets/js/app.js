@@ -813,6 +813,7 @@ const ALL_VIEWS = [
   {id:'view-validacion',         icon:'⚠️', label:'Validación'},
   {id:'view-equipos-ccaa',       icon:'🗺️', label:'Equipos y CCAA'},
   {id:'view-ciclistas-cat',      icon:'🎽', label:'Categorías ciclistas'},
+  {id:'view-fccv-docs',          icon:'📑', label:'Documentos FCCV'},
   {id:'view-calendario',         icon:'📅', label:'Calendario'},
   {id:'view-informe-plantilla',  icon:'📋', label:'Informe de Plantilla'},
   {id:'view-resumen',            icon:'🏅', label:'Resumen Temporada'},
@@ -924,7 +925,7 @@ async function _rbacLoadPerms(role){
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
   if(!data || data.length === 0){
     const defaults = {
-      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa','view-ciclistas-cat'],
+      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
       CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos'],
       LECTOR:   ['view-carga','view-tabla']
     };
@@ -30330,3 +30331,354 @@ function _histTogglePlanned(){
   if(btn) btn.textContent = isHidden ? '▲ Ocultar' : '▼ Mostrar';
   localStorage.setItem('_histPlannedCollapsed', isHidden ? '0' : '1');
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// MÓDULO FCCV — Gestor de Documentación (Fase 1)
+//   - Datos del firmante (presidenta) persistentes en localStorage
+//   - Importador de Excel (cadetes / juveniles / staff)
+//   - Listado buscable con filtros y borrado
+// ════════════════════════════════════════════════════════════════════════
+
+const FCCV_K_FIRMANTE  = 'fccv_firmante_v1';
+const FCCV_K_LICENCIAS = 'fccv_licencias_v1';
+
+// ── Tabs ───────────────────────────────────────────────────────────────
+function _fccvShowTab(tab){
+  ['licencias','generar','historico'].forEach(t => {
+    const btn = document.getElementById('fccvTab'+t.charAt(0).toUpperCase()+t.slice(1)+'Btn');
+    const panel = document.getElementById('fccvPanel'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(btn) btn.classList.toggle('active', t===tab);
+    if(panel) panel.style.display = (t===tab) ? '' : 'none';
+  });
+  if(tab === 'licencias'){ _fccvLoadFirmante(); _fccvRenderLicencias(); }
+}
+
+// ── Firmante ───────────────────────────────────────────────────────────
+function _fccvLoadFirmante(){
+  let data = {};
+  try{ data = JSON.parse(localStorage.getItem(FCCV_K_FIRMANTE)||'{}'); }catch(e){}
+  const set = (id, k) => { const el=document.getElementById(id); if(el && data[k]!=null) el.value = data[k]; };
+  set('fccvFirmaNombre','nombre');
+  set('fccvFirmaCargo','cargo');
+  set('fccvFirmaEquipo','equipo');
+  set('fccvFirmaTelefono','telefono');
+  set('fccvFirmaEmail','email');
+  // Auto-llenar equipo desde myTeam si está vacío
+  const eqEl = document.getElementById('fccvFirmaEquipo');
+  if(eqEl && !eqEl.value){
+    const mt = (localStorage.getItem('myTeam')||'').trim();
+    if(mt) eqEl.value = mt;
+  }
+}
+
+function _fccvSaveFirmante(){
+  const get = (id) => (document.getElementById(id)?.value || '').trim();
+  const data = {
+    nombre: get('fccvFirmaNombre'),
+    cargo: get('fccvFirmaCargo'),
+    equipo: get('fccvFirmaEquipo'),
+    telefono: get('fccvFirmaTelefono'),
+    email: get('fccvFirmaEmail'),
+    updatedAt: new Date().toISOString()
+  };
+  localStorage.setItem(FCCV_K_FIRMANTE, JSON.stringify(data));
+  const st = document.getElementById('fccvFirmaStatus');
+  if(st){
+    st.textContent = '✅ Guardado a las ' + new Date().toLocaleTimeString('es-ES');
+    setTimeout(()=>{ if(st) st.textContent = ''; }, 4000);
+  }
+}
+
+function _fccvGetFirmante(){
+  try{ return JSON.parse(localStorage.getItem(FCCV_K_FIRMANTE)||'{}'); }catch(e){ return {}; }
+}
+
+// ── Almacén de licencias ───────────────────────────────────────────────
+function _fccvGetLicencias(){
+  try{ return JSON.parse(localStorage.getItem(FCCV_K_LICENCIAS)||'[]'); }
+  catch(e){ return []; }
+}
+
+function _fccvSetLicencias(arr){
+  localStorage.setItem(FCCV_K_LICENCIAS, JSON.stringify(arr));
+}
+
+// Normaliza valor de "Cat. Licencia" para derivar el tipo
+function _fccvDeriveTipo(catLic, importedAs){
+  // Si el usuario marcó explícitamente al importar, eso prevalece para el primer pase.
+  const cat = (catLic||'').toLowerCase();
+  if(/(director|mec[aá]nico|auxiliar|preparador)/.test(cat)) return 'staff';
+  if(importedAs === 'staff') return 'staff';
+  if(importedAs === 'juvenil') return 'juvenil';
+  if(importedAs === 'cadete') return 'cadete';
+  // fallback: por categoría
+  if(/juvenil/.test(cat)) return 'juvenil';
+  if(/cadete/.test(cat)) return 'cadete';
+  return importedAs || 'ciclista';
+}
+
+function _fccvNormalizeHeader(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+}
+
+const _FCCV_COL_MAP = {
+  dni:           ['dni','documento','nif'],
+  nombre:        ['nombre'],
+  apellidos:     ['apellidos','apellido'],
+  uciId:         ['uciid','ucid','codigouci','uci'],
+  fechaNac:      ['fechanacimiento','fechanac','fnac','fechadenacimiento','nacimiento'],
+  telefono:      ['telefono','tel','movil'],
+  email:         ['email','correo','mail','correoelectronico'],
+  provincia:     ['provincia'],
+  localidad:     ['localidad','poblacion'],
+  domicilio:     ['domicilio','direccion'],
+  cp:            ['cp','codigopostal'],
+  temporada:     ['temporada','ano','anio','año'],
+  catLicencia:   ['catlicencia','categorialicencia','categoria','cat'],
+  especialidad:  ['especialidad','especialidades'],
+  equipo:        ['equipo','club','clubequipo','equipoclub']
+};
+
+function _fccvMapHeaderToFields(headerRow){
+  // headerRow es un array con los nombres de columna del Excel
+  const normalized = headerRow.map(_fccvNormalizeHeader);
+  const map = {};
+  Object.entries(_FCCV_COL_MAP).forEach(([field, aliases]) => {
+    for(const al of aliases){
+      const idx = normalized.findIndex(n => n === al || n.startsWith(al));
+      if(idx >= 0){ map[field] = idx; return; }
+    }
+  });
+  return map;
+}
+
+// Convierte un valor Excel de fecha (puede ser Date, número serial o string) a ISO yyyy-mm-dd
+function _fccvParseDate(v){
+  if(!v && v !== 0) return '';
+  if(v instanceof Date && !isNaN(v.getTime())){
+    return v.toISOString().slice(0,10);
+  }
+  if(typeof v === 'number'){
+    // Excel serial date (días desde 1900-01-01, con bug del 1900 bisiesto)
+    const ms = (v - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  }
+  const s = String(v).trim();
+  // dd/mm/yyyy o dd-mm-yyyy
+  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if(m){
+    let [_,d,mo,y] = m;
+    if(y.length===2) y = (parseInt(y) > 30 ? '19' : '20') + y;
+    d = d.padStart(2,'0'); mo = mo.padStart(2,'0');
+    return `${y}-${mo}-${d}`;
+  }
+  // yyyy-mm-dd ya
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  return s;
+}
+
+async function _fccvImportExcel(ev, importedAs){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  const status = document.getElementById('fccvImportStatus');
+  if(status) status.innerHTML = '⏳ Procesando '+file.name+'…';
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array', cellDates:true });
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header:1, raw:false, defval:'' });
+    if(!rows.length){
+      if(status) status.innerHTML = '⚠️ El Excel está vacío.';
+      ev.target.value = '';
+      return;
+    }
+    // Buscar fila de cabecera (la que contenga "dni", "nombre" y "apellidos")
+    let headerIdx = -1;
+    for(let i=0; i<Math.min(rows.length, 5); i++){
+      const norm = rows[i].map(_fccvNormalizeHeader);
+      if(norm.some(n=>n.includes('dni')) && norm.some(n=>n.includes('nombre')) && norm.some(n=>n.includes('apellido'))){
+        headerIdx = i; break;
+      }
+    }
+    if(headerIdx < 0){
+      if(status) status.innerHTML = '❌ No se encontró la cabecera (DNI / Nombre / Apellidos) en el Excel.';
+      ev.target.value = '';
+      return;
+    }
+    const map = _fccvMapHeaderToFields(rows[headerIdx]);
+    if(map.dni == null || map.nombre == null || map.apellidos == null){
+      if(status) status.innerHTML = '❌ Faltan columnas obligatorias (DNI, Nombre, Apellidos) tras mapear.';
+      ev.target.value = '';
+      return;
+    }
+    // Construir lista de licencias desde las filas siguientes
+    const incoming = [];
+    for(let i = headerIdx+1; i<rows.length; i++){
+      const row = rows[i];
+      const dni = String(row[map.dni]||'').trim();
+      const nombre = String(row[map.nombre]||'').trim();
+      const apellidos = String(row[map.apellidos]||'').trim();
+      if(!dni && !nombre && !apellidos) continue; // fila vacía
+      if(!dni){
+        // Sin DNI no podemos identificar, pero la guardamos con clave sintética
+        // para no perder al corredor (ej: ciclistas independientes sin licencia tradicional).
+        // Caso real: el usuario reporta que algunos no tienen dorsal asignado todavía.
+      }
+      const catLic = map.catLicencia != null ? String(row[map.catLicencia]||'').trim() : '';
+      const lic = {
+        dni: dni || ('SIN-DNI-'+i+'-'+(nombre+apellidos).replace(/\s+/g,'').slice(0,8).toUpperCase()),
+        nombre,
+        apellidos,
+        uciId:        map.uciId       != null ? String(row[map.uciId]||'').trim()      : '',
+        fechaNac:     map.fechaNac    != null ? _fccvParseDate(row[map.fechaNac])      : '',
+        telefono:     map.telefono    != null ? String(row[map.telefono]||'').trim()   : '',
+        email:        map.email       != null ? String(row[map.email]||'').trim()      : '',
+        provincia:    map.provincia   != null ? String(row[map.provincia]||'').trim()  : '',
+        localidad:    map.localidad   != null ? String(row[map.localidad]||'').trim()  : '',
+        domicilio:    map.domicilio   != null ? String(row[map.domicilio]||'').trim()  : '',
+        cp:           map.cp          != null ? String(row[map.cp]||'').trim()         : '',
+        temporada:    map.temporada   != null ? parseInt(row[map.temporada])||null     : null,
+        catLicencia:  catLic,
+        especialidad: map.especialidad!= null ? String(row[map.especialidad]||'').trim(): '',
+        equipo:       map.equipo      != null ? String(row[map.equipo]||'').trim()     : '',
+        tipo:         _fccvDeriveTipo(catLic, importedAs),
+        importedAs,
+        importedAt:   new Date().toISOString()
+      };
+      incoming.push(lic);
+    }
+
+    // Merge con lo existente, agrupado por DNI (upsert)
+    const existing = _fccvGetLicencias();
+    const byKey = new Map();
+    existing.forEach(l => byKey.set(l.dni, l));
+    let added = 0, updated = 0;
+    incoming.forEach(l => {
+      if(byKey.has(l.dni)){
+        const prev = byKey.get(l.dni);
+        // Solo contamos como "actualizado" si hay un cambio real en algún campo significativo
+        const sigFields = ['nombre','apellidos','uciId','fechaNac','telefono','email','provincia','localidad','domicilio','cp','temporada','catLicencia','especialidad','equipo','tipo'];
+        const changed = sigFields.some(f => (prev[f]||'') !== (l[f]||''));
+        if(changed) updated++;
+        byKey.set(l.dni, {...prev, ...l, importedAt: new Date().toISOString()});
+      } else {
+        byKey.set(l.dni, l);
+        added++;
+      }
+    });
+    const finalList = [...byKey.values()];
+    _fccvSetLicencias(finalList);
+    if(status){
+      status.innerHTML = `✅ <b>${file.name}</b> · ${incoming.length} filas leídas · <span style="color:#15803d">+${added} nuevos</span> · <span style="color:#0369a1">${updated} actualizados</span> · Total en base: <b>${finalList.length}</b>`;
+    }
+    _fccvRenderLicencias();
+  }catch(e){
+    console.warn('_fccvImportExcel', e);
+    if(status) status.innerHTML = '❌ Error procesando el Excel: '+(e.message||e);
+  }finally{
+    ev.target.value = ''; // permitir re-subir el mismo fichero si quiere
+  }
+}
+
+function _fccvClearAll(){
+  if(!confirm('¿Borrar TODAS las licencias importadas?\n\nEsta acción no se puede deshacer (pero puedes volver a importar los Excel).')) return;
+  localStorage.removeItem(FCCV_K_LICENCIAS);
+  _fccvRenderLicencias();
+  const status = document.getElementById('fccvImportStatus');
+  if(status) status.innerHTML = '🗑️ Base de licencias vaciada.';
+}
+
+// ── Render tabla de licencias ───────────────────────────────────────────
+function _fccvRenderLicencias(){
+  const wrap = document.getElementById('fccvLicTableWrap');
+  const counter = document.getElementById('fccvLicCount');
+  if(!wrap) return;
+  const all = _fccvGetLicencias();
+  const tipoF = (document.getElementById('fccvLicTipo')?.value||'').trim();
+  const q = (document.getElementById('fccvLicSearch')?.value||'').toLowerCase().trim();
+  let list = all;
+  if(tipoF) list = list.filter(l => l.tipo === tipoF);
+  if(q){
+    list = list.filter(l => {
+      const blob = [l.nombre, l.apellidos, l.dni, l.uciId, l.equipo, l.catLicencia, l.provincia, l.localidad].join(' ').toLowerCase();
+      return blob.includes(q);
+    });
+  }
+  list = list.slice().sort((a,b) => {
+    const ka = ((a.apellidos||'')+' '+(a.nombre||'')).toLowerCase();
+    const kb = ((b.apellidos||'')+' '+(b.nombre||'')).toLowerCase();
+    return ka.localeCompare(kb,'es');
+  });
+  if(counter){
+    counter.textContent = list.length === all.length
+      ? `${all.length} licencias en base`
+      : `Mostrando ${list.length} de ${all.length}`;
+  }
+  if(!list.length){
+    wrap.innerHTML = `<div style="padding:24px;text-align:center;color:#9ca3af;font-size:13px">
+      ${all.length ? 'Sin resultados para los filtros aplicados.' : 'Aún no hay licencias importadas. Sube los Excel de la FCCV con los botones de arriba.'}
+    </div>`;
+    return;
+  }
+  const tipoBadge = (t) => {
+    const styles = {
+      cadete:  'background:#dbeafe;color:#1e40af;border:1px solid #93c5fd',
+      juvenil: 'background:#fef3c7;color:#92400e;border:1px solid #fcd34d',
+      staff:   'background:#e9d5ff;color:#6b21a8;border:1px solid #d8b4fe'
+    };
+    const label = { cadete:'CADETE', juvenil:'JUVENIL', staff:'STAFF' }[t] || t;
+    return `<span style="display:inline-block;font-size:10px;font-weight:800;padding:1px 7px;border-radius:8px;${styles[t]||'background:#f3f4f6;color:#374151;border:1px solid #d1d5db'}">${label}</span>`;
+  };
+  const rows = list.map(l => `<tr>
+    <td style="padding:5px 8px;font-size:12px"><b>${escapeHtml(l.apellidos||'')}, ${escapeHtml(l.nombre||'')}</b></td>
+    <td style="padding:5px 8px;font-size:12px;color:#374151">${escapeHtml(l.dni||'')}</td>
+    <td style="padding:5px 8px;font-size:12px;color:#374151">${escapeHtml(l.uciId||'')}</td>
+    <td style="padding:5px 8px;font-size:12px;color:#374151">${escapeHtml(l.equipo||'')}</td>
+    <td style="padding:5px 8px;font-size:12px;color:#374151">${escapeHtml(l.catLicencia||'')}</td>
+    <td style="padding:5px 8px;text-align:center">${tipoBadge(l.tipo)}</td>
+    <td style="padding:5px 8px;font-size:11px;color:#6b7280">${escapeHtml(l.fechaNac||'')}</td>
+    <td style="padding:5px 8px;text-align:right">
+      <button onclick="_fccvDeleteOne('${escapeAttr(l.dni)}')" title="Eliminar este registro" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:2px 8px;font-size:13px;font-weight:800;cursor:pointer;line-height:1">×</button>
+    </td>
+  </tr>`).join('');
+  wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead style="position:sticky;top:0;background:#f9fafb;z-index:1">
+      <tr>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb">Apellidos, Nombre</th>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb">DNI</th>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb">UCI ID</th>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb">Equipo</th>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb">Cat. Licencia</th>
+        <th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb">Tipo</th>
+        <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb">F. Nac.</th>
+        <th style="padding:7px 8px;text-align:right;font-size:10px;text-transform:uppercase;color:#6b7280;letter-spacing:.3px;border-bottom:1px solid #e5e7eb"></th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function _fccvDeleteOne(dni){
+  if(!dni) return;
+  const all = _fccvGetLicencias();
+  const lic = all.find(l => l.dni === dni);
+  if(!lic) return;
+  if(!confirm(`¿Eliminar "${lic.apellidos}, ${lic.nombre}" de la base de licencias?`)) return;
+  _fccvSetLicencias(all.filter(l => l.dni !== dni));
+  _fccvRenderLicencias();
+}
+
+// Hook a showView para inicializar la vista FCCV
+(function(){
+  const _orig = (typeof showView==='function') ? showView : null;
+  if(!_orig) return;
+  window.showView = function(id){
+    const r = _orig.apply(this, arguments);
+    if(id === 'view-fccv-docs'){
+      setTimeout(()=>{ _fccvLoadFirmante(); _fccvRenderLicencias(); }, 40);
+    }
+    return r;
+  };
+})();

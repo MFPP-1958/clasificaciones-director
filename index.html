@@ -136,6 +136,7 @@
         <button class="nav-btn" data-view="view-validacion" data-label="Validación" onclick="showView('view-validacion')"><span class="nav-icon">⚠️</span><span class="nav-label"> Validación</span></button>
         <button class="nav-btn" data-view="view-equipos-ccaa" data-label="Equipos y CCAA" onclick="showView('view-equipos-ccaa')"><span class="nav-icon">🗺️</span><span class="nav-label"> Equipos y CCAA</span></button>
         <button class="nav-btn" data-view="view-ciclistas-cat" data-label="Categorías ciclistas" onclick="showView('view-ciclistas-cat')"><span class="nav-icon">🎽</span><span class="nav-label"> Categorías ciclistas</span></button>
+        <button class="nav-btn" data-view="view-fccv-docs" data-label="Documentos FCCV" onclick="showView('view-fccv-docs')"><span class="nav-icon">📑</span><span class="nav-label"> Documentos FCCV</span></button>
         <button class="nav-btn" id="navBtnGestion" data-view="view-gestion" data-label="Gestión" onclick="_gOpenPanel()" style="display:none"><span class="nav-icon">⚙️</span><span class="nav-label"> Gestión</span></button>
       </div>
     </div>
@@ -2841,6 +2842,126 @@
           <span id="riderCatSummary" style="font-size:12px;color:#6b7280;font-weight:700"></span>
         </div>
         <div id="riderCatTable"></div>
+      </section>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         Documentos FCCV (Gestor de Documentación)
+    ════════════════════════════════════════════════════════════════ -->
+    <div id="view-fccv-docs" class="spa-view">
+      <section class="panel">
+        <div class="section-title">
+          <h2>📑 Documentos FCCV</h2>
+          <span class="small">Gestor de Autorización de desplazamiento y Boletín de inscripción (Anexo VII)</span>
+        </div>
+
+        <!-- Sub-tabs -->
+        <div class="hist-tabs" style="margin-bottom:14px">
+          <button class="hist-tab-btn active" id="fccvTabLicenciasBtn" onclick="_fccvShowTab('licencias')">🪪 Licencias y firmante</button>
+          <button class="hist-tab-btn" id="fccvTabGenerarBtn" onclick="_fccvShowTab('generar')">📝 Generar documentos</button>
+          <button class="hist-tab-btn" id="fccvTabHistoricoBtn" onclick="_fccvShowTab('historico')">📂 Histórico</button>
+        </div>
+
+        <!-- TAB 1: Licencias y firmante -->
+        <div id="fccvPanelLicencias">
+          <!-- Bloque firmante -->
+          <div style="background:linear-gradient(135deg,#fef9c3,#fef3c7);border:1px solid #fcd34d;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <div style="font-weight:800;color:#92400e;font-size:14px;margin-bottom:10px">⚙️ Datos del firmante (Autorización desplazamiento)</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:10px">
+              <div>
+                <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Nombre completo</label>
+                <input id="fccvFirmaNombre" placeholder="Ej: María Pérez García" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Cargo / Calidad</label>
+                <input id="fccvFirmaCargo" placeholder="Ej: Presidenta" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Equipo deportivo</label>
+                <input id="fccvFirmaEquipo" placeholder="Ej: TBG-WIXUM" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Teléfono</label>
+                <input id="fccvFirmaTelefono" placeholder="Ej: 612 345 678" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Email</label>
+                <input id="fccvFirmaEmail" placeholder="Ej: contacto@…" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="btn" onclick="_fccvSaveFirmante()" style="background:#92400e;color:#fff;font-weight:800">💾 Guardar firmante</button>
+              <span id="fccvFirmaStatus" style="font-size:11px;color:#92400e"></span>
+              <span style="font-size:11px;color:#92400e;margin-left:auto">ℹ️ Se rellena automáticamente en cada documento hasta que lo cambies aquí.</span>
+            </div>
+          </div>
+
+          <!-- Bloque importadores -->
+          <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <div style="font-weight:800;color:#1d4ed8;font-size:14px;margin-bottom:8px">📥 Importar listados Excel</div>
+            <div style="font-size:12px;color:#1e3a8a;margin-bottom:12px;line-height:1.5">
+              Sube los tres ficheros oficiales de la FCCV. Cada uno se almacena <b>en tu navegador</b> (localStorage, sin enviar nada a Internet).<br>
+              <b>Formato esperado:</b> mismas columnas que los Excel oficiales (DNI, Nombre, Apellidos, UCIID, Fecha nacimiento, Telefono, Email, Provincia, Localidad, Domicilio, CP, Temporada, Cat. Licencia, Especialidad, Equipo).
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <label class="btn light" style="background:#dbeafe;color:#1e3a8a;border:1.5px solid #93c5fd;font-weight:800;cursor:pointer;padding:9px 16px">
+                🚴 Importar cadetes
+                <input type="file" accept=".xls,.xlsx,.csv" onchange="_fccvImportExcel(event,'cadete')" style="display:none">
+              </label>
+              <label class="btn light" style="background:#dbeafe;color:#1e3a8a;border:1.5px solid #93c5fd;font-weight:800;cursor:pointer;padding:9px 16px">
+                🚴‍♂️ Importar juveniles
+                <input type="file" accept=".xls,.xlsx,.csv" onchange="_fccvImportExcel(event,'juvenil')" style="display:none">
+              </label>
+              <label class="btn light" style="background:#dbeafe;color:#1e3a8a;border:1.5px solid #93c5fd;font-weight:800;cursor:pointer;padding:9px 16px">
+                👔 Importar staff (directores/mecánicos)
+                <input type="file" accept=".xls,.xlsx,.csv" onchange="_fccvImportExcel(event,'staff')" style="display:none">
+              </label>
+              <button class="btn light" onclick="_fccvClearAll()" style="background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;font-weight:800;margin-left:auto">🗑️ Borrar todo</button>
+            </div>
+            <div id="fccvImportStatus" style="margin-top:10px;font-size:12px;color:#1e3a8a"></div>
+          </div>
+
+          <!-- Tabla de licencias -->
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+              <div style="font-weight:800;color:#0b2f6b;font-size:14px">🪪 Licencias almacenadas</div>
+              <span id="fccvLicCount" style="font-size:12px;color:#6b7280;font-weight:700"></span>
+              <select id="fccvLicTipo" onchange="_fccvRenderLicencias()" style="padding:6px 10px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:13px;margin-left:auto">
+                <option value="">— Todos —</option>
+                <option value="cadete">Cadetes</option>
+                <option value="juvenil">Juveniles</option>
+                <option value="staff">Staff (Directores/Mecánicos)</option>
+              </select>
+              <input id="fccvLicSearch" type="text" placeholder="🔎 Nombre, DNI, licencia, equipo..." oninput="_fccvRenderLicencias()" style="padding:6px 12px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:13px;min-width:240px">
+            </div>
+            <div id="fccvLicTableWrap" style="overflow-x:auto;max-height:60vh;overflow-y:auto"></div>
+          </div>
+        </div>
+
+        <!-- TAB 2: Generar documentos -->
+        <div id="fccvPanelGenerar" style="display:none">
+          <div style="background:#f3f4f6;border:1px dashed #9ca3af;border-radius:12px;padding:40px 20px;text-align:center;color:#6b7280">
+            <div style="font-size:30px;margin-bottom:10px">🚧</div>
+            <div style="font-weight:800;color:#374151;font-size:15px;margin-bottom:6px">Próximamente · Fase 2</div>
+            <div style="font-size:12.5px;line-height:1.6">
+              Aquí podrás seleccionar la prueba (de tu calendario o manual),<br>
+              elegir director, auxiliares y ciclistas (titulares y reservas),<br>
+              y generar los PDFs rellenados automáticamente para descargar.
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: Histórico -->
+        <div id="fccvPanelHistorico" style="display:none">
+          <div style="background:#f3f4f6;border:1px dashed #9ca3af;border-radius:12px;padding:40px 20px;text-align:center;color:#6b7280">
+            <div style="font-size:30px;margin-bottom:10px">🚧</div>
+            <div style="font-weight:800;color:#374151;font-size:15px;margin-bottom:6px">Próximamente · Fase 3</div>
+            <div style="font-size:12.5px;line-height:1.6">
+              Listado de documentos generados anteriormente,<br>
+              con opción de re-descargar o re-imprimir.
+            </div>
+          </div>
+        </div>
       </section>
     </div>
 
