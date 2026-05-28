@@ -11604,6 +11604,35 @@ async function renderHistory(){
   const hist=await _sbLoadHistory();
   _cachedHistory=hist;
 
+  // Cargar también pruebas planificadas (calendario) para mostrarlas como un
+  // bloque destacado al principio del Historial, así el director puede
+  // seleccionar la próxima prueba y empezar a añadir pre-inscritos.
+  let _histPlanned = [];
+  try{
+    if(_sb){
+      const {data, error} = await _sb.from('races')
+        .select('id, name, date, notes')
+        .eq('race_type','planificada')
+        .order('date', {ascending: true});
+      if(!error && Array.isArray(data)){
+        _histPlanned = data.map(r=>{
+          let extra = {};
+          try{ extra = JSON.parse(r.notes||'{}'); }catch(e){}
+          return {
+            id: r.id,
+            raceName: r.name,
+            raceDate: formatDateDisplay(_parseSpanishDate(extra.raceDate||r.date||''))||extra.raceDate||r.date||'',
+            rawIso: _parseSpanishDate(extra.raceDate||r.date||'')||r.date||'',
+            localidad: extra.localidad || '',
+            circuitType: extra.circuitType || '',
+            km: extra.km || ''
+          };
+        });
+      }
+    }
+  }catch(e){ console.warn('renderHistory · planificadas error', e); }
+  window._histPlannedCache = _histPlanned;
+
   if(!hist.length){
     box.innerHTML='<p style="color:#9ca3af;text-align:center;padding:30px">No hay carreras guardadas todavía.</p>';
     return;
@@ -11977,12 +12006,49 @@ async function renderHistory(){
     if (best) defaultRider = best.name;
   }
 
+  // ── Bloque de pruebas PLANIFICADAS (calendario) ────────────────────────
+  // Solo aparece si hay planificadas que aún no se han convertido a
+  // clasificación. Permite al director seleccionar la próxima carrera y
+  // empezar a añadir los pre-inscritos directamente desde aquí.
+  let plannedBlock = '';
+  if(_histPlanned && _histPlanned.length){
+    const todayIso = new Date().toISOString().slice(0,10);
+    // Año global aplicado también a planificadas para no saturar
+    const _plannedFiltered = _histPlanned.filter(p=>{
+      if(!gfYear) return true;
+      return (p.rawIso||'').slice(0,4) === gfYear;
+    });
+    if(_plannedFiltered.length){
+      const rowsHtml = _plannedFiltered.map(p=>{
+        const isFuture = p.rawIso && p.rawIso >= todayIso;
+        const stateBadge = isFuture
+          ? '<span style="display:inline-block;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">📅 No realizada</span>'
+          : '<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">⏳ Pasada · sin inscritos</span>';
+        const meta = [p.raceDate||'', p.localidad||'', p.circuitType||'', p.km?p.km+' km':''].filter(Boolean).join(' · ');
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1px solid #c7d2fe;border-left:4px solid #1f6feb;border-radius:10px;margin-bottom:6px;flex-wrap:wrap">
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:800;color:#0b2f6b;font-size:14px">📅 ${escapeHtml(p.raceName||'Prueba planificada')}${stateBadge}</div>
+            <div style="font-size:11.5px;color:#475467;margin-top:2px">${escapeHtml(meta)}</div>
+          </div>
+          <button class="btn" style="background:#1f6feb;color:#fff;font-weight:800;font-size:12px;padding:7px 12px;white-space:nowrap"
+            onclick="loadPlanificadaToCarga('${escapeAttr(p.id)}')">▶ Añadir inscritos</button>
+        </div>`;
+      }).join('');
+      plannedBlock = `<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📅 Pruebas planificadas · sin inscritos cargados (${_plannedFiltered.length})</div>
+        ${rowsHtml}
+        <div style="font-size:10.5px;color:#6b7280;margin-top:4px">Selecciona la próxima carrera para volcar sus datos en <b>Carga y Resumen</b> y poder añadir los pre-inscritos.</div>
+      </div>`;
+    }
+  }
+
   box.innerHTML=`
     <!-- KPIs del histórico (resumen general) -->
     ${kpisHtml}
     <!-- Heatmap mensual + Mi récord histórico -->
     ${heatmapAndRecord}
     ${gfChip}
+    ${plannedBlock}
     <!-- PESTAÑAS -->
     <div class="hist-tabs">
       <button class="hist-tab-btn active" id="histTabCarreras" onclick="showHistTab('carreras')">🏁 Por Carrera</button>
