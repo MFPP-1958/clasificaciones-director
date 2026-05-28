@@ -2882,6 +2882,10 @@
                 <input id="fccvFirmaEquipo" placeholder="Ej: TBG-WIXUM" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
               </div>
               <div>
+                <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Localidad <span style="font-weight:400;text-transform:none;color:#92400e">(de firma)</span></label>
+                <input id="fccvFirmaLocalidad" placeholder="Ej: Castellón" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
+              </div>
+              <div>
                 <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Teléfono</label>
                 <input id="fccvFirmaTelefono" placeholder="Ej: 612 345 678" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
               </div>
@@ -2970,13 +2974,13 @@
                 <label class="fccv-lbl">Lugar / Localidad</label>
                 <input id="fccvPRlugar" placeholder="Ej: Nules">
               </div>
-              <div>
-                <label class="fccv-lbl">Modalidad</label>
-                <input id="fccvPRmodalidad" placeholder="Carretera / BTT / Pista">
+              <div style="background:#fef9c3;padding:6px 8px;border-radius:8px;border:1px solid #fcd34d">
+                <label class="fccv-lbl" style="color:#92400e">Modalidad <span style="font-weight:400;text-transform:none;color:#92400e">(autorización)</span></label>
+                <input id="fccvPRmodalidad" placeholder="Carretera / BTT / Pista" style="background:#fff">
               </div>
-              <div>
-                <label class="fccv-lbl">Clase</label>
-                <input id="fccvPRclase" placeholder="Ej: Open / CRI">
+              <div style="background:#fef9c3;padding:6px 8px;border-radius:8px;border:1px solid #fcd34d">
+                <label class="fccv-lbl" style="color:#92400e">Clase <span style="font-weight:400;text-transform:none;color:#92400e">(autorización)</span></label>
+                <input id="fccvPRclase" placeholder="Ej: Open / CRI" style="background:#fff">
               </div>
               <div>
                 <label class="fccv-lbl">Categoría/s</label>
@@ -3041,14 +3045,23 @@
           </div>
 
           <!-- 4. Acciones -->
-          <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1px solid #86efac;border-radius:12px;padding:14px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <div style="flex:1;min-width:200px">
-              <div style="font-weight:800;color:#14532d;font-size:14px">📄 Generar documentos</div>
-              <div id="fccvGenStatus" style="font-size:12px;color:#166534;margin-top:3px">Revisa los datos y pulsa el botón. Se descargarán los dos PDFs rellenados.</div>
+          <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1px solid #86efac;border-radius:12px;padding:14px 16px">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <div style="flex:1;min-width:200px">
+                <div style="font-weight:800;color:#14532d;font-size:14px">📄 Generar documentos</div>
+                <div id="fccvGenStatus" style="font-size:12px;color:#166534;margin-top:3px">Revisa los datos y pulsa el botón. Se descargarán los dos PDFs rellenados.</div>
+              </div>
+              <button class="btn" onclick="_fccvGenerarBoletin()" style="background:#0369a1;color:#fff;font-weight:800;padding:10px 14px">📋 Generar Boletín</button>
+              <button class="btn" onclick="_fccvGenerarAutorizacion()" style="background:#7c3aed;color:#fff;font-weight:800;padding:10px 14px">🛂 Generar Autorización</button>
+              <button class="btn" onclick="_fccvGenerarAmbos()" style="background:#15803d;color:#fff;font-weight:800;padding:10px 14px">📦 Generar AMBOS</button>
             </div>
-            <button class="btn" onclick="_fccvGenerarBoletin()" style="background:#0369a1;color:#fff;font-weight:800;padding:10px 14px">📋 Generar Boletín</button>
-            <button class="btn" onclick="_fccvGenerarAutorizacion()" style="background:#7c3aed;color:#fff;font-weight:800;padding:10px 14px">🛂 Generar Autorización</button>
-            <button class="btn" onclick="_fccvGenerarAmbos()" style="background:#15803d;color:#fff;font-weight:800;padding:10px 14px">📦 Generar AMBOS</button>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #86efac;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#14532d;font-weight:700;cursor:pointer">
+                <input type="checkbox" id="fccvFlatten" style="width:16px;height:16px;cursor:pointer;accent-color:#15803d">
+                🔒 Documento final no editable (aplanar campos)
+              </label>
+              <span style="font-size:11px;color:#166534">Marca esta opción si quieres un PDF "definitivo" sin los iconos de campo editable. Si lo dejas sin marcar, podrás retocar los datos en el PDF antes de firmar.</span>
+            </div>
           </div>
         </div>
 

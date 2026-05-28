@@ -30361,6 +30361,7 @@ function _fccvLoadFirmante(){
   set('fccvFirmaNombre','nombre');
   set('fccvFirmaCargo','cargo');
   set('fccvFirmaEquipo','equipo');
+  set('fccvFirmaLocalidad','localidad');
   set('fccvFirmaTelefono','telefono');
   set('fccvFirmaEmail','email');
   // Auto-llenar equipo desde myTeam si está vacío
@@ -30377,6 +30378,7 @@ function _fccvSaveFirmante(){
     nombre: get('fccvFirmaNombre'),
     cargo: get('fccvFirmaCargo'),
     equipo: get('fccvFirmaEquipo'),
+    localidad: get('fccvFirmaLocalidad'),
     telefono: get('fccvFirmaTelefono'),
     email: get('fccvFirmaEmail'),
     updatedAt: new Date().toISOString()
@@ -31086,9 +31088,16 @@ async function _fccvGenerarBoletin(){
     // Pie del Boletín — firmante
     _fccvSetField(form, 'Don',           firm.nombre||'');
     _fccvSetField(form, 'en calidad de', firm.cargo||'');
-    _fccvSetField(form, 'Lugar y fecha', (firm.equipo? '' : '') + (new Date().toLocaleDateString('es-ES')));
+    const lugarFechaBoletin = [firm.localidad||'', new Date().toLocaleDateString('es-ES')].filter(Boolean).join(', ');
+    _fccvSetField(form, 'Lugar y fecha', lugarFechaBoletin);
 
     try{ form.updateFieldAppearances(); }catch(e){}
+    // Si el usuario pidió documento final no editable, aplanamos el formulario:
+    // los campos pasan a ser texto fijo del documento (no se pueden editar y
+    // los iconos de "campo editable" del visor desaparecen).
+    if(document.getElementById('fccvFlatten')?.checked){
+      try{ form.flatten(); }catch(e){ console.warn('flatten falló', e); }
+    }
     const bytes = await pdf.save();
     const dateTag = _fccvSanitizeFileName(document.getElementById('fccvPRfecha').value);
     const nameTag = _fccvSanitizeFileName(document.getElementById('fccvPRname').value);
@@ -31155,9 +31164,16 @@ async function _fccvGenerarAutorizacion(){
     _fccvSetField(form, 'F i rmado',              firm.cargo||'');
     _fccvSetField(form, 'Telefono del que firma', firm.telefono||'');
     _fccvSetField(form, 'e-mail del que firma',   firm.email||'');
-    _fccvSetField(form, 'Lugar y FEcha',          (firm.equipo? '' : '') + (new Date().toLocaleDateString('es-ES')));
+    const lugarFechaAut = [firm.localidad||'', new Date().toLocaleDateString('es-ES')].filter(Boolean).join(', ');
+    _fccvSetField(form, 'Lugar y FEcha',          lugarFechaAut);
 
     try{ form.updateFieldAppearances(); }catch(e){}
+    // Si el usuario pidió documento final no editable, aplanamos el formulario:
+    // los campos pasan a ser texto fijo del documento (no se pueden editar y
+    // los iconos de "campo editable" del visor desaparecen).
+    if(document.getElementById('fccvFlatten')?.checked){
+      try{ form.flatten(); }catch(e){ console.warn('flatten falló', e); }
+    }
     const bytes = await pdf.save();
     const dateTag = _fccvSanitizeFileName(document.getElementById('fccvPRfecha').value);
     const nameTag = _fccvSanitizeFileName(document.getElementById('fccvPRname').value);
