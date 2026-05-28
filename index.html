@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
@@ -2940,14 +2941,114 @@
 
         <!-- TAB 2: Generar documentos -->
         <div id="fccvPanelGenerar" style="display:none">
-          <div style="background:#f3f4f6;border:1px dashed #9ca3af;border-radius:12px;padding:40px 20px;text-align:center;color:#6b7280">
-            <div style="font-size:30px;margin-bottom:10px">🚧</div>
-            <div style="font-weight:800;color:#374151;font-size:15px;margin-bottom:6px">Próximamente · Fase 2</div>
-            <div style="font-size:12.5px;line-height:1.6">
-              Aquí podrás seleccionar la prueba (de tu calendario o manual),<br>
-              elegir director, auxiliares y ciclistas (titulares y reservas),<br>
-              y generar los PDFs rellenados automáticamente para descargar.
+
+          <!-- 1. Datos de la prueba -->
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+              <div style="font-weight:800;color:#0b2f6b;font-size:14px">🏁 Datos de la prueba</div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select id="fccvGenPruebaSelect" onchange="_fccvOnPickPrueba()" style="padding:6px 10px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:13px;min-width:280px">
+                  <option value="">— Cargar desde calendario / histórico —</option>
+                </select>
+                <button class="btn light" onclick="_fccvClearPrueba()" style="font-size:11px;padding:5px 10px">🧹 Limpiar</button>
+              </div>
             </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+              <div>
+                <label class="fccv-lbl">Nombre de la prueba *</label>
+                <input id="fccvPRname" placeholder="Ej: CPTO CV CRI NULES 2026">
+              </div>
+              <div>
+                <label class="fccv-lbl">Fecha(s) *</label>
+                <input id="fccvPRfecha" placeholder="dd/mm/aaaa">
+              </div>
+              <div>
+                <label class="fccv-lbl">Hora</label>
+                <input id="fccvPRhora" type="time" placeholder="09:00">
+              </div>
+              <div>
+                <label class="fccv-lbl">Lugar / Localidad</label>
+                <input id="fccvPRlugar" placeholder="Ej: Nules">
+              </div>
+              <div>
+                <label class="fccv-lbl">Modalidad</label>
+                <input id="fccvPRmodalidad" placeholder="Carretera / BTT / Pista">
+              </div>
+              <div>
+                <label class="fccv-lbl">Clase</label>
+                <input id="fccvPRclase" placeholder="Ej: Open / CRI">
+              </div>
+              <div>
+                <label class="fccv-lbl">Categoría/s</label>
+                <input id="fccvPRcategoria" placeholder="Ej: Cadete">
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Staff -->
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <div style="font-weight:800;color:#0b2f6b;font-size:14px;margin-bottom:10px">👔 Staff</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+              <div>
+                <label class="fccv-lbl">Director deportivo *</label>
+                <select id="fccvStaffDir" class="fccv-staff-select"></select>
+              </div>
+              <div>
+                <label class="fccv-lbl">Auxiliar 1 (opcional)</label>
+                <select id="fccvStaffAux1" class="fccv-staff-select"></select>
+              </div>
+              <div>
+                <label class="fccv-lbl">Auxiliar 2 (opcional)</label>
+                <select id="fccvStaffAux2" class="fccv-staff-select"></select>
+              </div>
+            </div>
+            <div style="font-size:10.5px;color:#6b7280;margin-top:6px">Las opciones se cargan desde el Excel de staff importado. Incluye directores, mecánicos y auxiliares.</div>
+          </div>
+
+          <!-- 3. Ciclistas -->
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+              <div style="font-weight:800;color:#0b2f6b;font-size:14px">🚴 Ciclistas convocados</div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <label style="font-size:11px;color:#475569;font-weight:700">Tipo:</label>
+                <div class="mode-toggle">
+                  <button id="fccvCatBtnCad" class="mode-btn active" onclick="_fccvSetCat('cadete')">Cadetes</button>
+                  <button id="fccvCatBtnJuv" class="mode-btn" onclick="_fccvSetCat('juvenil')">Juveniles</button>
+                </div>
+                <label style="font-size:11px;color:#475569;font-weight:700;margin-left:10px">Titulares:</label>
+                <input id="fccvMaxT" type="number" min="1" max="20" value="8" style="width:54px;padding:5px 8px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px" oninput="_fccvRenderSelected()">
+                <label style="font-size:11px;color:#475569;font-weight:700">Reservas:</label>
+                <input id="fccvMaxR" type="number" min="0" max="10" value="4" style="width:54px;padding:5px 8px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px" oninput="_fccvRenderSelected()">
+                <button class="btn light" onclick="_fccvClearSel()" style="font-size:11px;padding:5px 10px;margin-left:6px">🧹 Vaciar selección</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <!-- Disponibles -->
+              <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px;min-height:300px">
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                  <span style="font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.3px" id="fccvAvailLabel">Disponibles · Cadetes</span>
+                  <span id="fccvAvailCount" style="font-size:10.5px;color:#9ca3af;font-weight:700"></span>
+                  <input id="fccvAvailSearch" oninput="_fccvRenderAvail()" placeholder="🔎 Nombre, DNI, equipo…" style="flex:1;padding:5px 10px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px;margin-left:auto;min-width:130px">
+                </div>
+                <div id="fccvAvailList" style="max-height:380px;overflow-y:auto"></div>
+              </div>
+              <!-- Seleccionados -->
+              <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:10px;min-height:300px">
+                <div id="fccvSelHeader" style="font-size:11px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Seleccionados · 0/8 titulares · 0/4 reservas</div>
+                <div id="fccvSelList"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Acciones -->
+          <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1px solid #86efac;border-radius:12px;padding:14px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-weight:800;color:#14532d;font-size:14px">📄 Generar documentos</div>
+              <div id="fccvGenStatus" style="font-size:12px;color:#166534;margin-top:3px">Revisa los datos y pulsa el botón. Se descargarán los dos PDFs rellenados.</div>
+            </div>
+            <button class="btn" onclick="_fccvGenerarBoletin()" style="background:#0369a1;color:#fff;font-weight:800;padding:10px 14px">📋 Generar Boletín</button>
+            <button class="btn" onclick="_fccvGenerarAutorizacion()" style="background:#7c3aed;color:#fff;font-weight:800;padding:10px 14px">🛂 Generar Autorización</button>
+            <button class="btn" onclick="_fccvGenerarAmbos()" style="background:#15803d;color:#fff;font-weight:800;padding:10px 14px">📦 Generar AMBOS</button>
           </div>
         </div>
 

@@ -30682,3 +30682,496 @@ function _fccvDeleteOne(dni){
     return r;
   };
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+// MÓDULO FCCV — Fase 2: Generar documentos (PDFs rellenos)
+// ════════════════════════════════════════════════════════════════════════
+
+const FCCV_TPL_BOLETIN   = 'assets/templates/boletin-fccv.pdf';
+const FCCV_TPL_AUTORIZ   = 'assets/templates/autorizacion-fccv.pdf';
+
+// Estado de selección de ciclistas
+let _fccvSelCat = 'cadete';  // 'cadete' | 'juvenil' — para el listado de disponibles
+let _fccvSel = { titulares: [], reservas: [] }; // arrays de DNIs en orden de selección
+
+// Inyectar estilos del módulo (clases reutilizadas en la vista)
+(function _fccvInjectStyles(){
+  if(document.getElementById('fccv-gen-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'fccv-gen-styles';
+  st.textContent = `
+    .fccv-lbl{display:block;font-size:10.5px;color:#475569;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
+    #fccvPanelGenerar input[type=text],
+    #fccvPanelGenerar input[type=time],
+    #fccvPanelGenerar input:not([type]){width:100%;padding:8px 10px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:13px;box-sizing:border-box;background:#fff}
+    .fccv-staff-select{width:100%;padding:8px 10px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:13px;box-sizing:border-box;background:#fff}
+    .fccv-avail-row{display:flex;gap:6px;align-items:center;padding:5px 6px;border-bottom:1px solid #f1f5f9;font-size:12px}
+    .fccv-avail-row:hover{background:#fff}
+    .fccv-avail-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .fccv-avail-row .fccv-mini-btn{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;border:1px solid;cursor:pointer;line-height:1.4}
+    .fccv-btn-tit{background:#dbeafe;color:#1e3a8a;border-color:#93c5fd}
+    .fccv-btn-tit:hover{background:#bfdbfe}
+    .fccv-btn-res{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+    .fccv-btn-res:hover{background:#fde68a}
+    .fccv-already{opacity:.4}
+    .fccv-sel-row{display:flex;gap:6px;align-items:center;padding:5px 7px;background:#fff;border:1px solid #c7d2fe;border-radius:8px;margin-bottom:4px;font-size:12px}
+    .fccv-sel-num{font-weight:900;color:#1d4ed8;min-width:24px;text-align:right}
+    .fccv-sel-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+    .fccv-sel-meta{font-size:10.5px;color:#6b7280}
+    .fccv-sel-rm{background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:1px 7px;font-size:13px;font-weight:800;cursor:pointer}
+    .fccv-sect-title{font-size:11px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.3px;margin:10px 0 6px}
+  `;
+  document.head.appendChild(st);
+})();
+
+// ── Init de la pestaña Generar ──
+function _fccvInitGenerar(){
+  _fccvPopulatePruebas();
+  _fccvPopulateStaff();
+  _fccvSetCat(_fccvSelCat);
+  _fccvRenderSelected();
+}
+
+// Extender el toggle de tabs (ya definido) para inicializar Generar al entrar
+(function _wrapShowTab(){
+  const _orig = (typeof _fccvShowTab === 'function') ? _fccvShowTab : null;
+  if(!_orig) return;
+  window._fccvShowTab = function(tab){
+    _orig.apply(this, arguments);
+    if(tab === 'generar') setTimeout(_fccvInitGenerar, 30);
+  };
+})();
+
+// ── Selector de prueba: pruebas planificadas + últimas clasificaciones ──
+async function _fccvPopulatePruebas(){
+  const sel = document.getElementById('fccvGenPruebaSelect');
+  if(!sel) return;
+  let opts = '<option value="">— Cargar desde calendario / histórico —</option>';
+  // Planificadas
+  try{
+    if(_sb){
+      const {data} = await _sb.from('races').select('id, name, date, notes').eq('race_type','planificada').order('date');
+      (data||[]).forEach(r => {
+        let extra = {};
+        try{ extra = JSON.parse(r.notes||'{}'); }catch(e){}
+        const dt = extra.raceDate || (formatDateDisplay(r.date)) || r.date;
+        opts += `<option value="planif:${r.id}">📅 ${escapeHtml(dt||'?')} · ${escapeHtml(r.name||'')}</option>`;
+      });
+    }
+  }catch(e){ console.warn('fccvPopulatePruebas planificadas', e); }
+  // Históricas (últimas 25)
+  try{
+    const hist = (Array.isArray(_cachedHistory) && _cachedHistory.length) ? _cachedHistory : (typeof _sbLoadHistory==='function' ? await _sbLoadHistory() : []);
+    if(Array.isArray(_cachedHistory) === false || !_cachedHistory.length) _cachedHistory = hist;
+    const sorted = hist.slice().sort((a,b)=>{
+      const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+      const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+      return db.localeCompare(da);
+    }).slice(0,25);
+    if(sorted.length){
+      opts += '<optgroup label="── Histórico (últimas 25) ──">';
+      sorted.forEach(h => {
+        opts += `<option value="hist:${h.id}">🏁 ${escapeHtml(h.raceDate||'?')} · ${escapeHtml(h.raceName||'')}</option>`;
+      });
+      opts += '</optgroup>';
+    }
+  }catch(e){ console.warn('fccvPopulatePruebas histórico', e); }
+  sel.innerHTML = opts;
+}
+
+async function _fccvOnPickPrueba(){
+  const sel = document.getElementById('fccvGenPruebaSelect');
+  const val = sel ? sel.value : '';
+  if(!val) return;
+  const [kind, id] = val.split(':');
+  let extra = {}, name = '', dateStr = '';
+  if(kind === 'planif'){
+    if(!_sb) return;
+    const {data} = await _sb.from('races').select('name, date, notes').eq('id', id).single();
+    if(!data) return;
+    name = data.name || '';
+    dateStr = data.date || '';
+    try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+  } else if(kind === 'hist'){
+    const h = (_cachedHistory||[]).find(x => x.id === id);
+    if(!h) return;
+    name = h.raceName || '';
+    dateStr = h.raceDate || '';
+    extra = { localidad: h.localidad, circuitType: h.circuitType, hora_inicio: h.hora_inicio, km: h.km };
+  }
+  document.getElementById('fccvPRname').value     = name || '';
+  document.getElementById('fccvPRfecha').value    = extra.raceDate || (formatDateDisplay(_parseSpanishDate(dateStr))) || dateStr || '';
+  document.getElementById('fccvPRhora').value     = extra.hora_inicio || '';
+  document.getElementById('fccvPRlugar').value    = extra.localidad || '';
+  document.getElementById('fccvPRmodalidad').value= extra.modality || extra.modalidad || '';
+  document.getElementById('fccvPRclase').value    = extra.circuitType || '';
+  // categoria desde la prueba si la trae, si no inferida de filtros globales
+  const inferCat = (typeof _globalFilters !== 'undefined' && _globalFilters && _globalFilters.cat) || '';
+  document.getElementById('fccvPRcategoria').value= extra.categoria || extra.cat || inferCat || '';
+}
+
+function _fccvClearPrueba(){
+  ['fccvPRname','fccvPRfecha','fccvPRhora','fccvPRlugar','fccvPRmodalidad','fccvPRclase','fccvPRcategoria'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  const sel = document.getElementById('fccvGenPruebaSelect'); if(sel) sel.value = '';
+}
+
+// ── Staff dropdowns ──
+function _fccvPopulateStaff(){
+  const all = _fccvGetLicencias();
+  const staff = all.filter(l => l.tipo === 'staff').sort((a,b)=>{
+    const ka = ((a.apellidos||'')+' '+(a.nombre||'')).toLowerCase();
+    const kb = ((b.apellidos||'')+' '+(b.nombre||'')).toLowerCase();
+    return ka.localeCompare(kb,'es');
+  });
+  const fillSelect = (id, isOptional) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const placeholder = isOptional ? '— Ninguno —' : '— Selecciona —';
+    let html = `<option value="">${placeholder}</option>`;
+    staff.forEach(l => {
+      const role = (l.catLicencia||'').replace(/^[A-Z]+\s*/,'') || 'Staff';
+      const label = `${l.apellidos||''}, ${l.nombre||''} — ${l.catLicencia||'Staff'}`;
+      html += `<option value="${escapeAttr(l.dni)}">${escapeHtml(label)}</option>`;
+    });
+    el.innerHTML = html;
+  };
+  fillSelect('fccvStaffDir', false);
+  fillSelect('fccvStaffAux1', true);
+  fillSelect('fccvStaffAux2', true);
+}
+
+// ── Selección de ciclistas ──
+function _fccvSetCat(cat){
+  _fccvSelCat = cat;
+  const btnC = document.getElementById('fccvCatBtnCad');
+  const btnJ = document.getElementById('fccvCatBtnJuv');
+  if(btnC) btnC.classList.toggle('active', cat==='cadete');
+  if(btnJ) btnJ.classList.toggle('active', cat==='juvenil');
+  const lbl = document.getElementById('fccvAvailLabel');
+  if(lbl) lbl.textContent = `Disponibles · ${cat==='cadete'?'Cadetes':'Juveniles'}`;
+  _fccvRenderAvail();
+}
+
+function _fccvRenderAvail(){
+  const wrap = document.getElementById('fccvAvailList');
+  const cntEl = document.getElementById('fccvAvailCount');
+  if(!wrap) return;
+  const q = (document.getElementById('fccvAvailSearch')?.value||'').toLowerCase().trim();
+  const all = _fccvGetLicencias();
+  const filtered = all
+    .filter(l => l.tipo === _fccvSelCat)
+    .filter(l => {
+      if(!q) return true;
+      const blob = [l.apellidos, l.nombre, l.dni, l.uciId, l.equipo, l.catLicencia].join(' ').toLowerCase();
+      return blob.includes(q);
+    })
+    .sort((a,b)=>{
+      const ka = ((a.apellidos||'')+' '+(a.nombre||'')).toLowerCase();
+      const kb = ((b.apellidos||'')+' '+(b.nombre||'')).toLowerCase();
+      return ka.localeCompare(kb,'es');
+    });
+  if(cntEl) cntEl.textContent = `${filtered.length} corredor${filtered.length===1?'':'es'}`;
+  if(!filtered.length){
+    wrap.innerHTML = `<div style="padding:18px;text-align:center;color:#9ca3af;font-size:12px">${all.filter(l=>l.tipo===_fccvSelCat).length===0?'No hay '+_fccvSelCat+'s importados aún.':'Sin resultados con ese filtro.'}</div>`;
+    return;
+  }
+  const selSet = new Set([..._fccvSel.titulares, ..._fccvSel.reservas]);
+  wrap.innerHTML = filtered.map(l => {
+    const isSel = selSet.has(l.dni);
+    return `<div class="fccv-avail-row ${isSel?'fccv-already':''}">
+      <div class="fccv-avail-name"><b>${escapeHtml(l.apellidos||'')}, ${escapeHtml(l.nombre||'')}</b>
+        <span style="color:#9ca3af;font-size:10.5px"> · ${escapeHtml(l.equipo||'(sin equipo)')}</span>
+      </div>
+      ${isSel
+        ? '<span style="font-size:10px;color:#0ea5e9;font-weight:800">YA SELECCIONADO</span>'
+        : `<button class="fccv-mini-btn fccv-btn-tit" onclick="_fccvAdd('titular','${escapeAttr(l.dni)}')">T+</button>
+           <button class="fccv-mini-btn fccv-btn-res" onclick="_fccvAdd('reserva','${escapeAttr(l.dni)}')">R+</button>`}
+    </div>`;
+  }).join('');
+}
+
+function _fccvAdd(slot, dni){
+  if(!dni) return;
+  if(_fccvSel.titulares.includes(dni) || _fccvSel.reservas.includes(dni)) return;
+  const maxT = parseInt(document.getElementById('fccvMaxT')?.value)||8;
+  const maxR = parseInt(document.getElementById('fccvMaxR')?.value)||4;
+  if(slot === 'titular'){
+    if(_fccvSel.titulares.length >= maxT){ alert(`Ya tienes ${maxT} titulares. Aumenta el máximo o quita alguno.`); return; }
+    _fccvSel.titulares.push(dni);
+  } else {
+    if(_fccvSel.reservas.length >= maxR){ alert(`Ya tienes ${maxR} reservas. Aumenta el máximo o quita alguno.`); return; }
+    _fccvSel.reservas.push(dni);
+  }
+  _fccvRenderAvail();
+  _fccvRenderSelected();
+}
+
+function _fccvRemoveSel(dni){
+  _fccvSel.titulares = _fccvSel.titulares.filter(d => d !== dni);
+  _fccvSel.reservas = _fccvSel.reservas.filter(d => d !== dni);
+  _fccvRenderAvail();
+  _fccvRenderSelected();
+}
+
+function _fccvMove(slot, dni, direction){
+  const arr = slot==='titular' ? _fccvSel.titulares : _fccvSel.reservas;
+  const i = arr.indexOf(dni);
+  if(i < 0) return;
+  const j = direction==='up' ? i-1 : i+1;
+  if(j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  _fccvRenderSelected();
+}
+
+function _fccvClearSel(){
+  _fccvSel = { titulares: [], reservas: [] };
+  _fccvRenderAvail();
+  _fccvRenderSelected();
+}
+
+function _fccvRenderSelected(){
+  const wrap = document.getElementById('fccvSelList');
+  const hdr = document.getElementById('fccvSelHeader');
+  if(!wrap) return;
+  const maxT = parseInt(document.getElementById('fccvMaxT')?.value)||8;
+  const maxR = parseInt(document.getElementById('fccvMaxR')?.value)||4;
+  if(hdr){
+    const tColor = _fccvSel.titulares.length>=maxT ? '#15803d' : (_fccvSel.titulares.length>0 ? '#1d4ed8' : '#9ca3af');
+    const rColor = _fccvSel.reservas.length>=maxR ? '#15803d' : (_fccvSel.reservas.length>0 ? '#1d4ed8' : '#9ca3af');
+    hdr.innerHTML = `Seleccionados · <span style="color:${tColor}">${_fccvSel.titulares.length}/${maxT} titulares</span> · <span style="color:${rColor}">${_fccvSel.reservas.length}/${maxR} reservas</span>`;
+  }
+  const all = _fccvGetLicencias();
+  const byDni = new Map(all.map(l => [l.dni, l]));
+  const renderSlot = (dnis, slotName) => {
+    return dnis.map((dni, i) => {
+      const l = byDni.get(dni);
+      if(!l) return `<div class="fccv-sel-row" style="background:#fee2e2"><span class="fccv-sel-num">${i+1}</span><span class="fccv-sel-name">?? ${escapeHtml(dni)} (eliminado)</span><button class="fccv-sel-rm" onclick="_fccvRemoveSel('${escapeAttr(dni)}')">×</button></div>`;
+      return `<div class="fccv-sel-row">
+        <span class="fccv-sel-num">${i+1}</span>
+        <div style="flex:1;min-width:0">
+          <div class="fccv-sel-name">${escapeHtml(l.apellidos||'')}, ${escapeHtml(l.nombre||'')}</div>
+          <div class="fccv-sel-meta">${escapeHtml(l.equipo||'')}${l.catLicencia?' · '+escapeHtml(l.catLicencia):''}${l.uciId?' · UCI '+escapeHtml(l.uciId):''}</div>
+        </div>
+        <button class="fccv-mini-btn fccv-btn-tit" title="Subir" onclick="_fccvMove('${slotName}','${escapeAttr(dni)}','up')" style="padding:2px 5px">↑</button>
+        <button class="fccv-mini-btn fccv-btn-tit" title="Bajar" onclick="_fccvMove('${slotName}','${escapeAttr(dni)}','down')" style="padding:2px 5px">↓</button>
+        <button class="fccv-sel-rm" onclick="_fccvRemoveSel('${escapeAttr(dni)}')">×</button>
+      </div>`;
+    }).join('');
+  };
+  let html = '';
+  html += `<div class="fccv-sect-title">🟢 Titulares (${_fccvSel.titulares.length}/${maxT})</div>`;
+  html += _fccvSel.titulares.length ? renderSlot(_fccvSel.titulares, 'titular') : '<div style="font-size:11px;color:#9ca3af;padding:4px 6px">Pulsa T+ en la columna izquierda para añadir titulares.</div>';
+  html += `<div class="fccv-sect-title" style="color:#92400e;margin-top:14px">🟡 Reservas (${_fccvSel.reservas.length}/${maxR})</div>`;
+  html += _fccvSel.reservas.length ? renderSlot(_fccvSel.reservas, 'reserva') : '<div style="font-size:11px;color:#9ca3af;padding:4px 6px">Pulsa R+ en la columna izquierda para añadir reservas.</div>';
+  wrap.innerHTML = html;
+}
+
+// ── Generación PDF ──
+function _fccvDniToLic(dni){ return _fccvGetLicencias().find(l => l.dni === dni); }
+
+function _fccvFullName(lic){
+  return `${(lic.apellidos||'').trim()}, ${(lic.nombre||'').trim()}`.replace(/^, $/,'(sin nombre)');
+}
+
+function _fccvSetField(form, fieldName, value){
+  if(value == null || value === '') return;
+  try{
+    const f = form.getTextField(fieldName);
+    f.setText(String(value));
+  }catch(e){ console.warn('Campo no encontrado:', fieldName); }
+}
+
+async function _fccvLoadTemplate(url){
+  const resp = await fetch(url);
+  if(!resp.ok) throw new Error('No se pudo cargar la plantilla: '+url+' ('+resp.status+')');
+  return await resp.arrayBuffer();
+}
+
+function _fccvSanitizeFileName(s){
+  return String(s||'').replace(/[\\\/:*?"<>|]/g,'_').replace(/\s+/g,'_').slice(0,80) || 'documento';
+}
+
+function _fccvDownloadPdf(bytes, filename){
+  const blob = new Blob([bytes], { type:'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+}
+
+function _fccvValidateBasics(){
+  const errors = [];
+  if(!document.getElementById('fccvPRname')?.value.trim()) errors.push('Falta el nombre de la prueba');
+  if(!document.getElementById('fccvPRfecha')?.value.trim()) errors.push('Falta la fecha');
+  if(!document.getElementById('fccvStaffDir')?.value) errors.push('Falta el director deportivo');
+  if(!_fccvSel.titulares.length) errors.push('No hay ningún ciclista titular seleccionado');
+  return errors;
+}
+
+function _fccvGenStatus(msg, ok){
+  const st = document.getElementById('fccvGenStatus');
+  if(st) st.innerHTML = `<span style="color:${ok?'#15803d':'#b42318'};font-weight:700">${msg}</span>`;
+}
+
+async function _fccvGenerarBoletin(){
+  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página.'); return; }
+  const errs = _fccvValidateBasics();
+  if(errs.length){ _fccvGenStatus('❌ '+errs.join(' · '), false); return; }
+  _fccvGenStatus('⏳ Generando Boletín…', true);
+  try{
+    const buf = await _fccvLoadTemplate(FCCV_TPL_BOLETIN);
+    const pdf = await PDFLib.PDFDocument.load(buf);
+    const form = pdf.getForm();
+    const firm = _fccvGetFirmante();
+
+    // Cabecera
+    _fccvSetField(form, 'del equipo deportivo', firm.equipo||'');
+    _fccvSetField(form, 'Nombre',    document.getElementById('fccvPRname').value);
+    _fccvSetField(form, 'Clase',     document.getElementById('fccvPRclase').value);
+    _fccvSetField(form, 'Categoría', document.getElementById('fccvPRcategoria').value);
+    _fccvSetField(form, 'Fecha',     document.getElementById('fccvPRfecha').value);
+
+    // Titulares (hasta 8 plazas con sufijo numérico simple)
+    _fccvSel.titulares.slice(0,8).forEach((dni,i)=>{
+      const lic = _fccvDniToLic(dni); if(!lic) return;
+      const n = i+1;
+      _fccvSetField(form, `NOMBRE DEL CORREDOR${n}`, _fccvFullName(lic));
+      _fccvSetField(form, `LICENCIA${n}`,            lic.dni);
+      _fccvSetField(form, `UCI ID${n}`,              lic.uciId);
+      _fccvSetField(form, `CATEGORÍA${n}`,           lic.catLicencia);
+    });
+
+    // Reservas (mapeo irregular del PDF original):
+    // R1 → name='1', lic='RESERVA1',   uci='UCI ID5RES', cat='CATEGORÍA5RES'
+    // R2 → name='2', lic='LICENCIA6RES', uci='UCI ID6RES', cat='CATEGORÍA6RES'
+    // R3 → name='3', lic='LICENCIA7RES', uci='UCI ID7RES', cat='CATEGORÍA7RES'
+    // R4 → name='4', lic='LICENCIA8RES', uci='UCI ID8RES', cat='CATEGORÍA8RES'
+    const RES_MAP = [
+      { name:'1', lic:'RESERVA1',    uci:'UCI ID5RES', cat:'CATEGORÍA5RES' },
+      { name:'2', lic:'LICENCIA6RES', uci:'UCI ID6RES', cat:'CATEGORÍA6RES' },
+      { name:'3', lic:'LICENCIA7RES', uci:'UCI ID7RES', cat:'CATEGORÍA7RES' },
+      { name:'4', lic:'LICENCIA8RES', uci:'UCI ID8RES', cat:'CATEGORÍA8RES' }
+    ];
+    _fccvSel.reservas.slice(0,4).forEach((dni,i)=>{
+      const lic = _fccvDniToLic(dni); if(!lic) return;
+      const m = RES_MAP[i]; if(!m) return;
+      _fccvSetField(form, m.name, _fccvFullName(lic));
+      _fccvSetField(form, m.lic,  lic.dni);
+      _fccvSetField(form, m.uci,  lic.uciId);
+      _fccvSetField(form, m.cat,  lic.catLicencia);
+    });
+
+    // Directores (hasta 2):
+    // D1 → name='1_2', lic='DD1',          uci='UCI ID5RDD', cat='CATEGORÍA5RDD'
+    // D2 → name='2_2', lic='LICENCIA6RDD',  uci='UCI ID6RDD', cat='CATEGORÍA6RDD'
+    const DD_MAP = [
+      { name:'1_2', lic:'DD1',            uci:'UCI ID5RDD', cat:'CATEGORÍA5RDD' },
+      { name:'2_2', lic:'LICENCIA6RDD',   uci:'UCI ID6RDD', cat:'CATEGORÍA6RDD' }
+    ];
+    const dirDni = document.getElementById('fccvStaffDir').value;
+    const aux1Dni = document.getElementById('fccvStaffAux1').value;
+    const dirs = [dirDni, aux1Dni].filter(Boolean).slice(0,2);
+    dirs.forEach((dni,i)=>{
+      const lic = _fccvDniToLic(dni); if(!lic) return;
+      const m = DD_MAP[i]; if(!m) return;
+      _fccvSetField(form, m.name, _fccvFullName(lic));
+      _fccvSetField(form, m.lic,  lic.dni);
+      _fccvSetField(form, m.uci,  lic.uciId);
+      _fccvSetField(form, m.cat,  lic.catLicencia);
+    });
+
+    // Pie del Boletín — firmante
+    _fccvSetField(form, 'Don',           firm.nombre||'');
+    _fccvSetField(form, 'en calidad de', firm.cargo||'');
+    _fccvSetField(form, 'Lugar y fecha', (firm.equipo? '' : '') + (new Date().toLocaleDateString('es-ES')));
+
+    try{ form.updateFieldAppearances(); }catch(e){}
+    const bytes = await pdf.save();
+    const dateTag = _fccvSanitizeFileName(document.getElementById('fccvPRfecha').value);
+    const nameTag = _fccvSanitizeFileName(document.getElementById('fccvPRname').value);
+    _fccvDownloadPdf(bytes, `Boletin_${dateTag}_${nameTag}.pdf`);
+    _fccvGenStatus('✅ Boletín generado y descargado', true);
+  }catch(e){
+    console.warn('_fccvGenerarBoletin', e);
+    _fccvGenStatus('❌ Error: '+(e.message||e), false);
+  }
+}
+
+async function _fccvGenerarAutorizacion(){
+  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página.'); return; }
+  const errs = _fccvValidateBasics();
+  if(errs.length){ _fccvGenStatus('❌ '+errs.join(' · '), false); return; }
+  _fccvGenStatus('⏳ Generando Autorización…', true);
+  try{
+    const buf = await _fccvLoadTemplate(FCCV_TPL_AUTORIZ);
+    const pdf = await PDFLib.PDFDocument.load(buf);
+    const form = pdf.getForm();
+    const firm = _fccvGetFirmante();
+
+    // Datos prueba
+    _fccvSetField(form, 'Nombre de l a Prueba', document.getElementById('fccvPRname').value);
+    _fccvSetField(form, 'Lugar',                document.getElementById('fccvPRlugar').value);
+    _fccvSetField(form, 'Modal i dad',          document.getElementById('fccvPRmodalidad').value);
+    _fccvSetField(form, 'Clase',                document.getElementById('fccvPRclase').value);
+    _fccvSetField(form, 'Categorías',           document.getElementById('fccvPRcategoria').value);
+    _fccvSetField(form, 'Fechas',               document.getElementById('fccvPRfecha').value);
+    _fccvSetField(form, 'Hora',                 document.getElementById('fccvPRhora').value);
+
+    // Equipo del club (mismo que firmante)
+    _fccvSetField(form, 'EquipoC l ub', firm.equipo||'');
+
+    // Director y auxiliares
+    const dirLic = _fccvDniToLic(document.getElementById('fccvStaffDir').value);
+    if(dirLic){
+      _fccvSetField(form, 'D i rector Deport i vo', _fccvFullName(dirLic));
+      _fccvSetField(form, 'Licenc i a',             dirLic.dni);
+    }
+    const aux1 = _fccvDniToLic(document.getElementById('fccvStaffAux1').value);
+    if(aux1){
+      _fccvSetField(form, 'Personal aux i l i ar', _fccvFullName(aux1));
+      _fccvSetField(form, 'Licenc i a_2',          aux1.dni);
+    }
+    const aux2 = _fccvDniToLic(document.getElementById('fccvStaffAux2').value);
+    if(aux2){
+      _fccvSetField(form, 'Personal aux i l i ar_2', _fccvFullName(aux2));
+      _fccvSetField(form, 'Licenc i a_3',            aux2.dni);
+    }
+
+    // Corredores (15 plazas, TODOS los que viajan = titulares + reservas)
+    const todos = [..._fccvSel.titulares, ..._fccvSel.reservas].slice(0,15);
+    todos.forEach((dni, i)=>{
+      const lic = _fccvDniToLic(dni); if(!lic) return;
+      const row = i+1;
+      _fccvSetField(form, `Nombre y Apel l i dosRow${row}`, _fccvFullName(lic));
+      _fccvSetField(form, `Licenc i aRow${row}`,            lic.dni);
+      _fccvSetField(form, `Código UCIRow${row}`,            lic.uciId);
+    });
+
+    // Firmante
+    _fccvSetField(form, 'Nombre del que firma',   firm.nombre||'');
+    _fccvSetField(form, 'F i rmado',              firm.cargo||'');
+    _fccvSetField(form, 'Telefono del que firma', firm.telefono||'');
+    _fccvSetField(form, 'e-mail del que firma',   firm.email||'');
+    _fccvSetField(form, 'Lugar y FEcha',          (firm.equipo? '' : '') + (new Date().toLocaleDateString('es-ES')));
+
+    try{ form.updateFieldAppearances(); }catch(e){}
+    const bytes = await pdf.save();
+    const dateTag = _fccvSanitizeFileName(document.getElementById('fccvPRfecha').value);
+    const nameTag = _fccvSanitizeFileName(document.getElementById('fccvPRname').value);
+    _fccvDownloadPdf(bytes, `Autorizacion_${dateTag}_${nameTag}.pdf`);
+    _fccvGenStatus('✅ Autorización generada y descargada', true);
+  }catch(e){
+    console.warn('_fccvGenerarAutorizacion', e);
+    _fccvGenStatus('❌ Error: '+(e.message||e), false);
+  }
+}
+
+async function _fccvGenerarAmbos(){
+  await _fccvGenerarBoletin();
+  await new Promise(r => setTimeout(r, 350));
+  await _fccvGenerarAutorizacion();
+  _fccvGenStatus('✅ Los dos documentos se han generado y descargado', true);
+}
