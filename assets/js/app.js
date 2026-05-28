@@ -27987,11 +27987,16 @@ function _cargaFindSimilarRider(insName, allHistRiderNames){
 function _cargaAnalyzeInscritosVsHistory(insArr){
   if(!Array.isArray(insArr) || !insArr.length) return null;
   const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
-  // Recolectar todos los nombres únicos del histórico
+  // Recolectar todos los nombres únicos del histórico — INCLUYENDO los que
+  // solo aparecen en inscritos de otras pruebas (DNFs / no terminadores).
+  // Antes solo se miraban los clasificados, así que un corredor que aún no
+  // había acabado nunca aparecía como "Sin histórico" aunque la app sí
+  // tuviera su nombre en pre-inscripciones previas.
   const allRiderNames = new Set();
-  hist.forEach(h => (h.riders||[]).forEach(r => {
-    if(r.name) allRiderNames.add(r.name);
-  }));
+  hist.forEach(h => {
+    (h.riders||[]).forEach(r => { if(r.name) allRiderNames.add(r.name); });
+    (h.inscritos||[]).forEach(i => { if(i.name) allRiderNames.add(i.name); });
+  });
   const allRiderNamesArr = [...allRiderNames];
   const normalize = (s) => typeof normalizeForMatching === 'function'
     ? normalizeForMatching(s||'')
