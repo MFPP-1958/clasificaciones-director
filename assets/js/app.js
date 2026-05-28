@@ -19078,9 +19078,28 @@ function _postProcessInscritos(arr){
   const year = (typeof _getRaceYear==='function') ? _getRaceYear() : new Date().getFullYear();
   // Index: nameKey → {bibs:Map<bib,count>, cats:Map<cat,count>, team, lastDate}
   const idx = _buildYearRiderIndex(year);
+  // Generar variantes para tolerar formato "Apellido1, Apellido2 Nombre" frente
+  // a "Apellido1, Nombre" del histórico (típica disparidad entre orígenes).
+  const stripDia = (s) => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const lookupVariants = (rawName) => {
+    if(!rawName) return [];
+    const out = [];
+    try{ out.push(normalizeForMatching(rawName)); }catch(e){}
+    const m = String(rawName).match(/^([^,]+),\s*(.+)$/);
+    if(m){
+      const ap = stripDia((m[1].trim().split(/\s+/)[0])||'');
+      const restW = m[2].trim().split(/\s+/).filter(Boolean);
+      if(ap && restW.length){
+        out.push(ap+', '+stripDia(restW[0]));
+        out.push(ap+', '+stripDia(restW[restW.length-1]));
+      }
+    }
+    return [...new Set(out)].filter(Boolean);
+  };
   return arr.map(ins=>{
-    const nk = normalizeForMatching(ins.name||'');
-    const hit = idx.get(nk);
+    const variants = lookupVariants(ins.name||'');
+    let hit = null;
+    for(const v of variants){ if(idx.has(v)){ hit = idx.get(v); break; } }
     if(!hit){
       // No encontrado: dejamos lo que venía
       return {...ins, _enriched:false, _newRider: true};
@@ -19114,22 +19133,49 @@ function _buildYearRiderIndex(year){
 
   const idx = new Map(); // nameKey → {bibs, cats, lastBib, lastTeam, lastDate}
   const yStr = String(year);
+  // Variantes de clave para tolerar disparidades de formato del nombre
+  // ("Apellido, Nombre" vs "Apellido, Apellido2 Nombre", etc.)
+  const _stripDia = (s) => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _keyVariants = (rawName) => {
+    if(!rawName) return [];
+    const out = new Set();
+    try{ out.add(normalizeForMatching(rawName)); }catch(e){}
+    const m = String(rawName).match(/^([^,]+),\s*(.+)$/);
+    if(m){
+      const ap = _stripDia((m[1].trim().split(/\s+/)[0])||'');
+      const restW = m[2].trim().split(/\s+/).filter(Boolean);
+      if(ap && restW.length){
+        out.add(ap+', '+_stripDia(restW[0]));
+        out.add(ap+', '+_stripDia(restW[restW.length-1]));
+      }
+    } else {
+      const ws = String(rawName).split(/\s+/).filter(Boolean);
+      if(ws.length>=2){
+        const w0=_stripDia(ws[0]), wL=_stripDia(ws[ws.length-1]);
+        out.add(w0+', '+wL);
+        out.add(_stripDia(ws[1])+', '+w0);
+      }
+    }
+    return [...out].filter(Boolean);
+  };
   // Helper para acumular una aparición (de riders o de inscritos)
   const ingest = (h, r, iso) => {
-    const nk = normalizeForMatching(r.name||'');
-    if(!nk) return;
-    let entry = idx.get(nk);
-    if(!entry){
-      entry = { bibs:new Map(), cats:new Map(), lastBib:'', lastTeam:'', lastDate:'0000-00-00' };
-      idx.set(nk, entry);
-    }
-    if(r.bib){ entry.bibs.set(String(r.bib), (entry.bibs.get(String(r.bib))||0)+1); }
-    if(r.cat){ entry.cats.set(r.cat, (entry.cats.get(r.cat)||0)+1); }
-    if(iso && iso > entry.lastDate){
-      entry.lastDate = iso;
-      if(r.bib)  entry.lastBib  = String(r.bib);
-      if(r.team) entry.lastTeam = r.team;
-    }
+    const keys = _keyVariants(r.name||'');
+    if(!keys.length) return;
+    keys.forEach(nk => {
+      let entry = idx.get(nk);
+      if(!entry){
+        entry = { bibs:new Map(), cats:new Map(), lastBib:'', lastTeam:'', lastDate:'0000-00-00' };
+        idx.set(nk, entry);
+      }
+      if(r.bib){ entry.bibs.set(String(r.bib), (entry.bibs.get(String(r.bib))||0)+1); }
+      if(r.cat){ entry.cats.set(r.cat, (entry.cats.get(r.cat)||0)+1); }
+      if(iso && iso > entry.lastDate){
+        entry.lastDate = iso;
+        if(r.bib)  entry.lastBib  = String(r.bib);
+        if(r.team) entry.lastTeam = r.team;
+      }
+    });
   };
   hist.forEach(h=>{
     const iso = _parseSpanishDate(h.raceDate)||'';
@@ -28008,9 +28054,6 @@ function _cargaFindSimilarRider(insName, allHistRiderNames){
 async function _cargaAnalyzeInscritosVsHistory(insArr){
   if(!Array.isArray(insArr) || !insArr.length) return null;
   // ── Garantizar que el histórico está cargado ────────────────────────────
-  // Antes, si la función se invocaba justo después de un guardado (que pone
-  // _cachedHistory = null para refrescar), o nada más cargar la página, el
-  // histórico estaba vacío y TODOS los inscritos salían como "sin histórico".
   if(!Array.isArray(_cachedHistory) || !_cachedHistory.length){
     try{
       if(typeof _sbLoadHistory === 'function'){
@@ -28019,30 +28062,68 @@ async function _cargaAnalyzeInscritosVsHistory(insArr){
     }catch(e){ console.warn('analyze: no se pudo cargar histórico', e); }
   }
   const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
-  // Recolectar todos los nombres únicos del histórico — INCLUYENDO los que
-  // solo aparecen en inscritos de otras pruebas (DNFs / no terminadores).
-  // Antes solo se miraban los clasificados, así que un corredor que aún no
-  // había acabado nunca aparecía como "Sin histórico" aunque la app sí
-  // tuviera su nombre en pre-inscripciones previas.
   const allRiderNames = new Set();
   hist.forEach(h => {
     (h.riders||[]).forEach(r => { if(r.name) allRiderNames.add(r.name); });
     (h.inscritos||[]).forEach(i => { if(i.name) allRiderNames.add(i.name); });
   });
   const allRiderNamesArr = [...allRiderNames];
-  const normalize = (s) => typeof normalizeForMatching === 'function'
-    ? normalizeForMatching(s||'')
-    : (s||'').toLowerCase().trim();
-  // Set de claves normalizadas para match exacto rápido
-  const normSet = new Set(allRiderNamesArr.map(normalize));
+
+  // ── Generador de variantes de clave ─────────────────────────────────────
+  // Algunas listas (típico de FCCV) pegan el nombre como
+  // "Apellido1, Apellido2 Nombre". El normalizador estándar coge sólo la
+  // PRIMERA palabra tras la coma, que en ese formato es el SEGUNDO APELLIDO
+  // en vez del nombre, y entonces no casa con el histórico "Apellido1, Nombre".
+  // Por eso devolvemos varias variantes y matcheamos contra cualquiera.
+  const stripDiacritics = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const variantsOf = (rawName) => {
+    if(!rawName) return [];
+    const s = String(rawName).trim();
+    const out = new Set();
+    // 1) Forma estándar (la que ya usa el resto de la app)
+    try{
+      if(typeof normalizeForMatching === 'function') out.add(normalizeForMatching(s));
+    }catch(e){}
+    // 2) Si hay coma, generar la variante "Apellido1, ÚLTIMA-palabra-tras-coma"
+    //    Esto cubre el caso "Apellido1, Apellido2 Nombre" → "Apellido1, Nombre"
+    const m = s.match(/^([^,]+),\s*(.+)$/);
+    if(m){
+      const ap = stripDiacritics((m[1].trim().split(/\s+/)[0])||'');
+      const restWords = m[2].trim().split(/\s+/).filter(Boolean);
+      if(restWords.length){
+        const first = stripDiacritics(restWords[0]);
+        const last  = stripDiacritics(restWords[restWords.length-1]);
+        if(ap) out.add(ap+', '+first);
+        if(ap && last !== first) out.add(ap+', '+last);
+      }
+    } else {
+      // 3) Sin coma: input como "Apellido1 Apellido2 Nombre" o "Nombre Apellido1 Apellido2".
+      //    Probamos ambas interpretaciones para no perder coincidencias.
+      const ws = s.split(/\s+/).filter(Boolean);
+      if(ws.length>=2){
+        const w0=stripDiacritics(ws[0]), wL=stripDiacritics(ws[ws.length-1]);
+        // "Apellido NOMBRE": surname=w0, name=wL
+        out.add(w0+', '+wL);
+        // "Nombre Apellido1 [Apellido2]": surname=w1, name=w0
+        if(ws.length>=2) out.add(stripDiacritics(ws[1])+', '+w0);
+      } else if(ws.length===1){
+        out.add(stripDiacritics(ws[0]));
+      }
+    }
+    return [...out].filter(Boolean);
+  };
+
+  // Set global: todas las variantes de todos los nombres del histórico.
+  const normSet = new Set();
+  allRiderNamesArr.forEach(n => variantsOf(n).forEach(v => normSet.add(v)));
 
   const enriched = [], newRiders = [], possibleTypos = [];
   insArr.forEach(ins => {
-    const insNameNorm = normalize(ins.name);
-    if(normSet.has(insNameNorm)){
+    const insVariants = variantsOf(ins.name);
+    const matched = insVariants.some(v => normSet.has(v));
+    if(matched){
       enriched.push(ins);
     } else {
-      // Buscar similar
       const similar = _cargaFindSimilarRider(ins.name, allRiderNamesArr);
       if(similar){
         possibleTypos.push({...ins, suggestion: similar.name, distance: similar.distance});
