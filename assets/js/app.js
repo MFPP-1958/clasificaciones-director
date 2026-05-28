@@ -19159,21 +19159,32 @@ function _buildYearRiderIndex(year){
     return [...out].filter(Boolean);
   };
   // Helper para acumular una aparición (de riders o de inscritos)
+  // Estrategia clave: rastreamos el dorsal/equipo más reciente NO VACÍO de
+  // forma independiente. Si una prueba más reciente carece de dorsal pero
+  // una anterior sí lo tenía, conservamos ese dorsal antiguo en vez de
+  // perderlo. Misma lógica para el equipo.
   const ingest = (h, r, iso) => {
     const keys = _keyVariants(r.name||'');
     if(!keys.length) return;
     keys.forEach(nk => {
       let entry = idx.get(nk);
       if(!entry){
-        entry = { bibs:new Map(), cats:new Map(), lastBib:'', lastTeam:'', lastDate:'0000-00-00' };
+        entry = { bibs:new Map(), cats:new Map(), lastBib:'', lastTeam:'', lastDate:'0000-00-00', lastBibDate:'0000-00-00', lastTeamDate:'0000-00-00' };
         idx.set(nk, entry);
       }
       if(r.bib){ entry.bibs.set(String(r.bib), (entry.bibs.get(String(r.bib))||0)+1); }
       if(r.cat){ entry.cats.set(r.cat, (entry.cats.get(r.cat)||0)+1); }
-      if(iso && iso > entry.lastDate){
-        entry.lastDate = iso;
-        if(r.bib)  entry.lastBib  = String(r.bib);
-        if(r.team) entry.lastTeam = r.team;
+      if(iso && iso > entry.lastDate){ entry.lastDate = iso; }
+      // Dorsal y equipo: solo se actualizan con valores no-vacíos. Si una
+      // prueba reciente no trae dorsal, mantenemos el más reciente que sí
+      // lo tenía (aunque sea anterior en el tiempo).
+      if(iso && r.bib && iso > entry.lastBibDate){
+        entry.lastBibDate = iso;
+        entry.lastBib     = String(r.bib);
+      }
+      if(iso && r.team && iso > entry.lastTeamDate){
+        entry.lastTeamDate = iso;
+        entry.lastTeam     = r.team;
       }
     });
   };
