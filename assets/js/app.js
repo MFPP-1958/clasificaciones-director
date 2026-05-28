@@ -19863,6 +19863,7 @@ async function saveInscritosOnly(){
   const localidad = ($('raceLocalidad')?.value||'').trim();
   const circuitType = ($('raceCircuitType')?.value||'').trim();
   const challengeCV = !!($('raceChallengeCV')?.checked);
+  const horaInicio = ($('raceStartTime')?.value||'').trim();
 
   console.log('[saveInscritosOnly] datos:', {raceName, raceDateStr, parsedDate, inscritosCount: inscritos.length});
 
@@ -19891,14 +19892,20 @@ async function saveInscritosOnly(){
     let extra = {};
     try{ extra = JSON.parse(dupClasif.notes||'{}'); }catch(e){}
     extra.inscritos = inscritos;
-    if(raceDateStr) extra.raceDate = raceDateStr;
-    if(km) extra.km = km;
-    if(avg) extra.avg = avg;
-    if(localidad) extra.localidad = localidad;
-    if(circuitType) extra.circuitType = circuitType;
+    // SOBRESCRIBIMOS los campos del formulario, incluyendo vacíos, para que
+    // el director pueda borrar/corregir una localidad mal escrita, una hora
+    // equivocada o un tipo de prueba erróneo sin que la app conserve el
+    // valor antiguo. Si el campo está vacío en el formulario, se borra del
+    // extra (no se queda el viejo).
+    extra.raceDate = raceDateStr;
+    extra.km = km;
+    extra.avg = avg;
+    extra.localidad = localidad;
+    extra.circuitType = circuitType;
+    extra.hora_inicio = horaInicio;
     extra.challengeCV = challengeCV;
     const {error:updErr,data:updData} = await _sb.from('races')
-      .update({notes: JSON.stringify(extra)})
+      .update({name: raceName, notes: JSON.stringify(extra)})
       .eq('id', dupClasif.id)
       .select();
     if(updErr){
@@ -19923,14 +19930,17 @@ async function saveInscritosOnly(){
     let extra = {};
     try{ extra = JSON.parse(dupPlanif.notes||'{}'); }catch(e){}
     extra.inscritos = inscritos;
-    if(raceDateStr) extra.raceDate = raceDateStr;
-    if(km) extra.km = km;
-    if(avg) extra.avg = avg;
-    if(localidad) extra.localidad = localidad;
-    if(circuitType) extra.circuitType = circuitType;
+    // Sobrescribimos todos los campos del formulario para no arrastrar
+    // valores antiguos de la planificada (ej: localidad mal escrita).
+    extra.raceDate = raceDateStr;
+    extra.km = km;
+    extra.avg = avg;
+    extra.localidad = localidad;
+    extra.circuitType = circuitType;
+    extra.hora_inicio = horaInicio;
     extra.challengeCV = challengeCV;
     const {error:convErr,data:convData} = await _sb.from('races')
-      .update({race_type:'clasificacion', notes: JSON.stringify(extra)})
+      .update({name: raceName, race_type:'clasificacion', notes: JSON.stringify(extra)})
       .eq('id', dupPlanif.id)
       .select();
     if(convErr){
@@ -19951,7 +19961,7 @@ async function saveInscritosOnly(){
 
   // ── No existe nada en esa fecha → crear entrada nueva
   const extra = {
-    raceDate:raceDateStr, km, avg, localidad, circuitType, challengeCV,
+    raceDate:raceDateStr, km, avg, localidad, circuitType, hora_inicio: horaInicio, challengeCV,
     regions:{}, inscritos
   };
   const payload = {
@@ -29583,4 +29593,177 @@ function _aiInjectDNFStyles(){
     @page { margin: 0; size: A4; }
   `;
   document.head.appendChild(st);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// GESTOR DE LOCALIDADES
+//   Permite renombrar una localidad mal escrita en TODAS las pruebas del
+//   histórico, o simplemente ocultarla de las sugerencias del datalist
+//   sin tocar los datos guardados (lista de ignoradas en localStorage).
+// ════════════════════════════════════════════════════════════════════════
+
+function _cargaGetIgnoredLocs(){
+  try{ return new Set(JSON.parse(localStorage.getItem('_cargaIgnoredLocs')||'[]')); }
+  catch(e){ return new Set(); }
+}
+function _cargaSetIgnoredLocs(set){
+  localStorage.setItem('_cargaIgnoredLocs', JSON.stringify([...set]));
+}
+
+// Wrap del builder original para filtrar las ignoradas
+(function(){
+  const _orig = (typeof _cargaPopulateLocalidadDatalist === 'function') ? _cargaPopulateLocalidadDatalist : null;
+  if(!_orig) return;
+  window._cargaPopulateLocalidadDatalist = function(){
+    const inp = document.getElementById('raceLocalidad');
+    if(!inp) return;
+    let dl = document.getElementById('cargaLocalidadList');
+    if(!dl){
+      dl = document.createElement('datalist');
+      dl.id = 'cargaLocalidadList';
+      document.body.appendChild(dl);
+      inp.setAttribute('list', 'cargaLocalidadList');
+    }
+    const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+    const ignored = _cargaGetIgnoredLocs();
+    const locs = new Set();
+    hist.forEach(h => {
+      const v = (h.localidad||'').trim();
+      if(v && !ignored.has(v.toLowerCase())) locs.add(v);
+    });
+    dl.innerHTML = [...locs].sort().map(l => `<option value="${escapeAttr(l)}">`).join('');
+  };
+})();
+
+async function _cargaOpenLocalidadManager(){
+  // Asegurar histórico cargado
+  if(!Array.isArray(_cachedHistory) || !_cachedHistory.length){
+    if(typeof _sbLoadHistory==='function') _cachedHistory = await _sbLoadHistory();
+  }
+  const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  // Mapear localidad → [{id, name}]
+  const map = new Map();
+  hist.forEach(h=>{
+    const v = (h.localidad||'').trim();
+    if(!v) return;
+    if(!map.has(v)) map.set(v, []);
+    map.get(v).push({ id: h.id, name: h.raceName||'' });
+  });
+  const ignored = _cargaGetIgnoredLocs();
+  const items = [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'es'));
+
+  let overlay = document.getElementById('_locMgrOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = '_locMgrOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10002;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.addEventListener('click',(e)=>{ if(e.target===overlay) _cargaCloseLocalidadManager(); });
+    document.body.appendChild(overlay);
+  }
+
+  if(!items.length){
+    overlay.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:520px;padding:24px;text-align:center">
+      <div style="font-size:15px;color:#374151">No hay localidades guardadas en el histórico todavía.</div>
+      <button class="btn light" style="margin-top:14px" onclick="_cargaCloseLocalidadManager()">Cerrar</button>
+    </div>`;
+    return;
+  }
+
+  const rows = items.map(([loc, races])=>{
+    const isIgnored = ignored.has(loc.toLowerCase());
+    const racesTooltip = races.slice(0,5).map(r=>r.name).join('\n');
+    return `<tr data-loc-row="${escapeAttr(loc)}">
+      <td style="padding:6px 8px;vertical-align:top;width:32px;color:#9ca3af;font-size:11px;text-align:right">${races.length}</td>
+      <td style="padding:6px 8px;vertical-align:top">
+        <div style="font-weight:700;color:#0b2f6b;font-size:13px">${escapeHtml(loc)}</div>
+        <div title="${escapeAttr(racesTooltip)}" style="font-size:10.5px;color:#6b7280;margin-top:1px">
+          en ${races.length} prueba${races.length!==1?'s':''}${isIgnored?' · <span style="color:#dc2626;font-weight:700">oculta en sugerencias</span>':''}
+        </div>
+      </td>
+      <td style="padding:6px 8px;vertical-align:top;white-space:nowrap">
+        <button class="btn light" style="font-size:11px;padding:4px 8px" onclick="_cargaRenameLocalidad(${JSON.stringify(loc)})">✏️ Renombrar</button>
+        <button class="btn light" style="font-size:11px;padding:4px 8px;${isIgnored?'background:#fef2f2;color:#991b1b':''}" onclick="_cargaToggleIgnoreLoc(${JSON.stringify(loc)})">${isIgnored?'↩️ Mostrar':'🚫 Ocultar'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:720px;width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div>
+          <div style="font-weight:800;font-size:16px;color:#0b2f6b">🧹 Gestionar localidades</div>
+          <div style="font-size:11.5px;color:#6b7280;margin-top:3px">
+            <b>Renombrar</b>: cambia el texto en TODAS las pruebas que la tengan (corrige errores de escritura).<br>
+            <b>Ocultar</b>: la quita de las sugerencias del autocompletado sin tocar los datos guardados.
+          </div>
+        </div>
+        <button class="btn light" onclick="_cargaCloseLocalidadManager()" style="font-size:12px;padding:5px 10px">✕</button>
+      </div>
+      <div style="flex:1;overflow:auto;padding:6px 8px">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead><tr style="background:#f9fafb">
+            <th style="padding:6px 8px;text-align:right;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.3px">#</th>
+            <th style="padding:6px 8px;text-align:left;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Localidad</th>
+            <th style="padding:6px 8px;text-align:right;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Acciones</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="padding:10px 14px;border-top:1px solid #e5e7eb;background:#f9fafb;font-size:11px;color:#6b7280;text-align:center">
+        Total: ${items.length} localidad${items.length!==1?'es':''} distintas · ${ignored.size} oculta${ignored.size!==1?'s':''}
+      </div>
+    </div>`;
+}
+
+function _cargaCloseLocalidadManager(){
+  const ov = document.getElementById('_locMgrOverlay');
+  if(ov) ov.remove();
+}
+
+function _cargaToggleIgnoreLoc(loc){
+  const ignored = _cargaGetIgnoredLocs();
+  const k = (loc||'').toLowerCase();
+  if(ignored.has(k)) ignored.delete(k); else ignored.add(k);
+  _cargaSetIgnoredLocs(ignored);
+  // Refrescar datalist y modal
+  if(typeof _cargaPopulateLocalidadDatalist==='function') _cargaPopulateLocalidadDatalist();
+  _cargaOpenLocalidadManager();
+}
+
+async function _cargaRenameLocalidad(oldName){
+  const nv = prompt(`Renombrar localidad "${oldName}" a:\n\n(El cambio se aplicará a TODAS las pruebas que la tengan en el histórico)`, oldName);
+  if(nv == null) return;
+  const newName = nv.trim();
+  if(!newName){ alert('El nuevo nombre no puede estar vacío. Si quieres quitarla, usa "Ocultar".'); return; }
+  if(newName === oldName){ return; }
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  const affected = hist.filter(h => (h.localidad||'').trim() === oldName);
+  if(!affected.length){ alert('No se encontraron pruebas con esa localidad.'); return; }
+  if(!confirm(`Se renombrará "${oldName}" → "${newName}" en ${affected.length} prueba${affected.length!==1?'s':''} del histórico.\n\n¿Continuar?`)) return;
+  // Para cada prueba afectada, leer notes, actualizar y guardar
+  let ok = 0, fail = 0;
+  for(const h of affected){
+    try{
+      const {data, error} = await _sb.from('races').select('notes').eq('id', h.id).single();
+      if(error || !data){ fail++; continue; }
+      let extra = {};
+      try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+      extra.localidad = newName;
+      const {error:e2} = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', h.id);
+      if(e2){ fail++; } else { ok++; }
+    }catch(e){ fail++; }
+  }
+  // Quitar la antigua de ignoradas si estaba
+  const ignored = _cargaGetIgnoredLocs();
+  if(ignored.has(oldName.toLowerCase())){ ignored.delete(oldName.toLowerCase()); _cargaSetIgnoredLocs(ignored); }
+  // Refrescar caché y vistas
+  _cachedHistory = null;
+  if(typeof _sbLoadHistory==='function') _cachedHistory = await _sbLoadHistory();
+  if(typeof _cargaPopulateLocalidadDatalist==='function') _cargaPopulateLocalidadDatalist();
+  // Si el campo del formulario muestra la antigua, actualízalo también
+  const inp = document.getElementById('raceLocalidad');
+  if(inp && inp.value.trim() === oldName) inp.value = newName;
+  alert(`✅ Renombradas ${ok} prueba${ok!==1?'s':''}.${fail?` ❌ Errores: ${fail}.`:''}`);
+  _cargaOpenLocalidadManager();
 }
