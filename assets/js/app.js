@@ -29681,8 +29681,8 @@ async function _cargaOpenLocalidadManager(){
         </div>
       </td>
       <td style="padding:6px 8px;vertical-align:top;white-space:nowrap">
-        <button class="btn light" style="font-size:11px;padding:4px 8px" onclick="_cargaRenameLocalidad(${JSON.stringify(loc)})">✏️ Renombrar</button>
-        <button class="btn light" style="font-size:11px;padding:4px 8px;${isIgnored?'background:#fef2f2;color:#991b1b':''}" onclick="_cargaToggleIgnoreLoc(${JSON.stringify(loc)})">${isIgnored?'↩️ Mostrar':'🚫 Ocultar'}</button>
+        <button class="btn light" style="font-size:11px;padding:4px 8px" onclick="_cargaRenameLocalidad(this.getAttribute('data-loc'))" data-loc="${escapeAttr(loc)}">✏️ Renombrar</button>
+        <button class="btn light" style="font-size:11px;padding:4px 8px;${isIgnored?'background:#fef2f2;color:#991b1b':''}" onclick="_cargaToggleIgnoreLoc(this.getAttribute('data-loc'))" data-loc="${escapeAttr(loc)}">${isIgnored?'↩️ Mostrar':'🚫 Ocultar'}</button>
       </td>
     </tr>`;
   }).join('');
