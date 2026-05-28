@@ -12051,10 +12051,28 @@ async function renderHistory(){
             onclick="loadPlanificadaToCarga('${escapeAttr(p.id)}')">▶ Añadir inscritos</button>
         </div>`;
       }).join('');
+      // Plegable: estado persistente en localStorage. Por defecto colapsado
+      // si hay más de 6 planificadas (lista larga), expandido si hay pocas.
+      const _plnKey = '_histPlannedCollapsed';
+      const _plnStored = localStorage.getItem(_plnKey);
+      const _plnCollapsed = _plnStored != null
+        ? _plnStored === '1'
+        : (_plannedFiltered.length > 6);
       plannedBlock = `<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:12px 14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📅 Pruebas planificadas · sin inscritos cargados (${_plannedFiltered.length})</div>
-        ${rowsHtml}
-        <div style="font-size:10.5px;color:#6b7280;margin-top:4px">Selecciona la próxima carrera para volcar sus datos en <b>Carga y Resumen</b> y poder añadir los pre-inscritos.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;user-select:none" onclick="_histTogglePlanned()">
+          <div style="font-size:12px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:6px">
+            <span id="histPlannedChevron" style="display:inline-block;transition:transform .15s;${_plnCollapsed?'transform:rotate(-90deg)':''}">▼</span>
+            📅 Pruebas planificadas · sin inscritos cargados (${_plannedFiltered.length})
+          </div>
+          <button type="button" onclick="event.stopPropagation();_histTogglePlanned()"
+            style="background:transparent;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">
+            ${_plnCollapsed?'▼ Mostrar':'▲ Ocultar'}
+          </button>
+        </div>
+        <div id="histPlannedBody" style="${_plnCollapsed?'display:none':''};margin-top:8px">
+          ${rowsHtml}
+          <div style="font-size:10.5px;color:#6b7280;margin-top:4px">Selecciona la próxima carrera para volcar sus datos en <b>Carga y Resumen</b> y poder añadir los pre-inscritos.</div>
+        </div>
       </div>`;
     }
   }
@@ -30297,4 +30315,18 @@ function _simInjectTeamsStyles(){
     @page { margin: 0; size: A4; }
   `;
   document.head.appendChild(st);
+}
+
+// Historial: plegar/desplegar el bloque "Pruebas planificadas"
+function _histTogglePlanned(){
+  const body = document.getElementById('histPlannedBody');
+  const chev = document.getElementById('histPlannedChevron');
+  if(!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if(chev) chev.style.transform = isHidden ? '' : 'rotate(-90deg)';
+  // Actualizar el botón
+  const btn = body.parentElement && body.parentElement.querySelector('button[onclick*="_histTogglePlanned"]');
+  if(btn) btn.textContent = isHidden ? '▲ Ocultar' : '▼ Mostrar';
+  localStorage.setItem('_histPlannedCollapsed', isHidden ? '0' : '1');
 }
