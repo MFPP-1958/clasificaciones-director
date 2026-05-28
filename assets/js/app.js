@@ -9650,27 +9650,148 @@ async function openHistoryModal(){
   const hist = await _sbLoadHistory();
   _cachedHistory = hist;
 
-  if(!hist.length){
+  // Cargar TAMBIÉN las pruebas planificadas (calendario) para que el director
+  // pueda seleccionar la próxima carrera y empezar a añadir los pre-inscritos.
+  // Antes solo se mostraban las que ya tenían race_type=clasificacion, lo que
+  // obligaba a re-crear manualmente la prueba si solo existía en el calendario.
+  let planned = [];
+  try{
+    if(_sb){
+      const {data, error} = await _sb.from('races')
+        .select('id, name, date, notes')
+        .eq('race_type','planificada')
+        .order('date', {ascending: true});
+      if(!error && Array.isArray(data)){
+        planned = data.map(r=>{
+          let extra = {};
+          try{ extra = JSON.parse(r.notes||'{}'); }catch(e){}
+          return {
+            id: r.id,
+            raceName: r.name,
+            raceDate: formatDateDisplay(_parseSpanishDate(extra.raceDate||r.date||''))||extra.raceDate||r.date||'',
+            rawDate: r.date||'',
+            km: extra.km || '',
+            avg: extra.avg || '',
+            localidad: extra.localidad || '',
+            circuitType: extra.circuitType || '',
+            isPlanificada: true
+          };
+        });
+      }
+    }
+  }catch(e){ console.warn('openHistoryModal · planificadas error', e); }
+
+  if(!hist.length && !planned.length){
     body.innerHTML = '<div class="hist-empty">📭 No hay carreras guardadas todavía.<br><span style="font-size:13px;color:#9ca3af">Carga una clasificación y guárdala con el botón "Guardar carrera en el histórico".</span></div>';
-  } else {
-    const histSorted=hist.slice().sort((a,b)=>{
-      const da=_parseSpanishDate(a.raceDate)||'0000-00-00';
-      const db=_parseSpanishDate(b.raceDate)||'0000-00-00';
-      return db.localeCompare(da);
-    });
-    body.innerHTML = histSorted.map(h=>{
-      const w = h.riders&&h.riders[0]?h.riders[0].name:'—';
-      return `<div class="hist-entry" onclick="loadHistoryEntry('${h.id}')">
+    return;
+  }
+
+  // Combinar y ordenar por fecha desc (las planificadas suelen ser futuras,
+  // así que con desc aparecen arriba — exactamente donde el director las busca).
+  const todayIso = new Date().toISOString().slice(0,10);
+  const merged = [
+    ...planned.map(p=>({ ...p, _kind: 'planificada' })),
+    ...hist.map(h=>({ ...h, _kind: 'clasificacion' }))
+  ];
+  merged.sort((a,b)=>{
+    const da=_parseSpanishDate(a.raceDate)||a.rawDate||'0000-00-00';
+    const db=_parseSpanishDate(b.raceDate)||b.rawDate||'0000-00-00';
+    return db.localeCompare(da);
+  });
+
+  body.innerHTML = merged.map(h=>{
+    if(h._kind === 'planificada'){
+      const iso = _parseSpanishDate(h.raceDate)||h.rawDate||'';
+      const isFuture = iso && iso >= todayIso;
+      const stateBadge = isFuture
+        ? '<span style="display:inline-block;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">📅 No realizada · planificada</span>'
+        : '<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">⏳ Pasada · sin inscritos</span>';
+      const meta = [h.raceDate||'Fecha no indicada', h.localidad||'', h.circuitType||''].filter(Boolean).join(' · ');
+      return `<div class="hist-entry" style="border-left:4px solid #1f6feb;background:#f0f7ff" onclick="loadPlanificadaToCarga('${h.id}')">
         <div>
-          <div class="hist-entry-name">📋 ${escapeHtml(h.raceName||'Carrera sin nombre')}</div>
-          <div class="hist-entry-meta">${escapeHtml(h.raceDate||'Fecha no indicada')} · ${escapeHtml(h.km||'')} · ${h.riders?h.riders.length:0} clasificados · Ganador: ${escapeHtml(w)}</div>
+          <div class="hist-entry-name">📅 ${escapeHtml(h.raceName||'Prueba planificada')}${stateBadge}</div>
+          <div class="hist-entry-meta">${escapeHtml(meta)} · <i>aún sin inscritos · clic para empezar a añadirlos</i></div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <button class="hist-entry-load" onclick="event.stopPropagation();loadHistoryEntry('${h.id}')">▶ Cargar</button>
-          <button class="btn danger" style="padding:6px 10px;font-size:12px" onclick="event.stopPropagation();deleteHistoryEntry('${h.id}')">🗑</button>
+          <button class="hist-entry-load" style="background:#1f6feb" onclick="event.stopPropagation();loadPlanificadaToCarga('${h.id}')">▶ Añadir inscritos</button>
         </div>
       </div>`;
-    }).join('');
+    }
+    const w = h.riders&&h.riders[0]?h.riders[0].name:'—';
+    const hasIns = Array.isArray(h.inscritos) && h.inscritos.length>0;
+    const hasRiders = Array.isArray(h.riders) && h.riders.length>=3;
+    let preBadge = '';
+    if(hasIns && !hasRiders){
+      preBadge = `<span style="display:inline-block;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">📋 ${h.inscritos.length} pre-inscritos · sin clasificar</span>`;
+    } else if(hasIns){
+      preBadge = `<span style="display:inline-block;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">📋 ${h.inscritos.length} inscritos</span>`;
+    }
+    return `<div class="hist-entry" onclick="loadHistoryEntry('${h.id}')">
+      <div>
+        <div class="hist-entry-name">📋 ${escapeHtml(h.raceName||'Carrera sin nombre')}${preBadge}</div>
+        <div class="hist-entry-meta">${escapeHtml(h.raceDate||'Fecha no indicada')} · ${escapeHtml(h.km||'')} · ${h.riders?h.riders.length:0} clasificados · Ganador: ${escapeHtml(w)}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="hist-entry-load" onclick="event.stopPropagation();loadHistoryEntry('${h.id}')">▶ Cargar</button>
+        <button class="btn danger" style="padding:6px 10px;font-size:12px" onclick="event.stopPropagation();deleteHistoryEntry('${h.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Carga una prueba PLANIFICADA en Carga y Resumen para que el director pueda
+// añadir los pre-inscritos. No toca Supabase aquí — la conversión a
+// race_type='clasificacion' se hace después al pulsar "Guardar pre-inscripción"
+// (saveInscritosOnly detecta la planificada existente por fecha y la convierte).
+async function loadPlanificadaToCarga(id){
+  try{
+    if(!_sb){ alert('Supabase no disponible.'); return; }
+    const {data, error} = await _sb.from('races').select('id, name, date, notes').eq('id', id).single();
+    if(error || !data){ alert('No se pudo cargar la prueba planificada.'); return; }
+    let extra = {};
+    try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+    const raceDate = extra.raceDate || data.date || '';
+    const raceDateDisplay = formatDateDisplay(_parseSpanishDate(raceDate)) || raceDate;
+    // Volcar a los campos de Carga y Resumen
+    if($('raceName')) $('raceName').value = data.name || '';
+    if($('raceDate')) $('raceDate').value = raceDateDisplay;
+    if($('raceKm'))   $('raceKm').value   = extra.km || '';
+    if($('raceAvg')){ $('raceAvg').value = extra.avg || ''; delete $('raceAvg').dataset.manual; }
+    if($('raceLocalidad'))   $('raceLocalidad').value   = extra.localidad || '';
+    if($('raceCircuitType')) $('raceCircuitType').value = extra.circuitType || '';
+    if($('raceStartTime'))   $('raceStartTime').value   = extra.hora_inicio || '';
+    // Limpiar riders/inscritos: esta prueba aún no tiene datos
+    if(Array.isArray(riders)) riders.length = 0;
+    inscritos = [];
+    hasValidData = false;
+    selectedCompare = [];
+    if(typeof _updateInscritosUI === 'function') _updateInscritosUI();
+    closeHistoryModal();
+    // Llevar al usuario a Carga y Resumen con los paneles abiertos
+    setTimeout(()=>{
+      showView('view-carga');
+      const body = document.getElementById('loadPanelBody');
+      const chev = document.getElementById('loadChevron');
+      const bar  = document.getElementById('loadBar');
+      if(body && body.classList.contains('collapsed')){
+        body.classList.remove('collapsed');
+        if(chev) chev.classList.remove('closed');
+        if(bar)  bar.classList.add('load-bar-open');
+      }
+      const insBody = document.getElementById('inscritosBody');
+      const insChev = document.getElementById('inscritosChevron');
+      if(insBody && insBody.style.display === 'none'){
+        insBody.style.display = 'block';
+        if(insChev) insChev.textContent = '▼';
+      }
+      if($('fileName')) $('fileName').textContent = 'Prueba planificada cargada: '+(data.name||'')+' · añade los pre-inscritos y guarda';
+      if(typeof showToast==='function'){
+        showToast(`📅 "${data.name}" cargada · ahora pega o sube la lista de inscritos`, 'ok', 4200);
+      }
+    }, 50);
+  }catch(e){
+    console.warn('loadPlanificadaToCarga', e);
+    alert('Error: '+(e.message||e));
   }
 }
 function closeHistoryModal(){
