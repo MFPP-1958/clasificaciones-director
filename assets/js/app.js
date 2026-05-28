@@ -30364,6 +30364,7 @@ function _fccvLoadFirmante(){
   set('fccvFirmaLocalidad','localidad');
   set('fccvFirmaTelefono','telefono');
   set('fccvFirmaEmail','email');
+  set('fccvFirmaMatriculas','matriculas');
   // Auto-llenar equipo desde myTeam si está vacío
   const eqEl = document.getElementById('fccvFirmaEquipo');
   if(eqEl && !eqEl.value){
@@ -30381,6 +30382,7 @@ function _fccvSaveFirmante(){
     localidad: get('fccvFirmaLocalidad'),
     telefono: get('fccvFirmaTelefono'),
     email: get('fccvFirmaEmail'),
+    matriculas: get('fccvFirmaMatriculas'),
     updatedAt: new Date().toISOString()
   };
   localStorage.setItem(FCCV_K_FIRMANTE, JSON.stringify(data));
@@ -30977,6 +30979,50 @@ function _fccvFullName(lic){
   return `${(lic.apellidos||'').trim()}, ${(lic.nombre||'').trim()}`.replace(/^, $/,'(sin nombre)');
 }
 
+// Resuelve la categoría ESPECÍFICA (CAD-1, CAD-2, JUN-1, JUN-2…) de un
+// ciclista. La columna "Cat. Licencia" del Excel suele decir solo "CADETE"
+// o "JUVENIL" en genérico, pero en el Boletín hace falta la versión con
+// dígito porque los premios se reparten por años (cadete-1 vs cadete-2).
+// Buscamos al ciclista en el histórico de la app (race_results) y nos
+// quedamos con la categoría con dígito MÁS FRECUENTE del año en curso.
+// Si no hay datos suficientes, devolvemos la genérica del Excel.
+function _fccvResolveSpecificCat(lic){
+  if(!lic) return '';
+  const generic = (lic.catLicencia||'').trim();
+  try{
+    const hist = (typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+    if(!hist.length) return generic;
+    // Clave de matching: apellido + nombre (normalizado, sin tildes, primer apellido).
+    const key = (typeof normalizeForMatching==='function')
+      ? normalizeForMatching(`${lic.apellidos||''}, ${lic.nombre||''}`)
+      : `${(lic.apellidos||'').toLowerCase()}, ${(lic.nombre||'').toLowerCase()}`;
+    if(!key) return generic;
+    // Recorremos riders e inscritos de cada carrera. Priorizamos riders
+    // (clasificación oficial) porque traen la categoría más fiable.
+    const cats = new Map(); // catEspecífica → contador
+    const ingest = (r) => {
+      const nk = (typeof normalizeForMatching==='function') ? normalizeForMatching(r.name||'') : (r.name||'').toLowerCase();
+      if(nk !== key) return;
+      const c = (r.cat||'').trim();
+      if(!c) return;
+      // Solo nos interesan las que tienen dígito (las específicas)
+      if(!/\d/.test(c)) return;
+      cats.set(c, (cats.get(c)||0)+1);
+    };
+    for(const race of hist){
+      (race.riders||[]).forEach(ingest);
+      (race.inscritos||[]).forEach(ingest);
+    }
+    if(!cats.size) return generic;
+    // Devolver la más frecuente
+    const sorted = [...cats.entries()].sort((a,b)=>b[1]-a[1]);
+    return sorted[0][0];
+  }catch(e){
+    console.warn('_fccvResolveSpecificCat', e);
+    return generic;
+  }
+}
+
 function _fccvSetField(form, fieldName, value){
   if(value == null || value === '') return;
   try{
@@ -31110,7 +31156,7 @@ async function _fccvGenerarBoletin(){
       _fccvSetField(form, `NOMBRE DEL CORREDOR${n}`, _fccvFullName(lic));
       _fccvSetField(form, `LICENCIA${n}`,            lic.dni);
       _fccvSetField(form, `UCI ID${n}`,              lic.uciId);
-      _fccvSetField(form, `CATEGORÍA${n}`,           lic.catLicencia);
+      _fccvSetField(form, `CATEGORÍA${n}`,           _fccvResolveSpecificCat(lic));
     });
 
     // Reservas (mapeo irregular del PDF original):
@@ -31130,7 +31176,7 @@ async function _fccvGenerarBoletin(){
       _fccvSetField(form, m.name, _fccvFullName(lic));
       _fccvSetField(form, m.lic,  lic.dni);
       _fccvSetField(form, m.uci,  lic.uciId);
-      _fccvSetField(form, m.cat,  lic.catLicencia);
+      _fccvSetField(form, m.cat,  _fccvResolveSpecificCat(lic));
     });
 
     // Directores (hasta 2):

@@ -2893,6 +2893,10 @@
                 <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Email</label>
                 <input id="fccvFirmaEmail" placeholder="Ej: contacto@…" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
               </div>
+              <div style="grid-column:1/-1">
+                <label style="display:block;font-size:11px;color:#78350f;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px">Matrículas coches seguidores <span style="font-weight:400;text-transform:none;color:#92400e">(solo CRI · separadas por coma)</span></label>
+                <input id="fccvFirmaMatriculas" placeholder="Ej: 1234-ABC, 5678-DEF" style="width:100%;padding:9px 12px;border:1.5px solid #fbbf24;border-radius:8px;font-size:13px;box-sizing:border-box">
+              </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <button class="btn" onclick="_fccvSaveFirmante()" style="background:#92400e;color:#fff;font-weight:800">💾 Guardar firmante</button>
@@ -3053,6 +3057,7 @@
               </div>
               <button class="btn" onclick="_fccvGenerarBoletin()" style="background:#0369a1;color:#fff;font-weight:800;padding:10px 14px">📋 Generar Boletín</button>
               <button class="btn" onclick="_fccvGenerarAutorizacion()" style="background:#7c3aed;color:#fff;font-weight:800;padding:10px 14px">🛂 Generar Autorización</button>
+              <button class="btn" onclick="_fccvGenerarCRI()" style="background:#ea580c;color:#fff;font-weight:800;padding:10px 14px" title="Inscripción / orden de salida para contrarreloj por equipos">🛣️ Generar CRI</button>
               <button class="btn" onclick="_fccvGenerarAmbos()" style="background:#15803d;color:#fff;font-weight:800;padding:10px 14px">📦 Generar AMBOS</button>
             </div>
             <div style="margin-top:10px;padding-top:10px;border-top:1px solid #86efac;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
