@@ -28005,8 +28005,19 @@ function _cargaFindSimilarRider(insName, allHistRiderNames){
 }
 
 // Análisis completo de inscritos
-function _cargaAnalyzeInscritosVsHistory(insArr){
+async function _cargaAnalyzeInscritosVsHistory(insArr){
   if(!Array.isArray(insArr) || !insArr.length) return null;
+  // ── Garantizar que el histórico está cargado ────────────────────────────
+  // Antes, si la función se invocaba justo después de un guardado (que pone
+  // _cachedHistory = null para refrescar), o nada más cargar la página, el
+  // histórico estaba vacío y TODOS los inscritos salían como "sin histórico".
+  if(!Array.isArray(_cachedHistory) || !_cachedHistory.length){
+    try{
+      if(typeof _sbLoadHistory === 'function'){
+        _cachedHistory = await _sbLoadHistory();
+      }
+    }catch(e){ console.warn('analyze: no se pudo cargar histórico', e); }
+  }
   const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
   // Recolectar todos los nombres únicos del histórico — INCLUYENDO los que
   // solo aparecen en inscritos de otras pruebas (DNFs / no terminadores).
@@ -28050,8 +28061,8 @@ function _cargaAnalyzeInscritosVsHistory(insArr){
 }
 
 // Render del informe enriquecido (sustituye el alert plano)
-function _cargaShowInscritosReportRich(insArr, source){
-  const a = _cargaAnalyzeInscritosVsHistory(insArr);
+async function _cargaShowInscritosReportRich(insArr, source){
+  const a = await _cargaAnalyzeInscritosVsHistory(insArr);
   if(!a){
     if(typeof showToast === 'function') showToast('No se pudo analizar inscritos','warn');
     return;
