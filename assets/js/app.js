@@ -29904,3 +29904,189 @@ async function _cargaRenameLocalidad(oldName){
   alert(`✅ Renombradas ${ok} prueba${ok!==1?'s':''}.${fail?` ❌ Errores: ${fail}.`:''}`);
   _cargaOpenLocalidadManager();
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// SIMULADOR — Informe del Top 10 esperado (compartir / PDF / PNG)
+//   Modal independiente con el Top 10 predicho por la IA en formato
+//   imprimible y limpio, para enviar al jefe de equipo o segundo
+//   director. Reutiliza la marca MFPP y el patrón de impresión de los
+//   otros modales (Pred vs Real, DNFs).
+// ════════════════════════════════════════════════════════════════════════
+
+function _simOpenTop10Report(){
+  try{
+    if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+    const { race, grid, kpis } = _simCurrentData;
+    const catSelEl = document.getElementById('simCatSelect');
+    const catFilter = catSelEl ? (catSelEl.value||'') : '';
+    // Construir el Top 10 igual que la vista (predictedPos asc, filtrado por cat si procede)
+    const pool = grid.filter(g => g.predictedPos != null && (!catFilter || g.cat === catFilter));
+    pool.sort((a,b)=>{
+      const ap = a.predictedPosRaw!=null?a.predictedPosRaw:a.predictedPos;
+      const bp = b.predictedPosRaw!=null?b.predictedPosRaw:b.predictedPos;
+      return ap - bp;
+    });
+    const top10 = pool.slice(0,10);
+    if(!top10.length){ alert('No hay predicciones disponibles para mostrar.'); return; }
+
+    const _pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
+    const ridersWithHist = top10.filter(g => g.hasHistory).length;
+    const avgRelTop10 = (()=>{
+      const rels = top10.map(g => (typeof g.reliability === 'number') ? g.reliability : null).filter(v => v != null);
+      return rels.length ? Math.round(rels.reduce((s,v)=>s+v,0)/rels.length) : null;
+    })();
+    const myInTop10 = top10.filter(g => g.isMyTeam).length;
+
+    const rowsHtml = top10.map((g, i) => {
+      const pos = i+1;
+      const bib = g.bib ? '#'+g.bib : '—';
+      const team = g.team || '—';
+      const cat = g.cat || '';
+      const avg = (typeof g.avgPos === 'number') ? g.avgPos.toFixed(1)+'º' : '—';
+      const best = (typeof g.bestPos === 'number') ? g.bestPos+'º' : (typeof g.best === 'number' ? g.best+'º' : '—');
+      const rel = (typeof g.reliability === 'number') ? g.reliability+'%' : '—';
+      const carrs = (typeof g.nRaces === 'number') ? g.nRaces : (typeof g.races === 'number' ? g.races : '—');
+      const rngLo = (g.predLower!=null) ? g.predLower : null;
+      const rngHi = (g.predUpper!=null) ? g.predUpper : null;
+      const rng = (rngLo!=null && rngHi!=null && rngLo!==rngHi) ? `${rngLo}º–${rngHi}º` : (g.predictedPos!=null?g.predictedPos+'º':'—');
+      const myTeamTag = g.isMyTeam ? ' <span style="color:#1f6feb;font-weight:800">★</span>' : '';
+      // Color de fila: top 3 destacado
+      const bgRow = i < 3 ? '#fef9c3' : (i % 2 === 0 ? '#ffffff' : '#f9fafb');
+      return `<tr style="background:${bgRow}">
+        <td class="st10-pos">${pos}º</td>
+        <td>
+          <div class="st10-name">${escapeHtml(g.name)}${myTeamTag}</div>
+          <div class="st10-meta">${escapeHtml(team)}${cat?' · '+escapeHtml(cat):''} · ${escapeHtml(bib)}</div>
+        </td>
+        <td class="st10-num"><b>${rng}</b><br><span class="st10-small">rango IA</span></td>
+        <td class="st10-num">${avg}<br><span class="st10-small">media</span></td>
+        <td class="st10-num">${best}<br><span class="st10-small">mejor</span></td>
+        <td class="st10-num">${rel}<br><span class="st10-small">fiab.</span></td>
+        <td class="st10-num">${carrs}<br><span class="st10-small">carrs.</span></td>
+      </tr>`;
+    }).join('');
+
+    const meta = `
+      <div class="st10-race-meta">
+        <b>${escapeHtml(race.raceName||'')}</b>
+        ${race.raceDate?` · 📅 ${escapeHtml(race.raceDate)}`:''}
+        ${race.localidad?` · 📍 ${escapeHtml(race.localidad)}`:''}
+        ${race.circuitType?` · 🛣️ ${escapeHtml(race.circuitType)}`:''}
+        ${catFilter?` · 🏷️ Categoría <b>${escapeHtml(catFilter)}</b>`:''}
+      </div>`;
+
+    let overlay = document.getElementById('simTop10Overlay');
+    if(!overlay){
+      overlay = document.createElement('div');
+      overlay.id = 'simTop10Overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+      overlay.addEventListener('click',(e)=>{ if(e.target===overlay) _simCloseTop10Report(); });
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+      <div id="simTop10Box">
+        <div class="st10-header">
+          <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+            ${_pdfLogoSrc?`<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="st10-logo">`:''}
+            <div style="min-width:0">
+              <h2 class="st10-title">🏆 Top 10 esperado · Predicción IA</h2>
+              ${meta}
+            </div>
+          </div>
+          <div class="st10-actions no-print">
+            <button class="btn" onclick="window.print()" style="background:#dc2626;color:#fff;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="_simCloseTop10Report()">✕</button>
+          </div>
+        </div>
+        <div class="st10-kpis">
+          <div class="st10-kpi"><div class="st10-kpi-v" style="color:#0b2f6b">${top10.length}</div><div class="st10-kpi-l">Predicciones</div></div>
+          <div class="st10-kpi"><div class="st10-kpi-v" style="color:#16a34a">${ridersWithHist}</div><div class="st10-kpi-l">Con histórico</div></div>
+          ${avgRelTop10!=null?`<div class="st10-kpi"><div class="st10-kpi-v" style="color:#7c3aed">${avgRelTop10}%</div><div class="st10-kpi-l">Fiabilidad media</div></div>`:''}
+          <div class="st10-kpi"><div class="st10-kpi-v" style="color:#1f6feb">${myInTop10}</div><div class="st10-kpi-l">Mi equipo (★)</div></div>
+        </div>
+        <div style="padding:0 0 6px;font-size:11px;color:#6b7280;text-align:center">
+          Ordenado por <b>Pos. IA ascendente</b> (mejor predicción primero) · ★ = corredor de mi equipo
+        </div>
+        <div class="st10-table-wrap">
+          <table class="st10-table">
+            <thead>
+              <tr>
+                <th style="width:48px">Pos.</th>
+                <th>Ciclista · Equipo · Dorsal</th>
+                <th style="width:90px;text-align:center">Rango IA</th>
+                <th style="width:72px;text-align:center">Media</th>
+                <th style="width:68px;text-align:center">Mejor</th>
+                <th style="width:68px;text-align:center">Fiab.</th>
+                <th style="width:68px;text-align:center">Carrs.</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+        <div class="st10-footer">
+          <div><b>Pos. IA</b> = (0.60 × media últimas 3) + (0.40 × media histórica) × factor cadete × penalización por fiabilidad</div>
+          <div style="margin-top:8px">Informe generado por <b>Dashboard Director · MFPP Cycling Specialist</b> · ${new Date().toLocaleString('es-ES')}</div>
+        </div>
+      </div>`;
+
+    _simInjectTop10Styles();
+    document.body.style.overflow = 'hidden';
+  }catch(e){
+    console.warn('_simOpenTop10Report', e);
+    alert('Error al abrir el informe: '+(e.message||e));
+  }
+}
+
+function _simCloseTop10Report(){
+  const ov = document.getElementById('simTop10Overlay');
+  if(ov) ov.remove();
+  document.body.style.overflow = '';
+}
+
+function _simInjectTop10Styles(){
+  if(document.getElementById('sim-top10-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'sim-top10-styles';
+  st.textContent = `
+    #simTop10Box{background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);padding:0}
+    .st10-logo{height:48px;width:auto;flex-shrink:0;object-fit:contain}
+    .st10-title{margin:0;font-size:20px;color:#0b2f6b}
+    .st10-race-meta{font-size:13px;color:#374151;margin-top:4px}
+    .st10-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .st10-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:16px 20px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
+    .st10-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:14px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
+    .st10-kpi{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center}
+    .st10-kpi-v{font-size:24px;font-weight:900;line-height:1.1}
+    .st10-kpi-l{font-size:11px;color:#6b7280;margin-top:4px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+    .st10-table-wrap{padding:0 16px 16px;overflow-x:auto}
+    .st10-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+    .st10-table th,.st10-table td{padding:7px 8px;border:1px solid #e5e7eb;vertical-align:middle}
+    .st10-table th{background:#1f6feb;color:#fff;font-size:11px;text-align:left;text-transform:uppercase;letter-spacing:.3px}
+    .st10-pos{font-weight:900;font-size:16px;text-align:center;color:#0b2f6b;background:#f9fafb;width:48px}
+    .st10-name{font-weight:800;color:#0b2f6b;font-size:13.5px}
+    .st10-meta{font-size:11px;color:#6b7280;margin-top:1px}
+    .st10-num{text-align:center;font-weight:700;color:#374151}
+    .st10-small{display:block;font-size:9.5px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-top:1px}
+    .st10-footer{padding:14px 20px 18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;text-align:center;line-height:1.55}
+    @media print {
+      body * { visibility: hidden !important; }
+      #simTop10Overlay, #simTop10Overlay * { visibility: visible !important; }
+      #simTop10Overlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
+      #simTop10Box { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
+      .no-print { display: none !important; }
+      .st10-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
+      .st10-logo { height: 56px !important; }
+      .st10-title { font-size: 22px !important; }
+      .st10-kpis { background: #fff !important; padding: 0 !important; border-bottom: 0 !important; margin-bottom: 8px !important; }
+      .st10-kpi { border: 1px solid #999 !important; }
+      .st10-table-wrap { padding: 0 !important; margin-top: 8px !important; }
+      .st10-table th, .st10-table td { border: 1px solid #999 !important; }
+      .st10-table th { background: #1f6feb !important; color: #fff !important; }
+      .st10-table { font-size: 10.5px !important; }
+      .st10-footer { padding: 10px 0 0 !important; margin-top: 12px !important; }
+      #simTop10Box, #simTop10Box * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    }
+    @page { margin: 0; size: A4; }
+  `;
+  document.head.appendChild(st);
+}

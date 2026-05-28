@@ -1605,7 +1605,14 @@
       <section class="panel" id="simTopPanel" style="display:none">
         <div class="section-title">
           <h2 style="margin:0">🏆 Top 10 esperado (predicción IA)</h2>
-          <span class="small">Pondera puesto medio + fiabilidad</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="small">Pondera puesto medio + fiabilidad</span>
+            <button class="btn light" onclick="_simOpenTop10Report()" id="simTop10ReportBtn"
+              style="background:#7c3aed;color:#fff;border:0;font-weight:800;font-size:12px;padding:7px 13px"
+              title="Abrir informe imprimible del Top 10 esperado (PDF / PNG)">
+              📤 Compartir / PDF
+            </button>
+          </div>
         </div>
 
         <details class="sim-help">
