@@ -19102,26 +19102,34 @@ function _buildYearRiderIndex(year){
 
   const idx = new Map(); // nameKey → {bibs, cats, lastBib, lastTeam, lastDate}
   const yStr = String(year);
+  // Helper para acumular una aparición (de riders o de inscritos)
+  const ingest = (h, r, iso) => {
+    const nk = normalizeForMatching(r.name||'');
+    if(!nk) return;
+    let entry = idx.get(nk);
+    if(!entry){
+      entry = { bibs:new Map(), cats:new Map(), lastBib:'', lastTeam:'', lastDate:'0000-00-00' };
+      idx.set(nk, entry);
+    }
+    if(r.bib){ entry.bibs.set(String(r.bib), (entry.bibs.get(String(r.bib))||0)+1); }
+    if(r.cat){ entry.cats.set(r.cat, (entry.cats.get(r.cat)||0)+1); }
+    if(iso && iso > entry.lastDate){
+      entry.lastDate = iso;
+      if(r.bib)  entry.lastBib  = String(r.bib);
+      if(r.team) entry.lastTeam = r.team;
+    }
+  };
   hist.forEach(h=>{
-    const ry = (_parseSpanishDate(h.raceDate)||'').slice(0,4);
+    const iso = _parseSpanishDate(h.raceDate)||'';
+    const ry = iso.slice(0,4);
     if(ry !== yStr) return;
-    (h.riders||[]).forEach(r=>{
-      const nk = normalizeForMatching(r.name||'');
-      if(!nk) return;
-      let entry = idx.get(nk);
-      if(!entry){
-        entry = { bibs:new Map(), cats:new Map(), lastBib:'', lastTeam:'', lastDate:'0000-00-00' };
-        idx.set(nk, entry);
-      }
-      if(r.bib){ entry.bibs.set(String(r.bib), (entry.bibs.get(String(r.bib))||0)+1); }
-      if(r.cat){ entry.cats.set(r.cat, (entry.cats.get(r.cat)||0)+1); }
-      const iso = _parseSpanishDate(h.raceDate)||'';
-      if(iso && iso > entry.lastDate){
-        entry.lastDate = iso;
-        if(r.bib) entry.lastBib = String(r.bib);
-        if(r.team) entry.lastTeam = r.team;
-      }
-    });
+    // 1) Clasificados (datos más fiables — los procesamos primero)
+    (h.riders||[]).forEach(r => ingest(h, r, iso));
+    // 2) Inscritos (importante para corredores que NUNCA han acabado:
+    //    DNFs o pre-inscritos a pruebas futuras). Antes se ignoraban y por
+    //    eso aparecían como "🆕 sin historial · sin dorsal" tras procesar
+    //    una nueva startlist.
+    (h.inscritos||[]).forEach(i => ingest(h, i, iso));
   });
   _yearRiderIdxCache = idx;
   _yearRiderIdxKey = key;
