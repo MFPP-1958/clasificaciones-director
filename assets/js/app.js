@@ -29385,7 +29385,9 @@ function _simInjectPVRStyles(){
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
       body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #pvrModalOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
-      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
+      /* Sin padding interno: dejamos que @page margin gestione TODOS los
+         márgenes, así también se respetan en los saltos de página. */
+      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 0 !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .pvr-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
       .pvr-logo { height: 52px !important; }
@@ -29397,7 +29399,7 @@ function _simInjectPVRStyles(){
       .pvr-footer { padding: 10px 0 0 !important; margin-top: 12px !important; }
       #pvrModalBox, #pvrModalBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
-    @page { margin: 0; size: A4; }
+    @page { margin: 22mm 14mm 18mm 14mm; size: A4; }
   `;
   document.head.appendChild(st);
 }
@@ -29865,7 +29867,7 @@ function _aiInjectDNFStyles(){
       body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #aiDnfOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
       /* Margen real DENTRO del documento (no depende del @page del navegador) */
-      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
+      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 0 !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .ai-dnf-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 14px 0 !important; margin-bottom: 12px !important; }
       .ai-dnf-logo { height: 58px !important; }
@@ -29883,7 +29885,7 @@ function _aiInjectDNFStyles(){
       #aiDnfBox, #aiDnfBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
     /* @page a 0 para que NO compita con el padding interno; los márgenes están ya en #aiDnfBox */
-    @page { margin: 0; size: A4; }
+    @page { margin: 22mm 14mm 18mm 14mm; size: A4; }
   `;
   document.head.appendChild(st);
 }
@@ -30230,7 +30232,7 @@ function _simInjectTop10Styles(){
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
       body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #simTop10Overlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
-      #simTop10Box { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
+      #simTop10Box { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 0 !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .st10-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
       .st10-logo { height: 56px !important; }
@@ -30244,7 +30246,7 @@ function _simInjectTop10Styles(){
       .st10-footer { padding: 10px 0 0 !important; margin-top: 12px !important; }
       #simTop10Box, #simTop10Box * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
-    @page { margin: 0; size: A4; }
+    @page { margin: 22mm 14mm 18mm 14mm; size: A4; }
   `;
   document.head.appendChild(st);
 }
@@ -30419,7 +30421,7 @@ function _simInjectTeamsStyles(){
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
       body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #simTeamsOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
-      #simTeamsBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
+      #simTeamsBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 0 !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .stm-header { border-bottom: 2px solid #854d0e !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
       .stm-logo { height: 56px !important; }
@@ -30431,7 +30433,7 @@ function _simInjectTeamsStyles(){
       .stm-footer { padding: 10px 0 0 !important; margin-top: 12px !important; }
       #simTeamsBox, #simTeamsBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
-    @page { margin: 0; size: A4; }
+    @page { margin: 22mm 14mm 18mm 14mm; size: A4; }
   `;
   document.head.appendChild(st);
 }
