@@ -31926,3 +31926,351 @@ async function _ccaaBulkApplyGuess(){
   if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
   if(status) status.innerHTML = `✅ ${ok} marcadas como CV${fail?` · ❌ ${fail} fallos`:''}. Cierra y vuelve a abrir para refrescar la lista.`;
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// FCCV · Capa Supabase (Fase 2)
+//   Sincroniza licencias_fccv y team_settings_fccv con Supabase manteniendo
+//   localStorage como caché local. Patrón:
+//     - Las funciones existentes (_fccvGetLicencias, _fccvGetFirmante…)
+//       siguen siendo SÍNCRONAS y leen de localStorage. No cambia el resto
+//       del código.
+//     - Al entrar en la vista FCCV se dispara _fccvDbSyncFromCloud() que
+//       actualiza localStorage desde Supabase si la nube tiene datos.
+//     - Al importar Excel o guardar firmante también se PUSHEA a la nube
+//       en segundo plano (best-effort, no bloquea la UI).
+//     - Botón "☁️ Subir mis licencias actuales a la nube" para forzar
+//       una sincronización local → nube cuando el director quiera.
+// ════════════════════════════════════════════════════════════════════════
+
+let _fccvDbLastSync = null; // ISO de la última sincronización exitosa
+
+// — Helper: equipo activo (key para team_settings_fccv) —
+function _fccvDbTeamKey(){
+  // Usamos el equipo persistente del director como clave única. Si no hay,
+  // caemos a 'default' para que la fila exista de todos modos.
+  const t = (localStorage.getItem('myTeam')||'').trim();
+  return t || 'default';
+}
+
+// — Pull desde Supabase y vuelca a localStorage (preserva la caché actual
+//   si la nube responde vacía y el local tiene datos: nunca destruimos local
+//   por nube vacía, porque podría ser un fallo de RLS o un cambio en curso).
+async function _fccvDbSyncFromCloud(){
+  if(!_sb) return { ok:false, reason:'sb_unavailable' };
+  try{
+    const [{data: lic, error: e1}, {data: tset, error: e2}] = await Promise.all([
+      _sb.from('licencias_fccv').select('*'),
+      _sb.from('team_settings_fccv').select('*').eq('team_key', _fccvDbTeamKey()).limit(1)
+    ]);
+    if(e1) throw new Error('licencias: '+e1.message);
+    if(e2) throw new Error('team_settings: '+e2.message);
+    // licencias_fccv: solo sobreescribimos local si la nube TIENE datos.
+    if(Array.isArray(lic) && lic.length > 0){
+      // Mapear los campos del DB a la forma que usa el código existente.
+      const mapped = lic.map(r => ({
+        dni:           r.dni||'',
+        nombre:        r.nombre||'',
+        apellidos:     r.apellidos||'',
+        uciId:         r.uci_id||'',
+        fechaNac:      r.fecha_nac||'',
+        telefono:      r.telefono||'',
+        email:         r.email||'',
+        provincia:     r.provincia||'',
+        localidad:     r.localidad||'',
+        domicilio:     r.domicilio||'',
+        cp:            r.cp||'',
+        temporada:     r.temporada,
+        catLicencia:   r.cat_licencia||'',
+        especialidad:  r.especialidad||'',
+        equipo:        r.equipo||'',
+        tipo:          r.tipo||'',
+        importedAt:    r.imported_at||'',
+      }));
+      _fccvSetLicencias(mapped);
+    }
+    // team_settings_fccv: sobreescribimos local solo si hay fila.
+    if(Array.isArray(tset) && tset.length === 1){
+      const t = tset[0];
+      const firm = {
+        nombre:    t.firmante_nombre||'',
+        cargo:     t.firmante_cargo||'',
+        equipo:    t.firmante_equipo||'',
+        localidad: t.firmante_localidad||'',
+        telefono:  t.firmante_telefono||'',
+        email:     t.firmante_email||'',
+        matriculas: t.matriculas_coches||'',
+        updatedAt: t.updated_at||''
+      };
+      localStorage.setItem(FCCV_K_FIRMANTE, JSON.stringify(firm));
+    }
+    _fccvDbLastSync = new Date().toISOString();
+    return { ok:true, n:lic?.length||0 };
+  }catch(e){
+    console.warn('[fccvDb] syncFromCloud falló', e);
+    return { ok:false, reason:'error', message:e.message };
+  }
+}
+
+// — Push desde localStorage hacia Supabase (upsert por dni+temporada).
+//   Pensado para el botón manual "Subir mis licencias actuales a la nube"
+//   y para la migración inicial (Fase 3).
+async function _fccvDbPushAllFromLocal(){
+  if(!_sb) return { ok:false, reason:'sb_unavailable' };
+  // Comprobación de rol: solo SUPERADMIN puede escribir (enforce client-side
+  // siguiendo el mismo modelo que el resto de la app).
+  if(typeof _rbacUser === 'object' && _rbacUser && _rbacUser.role !== 'SUPERADMIN'){
+    return { ok:false, reason:'not_superadmin' };
+  }
+  try{
+    const local = _fccvGetLicencias();
+    let licOk = 0, licFail = 0;
+    if(local && local.length){
+      const rows = local.map(l => ({
+        dni:           l.dni,
+        nombre:        l.nombre||'',
+        apellidos:     l.apellidos||'',
+        uci_id:        l.uciId||null,
+        fecha_nac:     l.fechaNac && /^\d{4}-\d{2}-\d{2}$/.test(l.fechaNac) ? l.fechaNac : null,
+        telefono:      l.telefono||null,
+        email:         l.email||null,
+        provincia:     l.provincia||null,
+        localidad:     l.localidad||null,
+        domicilio:     l.domicilio||null,
+        cp:            l.cp||null,
+        temporada:     l.temporada || new Date().getFullYear(),
+        cat_licencia:  l.catLicencia||null,
+        especialidad:  l.especialidad||null,
+        equipo:        l.equipo||null,
+        tipo:          l.tipo||'cadete'
+      }));
+      // Upsert por chunks de 100 para no pasarse del tamaño de payload.
+      const CHUNK = 100;
+      for(let i=0; i<rows.length; i+=CHUNK){
+        const slice = rows.slice(i, i+CHUNK);
+        const { error } = await _sb.from('licencias_fccv')
+          .upsert(slice, { onConflict:'dni,temporada' });
+        if(error){ licFail += slice.length; console.warn('[fccvDb] upsert chunk', error); }
+        else licOk += slice.length;
+      }
+    }
+    // Firmante / team_settings
+    const firm = _fccvGetFirmante();
+    let firmOk = false;
+    if(firm && (firm.nombre || firm.equipo || firm.matriculas)){
+      const row = {
+        team_key:           _fccvDbTeamKey(),
+        firmante_nombre:    firm.nombre||null,
+        firmante_cargo:     firm.cargo||null,
+        firmante_equipo:    firm.equipo||null,
+        firmante_localidad: firm.localidad||null,
+        firmante_telefono:  firm.telefono||null,
+        firmante_email:     firm.email||null,
+        matriculas_coches:  firm.matriculas||null
+      };
+      const { error } = await _sb.from('team_settings_fccv')
+        .upsert(row, { onConflict:'team_key' });
+      if(error){ console.warn('[fccvDb] upsert team_settings', error); }
+      else firmOk = true;
+    }
+    _fccvDbLastSync = new Date().toISOString();
+    return { ok:true, licOk, licFail, firmOk };
+  }catch(e){
+    console.warn('[fccvDb] pushAll falló', e);
+    return { ok:false, reason:'error', message:e.message };
+  }
+}
+
+// — Push de UN firmante a la nube (best-effort, no bloquea la UI).
+//   Hook que llamamos desde _fccvSaveFirmante (Fase 2.b).
+async function _fccvDbPushFirmante(){
+  if(!_sb) return;
+  if(typeof _rbacUser === 'object' && _rbacUser && _rbacUser.role !== 'SUPERADMIN') return;
+  const firm = _fccvGetFirmante();
+  if(!firm || (!firm.nombre && !firm.equipo)) return;
+  try{
+    await _sb.from('team_settings_fccv').upsert({
+      team_key:           _fccvDbTeamKey(),
+      firmante_nombre:    firm.nombre||null,
+      firmante_cargo:     firm.cargo||null,
+      firmante_equipo:    firm.equipo||null,
+      firmante_localidad: firm.localidad||null,
+      firmante_telefono:  firm.telefono||null,
+      firmante_email:     firm.email||null,
+      matriculas_coches:  firm.matriculas||null
+    }, { onConflict:'team_key' });
+  }catch(e){ console.warn('[fccvDb] pushFirmante', e); }
+}
+
+// — Push de licencias importadas a la nube (chunks, async, best-effort).
+//   Hook que llamamos desde _fccvImportExcel (Fase 2.c).
+async function _fccvDbPushLicencias(licArr){
+  if(!_sb || !Array.isArray(licArr) || !licArr.length) return { ok:false };
+  if(typeof _rbacUser === 'object' && _rbacUser && _rbacUser.role !== 'SUPERADMIN') return { ok:false, reason:'not_superadmin' };
+  const rows = licArr.map(l => ({
+    dni:           l.dni,
+    nombre:        l.nombre||'',
+    apellidos:     l.apellidos||'',
+    uci_id:        l.uciId||null,
+    fecha_nac:     l.fechaNac && /^\d{4}-\d{2}-\d{2}$/.test(l.fechaNac) ? l.fechaNac : null,
+    telefono:      l.telefono||null,
+    email:         l.email||null,
+    provincia:     l.provincia||null,
+    localidad:     l.localidad||null,
+    domicilio:     l.domicilio||null,
+    cp:            l.cp||null,
+    temporada:     l.temporada || new Date().getFullYear(),
+    cat_licencia:  l.catLicencia||null,
+    especialidad:  l.especialidad||null,
+    equipo:        l.equipo||null,
+    tipo:          l.tipo||'cadete'
+  }));
+  try{
+    const CHUNK = 100;
+    let ok = 0, fail = 0;
+    for(let i=0; i<rows.length; i+=CHUNK){
+      const slice = rows.slice(i, i+CHUNK);
+      const { error } = await _sb.from('licencias_fccv').upsert(slice, { onConflict:'dni,temporada' });
+      if(error){ fail += slice.length; }
+      else ok += slice.length;
+    }
+    return { ok:true, pushed:ok, failed:fail };
+  }catch(e){
+    console.warn('[fccvDb] pushLicencias', e);
+    return { ok:false, message:e.message };
+  }
+}
+
+// — UI: botón "Subir mis licencias actuales a la nube" + estado de sync —
+function _fccvRenderDbStatusBar(){
+  // Insertamos una barra justo encima del bloque "Importar listados Excel".
+  // Solo se monta una vez (idempotente).
+  const importBlock = document.querySelector('#fccvPanelLicencias [onchange*="_fccvImportExcel"]');
+  if(!importBlock) return; // panel aún no renderizado
+  if(document.getElementById('fccvDbStatusBar')) return;
+  const container = importBlock.closest('div[style*="background:#eff6ff"]');
+  if(!container) return;
+  const bar = document.createElement('div');
+  bar.id = 'fccvDbStatusBar';
+  bar.style.cssText = 'background:#ecfeff;border:1px solid #67e8f9;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px';
+  bar.innerHTML = `
+    <div style="flex:1;min-width:200px">
+      <div style="font-weight:800;color:#155e75">☁️ Sincronización con la nube (Supabase)</div>
+      <div id="fccvDbStatusText" style="font-size:11px;color:#0e7490;margin-top:2px">Comprobando...</div>
+    </div>
+    <button id="fccvDbBtnPull" class="btn light" onclick="_fccvDbDoPull()" style="font-size:11px;padding:5px 10px;background:#fff;border:1px solid #06b6d4;color:#155e75;font-weight:700">⬇️ Bajar de la nube</button>
+    <button id="fccvDbBtnPush" class="btn light" onclick="_fccvDbDoPush()" style="font-size:11px;padding:5px 10px;background:#06b6d4;border:0;color:#fff;font-weight:800">⬆️ Subir mis licencias a la nube</button>
+  `;
+  container.parentNode.insertBefore(bar, container);
+  _fccvDbRefreshStatusText();
+}
+
+function _fccvDbRefreshStatusText(){
+  const el = document.getElementById('fccvDbStatusText');
+  if(!el) return;
+  const local = _fccvGetLicencias();
+  const last = _fccvDbLastSync ? new Date(_fccvDbLastSync).toLocaleString('es-ES') : 'aún no';
+  const isAdmin = (typeof _rbacUser === 'object' && _rbacUser && _rbacUser.role === 'SUPERADMIN');
+  el.innerHTML = `Local: <b>${local.length}</b> licencias · Última sincronización: <b>${last}</b>${isAdmin?'':' · <span style="color:#92400e">⚠️ Solo SUPERADMIN puede subir/bajar</span>'}`;
+}
+
+async function _fccvDbDoPull(){
+  const text = document.getElementById('fccvDbStatusText');
+  if(text) text.innerHTML = '⏳ Bajando desde la nube...';
+  const r = await _fccvDbSyncFromCloud();
+  if(r.ok){
+    _fccvRenderLicencias();
+    _fccvLoadFirmante();
+    _fccvDbRefreshStatusText();
+    const tt = document.getElementById('fccvDbStatusText');
+    if(tt) tt.innerHTML = `✅ Bajadas <b>${r.n}</b> licencias desde la nube · ${new Date().toLocaleTimeString('es-ES')}`;
+  } else {
+    if(text) text.innerHTML = `❌ Error bajando: ${r.message||r.reason||'desconocido'}`;
+  }
+}
+
+async function _fccvDbDoPush(){
+  const local = _fccvGetLicencias();
+  const firm = _fccvGetFirmante();
+  if(!local.length && !firm.nombre){
+    alert('No tienes licencias ni firmante en local para subir.');
+    return;
+  }
+  if(!confirm(`Vas a subir a la nube:\n\n  • ${local.length} licencias\n  • Datos del firmante: ${firm.nombre||'(vacío)'}\n  • Matrículas: ${firm.matriculas||'(vacías)'}\n\nLas licencias se actualizan por (DNI + temporada): si una ya existe en la nube, se sobreescribe; si no, se crea.\n\n¿Continuar?`)) return;
+  const text = document.getElementById('fccvDbStatusText');
+  if(text) text.innerHTML = '⏳ Subiendo a la nube...';
+  const r = await _fccvDbPushAllFromLocal();
+  if(r.ok){
+    if(text) text.innerHTML = `✅ Subidas <b>${r.licOk}</b> licencias${r.licFail?` · ❌ ${r.licFail} fallos`:''} · firmante: ${r.firmOk?'✅':'(sin cambios)'}`;
+    _fccvDbRefreshStatusText();
+  } else if(r.reason === 'not_superadmin'){
+    if(text) text.innerHTML = '❌ Solo SUPERADMIN puede subir a la nube. Cambia de usuario en la pantalla de login.';
+  } else {
+    if(text) text.innerHTML = `❌ Error subiendo: ${r.message||r.reason||'desconocido'}`;
+  }
+}
+
+// — Enlazar la sincronización inicial al entrar en la pestaña Licencias —
+(function(){
+  const _origShowTab = (typeof _fccvShowTab === 'function') ? _fccvShowTab : null;
+  if(!_origShowTab) return;
+  window._fccvShowTab = function(tab){
+    _origShowTab.apply(this, arguments);
+    if(tab === 'licencias'){
+      // Render la barra de estado y dispara una sincronización en cuanto se
+      // pueda. Si la nube tiene datos, se reemplaza el local; si no, no se
+      // toca nada.
+      setTimeout(async () => {
+        _fccvRenderDbStatusBar();
+        const r = await _fccvDbSyncFromCloud();
+        if(r.ok && r.n > 0){
+          _fccvRenderLicencias();
+          _fccvLoadFirmante();
+        }
+        _fccvDbRefreshStatusText();
+      }, 60);
+    }
+  };
+})();
+
+// — Hook al guardado del firmante para pushear a la nube en segundo plano —
+(function(){
+  const _origSave = (typeof _fccvSaveFirmante === 'function') ? _fccvSaveFirmante : null;
+  if(!_origSave) return;
+  window._fccvSaveFirmante = function(){
+    const r = _origSave.apply(this, arguments);
+    // Push best-effort (no bloquea, no muestra error si falla — el local ya está guardado).
+    _fccvDbPushFirmante();
+    return r;
+  };
+})();
+
+// — Hook al importador Excel para pushear las licencias importadas a la nube —
+(function(){
+  const _origImport = (typeof _fccvImportExcel === 'function') ? _fccvImportExcel : null;
+  if(!_origImport) return;
+  window._fccvImportExcel = async function(ev, importedAs){
+    // Capturamos el snapshot ANTES de la importación para saber qué se añadió/cambió.
+    const before = _fccvGetLicencias();
+    const beforeKeys = new Set(before.map(l => l.dni+'|'+l.temporada));
+    // Ejecutamos el flujo original
+    await _origImport.apply(this, [ev, importedAs]);
+    // Tras importar, calculamos el delta (cambios o nuevos) y los pusheamos.
+    const after = _fccvGetLicencias();
+    const delta = after.filter(l => {
+      const key = l.dni+'|'+l.temporada;
+      if(!beforeKeys.has(key)) return true; // nuevo
+      const prev = before.find(x => (x.dni+'|'+x.temporada) === key);
+      // Comparación somera por importedAt: si _fccvImportExcel marcó el item como
+      // actualizado, su importedAt habrá cambiado.
+      return prev && prev.importedAt !== l.importedAt;
+    });
+    if(delta.length){
+      const r = await _fccvDbPushLicencias(delta);
+      const text = document.getElementById('fccvDbStatusText');
+      if(text && r && r.ok){
+        text.innerHTML = `☁️ Subidas <b>${r.pushed}</b> licencias a la nube tras importar${r.failed?` · ❌ ${r.failed} fallos`:''}`;
+      }
+    }
+    _fccvDbRefreshStatusText();
+  };
+})();
