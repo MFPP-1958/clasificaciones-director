@@ -31402,14 +31402,26 @@ async function _fccvGenerarCRI(){
     const firm = _fccvGetFirmante();
 
     _fccvSetField(form, 'Nombre de la Prueba', document.getElementById('fccvPRname').value);
-    _fccvSetField(form, 'Localidad',           document.getElementById('fccvPRlugar').value);
-    const f = _fccvSplitFecha(document.getElementById('fccvPRfecha').value);
-    _fccvSetField(form, 'Día', f.dia);
-    _fccvSetField(form, 'Mes', f.mes);
-    _fccvSetField(form, 'Año', f.anio);
+    // Los campos Localidad / Día / Mes / Año del PDF están en la zona de
+    // FIRMA al pie, no son la fecha de la prueba sino "donde y cuándo se
+    // firma el documento". Usamos la localidad del firmante (Castellón) y
+    // la fecha del día en que se genera el informe — lo que la FCCV
+    // espera ver cuando recibe el documento.
+    const today = new Date();
+    _fccvSetField(form, 'Localidad', firm.localidad||'');
+    _fccvSetField(form, 'Día',       String(today.getDate()));
+    _fccvSetField(form, 'Mes',       String(today.getMonth()+1));
+    _fccvSetField(form, 'Año',       String(today.getFullYear()));
     _fccvSetField(form, 'Equipo/Club',          firm.equipo||'');
     _fccvSetField(form, 'Categoría del equipo', document.getElementById('fccvPRcategoria').value);
-    _fccvSetField(form, 'Matrículas Coches Seguidoras Campeonato', firm.matriculas||'');
+    // Matrículas: la plantilla tiene 3 cuadritos separados. Si el director
+    // pone "1234-ABC, 5678-DEF, 9012-GHI" en el firmante, ponemos una
+    // matrícula por cuadrito (1ª, 2ª, 3ª). Si pone solo una o dos, los
+    // huecos sobrantes quedan vacíos.
+    const matriculas = (firm.matriculas||'').split(/[,;]/).map(s=>s.trim()).filter(Boolean);
+    if(matriculas[0]) _fccvSetField(form, 'Matrículas Coches Seguidoras Campeonato', matriculas[0]);
+    if(matriculas[1]) _fccvSetField(form, 'Matrícula 2', matriculas[1]);
+    if(matriculas[2]) _fccvSetField(form, 'Matrícula 3', matriculas[2]);
 
     const dirLic = _fccvDniToLic(document.getElementById('fccvStaffDir').value);
     if(dirLic){
