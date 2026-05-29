@@ -31353,11 +31353,46 @@ async function _fccvGenerarAmbos(){
 
 const FCCV_TPL_CRI = 'assets/templates/cri-fccv.pdf';
 
-// Resuelve el dorsal más reciente conocido del ciclista. Como el Excel
-// no trae dorsal (solo DNI = licencia), miramos en _cachedHistory: tanto
-// inscritos como riders de carreras previas. Si nunca se ha visto su
-// dorsal en la app, devolvemos cadena vacía y el director lo escribirá
-// a mano en el PDF generado.
+// Localidades CV reconocidas (fallback cuando no hay region por ciclista).
+// Lista no exhaustiva pero cubre las habituales del calendario cadete.
+const _FCCV_CV_LOCS = ['cocentaina','nules','castell','valencia','val.','valéncia','alicante','alacant','denia','dénia','jávea','javea','xàbia','xabia','elche','elx','altea','calpe','calp','benidorm','torrevieja','sagunto','sagunt','villarreal','vila-real','vila real','onda','peníscola','peniscola','vinaròs','vinaros','gandia','xàtiva','xativa','san vicente','sant vicent','raspeig','almoradi','benicarló','benicarlo','la nucia','la nucía','silla','paterna','torrent','algemesí','algemesi','dénia','dianense','elda','petrer','santa pola','crevillent','crevillente','el campello','campello','villena','aspe','novelda','ibi','alcoi','alcoy','muro','bocairent','requena','cheste','llíria','liria','bétera','betera','pobla de farnals','el puig','catarroja','sueca','cullera','tavernes','xeraco','oliva','pego','benisa','calpe','teulada','poble nou','novelé','novele','ondara','beniarbeig','vinalopó'];
+
+// ¿La carrera se celebró en la Comunitat Valenciana?
+// Heurística con dos pasos:
+//   1) Mayoría de corredores con region "Comunitat Valenciana" → CV
+//   2) Localidad de la prueba en la lista CV conocida → CV
+// Si nada concluye, devolvemos null (incierto) y NO usamos esa carrera
+// para resolver dorsales — más seguro que asumir CV y poner el dorsal
+// equivocado de Villarrobledo.
+function _fccvIsCVRace(race){
+  if(!race) return null;
+  // Marcador manual si existe
+  if(typeof race.ccaa === 'string' && race.ccaa){
+    return /valencia/i.test(race.ccaa);
+  }
+  // Por riders region (más fiable)
+  const riders = race.riders || [];
+  const withRegion = riders.filter(r => r.region);
+  if(withRegion.length >= 5){
+    const cv = withRegion.filter(r => /valencia/i.test(r.region||'')).length;
+    return cv / withRegion.length >= 0.5;
+  }
+  // Por localidad
+  const loc = (race.localidad||'').toLowerCase().trim();
+  if(loc && _FCCV_CV_LOCS.some(l => loc.includes(l))) return true;
+  // Por nombre de la prueba (último recurso)
+  const name = (race.raceName||'').toLowerCase();
+  if(/c\.?\s*valenciana|comunitat|comunidad valenciana|cv\b/.test(name)) return true;
+  // No podemos decidir
+  return null;
+}
+
+// Resuelve el dorsal OFICIAL de la Comunidad Valenciana del ciclista.
+// IMPORTANTE: en CV cada ciclista tiene un dorsal anual fijo que se usa
+// en TODAS las pruebas autonómicas. Cuando viajan fuera (p.ej. Villarrobledo)
+// el organizador asigna un dorsal temporal distinto que NO debemos usar
+// para los documentos federativos. Por eso filtramos a carreras CV y
+// elegimos el dorsal más reciente y más frecuente dentro de ellas.
 function _fccvResolveBib(lic){
   if(!lic) return '';
   try{
@@ -31367,22 +31402,43 @@ function _fccvResolveBib(lic){
       ? normalizeForMatching(`${lic.apellidos||''}, ${lic.nombre||''}`)
       : `${(lic.apellidos||'').toLowerCase()}, ${(lic.nombre||'').toLowerCase()}`;
     if(!key) return '';
-    let bestBib = '', bestDate = '0000-00-00';
-    const check = (r, raceDate) => {
+
+    // Recolectar todos los dorsales del ciclista, anotando si vienen de
+    // una carrera CV (cv=true), no-CV (cv=false) o incierta (cv=null).
+    const found = []; // [{bib, date, cv}]
+    const collect = (r, race) => {
       if(!r || !r.bib) return;
       const nk = (typeof normalizeForMatching==='function') ? normalizeForMatching(r.name||'') : (r.name||'').toLowerCase();
       if(nk !== key) return;
-      const iso = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(raceDate||'') : '') || '';
-      if(iso >= bestDate){
-        bestDate = iso;
-        bestBib = String(r.bib);
-      }
+      const iso = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(race.raceDate||'') : '') || '';
+      found.push({ bib: String(r.bib), date: iso, cv: _fccvIsCVRace(race) });
     };
     for(const race of hist){
-      (race.riders||[]).forEach(r => check(r, race.raceDate));
-      (race.inscritos||[]).forEach(r => check(r, race.raceDate));
+      (race.riders||[]).forEach(r => collect(r, race));
+      (race.inscritos||[]).forEach(r => collect(r, race));
     }
-    return bestBib;
+    if(!found.length) return '';
+
+    // 1) Quedarnos solo con los apariciones en carreras CV confirmadas.
+    const cvOnes = found.filter(f => f.cv === true);
+    if(cvOnes.length){
+      // De entre los CV, el dorsal MÁS FRECUENTE (no el más reciente —
+      // el dorsal CV es fijo durante el año, así que la moda manda).
+      const counts = new Map();
+      cvOnes.forEach(f => counts.set(f.bib, (counts.get(f.bib)||0)+1));
+      const sorted = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
+      return sorted[0][0];
+    }
+    // 2) Si no hay carreras CV identificadas pero sí inciertas, usamos la
+    //    incierta más reciente (mejor que dejar en blanco).
+    const incertain = found.filter(f => f.cv === null);
+    if(incertain.length){
+      incertain.sort((a,b)=>b.date.localeCompare(a.date));
+      return incertain[0].bib;
+    }
+    // 3) Solo hay dorsales de carreras NO-CV: NO los usamos, queda blanco
+    //    y el director lo rellena a mano.
+    return '';
   }catch(e){
     console.warn('_fccvResolveBib', e);
     return '';
