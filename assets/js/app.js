@@ -32209,25 +32209,66 @@ async function _fccvDbDoPush(){
   }
 }
 
-// — Enlazar la sincronización inicial al entrar en la pestaña Licencias —
+// — Helper compartido: monta la barra de sync y bajada inicial desde la nube.
+async function _fccvDbBootLicenciasPanel(){
+  // Reintentos cortos por si el DOM aún no está montado del todo (iPad/Safari
+  // a veces tarda más en renderizar el panel tras showView).
+  let tries = 0;
+  while(tries < 6){
+    const block = document.querySelector('#fccvPanelLicencias [onchange*="_fccvImportExcel"]');
+    if(block){ break; }
+    await new Promise(r => setTimeout(r, 100));
+    tries++;
+  }
+  _fccvRenderDbStatusBar();
+  // Si por alguna razón no se encuentra el contenedor, intentamos un fallback
+  // que inserta la barra al inicio del panel.
+  if(!document.getElementById('fccvDbStatusBar')){
+    const panel = document.getElementById('fccvPanelLicencias');
+    if(panel){
+      const bar = document.createElement('div');
+      bar.id = 'fccvDbStatusBar';
+      bar.style.cssText = 'background:#ecfeff;border:1px solid #67e8f9;border-radius:10px;padding:10px 12px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px';
+      bar.innerHTML = `
+        <div style="flex:1;min-width:200px">
+          <div style="font-weight:800;color:#155e75">☁️ Sincronización con la nube (Supabase)</div>
+          <div id="fccvDbStatusText" style="font-size:11px;color:#0e7490;margin-top:2px">Comprobando...</div>
+        </div>
+        <button id="fccvDbBtnPull" class="btn light" onclick="_fccvDbDoPull()" style="font-size:11px;padding:5px 10px;background:#fff;border:1px solid #06b6d4;color:#155e75;font-weight:700">⬇️ Bajar de la nube</button>
+        <button id="fccvDbBtnPush" class="btn light" onclick="_fccvDbDoPush()" style="font-size:11px;padding:5px 10px;background:#06b6d4;border:0;color:#fff;font-weight:800">⬆️ Subir mis licencias a la nube</button>`;
+      panel.insertBefore(bar, panel.firstChild);
+    }
+  }
+  // Pull desde la nube. Si trae datos, refresca la tabla y el firmante.
+  const r = await _fccvDbSyncFromCloud();
+  if(r.ok && r.n > 0){
+    try{ _fccvRenderLicencias(); }catch(e){}
+    try{ _fccvLoadFirmante(); }catch(e){}
+  }
+  _fccvDbRefreshStatusText();
+}
+
+// — Hook 1: al entrar en la vista FCCV (es la pestaña Licencias por defecto)
+(function(){
+  const _origShowView = (typeof showView === 'function') ? showView : null;
+  if(!_origShowView) return;
+  window.showView = function(id){
+    const r = _origShowView.apply(this, arguments);
+    if(id === 'view-fccv-docs'){
+      setTimeout(_fccvDbBootLicenciasPanel, 80);
+    }
+    return r;
+  };
+})();
+
+// — Hook 2: al clicar la pestaña Licencias también dispara el boot.
 (function(){
   const _origShowTab = (typeof _fccvShowTab === 'function') ? _fccvShowTab : null;
   if(!_origShowTab) return;
   window._fccvShowTab = function(tab){
     _origShowTab.apply(this, arguments);
     if(tab === 'licencias'){
-      // Render la barra de estado y dispara una sincronización en cuanto se
-      // pueda. Si la nube tiene datos, se reemplaza el local; si no, no se
-      // toca nada.
-      setTimeout(async () => {
-        _fccvRenderDbStatusBar();
-        const r = await _fccvDbSyncFromCloud();
-        if(r.ok && r.n > 0){
-          _fccvRenderLicencias();
-          _fccvLoadFirmante();
-        }
-        _fccvDbRefreshStatusText();
-      }, 60);
+      setTimeout(_fccvDbBootLicenciasPanel, 60);
     }
   };
 })();
