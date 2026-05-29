@@ -32180,11 +32180,13 @@ async function _fccvDbDoPull(){
   if(r.ok){
     _fccvRenderLicencias();
     _fccvLoadFirmante();
-    _fccvDbRefreshStatusText();
-    const tt = document.getElementById('fccvDbStatusText');
-    if(tt) tt.innerHTML = `✅ Bajadas <b>${r.n}</b> licencias desde la nube · ${new Date().toLocaleTimeString('es-ES')}`;
+    const msg = `✅ Bajadas ${r.n} licencias desde la nube · ${new Date().toLocaleTimeString('es-ES')}`;
+    if(text) text.innerHTML = msg;
+    alert(`☁️ Bajada completada\n\n${msg}`);
   } else {
-    if(text) text.innerHTML = `❌ Error bajando: ${r.message||r.reason||'desconocido'}`;
+    const m = `❌ Error bajando: ${r.message||r.reason||'desconocido'}`;
+    if(text) text.innerHTML = m;
+    alert(m);
   }
 }
 
@@ -32200,12 +32202,20 @@ async function _fccvDbDoPush(){
   if(text) text.innerHTML = '⏳ Subiendo a la nube...';
   const r = await _fccvDbPushAllFromLocal();
   if(r.ok){
-    if(text) text.innerHTML = `✅ Subidas <b>${r.licOk}</b> licencias${r.licFail?` · ❌ ${r.licFail} fallos`:''} · firmante: ${r.firmOk?'✅':'(sin cambios)'}`;
-    _fccvDbRefreshStatusText();
+    // Mensaje fijo en la barra (NO llamamos a _fccvDbRefreshStatusText
+    // porque pisaba el texto del éxito) + alert claro para que el director
+    // no se quede con duda de si pasó algo.
+    const msg = `✅ Subidas ${r.licOk} licencias${r.licFail?` · ❌ ${r.licFail} fallos`:''} · firmante: ${r.firmOk?'✅':'(sin cambios)'}`;
+    if(text) text.innerHTML = msg;
+    alert(`☁️ Subida completada\n\n${msg}\n\nYa puedes acceder a estas licencias desde otros dispositivos (iPad / móvil).`);
   } else if(r.reason === 'not_superadmin'){
-    if(text) text.innerHTML = '❌ Solo SUPERADMIN puede subir a la nube. Cambia de usuario en la pantalla de login.';
+    const m = '❌ Solo SUPERADMIN puede subir a la nube. Cambia de usuario en la pantalla de login.';
+    if(text) text.innerHTML = m;
+    alert(m);
   } else {
-    if(text) text.innerHTML = `❌ Error subiendo: ${r.message||r.reason||'desconocido'}`;
+    const m = `❌ Error subiendo: ${r.message||r.reason||'desconocido'}`;
+    if(text) text.innerHTML = m;
+    alert(m);
   }
 }
 
