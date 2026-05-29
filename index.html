@@ -3023,11 +3023,13 @@
                   <button id="fccvCatBtnCad" class="mode-btn active" onclick="_fccvSetCat('cadete')">Cadetes</button>
                   <button id="fccvCatBtnJuv" class="mode-btn" onclick="_fccvSetCat('juvenil')">Juveniles</button>
                 </div>
-                <label style="font-size:11px;color:#475569;font-weight:700;margin-left:10px">Titulares:</label>
-                <input id="fccvMaxT" type="number" min="1" max="20" value="8" style="width:54px;padding:5px 8px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px" oninput="_fccvRenderSelected()">
-                <label style="font-size:11px;color:#475569;font-weight:700">Reservas:</label>
-                <input id="fccvMaxR" type="number" min="0" max="10" value="4" style="width:54px;padding:5px 8px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px" oninput="_fccvRenderSelected()">
-                <button class="btn light" onclick="_fccvClearSel()" style="font-size:11px;padding:5px 10px;margin-left:6px">🧹 Vaciar selección</button>
+                <label style="font-size:11px;color:#475569;font-weight:700;margin-left:10px" title="Cupo de referencia, solo informativo. No bloquea: puedes añadir más para pruebas sin límite o para el CRI (donde no hay reservas).">Cupo titulares:</label>
+                <input id="fccvMaxT" type="number" min="0" max="30" value="8" style="width:54px;padding:5px 8px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px" oninput="_fccvRenderSelected()">
+                <label style="font-size:11px;color:#475569;font-weight:700">Cupo reservas:</label>
+                <input id="fccvMaxR" type="number" min="0" max="30" value="4" style="width:54px;padding:5px 8px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px" oninput="_fccvRenderSelected()">
+                <button class="btn light" onclick="_fccvPresetCRI()" style="font-size:11px;padding:5px 10px" title="Sube el cupo de titulares a 18 y borra el de reservas (modo CRI: sin titulares ni reservas, solo orden)">🛣️ Modo CRI</button>
+                <button class="btn light" onclick="_fccvPresetBoletin()" style="font-size:11px;padding:5px 10px" title="Cupo del Boletín antiguo: 8 titulares + 4 reservas">📋 Modo Boletín</button>
+                <button class="btn light" onclick="_fccvClearSel()" style="font-size:11px;padding:5px 10px">🧹 Vaciar selección</button>
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">

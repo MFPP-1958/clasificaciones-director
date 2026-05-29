@@ -30899,17 +30899,31 @@ function _fccvRenderAvail(){
 function _fccvAdd(slot, dni){
   if(!dni) return;
   if(_fccvSel.titulares.includes(dni) || _fccvSel.reservas.includes(dni)) return;
-  const maxT = parseInt(document.getElementById('fccvMaxT')?.value)||8;
-  const maxR = parseInt(document.getElementById('fccvMaxR')?.value)||4;
+  // Sin bloqueo: el "cupo" es solo informativo. El director sabe mejor que
+  // nadie cuántos puede llevar a cada prueba (algunas no tienen límite,
+  // el CRI no tiene reservas, etc.). Si supera el cupo se ve en rojo en
+  // el panel de seleccionados pero NO se le impide añadir más.
   if(slot === 'titular'){
-    if(_fccvSel.titulares.length >= maxT){ alert(`Ya tienes ${maxT} titulares. Aumenta el máximo o quita alguno.`); return; }
     _fccvSel.titulares.push(dni);
   } else {
-    if(_fccvSel.reservas.length >= maxR){ alert(`Ya tienes ${maxR} reservas. Aumenta el máximo o quita alguno.`); return; }
     _fccvSel.reservas.push(dni);
   }
   _fccvRenderAvail();
   _fccvRenderSelected();
+}
+
+// Presets de cupo: ajustan rápido los inputs para los casos típicos.
+function _fccvPresetCRI(){
+  const t = document.getElementById('fccvMaxT'); if(t) t.value = 18;
+  const r = document.getElementById('fccvMaxR'); if(r) r.value = 0;
+  _fccvRenderSelected();
+  if(typeof showToast==='function') showToast('🛣️ Modo CRI · cupo 18 + 0. Mete todos los ciclistas como TITULARES en el orden de salida.','ok',4000);
+}
+function _fccvPresetBoletin(){
+  const t = document.getElementById('fccvMaxT'); if(t) t.value = 8;
+  const r = document.getElementById('fccvMaxR'); if(r) r.value = 4;
+  _fccvRenderSelected();
+  if(typeof showToast==='function') showToast('📋 Modo Boletín · cupo 8 titulares + 4 reservas (formato FCCV estándar).','ok',3500);
 }
 
 function _fccvRemoveSel(dni){
@@ -30942,8 +30956,17 @@ function _fccvRenderSelected(){
   const maxT = parseInt(document.getElementById('fccvMaxT')?.value)||8;
   const maxR = parseInt(document.getElementById('fccvMaxR')?.value)||4;
   if(hdr){
-    const tColor = _fccvSel.titulares.length>=maxT ? '#15803d' : (_fccvSel.titulares.length>0 ? '#1d4ed8' : '#9ca3af');
-    const rColor = _fccvSel.reservas.length>=maxR ? '#15803d' : (_fccvSel.reservas.length>0 ? '#1d4ed8' : '#9ca3af');
+    // Color: rojo si sobra (más de los del cupo), verde si llega justo,
+    // azul si va por debajo del cupo, gris si vacío. El cupo es solo
+    // referencia — el director puede meter los que quiera.
+    const colorFor = (n, max) => {
+      if(n === 0) return '#9ca3af';
+      if(max > 0 && n > max) return '#dc2626';   // ojo, supera el cupo
+      if(max > 0 && n === max) return '#15803d'; // cupo completo justo
+      return '#1d4ed8';
+    };
+    const tColor = colorFor(_fccvSel.titulares.length, maxT);
+    const rColor = colorFor(_fccvSel.reservas.length, maxR);
     hdr.innerHTML = `Seleccionados · <span style="color:${tColor}">${_fccvSel.titulares.length}/${maxT} titulares</span> · <span style="color:${rColor}">${_fccvSel.reservas.length}/${maxR} reservas</span>`;
   }
   const all = _fccvGetLicencias();
@@ -31134,6 +31157,10 @@ async function _fccvGenerarBoletin(){
   if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
   const v = _fccvValidateBasics({doc:'boletin'});
   if(_fccvShowValidationErrors(v, 'el Boletín de inscripción')) return;
+  if(_fccvSel.titulares.length > 8 || _fccvSel.reservas.length > 4){
+    const ok = confirm(`El Boletín FCCV solo tiene 8 plazas de titular y 4 de reserva.\n\nTienes seleccionados ${_fccvSel.titulares.length} titulares y ${_fccvSel.reservas.length} reservas.\n\nSe rellenarán solo los 8 primeros titulares y las 4 primeras reservas.\nEl resto se quedarán fuera de este documento.\n\n¿Continuar?`);
+    if(!ok) return;
+  }
   _fccvFlagFields(null); // limpiar bordes rojos previos si los hubiera
   _fccvGenStatus('⏳ Generando Boletín…', true);
   try{
@@ -31226,6 +31253,11 @@ async function _fccvGenerarAutorizacion(){
   if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
   const v = _fccvValidateBasics({doc:'autorizacion'});
   if(_fccvShowValidationErrors(v, 'la Autorización de desplazamiento')) return;
+  const totalAuth = _fccvSel.titulares.length + _fccvSel.reservas.length;
+  if(totalAuth > 15){
+    const ok = confirm(`La Autorización FCCV tiene 15 plazas de ciclistas.\n\nTienes ${totalAuth} seleccionados (${_fccvSel.titulares.length} titulares + ${_fccvSel.reservas.length} reservas).\n\nSe rellenarán solo los 15 primeros (titulares antes que reservas).\nEl resto se quedarán fuera de este documento.\n\n¿Continuar?`);
+    if(!ok) return;
+  }
   _fccvFlagFields(null);
   _fccvGenStatus('⏳ Generando Autorización…', true);
   try{
@@ -31393,6 +31425,11 @@ async function _fccvGenerarCRI(){
   if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
   const v = _fccvValidateCRI();
   if(_fccvShowValidationErrors(v, 'la Inscripción CRI')) return;
+  const totalCRI = _fccvSel.titulares.length + _fccvSel.reservas.length;
+  if(totalCRI > 18){
+    const ok = confirm(`El CRI tiene 18 plazas.\n\nTienes ${totalCRI} seleccionados.\n\nSe rellenarán solo los 18 primeros (titulares antes que reservas) en el orden de la lista.\nEl resto se quedarán fuera de este documento.\n\n¿Continuar?`);
+    if(!ok) return;
+  }
   _fccvFlagFields(null);
   _fccvGenStatus('⏳ Generando Inscripción CRI…', true);
   try{
