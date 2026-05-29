@@ -31481,41 +31481,64 @@ function _fccvResolveBib(lic){
       : `${(lic.apellidos||'').toLowerCase()}, ${(lic.nombre||'').toLowerCase()}`;
     if(!key) return '';
 
-    // Recolectar todos los dorsales del ciclista, anotando si vienen de
-    // una carrera CV (cv=true), no-CV (cv=false) o incierta (cv=null).
-    const found = []; // [{bib, date, cv}]
-    const collect = (r, race) => {
+    // Recolectar todos los dorsales del ciclista, anotando:
+    //   cv      : true | false | null (CCAA de la carrera)
+    //   source  : 'riders' (clasificación oficial) | 'inscritos' (puede estar
+    //             contaminado por enriquecimientos antiguos no-CV)
+    //   date    : ISO de la carrera
+    const found = []; // [{bib, date, cv, source}]
+    const collect = (r, race, source) => {
       if(!r || !r.bib) return;
       const nk = (typeof normalizeForMatching==='function') ? normalizeForMatching(r.name||'') : (r.name||'').toLowerCase();
       if(nk !== key) return;
       const iso = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(race.raceDate||'') : '') || '';
-      found.push({ bib: String(r.bib), date: iso, cv: _isCVRace(race) });
+      found.push({ bib: String(r.bib), date: iso, cv: _isCVRace(race), source });
     };
     for(const race of hist){
-      (race.riders||[]).forEach(r => collect(r, race));
-      (race.inscritos||[]).forEach(r => collect(r, race));
+      (race.riders||[]).forEach(r => collect(r, race, 'riders'));
+      (race.inscritos||[]).forEach(r => collect(r, race, 'inscritos'));
     }
     if(!found.length) return '';
 
-    // 1) Quedarnos solo con los apariciones en carreras CV confirmadas.
-    const cvOnes = found.filter(f => f.cv === true);
-    if(cvOnes.length){
-      // De entre los CV, el dorsal MÁS FRECUENTE (no el más reciente —
-      // el dorsal CV es fijo durante el año, así que la moda manda).
+    // Helper: moda de bibs (más frecuente, desempate por fecha más reciente).
+    const modeBib = (arr) => {
+      if(!arr.length) return '';
       const counts = new Map();
-      cvOnes.forEach(f => counts.set(f.bib, (counts.get(f.bib)||0)+1));
-      const sorted = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
+      const dates  = new Map();
+      arr.forEach(f => {
+        counts.set(f.bib, (counts.get(f.bib)||0)+1);
+        const prev = dates.get(f.bib)||'';
+        if(f.date > prev) dates.set(f.bib, f.date);
+      });
+      const sorted = [...counts.entries()].sort((a,b)=>{
+        if(b[1] !== a[1]) return b[1]-a[1];
+        return (dates.get(b[0])||'').localeCompare(dates.get(a[0])||'');
+      });
       return sorted[0][0];
+    };
+
+    // 1) Carreras CV confirmadas. Damos prioridad MUY ALTA a los riders
+    //    (clasificación oficial) sobre los inscritos, porque los inscritos
+    //    pueden estar contaminados por enriquecimientos antiguos pre-CCAA
+    //    que metieron dorsales no-CV en pruebas CV.
+    const cvRiders    = found.filter(f => f.cv === true  && f.source === 'riders');
+    const cvInscritos = found.filter(f => f.cv === true  && f.source === 'inscritos');
+    if(cvRiders.length) return modeBib(cvRiders);
+    if(cvInscritos.length) return modeBib(cvInscritos);
+
+    // 2) Sin carreras CV identificadas pero hay inciertas (CCAA sin marcar).
+    //    Aquí también priorizamos riders sobre inscritos por la misma razón.
+    const uncRiders    = found.filter(f => f.cv === null && f.source === 'riders');
+    const uncInscritos = found.filter(f => f.cv === null && f.source === 'inscritos');
+    if(uncRiders.length){
+      uncRiders.sort((a,b)=>b.date.localeCompare(a.date));
+      return uncRiders[0].bib;
     }
-    // 2) Si no hay carreras CV identificadas pero sí inciertas, usamos la
-    //    incierta más reciente (mejor que dejar en blanco).
-    const incertain = found.filter(f => f.cv === null);
-    if(incertain.length){
-      incertain.sort((a,b)=>b.date.localeCompare(a.date));
-      return incertain[0].bib;
+    if(uncInscritos.length){
+      uncInscritos.sort((a,b)=>b.date.localeCompare(a.date));
+      return uncInscritos[0].bib;
     }
-    // 3) Solo hay dorsales de carreras NO-CV: NO los usamos, queda blanco
-    //    y el director lo rellena a mano.
+    // 3) Solo hay dorsales de carreras NO-CV: blanco (el director lo escribe).
     return '';
   }catch(e){
     console.warn('_fccvResolveBib', e);
@@ -31735,6 +31758,8 @@ async function _ccaaOpenManager(){
       <div style="padding:10px 14px;border-bottom:1px solid #e5e7eb;background:#f9fafb;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn" onclick="_ccaaBulkApplyGuess()" style="background:#1f6feb;color:#fff;font-weight:800;font-size:12px;padding:6px 12px">⚡ Aplicar sugerencia a las SIN ASIGNAR</button>
         <span style="font-size:11px;color:#6b7280">Pone la CCAA "Comunitat Valenciana" cuando la sugerencia es 🟢, deja sin tocar las 🟠 y ⚪.</span>
+        <button class="btn" onclick="_ccaaCleanContaminatedBibs()" style="background:#b91c1c;color:#fff;font-weight:800;font-size:12px;padding:6px 12px;margin-left:auto">🧹 Limpiar dorsales contaminados</button>
+        <span style="font-size:11px;color:#9a3412">Vacía los dorsales de los INSCRITOS en pruebas CV que no aparecen en sus clasificaciones (suelen ser enriquecimientos antiguos no-CV).</span>
       </div>
       <div style="flex:1;overflow:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -31794,6 +31819,84 @@ async function _ccaaSaveRow(raceId, newCCAA, selectEl){
     console.warn('_ccaaSaveRow', e);
     if(status) status.innerHTML = `❌ Error: ${escapeHtml(e.message||String(e))}`;
   }
+}
+
+// Limpia los dorsales contaminados en inscritos de carreras CV. La idea:
+// los inscritos CV pueden haber sido enriquecidos en versiones antiguas
+// con dorsales de carreras NO-CV (Villarrobledo, etc.) cuando no había
+// distinción CCAA. Esos dorsales "contaminan" la moda CV y devuelven
+// dorsales temporales que no son los oficiales del año.
+//
+// Estrategia: para cada carrera CV con inscritos:
+//   - Si tiene clasificación (riders), conservamos solo dorsales de
+//     inscritos que también aparezcan en riders (mismo nombre+bib).
+//   - Si NO tiene clasificación (solo pre-inscripción), vaciamos todos
+//     los dorsales para forzar a que el director los reintroduzca
+//     pegando una startlist limpia.
+async function _ccaaCleanContaminatedBibs(){
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  // Pruebas CV confirmadas (manual o por marcador heurístico fiable)
+  const cvRaces = hist.filter(h => _isCVRace(h) === true && Array.isArray(h.inscritos) && h.inscritos.length>0);
+  if(!cvRaces.length){
+    alert('No hay pruebas CV con inscritos para limpiar.');
+    return;
+  }
+  // Calcular plan de limpieza
+  const plan = []; // [{race, cleaned: [{name, oldBib}]}]
+  const nkey = (s) => (typeof normalizeForMatching==='function')?normalizeForMatching(s||''):(s||'').toLowerCase();
+  cvRaces.forEach(race => {
+    const riders = race.riders || [];
+    const ridersByName = new Map();
+    riders.forEach(r => {
+      if(r.bib) ridersByName.set(nkey(r.name||''), String(r.bib));
+    });
+    const hasRiders = riders.length >= 3;
+    const newIns = race.inscritos.map(ins => {
+      const insBib = String(ins.bib||'');
+      if(!insBib) return ins;
+      if(hasRiders){
+        const officialBib = ridersByName.get(nkey(ins.name||''));
+        // Si la clasificación oficial tiene su dorsal, conservamos solo si
+        // coincide. Si no aparece en clasificación, mantenemos (puede ser
+        // un inscrito que abandonó).
+        if(officialBib && officialBib !== insBib){
+          return { ...ins, bib: '' };
+        }
+        return ins;
+      }
+      // Sin clasificación oficial: vaciamos para forzar re-pegado limpio.
+      return { ...ins, bib: '' };
+    });
+    const cleanedCount = race.inscritos.filter((ins, i) => ins.bib && !newIns[i].bib).length;
+    if(cleanedCount > 0){
+      plan.push({ race, newIns, cleanedCount });
+    }
+  });
+  if(!plan.length){
+    alert('No se encontraron dorsales contaminados en las pruebas CV.');
+    return;
+  }
+  const total = plan.reduce((s,p)=>s+p.cleanedCount,0);
+  if(!confirm(`Voy a vaciar ${total} dorsal(es) sospechoso(s) en ${plan.length} prueba(s) CV.\n\nQuedarán en blanco para que los inscritos no sigan inyectando dorsales no-CV en la resolución automática. La clasificación oficial (riders) NO se toca.\n\n¿Continuar?`)) return;
+  const status = document.getElementById('_ccaaMgrStatus');
+  if(status) status.textContent = '⏳ Limpiando…';
+  let ok = 0, fail = 0;
+  for(const p of plan){
+    try{
+      const { data, error } = await _sb.from('races').select('notes').eq('id', p.race.id).single();
+      if(error || !data){ fail++; continue; }
+      let extra = {};
+      try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+      extra.inscritos = p.newIns;
+      const { error: upErr } = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', p.race.id);
+      if(upErr){ fail++; continue; }
+      p.race.inscritos = p.newIns;
+      ok++;
+    }catch(e){ fail++; }
+  }
+  if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+  if(status) status.innerHTML = `🧹 ${total} dorsales vaciados en ${ok} prueba(s)${fail?` · ❌ ${fail} fallos`:''}. Vuelve a generar los PDFs para ver el efecto.`;
 }
 
 async function _ccaaBulkApplyGuess(){
