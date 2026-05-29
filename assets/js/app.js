@@ -31124,8 +31124,10 @@ function _fccvValidateBasics(opts){
   if(!document.getElementById('fccvPRname')?.value.trim())     add('Falta el NOMBRE de la prueba', 'fccvPRname');
   if(!document.getElementById('fccvPRfecha')?.value.trim())    add('Falta la FECHA de la prueba', 'fccvPRfecha');
   if(reqAutoriz && !document.getElementById('fccvPRlugar')?.value.trim()) add('Falta el LUGAR/Localidad de la prueba', 'fccvPRlugar');
-  if(reqAutoriz && !document.getElementById('fccvPRmodalidad')?.value.trim()) add('Falta la MODALIDAD (carretera, BTT…) — requerida para la Autorización', 'fccvPRmodalidad');
-  if(!document.getElementById('fccvPRclase')?.value.trim())    add('Falta la CLASE (open, CRI…)', 'fccvPRclase');
+  // Modalidad y Clase NO son obligatorias. A veces hay que mandar la
+  // inscripción sin tener todavía el reglamento publicado. Quedan en
+  // blanco en el PDF y el director las rellena a mano más tarde si
+  // hace falta.
   if(!document.getElementById('fccvPRcategoria')?.value.trim()) add('Falta la CATEGORÍA (Cadete, Juvenil…)', 'fccvPRcategoria');
 
   // Staff
