@@ -29379,10 +29379,13 @@ function _simInjectPVRStyles(){
     .pvr-rng{font-size:10px;color:#9ca3af;font-weight:600;margin-left:4px}
     .pvr-footer{padding:10px 20px 16px;border-top:1px solid #e5e7eb}
     @media print {
-      body * { visibility: hidden !important; }
-      #pvrModalOverlay, #pvrModalOverlay * { visibility: visible !important; }
-      #pvrModalOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
+      /* Saca de la maquetación TODO lo que NO sea el modal. display:none
+         no reserva espacio (visibility:hidden sí lo hacía y por eso se
+         generaban páginas en blanco). */
+      html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
+      body > *:not(#pvrModalOverlay) { display: none !important; }
+      #pvrModalOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
+      #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .pvr-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
       .pvr-logo { height: 52px !important; }
@@ -29855,11 +29858,14 @@ function _aiInjectDNFStyles(){
     .ai-dnf-bib{display:inline-block;background:#eef2ff;color:#1e3a8a;border:1px solid #c7d2fe;border-radius:6px;padding:1px 6px;font-weight:800;font-size:11px}
     .ai-dnf-footer{padding:12px 20px 18px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#6b7280;margin-top:14px}
     @media print {
-      body * { visibility: hidden !important; }
-      #aiDnfOverlay, #aiDnfOverlay * { visibility: visible !important; }
-      #aiDnfOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
+      /* display:none en los hermanos del modal: elimina su espacio del
+         layout. visibility:hidden mantenía el hueco y generaba páginas
+         en blanco en PDFs largos. */
+      html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
+      body > *:not(#aiDnfOverlay) { display: none !important; }
+      #aiDnfOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
       /* Margen real DENTRO del documento (no depende del @page del navegador) */
-      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
+      #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .ai-dnf-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 14px 0 !important; margin-bottom: 12px !important; }
       .ai-dnf-logo { height: 58px !important; }
@@ -30219,10 +30225,12 @@ function _simInjectTop10Styles(){
     .st10-small{display:block;font-size:9.5px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-top:1px}
     .st10-footer{padding:14px 20px 18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;text-align:center;line-height:1.55}
     @media print {
-      body * { visibility: hidden !important; }
-      #simTop10Overlay, #simTop10Overlay * { visibility: visible !important; }
-      #simTop10Overlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-      #simTop10Box { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
+      /* Saca del layout TODO lo que no sea el modal (con display:none, no
+         visibility:hidden, que mantenía espacio y generaba páginas vacías). */
+      html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
+      body > *:not(#simTop10Overlay) { display: none !important; }
+      #simTop10Overlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
+      #simTop10Box { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .st10-header { border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
       .st10-logo { height: 56px !important; }
@@ -30406,10 +30414,12 @@ function _simInjectTeamsStyles(){
     .stm-chip-risk{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
     .stm-footer{padding:14px 20px 18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;text-align:center;line-height:1.55}
     @media print {
-      body * { visibility: hidden !important; }
-      #simTeamsOverlay, #simTeamsOverlay * { visibility: visible !important; }
-      #simTeamsOverlay { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-      #simTeamsBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; }
+      /* display:none en los hermanos del modal: no reservan espacio en el
+         layout, así no se imprimen páginas en blanco. */
+      html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
+      body > *:not(#simTeamsOverlay) { display: none !important; }
+      #simTeamsOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
+      #simTeamsBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
       .stm-header { border-bottom: 2px solid #854d0e !important; padding: 0 0 12px 0 !important; margin-bottom: 10px !important; }
       .stm-logo { height: 56px !important; }
