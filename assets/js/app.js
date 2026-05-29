@@ -31296,10 +31296,14 @@ async function _fccvGenerarAutorizacion(){
     }
 
     // Corredores (15 plazas, TODOS los que viajan = titulares + reservas)
+    // La nueva versión de la plantilla añade una columna Dorsal a la
+    // izquierda; el dorsal lo resolvemos desde el histórico igual que en
+    // el CRI. Si el ciclista no tiene dorsal en histórico, queda en blanco.
     const todos = [..._fccvSel.titulares, ..._fccvSel.reservas].slice(0,15);
     todos.forEach((dni, i)=>{
       const lic = _fccvDniToLic(dni); if(!lic) return;
       const row = i+1;
+      _fccvSetField(form, `Dorsal ${row}`,                  _fccvResolveBib(lic));
       _fccvSetField(form, `Nombre y Apel l i dosRow${row}`, _fccvFullName(lic));
       _fccvSetField(form, `Licenc i aRow${row}`,            lic.dni);
       _fccvSetField(form, `Código UCIRow${row}`,            lic.uciId);
