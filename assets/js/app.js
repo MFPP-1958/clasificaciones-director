@@ -42,6 +42,7 @@ function openLoadPanelForNew(){
     const el=$(id); if(el) el.value='';
   });
   if($('raceChallengeCV')) $('raceChallengeCV').checked = false;
+  if($('raceCCAA')) $('raceCCAA').value = '';
   const fn=$('fileName'); if(fn) fn.textContent='';
   const fnI=$('fileNameInscritos'); if(fnI) fnI.textContent='';
   // Reset inscritos (Tier 1)
@@ -4618,6 +4619,7 @@ async function _sbLoadHistory(){
       localidad: extra.localidad || '',
       circuitType: extra.circuitType || '',
       challengeCV: !!extra.challengeCV,
+      ccaa: extra.ccaa || '',
       // Meteo (Open-Meteo) — opcionales, leídos desde notes
       hora_inicio: extra.hora_inicio || '',
       weather: extra.weather || null,
@@ -9764,6 +9766,8 @@ async function loadPlanificadaToCarga(id){
     if($('raceCircuitType')) $('raceCircuitType').value = extra.circuitType || '';
     if($('raceStartTime'))   $('raceStartTime').value   = extra.hora_inicio || '';
     if($('raceChallengeCV')) $('raceChallengeCV').checked = !!extra.challengeCV;
+    if($('raceCCAA')) $('raceCCAA').value = extra.ccaa || '';
+    try{ _cargaUpdateCVHint(); }catch(e){}
     // Limpiar riders/inscritos: esta prueba aún no tiene datos
     if(Array.isArray(riders)) riders.length = 0;
     inscritos = [];
@@ -9875,6 +9879,8 @@ async function loadHistoryEntry(id){
   if($('raceCircuitType')) $('raceCircuitType').value = h.circuitType||'';
   if($('raceStartTime'))  $('raceStartTime').value  = h.hora_inicio||'';
   if($('raceChallengeCV')) $('raceChallengeCV').checked = !!h.challengeCV;
+  if($('raceCCAA')) $('raceCCAA').value = h.ccaa || '';
+  try{ _cargaUpdateCVHint(); }catch(e){}
   // Refrescar chip meteorológico (si hay weather guardada de esta carrera)
   try{ if(typeof _wxRenderLoadedRaceChip === 'function') _wxRenderLoadedRaceChip(); }catch{}
   // Restaurar inscritos (Tier 1)
@@ -10198,6 +10204,7 @@ async function saveHistory(){
   const localidad=($('raceLocalidad')?.value||'').trim();
   const circuitType=($('raceCircuitType')?.value||'').trim();
   const challengeCV = !!($('raceChallengeCV')?.checked);
+  const ccaa = ($('raceCCAA')?.value||'').trim();
   const parsedDate=_parseSpanishDate(raceDateStr);
   if(!parsedDate && raceDateStr){
     const cont=confirm(`⚠️ La fecha "${raceDateStr}" no se reconoce como fecha válida.\n\nFormatos aceptados: DD/MM/AAAA · D-M-AA · D-M-AAAA\n\n¿Guardar igualmente con la fecha de hoy?`);
@@ -10210,7 +10217,7 @@ async function saveHistory(){
   const inscritosToSave = (typeof inscritos !== 'undefined' && Array.isArray(inscritos) && inscritos.length) ? inscritos : [];
   // Hora de inicio (Open-Meteo) — leída del formulario; opcional pero recomendado
   const horaInicio = (document.getElementById('raceStartTime')?.value || '').trim();
-  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV});
+  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,ccaa});
 
   // ── Buscar duplicados por fecha ──────────────────────────────────────────
   const {data:existing,error:dupErr}=await _sb
@@ -19159,8 +19166,13 @@ function _isCVRace(race){
 }
 
 function _isCurrentRaceCV(){
-  // Construye una pseudo-carrera con lo que hay ahora en el formulario y
-  // los riders actualmente cargados. Si todo está vacío, devolvemos null.
+  // 1) El desplegable manual gana sobre cualquier heurística. Si el director
+  //    ha marcado una CCAA explícita, esa es la verdad.
+  const ccaaSel = (document.getElementById('raceCCAA')?.value || '').trim();
+  if(ccaaSel){
+    return /valencia/i.test(ccaaSel);
+  }
+  // 2) Heurística sobre los campos del formulario (igual que antes).
   const pseudo = {
     localidad: (document.getElementById('raceLocalidad')?.value || '').trim(),
     raceName:  (document.getElementById('raceName')?.value || '').trim(),
@@ -20084,6 +20096,7 @@ async function saveInscritosOnly(){
   const localidad = ($('raceLocalidad')?.value||'').trim();
   const circuitType = ($('raceCircuitType')?.value||'').trim();
   const challengeCV = !!($('raceChallengeCV')?.checked);
+  const ccaa = ($('raceCCAA')?.value||'').trim();
   const horaInicio = ($('raceStartTime')?.value||'').trim();
 
   console.log('[saveInscritosOnly] datos:', {raceName, raceDateStr, parsedDate, inscritosCount: inscritos.length});
@@ -20125,6 +20138,7 @@ async function saveInscritosOnly(){
     extra.circuitType = circuitType;
     extra.hora_inicio = horaInicio;
     extra.challengeCV = challengeCV;
+    extra.ccaa = ccaa;
     const {error:updErr,data:updData} = await _sb.from('races')
       .update({name: raceName, notes: JSON.stringify(extra)})
       .eq('id', dupClasif.id)
@@ -20160,6 +20174,7 @@ async function saveInscritosOnly(){
     extra.circuitType = circuitType;
     extra.hora_inicio = horaInicio;
     extra.challengeCV = challengeCV;
+    extra.ccaa = ccaa;
     const {error:convErr,data:convData} = await _sb.from('races')
       .update({name: raceName, race_type:'clasificacion', notes: JSON.stringify(extra)})
       .eq('id', dupPlanif.id)
@@ -20182,7 +20197,7 @@ async function saveInscritosOnly(){
 
   // ── No existe nada en esa fecha → crear entrada nueva
   const extra = {
-    raceDate:raceDateStr, km, avg, localidad, circuitType, hora_inicio: horaInicio, challengeCV,
+    raceDate:raceDateStr, km, avg, localidad, circuitType, hora_inicio: horaInicio, challengeCV, ccaa,
     regions:{}, inscritos
   };
   const payload = {
@@ -31622,13 +31637,18 @@ async function _fccvGenerarCRI(){
 function _cargaUpdateCVHint(){
   const el = document.getElementById('raceCVHint');
   if(!el) return;
+  const ccaaSel = (document.getElementById('raceCCAA')?.value || '').trim();
   const cv = _isCurrentRaceCV();
+  // Si hay marcador manual, lo decimos para que se vea que es decisión del director.
+  const sourceTag = ccaaSel
+    ? `<span style="color:#1d4ed8;font-weight:800"> · marcador manual</span>`
+    : '<span style="color:#9ca3af;font-weight:600"> · auto-detectado</span>';
   if(cv === true){
-    el.innerHTML = '<span style="color:#15803d">🟢 Detectada como prueba CV · los dorsales se rellenarán con el dorsal oficial CV del año</span>';
+    el.innerHTML = '<span style="color:#15803d">🟢 Prueba CV · los dorsales se rellenarán con el dorsal oficial CV del año</span>'+sourceTag;
   } else if(cv === false){
-    el.innerHTML = '<span style="color:#9a3412">🟠 Detectada como prueba FUERA de la Comunitat Valenciana · los dorsales NO se rellenarán del histórico CV (el organizador asignará dorsales propios)</span>';
+    el.innerHTML = '<span style="color:#9a3412">🟠 Prueba FUERA de la Comunitat Valenciana · los dorsales NO se rellenarán del histórico CV</span>'+sourceTag;
   } else {
-    el.innerHTML = '<span style="color:#9ca3af">⚪ Sin info suficiente para detectar CCAA · se usará el comportamiento clásico (último dorsal conocido)</span>';
+    el.innerHTML = '<span style="color:#9ca3af">⚪ Sin marcador manual ni detección clara · se usará el comportamiento clásico. Marca la CCAA en el desplegable para evitar mezclas.</span>';
   }
 }
 
@@ -31637,6 +31657,169 @@ function _cargaUpdateCVHint(){
 (function(){
   const inp = document.getElementById('raceName');
   if(inp) inp.addEventListener('input', () => { try{ _cargaUpdateCVHint(); }catch(e){} });
+  const sel = document.getElementById('raceCCAA');
+  if(sel) sel.addEventListener('change', () => { try{ _cargaUpdateCVHint(); }catch(e){} });
   // Refrescar al cargar la app
   document.addEventListener('DOMContentLoaded', () => setTimeout(_cargaUpdateCVHint, 300));
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+// Gestor CCAA · Etiquetar pruebas guardadas en bloque
+//   Carga todas las pruebas race_type=clasificacion del histórico y permite
+//   asignarles una CCAA manual (extra.ccaa). Sirve para corregir el problema
+//   de mezclas de dorsales sin tener que re-cargar prueba a prueba.
+// ════════════════════════════════════════════════════════════════════════
+
+const _CCAA_OPTS = ['Comunitat Valenciana','Castilla-La Mancha','Murcia','Cataluña','Aragón','Andalucía','Madrid','Castilla y León','Islas Baleares','País Vasco','Navarra','La Rioja','Galicia','Asturias','Cantabria','Extremadura','Canarias','Ceuta','Melilla'];
+
+async function _ccaaOpenManager(){
+  // Asegurar histórico
+  if(!Array.isArray(_cachedHistory) || !_cachedHistory.length){
+    if(typeof _sbLoadHistory === 'function') _cachedHistory = await _sbLoadHistory();
+  }
+  const hist = (Array.isArray(_cachedHistory) ? _cachedHistory : []).slice().sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+    const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+    return db.localeCompare(da);
+  });
+
+  let overlay = document.getElementById('_ccaaMgrOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = '_ccaaMgrOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.addEventListener('click', e => { if(e.target===overlay) _ccaaCloseManager(); });
+    document.body.appendChild(overlay);
+  }
+
+  if(!hist.length){
+    overlay.innerHTML = `<div style="background:#fff;border-radius:12px;padding:24px;text-align:center;max-width:480px">
+      <div style="font-size:14px;color:#374151">No hay pruebas guardadas todavía.</div>
+      <button class="btn light" style="margin-top:12px" onclick="_ccaaCloseManager()">Cerrar</button>
+    </div>`;
+    return;
+  }
+
+  const rows = hist.map(h => {
+    const sel = h.ccaa || '';
+    const guess = _isCVRace({localidad:h.localidad, raceName:h.raceName, riders:h.riders});
+    const guessLbl = guess === true ? '🟢 sugerida CV' : (guess === false ? '🟠 sugerida fuera CV' : '⚪ incierta');
+    const stateBadge = sel
+      ? `<span style="background:#dbeafe;color:#1e3a8a;border:1px solid #93c5fd;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">${escapeHtml(sel)}</span>`
+      : `<span style="background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">SIN ASIGNAR</span>`;
+    const opts = '<option value="">— Sin asignar —</option>' + _CCAA_OPTS.map(c => `<option value="${escapeAttr(c)}" ${c===sel?'selected':''}>${escapeHtml(c)}</option>`).join('');
+    return `<tr data-race-id="${escapeAttr(h.id)}">
+      <td style="padding:6px 8px;font-size:12px;color:#475569">${escapeHtml(h.raceDate||'—')}</td>
+      <td style="padding:6px 8px;font-size:12px"><b>${escapeHtml(h.raceName||'(sin nombre)')}</b><div style="font-size:10.5px;color:#6b7280">${escapeHtml(h.localidad||'(sin localidad)')} · ${guessLbl}</div></td>
+      <td style="padding:6px 8px;text-align:center">${stateBadge}</td>
+      <td style="padding:6px 8px">
+        <select onchange="_ccaaSaveRow('${escapeAttr(h.id)}', this.value, this)" style="padding:4px 8px;border:1.5px solid #d0d5dd;border-radius:6px;font-size:12px;width:100%;max-width:200px">
+          ${opts}
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:920px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div>
+          <div style="font-weight:800;font-size:16px;color:#0b2f6b">🗂 Etiquetar CCAA de pruebas guardadas</div>
+          <div style="font-size:11.5px;color:#6b7280;margin-top:3px">
+            Marca la CCAA donde se celebró cada prueba. La CCAA <b>manual</b> tiene prioridad sobre la auto-detección, y se usa para decidir qué dorsales son CV (oficiales del año) y cuáles son temporales del organizador.<br>
+            Cambios se guardan al instante en Supabase.
+          </div>
+        </div>
+        <button class="btn light" onclick="_ccaaCloseManager()" style="font-size:12px;padding:5px 10px">✕</button>
+      </div>
+      <div style="padding:10px 14px;border-bottom:1px solid #e5e7eb;background:#f9fafb;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn" onclick="_ccaaBulkApplyGuess()" style="background:#1f6feb;color:#fff;font-weight:800;font-size:12px;padding:6px 12px">⚡ Aplicar sugerencia a las SIN ASIGNAR</button>
+        <span style="font-size:11px;color:#6b7280">Pone la CCAA "Comunitat Valenciana" cuando la sugerencia es 🟢, deja sin tocar las 🟠 y ⚪.</span>
+      </div>
+      <div style="flex:1;overflow:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead style="position:sticky;top:0;background:#f3f4f6;z-index:1">
+            <tr>
+              <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280">Fecha</th>
+              <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280">Prueba · Localidad · sugerencia</th>
+              <th style="padding:7px 8px;text-align:center;font-size:10px;text-transform:uppercase;color:#6b7280">Estado</th>
+              <th style="padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280">CCAA manual</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div id="_ccaaMgrStatus" style="padding:8px 14px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11.5px;color:#374151;min-height:30px"></div>
+    </div>`;
+}
+
+function _ccaaCloseManager(){
+  const ov = document.getElementById('_ccaaMgrOverlay');
+  if(ov) ov.remove();
+}
+
+async function _ccaaSaveRow(raceId, newCCAA, selectEl){
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const status = document.getElementById('_ccaaMgrStatus');
+  if(status) status.textContent = '⏳ Guardando…';
+  try{
+    const { data, error } = await _sb.from('races').select('notes').eq('id', raceId).single();
+    if(error || !data){ throw new Error(error?.message || 'No se pudo leer la prueba'); }
+    let extra = {};
+    try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+    extra.ccaa = newCCAA || '';
+    const { error: upErr } = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', raceId);
+    if(upErr) throw new Error(upErr.message);
+    // Refrescar en cache
+    if(Array.isArray(_cachedHistory)){
+      const h = _cachedHistory.find(x => x.id === raceId);
+      if(h) h.ccaa = newCCAA || '';
+    }
+    // Invalidar el índice anual para que se reconstruya en el próximo lookup
+    if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+    // Actualizar badge "estado" en la fila
+    const row = selectEl.closest('tr');
+    if(row){
+      const stateCell = row.querySelectorAll('td')[2];
+      if(stateCell){
+        if(newCCAA){
+          stateCell.innerHTML = `<span style="background:#dbeafe;color:#1e3a8a;border:1px solid #93c5fd;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">${escapeHtml(newCCAA)}</span>`;
+        } else {
+          stateCell.innerHTML = `<span style="background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700">SIN ASIGNAR</span>`;
+        }
+      }
+    }
+    if(status) status.innerHTML = `✅ Guardado · ${newCCAA?escapeHtml(newCCAA):'sin asignar'}`;
+  }catch(e){
+    console.warn('_ccaaSaveRow', e);
+    if(status) status.innerHTML = `❌ Error: ${escapeHtml(e.message||String(e))}`;
+  }
+}
+
+async function _ccaaBulkApplyGuess(){
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const hist = Array.isArray(_cachedHistory) ? _cachedHistory : [];
+  const candidates = hist.filter(h => !h.ccaa && _isCVRace({localidad:h.localidad, raceName:h.raceName, riders:h.riders}) === true);
+  if(!candidates.length){
+    alert('No hay pruebas SIN ASIGNAR cuya sugerencia sea CV. Las demás (🟠 y ⚪) requieren marcado manual.');
+    return;
+  }
+  if(!confirm(`Se marcarán ${candidates.length} prueba(s) como "Comunitat Valenciana" (las que la heurística detecta como CV y no tienen marcador manual aún).\n\n¿Continuar?`)) return;
+  const status = document.getElementById('_ccaaMgrStatus');
+  let ok = 0, fail = 0;
+  for(const h of candidates){
+    try{
+      const { data, error } = await _sb.from('races').select('notes').eq('id', h.id).single();
+      if(error || !data){ fail++; continue; }
+      let extra = {};
+      try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+      extra.ccaa = 'Comunitat Valenciana';
+      const { error: upErr } = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', h.id);
+      if(upErr){ fail++; continue; }
+      h.ccaa = 'Comunitat Valenciana';
+      ok++;
+    }catch(e){ fail++; }
+  }
+  if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+  if(status) status.innerHTML = `✅ ${ok} marcadas como CV${fail?` · ❌ ${fail} fallos`:''}. Cierra y vuelve a abrir para refrescar la lista.`;
+}

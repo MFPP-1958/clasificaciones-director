@@ -436,8 +436,35 @@
       </div>
     </div>
 
-    <!-- Banderas de campeonato/circuito (challenges) -->
-    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <!-- CCAA de la prueba (determina si los dorsales son CV o no) -->
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <label for="raceCCAA" style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#eef2ff;border:1.5px solid #93c5fd;border-radius:10px;font-size:13px;font-weight:700;color:#1e3a8a;user-select:none">
+        🗺️ Comunidad autónoma:
+        <button type="button" onclick="_ccaaOpenManager()" title="Etiquetar CCAA en bloque para las pruebas ya guardadas" style="background:none;border:1px solid #93c5fd;border-radius:6px;font-size:11px;padding:1px 8px;cursor:pointer;color:#1e3a8a;font-weight:700">🗂 Etiquetar guardadas</button>
+        <select id="raceCCAA" style="padding:4px 8px;border:1.5px solid #93c5fd;border-radius:6px;font-size:12px;background:#fff;min-width:180px">
+          <option value="">— Sin asignar (auto-detección) —</option>
+          <option value="Comunitat Valenciana">Comunitat Valenciana</option>
+          <option value="Castilla-La Mancha">Castilla-La Mancha</option>
+          <option value="Murcia">Murcia</option>
+          <option value="Cataluña">Cataluña</option>
+          <option value="Aragón">Aragón</option>
+          <option value="Andalucía">Andalucía</option>
+          <option value="Madrid">Madrid</option>
+          <option value="Castilla y León">Castilla y León</option>
+          <option value="Islas Baleares">Islas Baleares</option>
+          <option value="País Vasco">País Vasco</option>
+          <option value="Navarra">Navarra</option>
+          <option value="La Rioja">La Rioja</option>
+          <option value="Galicia">Galicia</option>
+          <option value="Asturias">Asturias</option>
+          <option value="Cantabria">Cantabria</option>
+          <option value="Extremadura">Extremadura</option>
+          <option value="Canarias">Canarias</option>
+          <option value="Ceuta">Ceuta</option>
+          <option value="Melilla">Melilla</option>
+        </select>
+        <button type="button" class="help-btn" data-help="&lt;strong&gt;🗺️ Comunidad autónoma de la prueba&lt;/strong&gt;Marca la CCAA donde se celebra la prueba.&lt;ul&gt;&lt;li&gt;&lt;b&gt;Comunitat Valenciana&lt;/b&gt;: dorsales fijos del año (137, 88…). El sistema rellenará automáticamente los dorsales en los documentos federativos.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Otra CCAA&lt;/b&gt;: dorsales temporales del organizador. El sistema NO rellenará dorsales del histórico CV para evitar mezclas.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Sin asignar&lt;/b&gt;: la app intenta deducirlo por localidad o nombre de la prueba.&lt;/li&gt;&lt;/ul&gt;">?</button>
+      </label>
       <label for="raceChallengeCV" style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#fff7ed;border:1.5px solid #fdba74;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;color:#9a3412;user-select:none">
         <input type="checkbox" id="raceChallengeCV" style="width:16px;height:16px;cursor:pointer;accent-color:#ea580c" />
         🏆 Challenge Comunitat Valenciana
