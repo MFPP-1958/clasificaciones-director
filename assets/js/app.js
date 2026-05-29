@@ -29383,7 +29383,7 @@ function _simInjectPVRStyles(){
          no reserva espacio (visibility:hidden sí lo hacía y por eso se
          generaban páginas en blanco). */
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
-      body > *:not(#pvrModalOverlay) { display: none !important; }
+      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #pvrModalOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
       #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
@@ -29862,7 +29862,7 @@ function _aiInjectDNFStyles(){
          layout. visibility:hidden mantenía el hueco y generaba páginas
          en blanco en PDFs largos. */
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
-      body > *:not(#aiDnfOverlay) { display: none !important; }
+      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #aiDnfOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
       /* Margen real DENTRO del documento (no depende del @page del navegador) */
       #aiDnfBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
@@ -30228,7 +30228,7 @@ function _simInjectTop10Styles(){
       /* Saca del layout TODO lo que no sea el modal (con display:none, no
          visibility:hidden, que mantenía espacio y generaba páginas vacías). */
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
-      body > *:not(#simTop10Overlay) { display: none !important; }
+      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #simTop10Overlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
       #simTop10Box { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
@@ -30417,7 +30417,7 @@ function _simInjectTeamsStyles(){
       /* display:none en los hermanos del modal: no reservan espacio en el
          layout, así no se imprimen páginas en blanco. */
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
-      body > *:not(#simTeamsOverlay) { display: none !important; }
+      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
       #simTeamsOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
       #simTeamsBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; }
       .no-print { display: none !important; }
