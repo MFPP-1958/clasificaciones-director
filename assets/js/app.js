@@ -22134,6 +22134,88 @@ function _simSpecialtyFactor(riderName, currentCircuitProfile){
   return null;
 }
 
+// ─── FASE 5 · FACTOR DE AFINIDAD AL TERRENO (desde GPX/FIT subidos) ─────────
+// Análogo a _simSpecialtyFactor pero usando race.route.terrain_type (llana /
+// rompepiernas / media_montana / montanosa) extraído del análisis del track.
+// Solo aplica si la prueba actual tiene route.terrain_type detectado y si el
+// corredor tiene ≥3 carreras totales y ≥2 en el mismo terreno.
+//
+// Devuelve {factor, type, reason} o null si no aplica.
+function _simTerrainFactor(riderName, currentTerrainType){
+  if(!riderName || !currentTerrainType || currentTerrainType === 'desconocido') return null;
+  const nk = normalizeForMatching(riderName);
+  if(!nk) return null;
+  const hist = _cachedHistory || [];
+  const byTerrain = {};
+  let totalSum = 0, totalCount = 0;
+  for(const h of hist){
+    const r = (h.riders||[]).find(x => normalizeForMatching(x.name||'') === nk);
+    if(!r || !r.pos || r.pos <= 0) continue;
+    const t = (h.route && h.route.terrain_type) || null;
+    totalSum += r.pos; totalCount++;
+    if(!t || t === 'desconocido') continue;
+    if(!byTerrain[t]) byTerrain[t] = [];
+    byTerrain[t].push(r.pos);
+  }
+  if(totalCount < 3) return null;
+  const overallMean = totalSum / totalCount;
+
+  const specialty = byTerrain[currentTerrainType];
+  if(!specialty || specialty.length < 2) return null;
+  const specMean = specialty.reduce((a,b)=>a+b,0) / specialty.length;
+  const specVar  = specialty.reduce((s,p)=>s+(p-specMean)**2,0) / specialty.length;
+  const specStd  = Math.sqrt(specVar);
+
+  const diff = specMean - overallMean;
+  const cv   = specMean > 0 ? specStd / specMean : 1;
+
+  // ESPECIALISTA en este terreno: rinde mejor que su media global con
+  // resultados consistentes.
+  if(diff < -3 && cv < 0.35 && specialty.length >= 3){
+    return { factor: 0.93, type: currentTerrainType,
+      reason: `Va bien en ${currentTerrainType} (${specMean.toFixed(1)}º vs ${overallMean.toFixed(1)}º global, ${specialty.length} carreras)` };
+  }
+  // SUFRE en este terreno
+  if(diff > 5 && specialty.length >= 3){
+    return { factor: 1.08, type: currentTerrainType,
+      reason: `Le cuesta ${currentTerrainType} (${specMean.toFixed(1)}º vs ${overallMean.toFixed(1)}º global, ${specialty.length} carreras)` };
+  }
+  // SEÑAL DÉBIL pero significativa con poca muestra
+  if(diff < -2 && specialty.length >= 2){
+    return { factor: 0.97, type: currentTerrainType,
+      reason: `Cómodo en ${currentTerrainType} (${specMean.toFixed(1)}º, ${specialty.length} carreras)` };
+  }
+  if(diff > 3 && specialty.length >= 2){
+    return { factor: 1.03, type: currentTerrainType,
+      reason: `No es lo suyo en ${currentTerrainType} (${specMean.toFixed(1)}º, ${specialty.length} carreras)` };
+  }
+  return null;
+}
+
+// — Detecta el terreno de la prueba actual desde route, con fallback al
+//   circuit type clásico si no hay route subido.
+function _simDetectRaceTerrain(race){
+  if(!race) return { terrain_type: 'desconocido', source: 'no-data', difficulty: null };
+  if(race.route && race.route.terrain_type){
+    return {
+      terrain_type:    race.route.terrain_type,
+      difficulty:      race.route.difficulty_score || null,
+      distance_m:      race.route.distance_m || null,
+      desnivel_pos_m:  race.route.desnivel_pos_m || null,
+      gradient_max:    race.route.gradient_max_pct || null,
+      source:          'route'
+    };
+  }
+  // Fallback heurístico para pruebas SIN route subido:
+  // mapeamos circuitType a un terrain_type aproximado.
+  const ct = (race.circuitType||'').toLowerCase();
+  let guess = 'desconocido';
+  if(/circuit|criterium/.test(ct)) guess = 'rompepiernas';
+  if(/contrarreloj|cri\b/.test(ct)) guess = 'llana';
+  if(/línea|linea/.test(ct))       guess = 'llana';
+  return { terrain_type: guess, source: 'guess', difficulty: null };
+}
+
 // ─── TIER 2 · CALIDAD DEL PELOTÓN HISTÓRICO ─────────────────────────────────
 // Pondera las muestras del histórico de un corredor según la "calidad" del
 // pelotón en cada carrera. Un 5º en una carrera con todos los favoritos
@@ -22393,6 +22475,8 @@ function _simBuildData(raceId){
   const _targetDateMs = _targetIso ? new Date(_targetIso).getTime() : null;
   // — Tier 1 #3 (especialización): perfil del circuito de la carrera
   const _currentCircuitProfile = _simCircuitToProfile(race.circuitType||'');
+  // — Fase 5: terreno detectado de race.route (GPX/FIT) o fallback heurístico
+  const _currentTerrain = _simDetectRaceTerrain(race);
   // — Tier 2: precomputar quality index por carrera del histórico
   // Devuelve Map<raceId, qualityWeight>. Pesos > 1 = carrera fuerte, < 1 = floja
   const _raceQualityWeight = _simComputeQualityIndex(historicalRaces);
@@ -22415,6 +22499,7 @@ function _simBuildData(raceId){
     // Tier 1: variables de fatiga y especialización (inicializadas a "no aplica")
     let fatigueInfo = {factor:1.0, racesIn7:0, racesIn14:0, reason:''};
     let specialtyInfo = null;
+    let terrainInfo = null;  // Fase 5: factor de afinidad al terreno
 
     if(hits.length){
       const validHits = hits.filter(h => h.pos > 0);
@@ -22533,6 +22618,15 @@ function _simBuildData(raceId){
           treeNode.push(`S:${specialtyInfo.reason}`);
         }
 
+        // — FASE 5: FACTOR DE AFINIDAD AL TERRENO (desde GPX/FIT) —
+        // Aplica solo si la prueba actual tiene route.terrain_type detectado
+        // y el corredor tiene historial cruzando con ese mismo terreno.
+        terrainInfo = _simTerrainFactor(ins.name, _currentTerrain && _currentTerrain.terrain_type);
+        if(terrainInfo){
+          predictedPos *= terrainInfo.factor;
+          treeNode.push(`T:${terrainInfo.reason}`);
+        }
+
         // — RAMA C: Fiabilidad → ajuste del intervalo de confianza —
         let relFactor;
         if(reliability >= 75){
@@ -22617,6 +22711,9 @@ function _simBuildData(raceId){
       fatigueReason: fatigueInfo.reason,
       specialtyFactor: specialtyInfo ? specialtyInfo.factor : 1.00,
       specialtyReason: specialtyInfo ? specialtyInfo.reason : '',
+      // Fase 5: factor de afinidad al terreno (route)
+      terrainFactor: terrainInfo ? terrainInfo.factor : 1.00,
+      terrainReason: terrainInfo ? terrainInfo.reason : '',
       // Tier 2: media ajustada por calidad del pelotón
       avgPosAdjusted: (typeof avgPosAdjusted !== 'undefined') ? avgPosAdjusted : null
     };
@@ -22721,7 +22818,8 @@ function _simBuildData(raceId){
 
   _simCurrentData = {
     race, inscritos, grid,
-    kpis:{ totalIns, strongRivals, difficulty, avgReliability, coverage, predictability, myTeamCount, myTeamWithHist }
+    kpis:{ totalIns, strongRivals, difficulty, avgReliability, coverage, predictability, myTeamCount, myTeamWithHist },
+    terrain: _currentTerrain
   };
 }
 
@@ -22749,11 +22847,24 @@ function _simRenderCurrent(){
   const stateChip = isPre
     ? '<span class="ib-chip" style="background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a">🔮 Pre-carrera</span>'
     : `<span class="ib-chip ok">🏁 Disputada · ${ridersN} clasificados</span>`;
+  // Chip de terreno detectado (Fase 5)
+  const terrainLabels = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa', desconocido:'⚪ Sin recorrido cargado' };
+  const t = _simCurrentData && _simCurrentData.terrain;
+  let terrainChip = '';
+  if(t && t.terrain_type){
+    const lbl = terrainLabels[t.terrain_type] || t.terrain_type;
+    const dif = t.difficulty != null ? ` · 🎯 ${t.difficulty}/100` : '';
+    const km  = t.distance_m ? ` · 📏 ${(t.distance_m/1000).toFixed(1)} km` : '';
+    const ds  = t.desnivel_pos_m != null ? ` · 🚵 ${t.desnivel_pos_m} m D+` : '';
+    const tag = t.source === 'route' ? 'detectado del GPX/FIT' : t.source === 'guess' ? 'aproximado por tipo de circuito' : 'sin datos';
+    terrainChip = `<span class="ib-chip" style="background:#dbeafe;border-color:#93c5fd;color:#1e3a8a" title="${escapeAttr(tag)}">🗺️ ${lbl}${dif}${km}${ds}</span>`;
+  }
   document.getElementById('simRaceMeta').innerHTML = `
     <b>🏁 ${escapeHtml(race.raceName||'')}</b>
     ${race.raceDate?`<span>📅 ${escapeHtml(race.raceDate)}</span>`:''}
     ${race.localidad?`<span>📍 ${escapeHtml(race.localidad)}</span>`:''}
     ${race.circuitType?`<span>🛣️ ${escapeHtml(race.circuitType)}</span>`:''}
+    ${terrainChip}
     <span>📋 ${inscritos.length} inscritos</span>
     ${stateChip}
   `;
@@ -22868,10 +22979,21 @@ function _simRenderTop10(grid, catFilter){
     const rangeStr = (g.predLower!=null && g.predUpper!=null)
       ? `<span style="color:${_rc2c}">${_rc2i} ${g.predLower}º–${g.predUpper}º</span>`
       : (g.predictedPos!=null ? `<span style="color:${_rc2c}">${_rc2i} ${Math.round(g.predictedPos)}º</span>` : '—');
+    // Badge de afinidad al terreno (Fase 5) — solo si el factor difiere de 1
+    let terrainBadge = '';
+    if(g.terrainFactor && g.terrainFactor !== 1){
+      const isFavorable = g.terrainFactor < 1;
+      const color = isFavorable ? '#15803d' : '#b91c1c';
+      const bg    = isFavorable ? '#dcfce7' : '#fee2e2';
+      const icon  = isFavorable ? '🏔️' : '⛰️';
+      const sign  = isFavorable ? '−' : '+';
+      const pct   = Math.round(Math.abs(g.terrainFactor - 1) * 100);
+      terrainBadge = `<span title="${escapeAttr(g.terrainReason||'')}" style="display:inline-block;font-size:10px;font-weight:800;color:${color};background:${bg};border-radius:8px;padding:1px 6px;margin-left:6px;cursor:help">${icon} ${sign}${pct}%</span>`;
+    }
     return `<div class="sim-top-row ${g.isMyTeam?'sim-my-team':''}">
       <div class="sim-top-rank ${rankCls}">${rank}º</div>
       <div class="sim-top-info">
-        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}</div>
+        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge}</div>
         <div class="sim-top-team">${escapeHtml(g.team||'(sin equipo)')}${g.cat?' · '+escapeHtml(g.cat):''}${g.bib?' · #'+escapeHtml(g.bib):''}${g.status==='team-fb'?' · <span style="color:#3730a3;font-weight:700">[fallback equipo]</span>':''}</div>
       </div>
       <div class="sim-top-metrics">
