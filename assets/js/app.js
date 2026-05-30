@@ -29579,6 +29579,300 @@ function _simPrintPredVsReal(){
   window.print();
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// FASE 6 — CALIBRACIÓN GLOBAL DEL FACTOR DE TERRENO
+// ─────────────────────────────────────────────────────────────────────────
+// Recorre TODO el histórico de carreras con terrain_type conocido y resul-
+// tados reales. Para cada corredor afectado por el factor de terreno
+// (terrainFactor != 1.00) compara error con/sin factor.
+// Agrega por tipo de terreno y por bucket de factor (0.93, 0.97, 1.03,
+// 1.08) y sugiere ajustes si el factor está sistemáticamente desviado.
+// ═════════════════════════════════════════════════════════════════════════
+
+function _simComputeTerrainCalibration(){
+  const hist = (typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+  if(!hist.length) return { byTerrain:{}, totalRaces:0, totalRiders:0, racesProcessed:[] };
+
+  // Guardamos estado actual del simulador para restaurarlo al final
+  const prevRaceId = _simSelectedRaceId;
+  const prevData   = _simCurrentData;
+
+  const candidates = hist.filter(h => {
+    const tt = h.route && h.route.terrain_type;
+    if(!tt || tt === 'desconocido') return false;
+    if(!Array.isArray(h.riders) || !h.riders.some(r => r.pos > 0)) return false;
+    if(!Array.isArray(h.inscritos) || h.inscritos.length < 5) return false;
+    return true;
+  });
+
+  const byTerrain = {};
+  const racesProcessed = [];
+  let totalRaces = 0, totalRiders = 0;
+
+  candidates.forEach(race => {
+    try {
+      _simBuildData(race.id);
+      if(!_simCurrentData || !Array.isArray(_simCurrentData.grid)) return;
+      const { grid } = _simCurrentData;
+      const tt = (race.route && race.route.terrain_type) || 'desconocido';
+
+      const realByName = new Map();
+      (race.riders||[]).forEach(r => {
+        const nk = normalizeForMatching(r.name||'');
+        if(nk && r.pos > 0) realByName.set(nk, parseInt(r.pos)||0);
+      });
+
+      let raceAffected = 0, raceErrWith = 0, raceErrWithout = 0;
+
+      grid.forEach(g => {
+        if(!g.terrainFactor || g.terrainFactor === 1) return;
+        if(g.predictedPos == null || g.predictedPosBaseTerrain == null) return;
+        const real = realByName.get(normalizeForMatching(g.name||''));
+        if(!real) return;
+        const errWith    = Math.abs(g.predictedPos - real);
+        const errWithout = Math.abs(g.predictedPosBaseTerrain - real);
+
+        if(!byTerrain[tt]) byTerrain[tt] = {
+          terrain: tt, races: 0, riders: 0,
+          sumErrWith: 0, sumErrWithout: 0,
+          improved: 0, worsened: 0, same: 0,
+          byBucket: {}
+        };
+        const T = byTerrain[tt];
+        T.riders++;
+        T.sumErrWith    += errWith;
+        T.sumErrWithout += errWithout;
+        if(errWith < errWithout - 0.5)      T.improved++;
+        else if(errWith > errWithout + 0.5) T.worsened++;
+        else                                 T.same++;
+
+        const bKey = g.terrainFactor.toFixed(2);
+        if(!T.byBucket[bKey]) T.byBucket[bKey] = {
+          factor: g.terrainFactor, riders: 0,
+          sumErrWith: 0, sumErrWithout: 0,
+          sumRealOverBase: 0
+        };
+        const B = T.byBucket[bKey];
+        B.riders++;
+        B.sumErrWith    += errWith;
+        B.sumErrWithout += errWithout;
+        // ratio real/base: indica qué multiplicador "ideal" habría dejado la
+        // predicción base sobre la real. Si la media de ratios ≠ factor
+        // actual → señal de calibración.
+        if(g.predictedPosBaseTerrain > 0){
+          B.sumRealOverBase += (real / g.predictedPosBaseTerrain);
+        }
+
+        raceAffected++;
+        raceErrWith    += errWith;
+        raceErrWithout += errWithout;
+      });
+
+      if(raceAffected){
+        byTerrain[tt].races++;
+        totalRaces++;
+        totalRiders += raceAffected;
+        racesProcessed.push({
+          id: race.id,
+          name: race.raceName || race.name || '(sin nombre)',
+          date: race.raceDate || '',
+          terrain: tt,
+          ridersAffected: raceAffected,
+          maeWith:    raceErrWith / raceAffected,
+          maeWithout: raceErrWithout / raceAffected
+        });
+      }
+    } catch(e){
+      console.warn('[fase6] error procesando', race.raceName, e);
+    }
+  });
+
+  // Restaurar estado anterior del simulador
+  try {
+    if(prevRaceId){
+      _simBuildData(prevRaceId);
+    } else {
+      _simCurrentData = prevData;
+    }
+  } catch(e){
+    _simCurrentData = prevData;
+  }
+
+  return { byTerrain, totalRaces, totalRiders, racesProcessed };
+}
+
+// Devuelve un factor SUGERIDO para un bucket, mezclando 50/50 el observado
+// con el actual para no sobreajustar con muestras pequeñas.
+function _simSuggestTerrainFactor(bucket){
+  if(!bucket || bucket.riders < 5) return null; // muestra insuficiente
+  const observed = bucket.sumRealOverBase / bucket.riders;
+  // Clamp para evitar sugerencias absurdas con outliers
+  const obsClamped = Math.max(0.80, Math.min(1.25, observed));
+  const suggested  = +(0.5 * bucket.factor + 0.5 * obsClamped).toFixed(3);
+  const delta      = suggested - bucket.factor;
+  let verdict;
+  if(Math.abs(delta) < 0.015) verdict = { txt: 'OK, mantener', color: '#15803d', icon: '✓' };
+  else if(delta > 0)          verdict = { txt: `Subir a ${suggested.toFixed(2)}`, color: '#b91c1c', icon: '↑' };
+  else                        verdict = { txt: `Bajar a ${suggested.toFixed(2)}`, color: '#2563eb', icon: '↓' };
+  return { observed, suggested, delta, verdict };
+}
+
+function _simOpenTerrainCalibration(){
+  try{
+    _simInjectPVRStyles();
+    // Cerrar overlay anterior si existe
+    const old = document.getElementById('tcalOverlay');
+    if(old) old.remove();
+
+    const res = _simComputeTerrainCalibration();
+    if(!res.totalRaces){
+      alert('Aún no hay suficientes carreras con terreno conocido + resultados reales para calibrar.\n\nNecesitas al menos 1 carrera con GPX/FIT subido y clasificación cargada en la que el factor de terreno haya modificado alguna predicción.');
+      return;
+    }
+
+    const labels = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa' };
+    const ttKeys = Object.keys(res.byTerrain).sort();
+
+    // Resumen agregado por terreno
+    const terrainRows = ttKeys.map(tt => {
+      const T = res.byTerrain[tt];
+      const mW  = T.sumErrWith    / T.riders;
+      const mWo = T.sumErrWithout / T.riders;
+      const delta = mWo - mW; // positivo = el factor ayuda
+      const dCol = delta > 0.3 ? '#15803d' : delta < -0.3 ? '#b91c1c' : '#6b7280';
+      const dTxt = (delta >= 0 ? '−' : '+') + Math.abs(delta).toFixed(2);
+
+      // Filas por bucket (factores 0.93 / 0.97 / 1.03 / 1.08)
+      const bucketRows = Object.values(T.byBucket)
+        .sort((a,b)=>a.factor-b.factor)
+        .map(B => {
+          const sug = _simSuggestTerrainFactor(B);
+          if(!sug){
+            return `<tr>
+              <td style="padding:4px 8px;text-align:center;font-weight:800;color:#0b2f6b">${B.factor.toFixed(2)}</td>
+              <td style="padding:4px 8px;text-align:center;color:#374151">${B.riders}</td>
+              <td style="padding:4px 8px;text-align:center;color:#6b7280" colspan="3">— muestra insuficiente (mín. 5) —</td>
+            </tr>`;
+          }
+          return `<tr>
+            <td style="padding:4px 8px;text-align:center;font-weight:800;color:#0b2f6b">${B.factor.toFixed(2)}</td>
+            <td style="padding:4px 8px;text-align:center;color:#374151">${B.riders}</td>
+            <td style="padding:4px 8px;text-align:center;color:#7c3aed;font-weight:700">${sug.observed.toFixed(3)}</td>
+            <td style="padding:4px 8px;text-align:center;color:#0b2f6b;font-weight:800">${sug.suggested.toFixed(2)}</td>
+            <td style="padding:4px 8px;text-align:center;color:${sug.verdict.color};font-weight:800">${sug.verdict.icon} ${sug.verdict.txt}</td>
+          </tr>`;
+        }).join('');
+
+      return `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <div style="font-weight:800;color:#0b2f6b;font-size:15px">${labels[tt]||tt}</div>
+            <span style="background:#f3f4f6;color:#374151;font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px">${T.races} carreras · ${T.riders} corredores</span>
+            <span style="background:${dCol}20;color:${dCol};font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px">Δ MAE = ${dTxt}</span>
+            <span style="background:#15803d20;color:#15803d;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px">✓ ${T.improved}</span>
+            <span style="background:#b91c1c20;color:#b91c1c;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px">✗ ${T.worsened}</span>
+            <span style="background:#6b728020;color:#6b7280;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px">= ${T.same}</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fafbfc;border-radius:6px;overflow:hidden">
+            <thead><tr style="background:#f3f4f6">
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Factor actual</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">N</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Ratio real/base obs.</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Sugerido (50/50)</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Veredicto</th>
+            </tr></thead>
+            <tbody>${bucketRows || '<tr><td colspan="5" style="padding:6px;text-align:center;color:#6b7280">—</td></tr>'}</tbody>
+          </table>
+        </div>`;
+    }).join('');
+
+    // Lista de carreras procesadas (colapsable)
+    const raceRows = res.racesProcessed
+      .slice()
+      .sort((a,b)=>(b.maeWithout - b.maeWith) - (a.maeWithout - a.maeWith))
+      .map(r => {
+        const delta = r.maeWithout - r.maeWith;
+        const dCol = delta > 0.3 ? '#15803d' : delta < -0.3 ? '#b91c1c' : '#6b7280';
+        const dTxt = (delta >= 0 ? '−' : '+') + Math.abs(delta).toFixed(2);
+        return `<tr>
+          <td style="padding:4px 8px;color:#0b2f6b;font-weight:700">${escapeHtml(r.name)}</td>
+          <td style="padding:4px 8px;text-align:center;color:#6b7280;font-size:11px">${escapeHtml(r.date||'')}</td>
+          <td style="padding:4px 8px;text-align:center;color:#374151">${labels[r.terrain]||r.terrain}</td>
+          <td style="padding:4px 8px;text-align:center;color:#374151">${r.ridersAffected}</td>
+          <td style="padding:4px 8px;text-align:center;color:#374151">${r.maeWithout.toFixed(2)}</td>
+          <td style="padding:4px 8px;text-align:center;color:#7c3aed">${r.maeWith.toFixed(2)}</td>
+          <td style="padding:4px 8px;text-align:center;color:${dCol};font-weight:800">${dTxt}</td>
+        </tr>`;
+      }).join('');
+
+    // KPI agregado global
+    let globalMaeWith = 0, globalMaeWithout = 0;
+    ttKeys.forEach(tt => {
+      globalMaeWith    += res.byTerrain[tt].sumErrWith;
+      globalMaeWithout += res.byTerrain[tt].sumErrWithout;
+    });
+    const gW  = globalMaeWith    / res.totalRiders;
+    const gWo = globalMaeWithout / res.totalRiders;
+    const gD  = gWo - gW;
+    const gCol = gD > 0.3 ? '#15803d' : gD < -0.3 ? '#b91c1c' : '#6b7280';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'tcalOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;z-index:2">
+          <div>
+            <h2 style="margin:0;font-size:20px;color:#0b2f6b">📊 Calibración global del factor de terreno</h2>
+            <div style="font-size:11.5px;color:#6b7280;margin-top:2px">Agrega TODAS las carreras del histórico con terreno conocido y resultados reales</div>
+          </div>
+          <button class="btn light" onclick="document.getElementById('tcalOverlay').remove()">✕ Cerrar</button>
+        </div>
+        <div style="padding:18px 20px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${res.totalRaces}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Carreras analizadas</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${res.totalRiders}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Corredores afectados</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#374151">${gWo.toFixed(2)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">MAE sin factor</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#7c3aed">${gW.toFixed(2)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">MAE con factor</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:${gCol}">${(gD>=0?'−':'+') + Math.abs(gD).toFixed(2)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Δ MAE global</div></div>
+          </div>
+
+          <h3 style="margin:0 0 8px;font-size:14px;color:#0b2f6b">📈 Por tipo de terreno · sugerencias de calibración</h3>
+          ${terrainRows || '<div style="color:#6b7280;font-size:12px">Sin datos por terreno.</div>'}
+
+          <details style="margin-top:14px">
+            <summary style="cursor:pointer;font-weight:700;color:#0b2f6b;font-size:13px">📋 Ver detalle de las ${res.racesProcessed.length} carreras analizadas</summary>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+              <thead><tr style="background:#f3f4f6">
+                <th style="padding:6px 8px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Carrera</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Fecha</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Terreno</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">N</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">MAE sin</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">MAE con</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Δ MAE</th>
+              </tr></thead>
+              <tbody>${raceRows}</tbody>
+            </table>
+          </details>
+
+          <div style="margin-top:14px;padding:10px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:11.5px;color:#0c4a6e;line-height:1.6">
+            <b>📘 Cómo interpretar la sugerencia:</b><br>
+            • <b>Ratio real/base observado</b>: si los corredores con factor 1.08 acabaron en promedio 1.15× peor que la predicción base, la realidad sugiere un factor más fuerte.<br>
+            • <b>Sugerido (50/50)</b>: media entre el factor actual y el observado, para no sobreajustar con muestras pequeñas.<br>
+            • <b>Mínimo 5 corredores por bucket</b> para emitir sugerencia.<br>
+            • Aplicar los valores sugeridos editando los umbrales en <code>_simTerrainFactor()</code> (líneas 22174-22191 aprox.).
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+  }catch(e){
+    console.warn('_simOpenTerrainCalibration', e);
+    alert('Error al calcular la calibración: '+(e.message||e));
+  }
+}
+
 function _simInjectPVRStyles(){
   if(document.getElementById('pvr-styles')) return;
   const st = document.createElement('style');
