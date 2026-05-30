@@ -29505,7 +29505,7 @@ function _simOpenPredVsReal(){
           ? { txt:'El factor de terreno EMPEORÓ la predicción media', color:'#b91c1c', icon:'❌' }
           : { txt:'El factor de terreno tuvo un efecto neutro', color:'#6b7280', icon:'➖' };
         terrainCalibHtml = `
-          <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f8fafc">
+          <div class="no-print" style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f8fafc">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
               <div style="font-weight:800;color:#0b2f6b;font-size:14px">🗺️ Validación del factor de terreno · ${terrainLabels2[tInfo.terrain_type]||tInfo.terrain_type}</div>
               <span style="background:${verdictGlobal.color}20;color:${verdictGlobal.color};font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px">${verdictGlobal.icon} ${verdictGlobal.txt}</span>
