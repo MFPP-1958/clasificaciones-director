@@ -29941,13 +29941,70 @@ function _simOpenTerrainCalibration(){
             </table>
           </details>
 
-          <div style="margin-top:14px;padding:10px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:11.5px;color:#0c4a6e;line-height:1.6">
-            <b>📘 Cómo interpretar la sugerencia:</b><br>
-            • <b>Ratio real/base observado</b>: si los corredores con factor 1.08 acabaron en promedio 1.15× peor que la predicción base, la realidad sugiere un factor más fuerte.<br>
-            • <b>Sugerido (50/50)</b>: media entre el factor actual y el observado, para no sobreajustar con muestras pequeñas.<br>
-            • <b>Mínimo 5 corredores por bucket</b> para emitir sugerencia.<br>
-            • Aplicar los valores sugeridos editando los umbrales en <code>_simTerrainFactor()</code> (líneas 22174-22191 aprox.).
-          </div>
+          <details class="sim-help" style="margin-top:14px">
+            <summary>❓ ¿Cómo funciona este panel y qué tengo que hacer?</summary>
+            <div class="sim-help-body">
+
+              <h4>🎯 ¿Para qué sirve este panel?</h4>
+              <p>El simulador predice en qué puesto va a acabar cada corredor en la próxima carrera. Una de las cosas que tiene en cuenta es el <b>tipo de terreno</b> (llana, rompepiernas, media montaña, montañosa): un corredor que va bien en montaña debe tener mejor predicción cuando la carrera es de montaña, y viceversa.</p>
+              <p>Para hacer eso, el modelo aplica unos <b>multiplicadores</b> ("factores de terreno"). Por defecto vienen valores genéricos del ciclismo amateur (0.93 / 0.97 / 1.03 / 1.08), pero <b>cada equipo y cada zona son distintos</b>. Este panel sirve para que el sistema <b>afine esos multiplicadores a TUS corredores</b> mirando lo que ya ha pasado en las carreras que has cargado.</p>
+
+              <h4>📊 Las 5 cifras grandes de arriba</h4>
+              <ul>
+                <li><b>Carreras analizadas</b>: carreras de tu histórico con GPX subido + resultados reales cargados.</li>
+                <li><b>Corredores afectados</b>: corredores donde el factor de terreno ha modificado su predicción (los que no, no cuentan).</li>
+                <li><b>MAE sin factor</b>: error medio en puestos si NO usáramos el factor de terreno. <i>(MAE = "Mean Absolute Error" — el promedio de cuánto se desvía la predicción de la realidad. Más bajo es mejor.)</i></li>
+                <li><b>MAE con factor</b>: error medio aplicando el factor de terreno.</li>
+                <li><b style="color:#15803d">Δ MAE global</b> (verde): la mejora. Si pone <b>−2.24</b> significa que el factor de terreno está afinando la predicción en 2.24 puestos de media. Cuanto más negativo (más verde), mejor.</li>
+              </ul>
+
+              <h4>🟢🟡🟠🔴 Los bloques por tipo de terreno</h4>
+              <p>Cada bloque muestra cómo se está comportando el factor en ese tipo específico de carrera.</p>
+              <ul>
+                <li><b>Δ MAE</b> del bloque: mejora propia de ese terreno. Verde = bueno, rojo = el factor empeora la predicción ahí.</li>
+                <li><b>✓ verde / ✗ rojo / = gris</b>: cuántos corredores mejoraron / empeoraron / quedaron igual con el factor de terreno.</li>
+              </ul>
+
+              <h4>📋 La tabla por bucket (las 4 columnas centrales)</h4>
+              <p>El modelo clasifica a cada corredor en uno de 4 "buckets" según cómo se le da ese terreno:</p>
+              <ul>
+                <li><b>Especialista</b>: claramente le va bien (multiplica su puesto por ~0.93).</li>
+                <li><b>Cómodo</b>: ligeramente mejor que su media (×0.97).</li>
+                <li><b>No es lo suyo</b>: peor de lo normal (×1.03).</li>
+                <li><b>Sufre</b>: claramente peor (×1.08).</li>
+              </ul>
+              <p>Columnas:</p>
+              <ul>
+                <li><b>Factor aplicado</b>: el valor que el simulador está usando AHORA. Si pone <code>0.89 (def 0.97)</code> significa que el autoajuste lo bajó de 0.97 a 0.89.</li>
+                <li><b>N</b>: cuántos corredores caen en ese bucket en tu histórico.</li>
+                <li><b>Ratio real/base observado</b>: dato técnico. Si los corredores con factor 1.08 acabaron en promedio 1.15× peor que la predicción base, la realidad sugiere un factor más fuerte.</li>
+                <li><b>Sugerido (50/50)</b>: el valor nuevo que el sistema propone. Hace una mezcla 50/50 entre el actual y el observado para no sobreajustar.</li>
+                <li><b>Veredicto</b>: ✓ OK mantener · ↑ subir · ↓ bajar.</li>
+              </ul>
+
+              <h4>🤖 ¿Cuándo pulsar "Aplicar autoajuste"?</h4>
+              <ol>
+                <li><b>Después de cargar una carrera nueva</b> con GPX + resultados → abre el panel y mira si aparecen sugerencias rojas/azules. Si sí, pulsa el botón.</li>
+                <li>Si ves <b>casi todo "✓ OK mantener"</b> (verde) → no hace falta tocar nada, el modelo ya está afinado a tu pelotón.</li>
+                <li>Si aplicas autoajuste y siguen quedando sugerencias → vuelve a pulsar. Cada pulsación lleva los factores la mitad del camino al óptimo (es deliberadamente conservador). En 2-4 pulsaciones converge.</li>
+              </ol>
+
+              <h4>↺ ¿Y "Restablecer defaults"?</h4>
+              <p>Vuelve a los valores genéricos originales (0.93 / 0.97 / 1.03 / 1.08). Solo úsalo si crees que algo se ha desajustado por una carrera rara o si quieres empezar la calibración de cero.</p>
+
+              <h4>🛡️ Salvaguardas automáticas (no tienes que preocuparte)</h4>
+              <ul>
+                <li>Mínimo <b>5 corredores</b> por bucket antes de tocar nada — evita ajustes con muestras pequeñas.</li>
+                <li>Los valores se acotan entre <b>0.80 y 1.25</b> — nunca harán una predicción absurda.</li>
+                <li>Mezcla <b>50/50</b> entre actual y observado — si una carrera trae números raros, no destroza la calibración.</li>
+                <li>Los ajustes se guardan en tu <b>navegador</b>. Si cambias de dispositivo empieza desde defaults y vuelves a pulsar autoajuste un par de veces.</li>
+              </ul>
+
+              <h4>📈 Resumen en una frase</h4>
+              <p><b>Abre este panel cuando cargues una carrera nueva, mira el Δ MAE global, si ves sugerencias pulsa "Aplicar autoajuste" hasta que casi todo esté en verde "OK mantener", y olvídate.</b> El sistema seguirá aprendiendo solo de tus datos.</p>
+
+            </div>
+          </details>
         </div>
       </div>`;
     document.body.appendChild(overlay);
