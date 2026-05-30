@@ -23677,9 +23677,24 @@ function _simInjectBriefingStyles(){
     #briefingOverlay .b-actions{display:flex;gap:8px;flex-wrap:wrap}
     @media print {
       @page { size: A4 portrait; margin: 14mm }
-      html, body { background:#fff !important; margin:0 !important; padding:0 !important }
+      html, body {
+        background:#fff !important;
+        margin:0 !important;
+        padding:0 !important;
+        overflow:visible !important;   /* anula el overflow:hidden que pone el modal al abrirse */
+        height:auto !important;
+      }
       body > *:not(#briefingOverlay) { display: none !important; }
-      #briefingOverlay { position:static !important; padding:0 !important; background:none !important; overflow:visible !important; display:block !important }
+      #briefingOverlay {
+        position:static !important;
+        inset:auto !important;
+        padding:0 !important;
+        background:none !important;
+        overflow:visible !important;
+        display:block !important;
+        height:auto !important;
+        width:auto !important
+      }
       #briefingOverlay .briefing { box-shadow:none !important; max-width:none !important; border-radius:0 !important; margin:0 !important }
       /* Cabecera azul: sólo aparece en la página 1, sangrada del borde */
       #briefingOverlay .b-hdr { background:#0b2f6b !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:10mm 8mm !important; margin:0 !important }
@@ -23810,8 +23825,8 @@ function _simOpenTeamBriefing(){
             <div class="b-subtitle">${escapeHtml(race.raceName||'')} · ${escapeHtml(race.raceDate||'')}${race.localidad?' · '+escapeHtml(race.localidad):''}</div>
           </div>
           <div class="b-actions no-print">
-            <button class="btn" onclick="window.print()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
-            <button class="btn light" onclick="document.getElementById('briefingOverlay').remove()">✕ Cerrar</button>
+            <button class="btn" onclick="_simPrintBriefing()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="_simCloseBriefing()">✕ Cerrar</button>
           </div>
         </div>
         <div class="b-body">
@@ -23841,11 +23856,34 @@ function _simOpenTeamBriefing(){
       </div>`;
     document.body.appendChild(overlay);
     document.body.style.overflow = 'hidden';
-    overlay.addEventListener('click', (ev)=>{ if(ev.target === overlay){ overlay.remove(); document.body.style.overflow=''; } });
+    overlay.addEventListener('click', (ev)=>{ if(ev.target === overlay){ _simCloseBriefing(); } });
   } catch(e){
     console.warn('_simOpenTeamBriefing', e);
     alert('Error al abrir el briefing: '+(e.message||e));
   }
+}
+
+// Restaurar overflow del body ANTES de imprimir: si no se hace, el
+// overflow:hidden que aplicamos al abrir el modal puede provocar que el
+// motor de impresión clipe el contenido y la hoja salga en blanco.
+function _simPrintBriefing(){
+  const prevOverflow = document.body.style.overflow;
+  document.body.style.overflow = '';
+  // Pequeño tick para que el navegador rehaga el layout antes de abrir el diálogo
+  setTimeout(()=>{
+    window.print();
+    // Si el usuario sigue con el modal abierto al cerrar el diálogo de
+    // impresión, reponemos el overflow:hidden para mantener el bloqueo de scroll.
+    setTimeout(()=>{
+      if(document.getElementById('briefingOverlay')) document.body.style.overflow = prevOverflow;
+    }, 50);
+  }, 10);
+}
+
+function _simCloseBriefing(){
+  const o = document.getElementById('briefingOverlay');
+  if(o) o.remove();
+  document.body.style.overflow = '';
 }
 
 // ── B) HEAD-TO-HEAD ──────────────────────────────────────────────────────
