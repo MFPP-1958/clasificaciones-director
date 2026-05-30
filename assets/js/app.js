@@ -32577,19 +32577,43 @@ function _routeParseTCX(text){
   return points;
 }
 
-// Lazy ESM load de fit-file-parser. La librería es CommonJS y no expone
-// global con un <script> normal, así que la cargamos como módulo ESM la
-// primera vez que se necesita (jsdelivr +esm convierte CJS → ESM al vuelo).
+// Lazy ESM load de fit-file-parser. La librería es CommonJS; según el CDN
+// que la sirva, puede llegar envuelta una o dos veces en {default: ...}.
+// Probamos esm.sh (mejor interop) con fallback a jsdelivr +esm, y
+// desenvolvemos defaults hasta encontrar la función constructora real.
 let _routeFitParserCtor = null;
 async function _routeLoadFitParser(){
   if(_routeFitParserCtor) return _routeFitParserCtor;
-  try{
-    const mod = await import('https://cdn.jsdelivr.net/npm/fit-file-parser@1.21.0/+esm');
-    _routeFitParserCtor = mod.default || mod.FitParser || mod;
-    return _routeFitParserCtor;
-  }catch(e){
-    throw new Error('No se pudo cargar fit-file-parser desde CDN: '+(e.message||e));
+  const tryUrls = [
+    'https://esm.sh/fit-file-parser@1.21.0',
+    'https://cdn.jsdelivr.net/npm/fit-file-parser@1.21.0/+esm'
+  ];
+  const errs = [];
+  for(const url of tryUrls){
+    try{
+      const mod = await import(url);
+      // Búsqueda profunda de la clase: el módulo podría ser la clase
+      // directamente, o tener default, o default.default, o exponer
+      // FitParser como nombre explícito.
+      const candidates = [
+        mod,
+        mod.default,
+        mod.default && mod.default.default,
+        mod.FitParser,
+        mod.default && mod.default.FitParser
+      ];
+      for(const c of candidates){
+        if(typeof c === 'function'){
+          _routeFitParserCtor = c;
+          return _routeFitParserCtor;
+        }
+      }
+      errs.push(url + ': no se encontró constructor en el módulo (keys: '+Object.keys(mod||{}).join(',')+')');
+    }catch(e){
+      errs.push(url + ': '+(e.message||e));
+    }
   }
+  throw new Error('No se pudo cargar fit-file-parser:\n'+errs.join('\n'));
 }
 
 // — Parser .fit —
