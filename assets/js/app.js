@@ -23631,6 +23631,17 @@ function _simBriefingFactorChips(g){
   if(g.climateReason)   chips.push({icon: g.climateIcon || '🌤️', txt: g.climateReason, color: (g.climateFactor||1) < 1 ? '#15803d' : (g.climateFactor||1) > 1 ? '#b91c1c' : '#475569'});
   if(g.specialtyReason) chips.push({icon:'🎯', txt: g.specialtyReason, color:'#0b2f6b'});
   if(g.fatigueReason)   chips.push({icon:'😴', txt: g.fatigueReason, color: '#d97706'});
+  // Bloque 1: chip Elo si hay rating con muestra suficiente
+  if(g.elo != null && g.eloGames >= 3){
+    const eloCol = g.elo >= 1300 ? '#15803d' : g.elo >= 1150 ? '#0b2f6b' : '#b91c1c';
+    const rankTxt = g.eloRank ? ` · #${g.eloRank} de la parrilla` : '';
+    chips.push({icon:'🧬', txt:`Elo ${g.elo} (${g.eloGames} carreras)${rankTxt}`, color: eloCol});
+  }
+  // Bloque 1: chip DNF si el corredor tiene tasa relevante (≥15%)
+  if(g.dnfRate >= 0.15 && g.dnfRaces >= 3){
+    const pct = Math.round(g.dnfRate * 100);
+    chips.push({icon:'⚠️', txt:`DNF en ${pct}% de sus carreras (${g.dnfCount}/${g.dnfRaces})`, color:'#b91c1c'});
+  }
   return chips;
 }
 
@@ -23744,10 +23755,25 @@ function _simOpenTeamBriefing(){
     });
 
     // Resumen del día
+    // Bloque 1: si está disponible, calculamos Monte Carlo de carrera COMPLETA
+    // para tener probabilidades coherentes (todos los corredores juntos).
+    let raceMC = null;
+    try { raceMC = (typeof _simMonteCarloFullRace==='function') ? _simMonteCarloFullRace(500) : null; }
+    catch(e){ raceMC = null; }
     let bestRider = null, bestPodium = -1;
     sorted.forEach(g=>{
       if(g.avgPos == null) return;
       const mc = _simMonteCarlo(g, 1000);
+      // Si tenemos MC de carrera completa, sobreescribimos las probs por las
+      // coherentes (mantenemos predicted/lower/upper de _simMonteCarlo original)
+      if(mc && raceMC){
+        const r = raceMC.perRider.get(g.name);
+        if(r){
+          mc.probTop3  = r.probTop3;
+          mc.probTop5  = r.probTop5;
+          mc.probTop10 = r.probTop10;
+        }
+      }
       if(mc && mc.probTop3 > bestPodium){ bestPodium = mc.probTop3; bestRider = {g, mc}; }
     });
     const withData = sorted.filter(g=>g.avgPos != null).length;
@@ -23768,6 +23794,15 @@ function _simOpenTeamBriefing(){
     // Cards de cada corredor
     const cardsHtml = sorted.map((g, idx) => {
       const mc = g.avgPos != null ? _simMonteCarlo(g, 1000) : null;
+      // Bloque 1: si hay raceMC, sustituimos probs por las coherentes
+      if(mc && raceMC){
+        const r = raceMC.perRider.get(g.name);
+        if(r){
+          mc.probTop3  = r.probTop3;
+          mc.probTop5  = r.probTop5;
+          mc.probTop10 = r.probTop10;
+        }
+      }
       const advice = _simBriefingAdvice(g, mc);
       const chips = _simBriefingFactorChips(g);
       const formArr = g.recentForm || [];
@@ -26363,6 +26398,269 @@ if(_origSimBuildData_WX){
     try{ _simApplyClimateLayer(); }catch(e){ console.warn('[wx] climate layer error', e); }
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BLOQUE 1 · RATING ELO + DNF RATE + MONTE CARLO DE CARRERA COMPLETA
+// ─────────────────────────────────────────────────────────────────────────
+// Tres capas ADDITIVAS sobre el predictor existente:
+//   1) Elo dinámico por corredor: actualizado tras cada carrera del histórico
+//      con K-factor amortiguado por nº de rivales. Solo "enriquece" el grid
+//      con la columna g.elo / g.eloRank; el cálculo de predictedPos NO se
+//      altera salvo que el usuario active el flag de mezcla.
+//   2) DNF rate por corredor: % de carreras donde se inscribió pero no
+//      terminó. Se expone como chip de aviso en el briefing si supera 15%.
+//   3) Monte Carlo de carrera completa: simula la carrera 500 veces
+//      ordenando a TODOS los corredores juntos en cada iteración → da
+//      probabilidades coherentes (todas suman 100% por puesto).
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _ELO_K_FACTOR = 32;
+const _ELO_BASE = 1200;
+const _ELO_MIN_GAMES_FOR_USE = 3;
+const _ELO_BLEND_KEY = 'tbg.eloBlendEnabled.v1';
+const _ELO_BLEND_WEIGHT = 0.30; // 30% Elo + 70% predictor heurístico
+
+let _eloCache = null, _eloCacheKey = null;
+let _dnfCache = null, _dnfCacheKey = null;
+
+function _b1HistorySignature(hist){
+  if(!hist || !hist.length) return '0';
+  // Hash simple para invalidar caché cuando cambia el histórico
+  return hist.length + ':' + (hist[hist.length-1]?.id || '') + ':' + (hist[0]?.id || '');
+}
+
+// Calcula Elo dinámico por corredor recorriendo el histórico en orden
+// cronológico. Para cada carrera hacemos N(N-1)/2 actualizaciones pairwise
+// con K amortiguado por sqrt(N-1) para que no se dispare en carreras grandes.
+function _computeRiderEloRatings(){
+  const hist = (typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+  const key = _b1HistorySignature(hist);
+  if(_eloCache && _eloCacheKey === key) return _eloCache;
+
+  const sorted = hist.slice().sort((a,b)=>{
+    const da = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(a.raceDate) : a.raceDate) || '0000-00-00';
+    const db = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(b.raceDate) : b.raceDate) || '0000-00-00';
+    return (''+da).localeCompare(''+db);
+  });
+
+  const elo = new Map(); // nameKey → {rating, games, lastDate}
+
+  sorted.forEach(race => {
+    const riders = (race.riders||[])
+      .filter(r => r && r.pos > 0 && r.name)
+      .sort((a,b) => parseInt(a.pos) - parseInt(b.pos));
+    if(riders.length < 2) return;
+
+    // Snapshot de ratings ANTES de la carrera para que las actualizaciones
+    // de esta carrera no se contaminen unas a otras
+    const ratingsBefore = new Map();
+    riders.forEach(r => {
+      const nk = normalizeForMatching(r.name);
+      if(!elo.has(nk)) elo.set(nk, {rating: _ELO_BASE, games: 0, lastDate: null});
+      ratingsBefore.set(nk, elo.get(nk).rating);
+    });
+
+    const k = _ELO_K_FACTOR / Math.sqrt(riders.length - 1);
+
+    for(let i=0; i<riders.length; i++){
+      const nkI = normalizeForMatching(riders[i].name);
+      const Ri = ratingsBefore.get(nkI);
+      let deltaSum = 0;
+      for(let j=0; j<riders.length; j++){
+        if(i === j) continue;
+        const nkJ = normalizeForMatching(riders[j].name);
+        const Rj = ratingsBefore.get(nkJ);
+        const Eij = 1 / (1 + Math.pow(10, (Rj - Ri) / 400));
+        // i terminó antes que j si parseInt(pos_i) < parseInt(pos_j)
+        const Sij = (parseInt(riders[i].pos) < parseInt(riders[j].pos)) ? 1
+                  : (parseInt(riders[i].pos) > parseInt(riders[j].pos)) ? 0
+                  : 0.5;
+        deltaSum += k * (Sij - Eij);
+      }
+      const cur = elo.get(nkI);
+      cur.rating += deltaSum;
+      cur.games += 1;
+      cur.lastDate = race.raceDate;
+    }
+  });
+
+  _eloCache = elo;
+  _eloCacheKey = key;
+  return elo;
+}
+
+// % de inscripciones donde el corredor NO terminó (pos==null/0/-1) sobre
+// total de inscripciones. Solo cuenta carreras donde realmente se inscribió.
+function _computeRiderDnfRates(){
+  const hist = (typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+  const key = _b1HistorySignature(hist);
+  if(_dnfCache && _dnfCacheKey === key) return _dnfCache;
+
+  const map = new Map(); // nameKey → {races, dnfs}
+  hist.forEach(race => {
+    const finished = new Set();
+    (race.riders||[]).forEach(r => {
+      if(r && r.pos > 0 && r.name) finished.add(normalizeForMatching(r.name));
+    });
+    (race.inscritos||[]).forEach(ins => {
+      const nk = normalizeForMatching(ins.name||'');
+      if(!nk) return;
+      if(!map.has(nk)) map.set(nk, {races: 0, dnfs: 0});
+      const e = map.get(nk);
+      e.races++;
+      if(!finished.has(nk)) e.dnfs++;
+    });
+  });
+
+  _dnfCache = map;
+  _dnfCacheKey = key;
+  return map;
+}
+
+function _loadEloBlendEnabled(){
+  try { return localStorage.getItem(_ELO_BLEND_KEY) === '1'; }
+  catch(e){ return false; }
+}
+function _saveEloBlendEnabled(on){
+  try { localStorage.setItem(_ELO_BLEND_KEY, on ? '1' : '0'); } catch(e){}
+}
+
+// Enriquece el grid actual con elo, eloRank, dnfRate. Si la mezcla Elo
+// está activada, modifica predictedPos haciendo un blend conservador.
+function _simEnrichGridBloque1(){
+  if(!_simCurrentData || !Array.isArray(_simCurrentData.grid)) return;
+  const elo = _computeRiderEloRatings();
+  const dnf = _computeRiderDnfRates();
+  const grid = _simCurrentData.grid;
+
+  grid.forEach(g => {
+    const nk = normalizeForMatching(g.name||'');
+    if(elo.has(nk)){
+      const e = elo.get(nk);
+      g.elo = Math.round(e.rating);
+      g.eloGames = e.games;
+    } else { g.elo = null; g.eloGames = 0; }
+    if(dnf.has(nk)){
+      const d = dnf.get(nk);
+      g.dnfRate = d.races > 0 ? d.dnfs / d.races : 0;
+      g.dnfRaces = d.races; g.dnfCount = d.dnfs;
+    } else { g.dnfRate = 0; g.dnfRaces = 0; g.dnfCount = 0; }
+  });
+
+  // Elo rank: posición del corredor en el ranking Elo entre TODOS los
+  // inscritos con al menos N partidas. Útil como input al blend y como KPI.
+  const withElo = grid.filter(g => g.elo != null && g.eloGames >= _ELO_MIN_GAMES_FOR_USE);
+  const sortedByElo = withElo.slice().sort((a,b) => b.elo - a.elo);
+  sortedByElo.forEach((g, idx) => { g.eloRank = idx + 1; });
+
+  // Mezcla opt-in: si está activada y el corredor tiene Elo válido,
+  // modificamos predictedPos guardando el original para diagnóstico.
+  if(_loadEloBlendEnabled() && sortedByElo.length >= 5){
+    const totalRank = sortedByElo.length;
+    grid.forEach(g => {
+      if(g.eloRank == null || g.predictedPos == null) return;
+      // Escalamos eloRank al rango del pelotón actual (no a los inscritos
+      // con Elo). Aproximación: misma posición absoluta.
+      g.predictedPosBaseElo = g.predictedPos;
+      g.predictedPos = (1 - _ELO_BLEND_WEIGHT) * g.predictedPos + _ELO_BLEND_WEIGHT * g.eloRank;
+    });
+    // Recalcular eloMixed flag para que la UI pueda mostrarlo
+    _simCurrentData._eloBlendApplied = true;
+  } else {
+    _simCurrentData._eloBlendApplied = false;
+  }
+}
+
+// HOOK: enriquecer DESPUÉS del clima (que va DESPUÉS del predictor base)
+const _origSimBuildData_B1 = (typeof _simBuildData === 'function') ? _simBuildData : null;
+if(_origSimBuildData_B1){
+  window._simBuildData = function(raceId){
+    _origSimBuildData_B1(raceId);
+    try { _simEnrichGridBloque1(); } catch(e){ console.warn('[bloque1]', e); }
+  };
+}
+
+// Monte Carlo de carrera completa: simula la carrera N veces, ordena a
+// todos los corredores juntos en cada iteración, acumula probabilidades.
+// El resultado es coherente: las probabilidades por puesto suman 100%.
+function _simMonteCarloFullRace(iterations){
+  iterations = iterations || 500;
+  if(!_simCurrentData || !Array.isArray(_simCurrentData.grid)) return null;
+  const racers = _simCurrentData.grid.filter(g => g.predictedPos != null);
+  if(racers.length < 2) return null;
+
+  // Pre-calcular media y std de cada corredor (usa intervalo predLower/predUpper
+  // como proxy de incertidumbre; si no hay, std por defecto 5).
+  const params = racers.map(g => {
+    const center = g.predictedPos;
+    const range = (g.predUpper != null && g.predLower != null) ? (g.predUpper - g.predLower) : 10;
+    const std = Math.max(2, range / 2);
+    return { name: g.name, isMyTeam: !!g.isMyTeam, team: g.team||'', center, std };
+  });
+
+  const counts = new Map();
+  params.forEach(p => counts.set(p.name, { byPos: new Array(racers.length+2).fill(0), top3:0, top5:0, top10:0, sum:0 }));
+
+  // Box-Muller para normal
+  const randN = () => {
+    const u1 = Math.random() || 1e-9, u2 = Math.random();
+    return Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+  };
+
+  for(let iter=0; iter<iterations; iter++){
+    const samples = params.map(p => ({ name: p.name, latent: p.center + randN() * p.std }));
+    samples.sort((a,b) => a.latent - b.latent);
+    samples.forEach((s, idx) => {
+      const pos = idx + 1;
+      const c = counts.get(s.name);
+      if(!c) return;
+      c.byPos[pos]++;
+      c.sum += pos;
+      if(pos <= 3)  c.top3++;
+      if(pos <= 5)  c.top5++;
+      if(pos <= 10) c.top10++;
+    });
+  }
+
+  const result = new Map();
+  counts.forEach((c, name) => {
+    let modePos = 1, modeCount = 0;
+    c.byPos.forEach((n, p) => { if(n > modeCount){ modeCount = n; modePos = p; } });
+    result.set(name, {
+      meanPos:  Math.round((c.sum / iterations) * 10) / 10,
+      modePos,
+      probTop3:  Math.round(c.top3  / iterations * 100),
+      probTop5:  Math.round(c.top5  / iterations * 100),
+      probTop10: Math.round(c.top10 / iterations * 100)
+    });
+  });
+  return { iterations, ridersCount: racers.length, perRider: result };
+}
+
+// Toggle del blend Elo: persiste, recalcula la prueba activa y refresca UI.
+function _simToggleEloBlend(){
+  const cur = _loadEloBlendEnabled();
+  _saveEloBlendEnabled(!cur);
+  const msg = !cur
+    ? '🧬 Mezcla Elo ACTIVADA.\n\nLa predicción ahora es 70% heurística + 30% rating Elo dinámico. Pulsa de nuevo para desactivar.'
+    : '🧬 Mezcla Elo DESACTIVADA.\n\nVuelves al predictor heurístico puro.';
+  alert(msg);
+  if(typeof _simSelectedRaceId !== 'undefined' && _simSelectedRaceId){
+    try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
+  }
+  _simRefreshEloBlendBtnLabel();
+}
+function _simRefreshEloBlendBtnLabel(){
+  const btn = document.getElementById('simEloBlendBtn');
+  if(!btn) return;
+  const on = _loadEloBlendEnabled();
+  btn.innerHTML = on ? '🧬 Mezcla Elo: ON' : '🧬 Mezcla Elo: OFF';
+  btn.style.background = on ? '#7c3aed' : '#fff';
+  btn.style.color      = on ? '#fff'    : '#374151';
+  btn.style.border     = on ? '0'       : '1px solid #d1d5db';
+}
+// Refresca el botón al cargar
+setTimeout(()=>_simRefreshEloBlendBtnLabel(), 600);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BACKFILL CLIMÁTICO — Herramienta de admin
