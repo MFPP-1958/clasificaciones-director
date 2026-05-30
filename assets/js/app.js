@@ -23487,7 +23487,16 @@ function _simRenderMyTeamPanel(){
   panel.style.display = '';
   // Aplicar filtro categoría (sincronizado con simCatSelect)
   const catFilter = document.getElementById('simCatSelect')?.value || '';
-  const visible = catFilter ? mine.filter(g=>g.cat===catFilter) : mine;
+  let visible = catFilter ? mine.filter(g=>g.cat===catFilter) : mine;
+  // Ordenar de MEJOR a PEOR puesto esperado: primero el que se prevé más alto
+  // (predictedPos más bajo). Los corredores sin datos (avgPos null) al final.
+  visible = visible.slice().sort((a,b)=>{
+    const sa = (a.avgPos == null) ? Infinity : (a.predictedPos ?? a.avgPos ?? Infinity);
+    const sb = (b.avgPos == null) ? Infinity : (b.predictedPos ?? b.avgPos ?? Infinity);
+    if(sa !== sb) return sa - sb;
+    // desempate por nombre alfabético para que sea estable visualmente
+    return (a.name||'').localeCompare(b.name||'');
+  });
   if(!visible.length){
     body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Ningún corredor de tu equipo en la categoría seleccionada.</p>';
     return;
