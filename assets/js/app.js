@@ -22134,13 +22134,54 @@ function _simSpecialtyFactor(riderName, currentCircuitProfile){
   return null;
 }
 
+// ─── FASE 6 · TABLA DE FACTORES DE TERRENO AUTOCALIBRABLE ───────────────────
+// Defaults conceptuales (4 buckets de intensidad). Pueden ser sobreescritos
+// por terrain_type concreto desde localStorage mediante el autoajuste.
+const _TERRAIN_FACTOR_DEFAULTS = Object.freeze({
+  strong_low:  0.93,  // claro especialista
+  mild_low:    0.97,  // cómodo
+  mild_high:   1.03,  // no es lo suyo
+  strong_high: 1.08   // sufre claramente
+});
+const _TERRAIN_FACTORS_KEY = 'tbg.terrainFactorsByTerrain.v1';
+
+function _loadTerrainFactorsTable(){
+  try {
+    const raw = localStorage.getItem(_TERRAIN_FACTORS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch(e){ return {}; }
+}
+function _saveTerrainFactorsTable(map){
+  try { localStorage.setItem(_TERRAIN_FACTORS_KEY, JSON.stringify(map||{})); } catch(e){}
+}
+function _resetTerrainFactorsTable(){
+  try { localStorage.removeItem(_TERRAIN_FACTORS_KEY); } catch(e){}
+}
+function _getTerrainFactorFor(terrainType, bucketKey){
+  const all = _loadTerrainFactorsTable();
+  const t = all && all[terrainType];
+  if(t && typeof t[bucketKey] === 'number' && isFinite(t[bucketKey])) return t[bucketKey];
+  return _TERRAIN_FACTOR_DEFAULTS[bucketKey];
+}
+// Para reconciliar factores observados con el bucket conceptual al que
+// corresponden (necesario porque tras autoajuste los factores pueden no
+// coincidir literalmente con 0.93/0.97/1.03/1.08).
+function _bucketKeyFromFactor(f){
+  let best = null, bestDist = Infinity;
+  Object.entries(_TERRAIN_FACTOR_DEFAULTS).forEach(([k,v])=>{
+    const d = Math.abs(v - f);
+    if(d < bestDist){ bestDist = d; best = k; }
+  });
+  return best;
+}
+
 // ─── FASE 5 · FACTOR DE AFINIDAD AL TERRENO (desde GPX/FIT subidos) ─────────
 // Análogo a _simSpecialtyFactor pero usando race.route.terrain_type (llana /
 // rompepiernas / media_montana / montanosa) extraído del análisis del track.
 // Solo aplica si la prueba actual tiene route.terrain_type detectado y si el
 // corredor tiene ≥3 carreras totales y ≥2 en el mismo terreno.
 //
-// Devuelve {factor, type, reason} o null si no aplica.
+// Devuelve {factor, type, reason, bucketKey} o null si no aplica.
 function _simTerrainFactor(riderName, currentTerrainType){
   if(!riderName || !currentTerrainType || currentTerrainType === 'desconocido') return null;
   const nk = normalizeForMatching(riderName);
@@ -22172,21 +22213,21 @@ function _simTerrainFactor(riderName, currentTerrainType){
   // ESPECIALISTA en este terreno: rinde mejor que su media global con
   // resultados consistentes.
   if(diff < -3 && cv < 0.35 && specialty.length >= 3){
-    return { factor: 0.93, type: currentTerrainType,
+    return { factor: _getTerrainFactorFor(currentTerrainType, 'strong_low'), type: currentTerrainType, bucketKey: 'strong_low',
       reason: `Va bien en ${currentTerrainType} (${specMean.toFixed(1)}º vs ${overallMean.toFixed(1)}º global, ${specialty.length} carreras)` };
   }
   // SUFRE en este terreno
   if(diff > 5 && specialty.length >= 3){
-    return { factor: 1.08, type: currentTerrainType,
+    return { factor: _getTerrainFactorFor(currentTerrainType, 'strong_high'), type: currentTerrainType, bucketKey: 'strong_high',
       reason: `Le cuesta ${currentTerrainType} (${specMean.toFixed(1)}º vs ${overallMean.toFixed(1)}º global, ${specialty.length} carreras)` };
   }
   // SEÑAL DÉBIL pero significativa con poca muestra
   if(diff < -2 && specialty.length >= 2){
-    return { factor: 0.97, type: currentTerrainType,
+    return { factor: _getTerrainFactorFor(currentTerrainType, 'mild_low'), type: currentTerrainType, bucketKey: 'mild_low',
       reason: `Cómodo en ${currentTerrainType} (${specMean.toFixed(1)}º, ${specialty.length} carreras)` };
   }
   if(diff > 3 && specialty.length >= 2){
-    return { factor: 1.03, type: currentTerrainType,
+    return { factor: _getTerrainFactorFor(currentTerrainType, 'mild_high'), type: currentTerrainType, bucketKey: 'mild_high',
       reason: `No es lo suyo en ${currentTerrainType} (${specMean.toFixed(1)}º, ${specialty.length} carreras)` };
   }
   return null;
@@ -22718,6 +22759,7 @@ function _simBuildData(raceId){
       // Fase 5: factor de afinidad al terreno (route)
       terrainFactor: terrainInfo ? terrainInfo.factor : 1.00,
       terrainReason: terrainInfo ? terrainInfo.reason : '',
+      terrainBucket: terrainInfo ? (terrainInfo.bucketKey || _bucketKeyFromFactor(terrainInfo.factor)) : null,
       // Fase 5.5: predicción antes de aplicar el factor de terreno (para
       // poder comparar con/sin en el panel de calibración Predicho vs Real).
       predictedPosBaseTerrain: predictedPosBaseTerrain != null ? Math.round(predictedPosBaseTerrain) : null,
@@ -29646,9 +29688,15 @@ function _simComputeTerrainCalibration(){
         else if(errWith > errWithout + 0.5) T.worsened++;
         else                                 T.same++;
 
-        const bKey = g.terrainFactor.toFixed(2);
+        // Agrupamos por bucket CONCEPTUAL (strong_low / mild_low / mild_high /
+        // strong_high), no por el valor numérico, para que el autoajuste pueda
+        // iterar coherentemente aunque los factores ya estén calibrados.
+        const bKey = g.terrainBucket || _bucketKeyFromFactor(g.terrainFactor);
         if(!T.byBucket[bKey]) T.byBucket[bKey] = {
-          factor: g.terrainFactor, riders: 0,
+          bucketKey: bKey,
+          factor: g.terrainFactor,   // factor APLICADO actualmente (puede no ser el default)
+          defaultFactor: _TERRAIN_FACTOR_DEFAULTS[bKey],
+          riders: 0,
           sumErrWith: 0, sumErrWithout: 0,
           sumRealOverBase: 0
         };
@@ -29701,6 +29749,32 @@ function _simComputeTerrainCalibration(){
   return { byTerrain, totalRaces, totalRiders, racesProcessed };
 }
 
+// ─── Aplica los factores sugeridos a la tabla persistente y devuelve el
+//     log de cambios para mostrar al usuario.
+function _simApplyTerrainAutoCalibration(){
+  const res = _simComputeTerrainCalibration();
+  const current = _loadTerrainFactorsTable();
+  const updated = JSON.parse(JSON.stringify(current||{}));
+  const changes = [];
+  Object.keys(res.byTerrain).forEach(tt => {
+    const T = res.byTerrain[tt];
+    if(!updated[tt]) updated[tt] = {};
+    Object.values(T.byBucket).forEach(B => {
+      const sug = _simSuggestTerrainFactor(B);
+      if(!sug) return; // muestra insuficiente
+      const bKey = B.bucketKey;
+      if(!bKey) return;
+      const prev = (updated[tt][bKey] != null) ? updated[tt][bKey] : _TERRAIN_FACTOR_DEFAULTS[bKey];
+      const next = sug.suggested;
+      if(Math.abs(next - prev) < 0.005) return; // sin cambio relevante
+      updated[tt][bKey] = next;
+      changes.push({ terrain: tt, bucket: bKey, from: prev, to: next, n: B.riders });
+    });
+  });
+  _saveTerrainFactorsTable(updated);
+  return { changes, totalRaces: res.totalRaces, totalRiders: res.totalRiders };
+}
+
 // Devuelve un factor SUGERIDO para un bucket, mezclando 50/50 el observado
 // con el actual para no sobreajustar con muestras pequeñas.
 function _simSuggestTerrainFactor(bucket){
@@ -29742,20 +29816,26 @@ function _simOpenTerrainCalibration(){
       const dCol = delta > 0.3 ? '#15803d' : delta < -0.3 ? '#b91c1c' : '#6b7280';
       const dTxt = (delta >= 0 ? '−' : '+') + Math.abs(delta).toFixed(2);
 
-      // Filas por bucket (factores 0.93 / 0.97 / 1.03 / 1.08)
+      // Filas por bucket (strong_low, mild_low, mild_high, strong_high)
+      const bucketLabels = { strong_low:'Especialista', mild_low:'Cómodo', mild_high:'No es lo suyo', strong_high:'Sufre' };
       const bucketRows = Object.values(T.byBucket)
         .sort((a,b)=>a.factor-b.factor)
         .map(B => {
           const sug = _simSuggestTerrainFactor(B);
+          const appliedTxt = (B.factor !== B.defaultFactor)
+            ? `<span style="font-weight:800;color:#0d9488">${B.factor.toFixed(2)}</span><span style="font-size:10px;color:#6b7280">&nbsp;(def ${B.defaultFactor.toFixed(2)})</span>`
+            : `<span style="font-weight:800;color:#0b2f6b">${B.factor.toFixed(2)}</span>`;
           if(!sug){
             return `<tr>
-              <td style="padding:4px 8px;text-align:center;font-weight:800;color:#0b2f6b">${B.factor.toFixed(2)}</td>
+              <td style="padding:4px 8px;text-align:center">${appliedTxt}</td>
+              <td style="padding:4px 8px;text-align:center;color:#374151;font-size:11px">${bucketLabels[B.bucketKey]||B.bucketKey}</td>
               <td style="padding:4px 8px;text-align:center;color:#374151">${B.riders}</td>
               <td style="padding:4px 8px;text-align:center;color:#6b7280" colspan="3">— muestra insuficiente (mín. 5) —</td>
             </tr>`;
           }
           return `<tr>
-            <td style="padding:4px 8px;text-align:center;font-weight:800;color:#0b2f6b">${B.factor.toFixed(2)}</td>
+            <td style="padding:4px 8px;text-align:center">${appliedTxt}</td>
+            <td style="padding:4px 8px;text-align:center;color:#374151;font-size:11px">${bucketLabels[B.bucketKey]||B.bucketKey}</td>
             <td style="padding:4px 8px;text-align:center;color:#374151">${B.riders}</td>
             <td style="padding:4px 8px;text-align:center;color:#7c3aed;font-weight:700">${sug.observed.toFixed(3)}</td>
             <td style="padding:4px 8px;text-align:center;color:#0b2f6b;font-weight:800">${sug.suggested.toFixed(2)}</td>
@@ -29775,13 +29855,14 @@ function _simOpenTerrainCalibration(){
           </div>
           <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fafbfc;border-radius:6px;overflow:hidden">
             <thead><tr style="background:#f3f4f6">
-              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Factor actual</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Factor aplicado</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Bucket</th>
               <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">N</th>
               <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Ratio real/base obs.</th>
               <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Sugerido (50/50)</th>
               <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Veredicto</th>
             </tr></thead>
-            <tbody>${bucketRows || '<tr><td colspan="5" style="padding:6px;text-align:center;color:#6b7280">—</td></tr>'}</tbody>
+            <tbody>${bucketRows || '<tr><td colspan="6" style="padding:6px;text-align:center;color:#6b7280">—</td></tr>'}</tbody>
           </table>
         </div>`;
     }).join('');
@@ -29826,7 +29907,11 @@ function _simOpenTerrainCalibration(){
             <h2 style="margin:0;font-size:20px;color:#0b2f6b">📊 Calibración global del factor de terreno</h2>
             <div style="font-size:11.5px;color:#6b7280;margin-top:2px">Agrega TODAS las carreras del histórico con terreno conocido y resultados reales</div>
           </div>
-          <button class="btn light" onclick="document.getElementById('tcalOverlay').remove()">✕ Cerrar</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn" onclick="_simRunTerrainAutoCalibration()" style="background:#0d9488;color:#fff;border:0;font-weight:800" title="Aplica los factores sugeridos a la tabla del simulador. Persiste en este dispositivo.">🤖 Aplicar autoajuste</button>
+            <button class="btn light" onclick="_simResetTerrainFactors()" style="background:#fff;color:#374151;border:1px solid #d1d5db;font-weight:700" title="Vuelve a los factores por defecto 0.93 / 0.97 / 1.03 / 1.08">↺ Restablecer defaults</button>
+            <button class="btn light" onclick="document.getElementById('tcalOverlay').remove()">✕ Cerrar</button>
+          </div>
         </div>
         <div style="padding:18px 20px">
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">
@@ -29871,6 +29956,41 @@ function _simOpenTerrainCalibration(){
     console.warn('_simOpenTerrainCalibration', e);
     alert('Error al calcular la calibración: '+(e.message||e));
   }
+}
+
+// Aplica el autoajuste y muestra un alert con el resumen de cambios.
+// Después relanza el modal y recalcula la prueba actual si la había.
+function _simRunTerrainAutoCalibration(){
+  try{
+    const { changes, totalRaces, totalRiders } = _simApplyTerrainAutoCalibration();
+    const labels = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa' };
+    const bLabels = { strong_low:'Especialista', mild_low:'Cómodo', mild_high:'No es lo suyo', strong_high:'Sufre' };
+    if(!changes.length){
+      alert(`✅ Autoajuste ejecutado sobre ${totalRaces} carreras y ${totalRiders} corredores.\n\nNo hay cambios relevantes: los factores actuales ya están bien ajustados a los datos.`);
+    } else {
+      const lines = changes.map(c => `  • ${labels[c.terrain]||c.terrain} · ${bLabels[c.bucket]||c.bucket} (n=${c.n}): ${c.from.toFixed(3)} → ${c.to.toFixed(3)}`);
+      alert(`🤖 Autoajuste aplicado sobre ${totalRaces} carreras y ${totalRiders} corredores.\n\n${changes.length} factor(es) actualizado(s):\n\n${lines.join('\n')}\n\nSe aplicarán en todas las predicciones futuras. Persistido en este dispositivo.`);
+    }
+    // Recalcular la prueba activa si la había, para que el usuario vea el efecto.
+    if(typeof _simSelectedRaceId !== 'undefined' && _simSelectedRaceId){
+      try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
+    }
+    // Recargar el modal con los nuevos valores
+    _simOpenTerrainCalibration();
+  }catch(e){
+    console.warn('_simRunTerrainAutoCalibration', e);
+    alert('Error al aplicar el autoajuste: '+(e.message||e));
+  }
+}
+
+// Restablece la tabla persistida y vuelve a los defaults 0.93/0.97/1.03/1.08
+function _simResetTerrainFactors(){
+  if(!confirm('¿Volver a los factores por defecto (0.93 / 0.97 / 1.03 / 1.08)?\n\nSe perderá todo el autoajuste calibrado a tu histórico.')) return;
+  _resetTerrainFactorsTable();
+  if(typeof _simSelectedRaceId !== 'undefined' && _simSelectedRaceId){
+    try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
+  }
+  _simOpenTerrainCalibration();
 }
 
 function _simInjectPVRStyles(){
