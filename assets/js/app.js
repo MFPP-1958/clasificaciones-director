@@ -23676,12 +23676,28 @@ function _simInjectBriefingStyles(){
     #briefingOverlay .b-rival b{color:#9a3412}
     #briefingOverlay .b-actions{display:flex;gap:8px;flex-wrap:wrap}
     @media print {
-      @page { size: A4 portrait; margin: 12mm }
-      body { background:#fff !important; }
+      @page { size: A4 portrait; margin: 14mm }
+      html, body { background:#fff !important; margin:0 !important; padding:0 !important }
       body > *:not(#briefingOverlay) { display: none !important; }
       #briefingOverlay { position:static !important; padding:0 !important; background:none !important; overflow:visible !important; display:block !important }
-      #briefingOverlay .briefing { box-shadow:none !important; max-width:none !important; border-radius:0 !important }
-      #briefingOverlay .b-hdr { background:#0b2f6b !important; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+      #briefingOverlay .briefing { box-shadow:none !important; max-width:none !important; border-radius:0 !important; margin:0 !important }
+      /* Cabecera azul: sólo aparece en la página 1, sangrada del borde */
+      #briefingOverlay .b-hdr { background:#0b2f6b !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:10mm 8mm !important; margin:0 !important }
+      /* b-body: padding clonado en cada página fragmentada → mantiene
+         márgenes laterales en TODAS las páginas, no solo la primera. */
+      #briefingOverlay .b-body { padding:6mm 8mm 8mm !important; -webkit-box-decoration-break:clone; box-decoration-break:clone }
+      /* Cada tarjeta tiene su propio margen superior, así si una rompe a
+         nueva página el contenido no queda pegado al borde superior. */
+      #briefingOverlay .b-rider { margin:0 0 4mm !important; padding:5mm 6mm !important; break-inside:avoid; page-break-inside:avoid }
+      #briefingOverlay .b-summary { gap:4mm !important; margin-bottom:6mm !important }
+      #briefingOverlay .b-meta-row { gap:3mm !important; margin-bottom:6mm !important }
+      #briefingOverlay .b-rider .br-role,
+      #briefingOverlay .b-rider .br-tips,
+      #briefingOverlay .b-rider .br-kpi,
+      #briefingOverlay .b-rider .br-chip,
+      #briefingOverlay .b-rival,
+      #briefingOverlay .b-meta-chip,
+      #briefingOverlay .b-summary-card { -webkit-print-color-adjust:exact; print-color-adjust:exact }
       .no-print, #briefingOverlay .b-actions { display:none !important }
     }
   `;
