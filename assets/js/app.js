@@ -4620,6 +4620,7 @@ async function _sbLoadHistory(){
       circuitType: extra.circuitType || '',
       challengeCV: !!extra.challengeCV,
       ccaa: extra.ccaa || '',
+      route: extra.route || null,
       // Meteo (Open-Meteo) — opcionales, leídos desde notes
       hora_inicio: extra.hora_inicio || '',
       weather: extra.weather || null,
@@ -10217,12 +10218,14 @@ async function saveHistory(){
   const inscritosToSave = (typeof inscritos !== 'undefined' && Array.isArray(inscritos) && inscritos.length) ? inscritos : [];
   // Hora de inicio (Open-Meteo) — leída del formulario; opcional pero recomendado
   const horaInicio = (document.getElementById('raceStartTime')?.value || '').trim();
-  const notes=JSON.stringify({raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,ccaa});
+  // Objeto base de notes — luego le añadimos campos preservados si existe
+  // un duplicado (route, weather, etc. que el formulario no controla).
+  const notesObj = {raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,ccaa};
 
   // ── Buscar duplicados por fecha ──────────────────────────────────────────
   const {data:existing,error:dupErr}=await _sb
     .from('races')
-    .select('id, name, race_results(count)')
+    .select('id, name, notes, race_results(count)')
     .eq('date', isoDate)
     .eq('race_type','clasificacion');
   if(dupErr){alert('Error al comprobar duplicados: '+dupErr.message);return;}
@@ -10235,11 +10238,23 @@ async function saveHistory(){
     accion=await _mostrarDialogoDuplicado(raceDateStr||isoDate, dup.name, nCorredores);
     if(accion==='cancelar') return;
     if(accion==='actualizar'){
+      // Antes de borrar la fila antigua, rescatamos campos que el formulario
+      // NO maneja pero que pueden estar en notes: route (GPX/FIT), weather
+      // (Open-Meteo) y lat/lon de la localidad. Si no, el "actualizar"
+      // destruiría datos costosos de regenerar.
+      try{
+        const oldExtra = JSON.parse(dup.notes||'{}');
+        ['route','weather','lat','lon'].forEach(k => {
+          if(oldExtra[k] != null) notesObj[k] = oldExtra[k];
+        });
+      }catch(e){ /* notes vacíos o malformados, seguimos */ }
       // Borrar carrera existente (cascade borrará race_results y team_rankings si está configurado)
       const {error:delErr}=await _sb.from('races').delete().eq('id',dup.id);
       if(delErr){alert('Error al eliminar la carrera existente: '+delErr.message);return;}
     }
   }
+
+  const notes = JSON.stringify(notesObj);
 
   // ── Insertar nueva carrera ───────────────────────────────────────────────
   const {data:raceRow,error:raceErr}=await _sb.from('races').insert({
@@ -11964,6 +11979,7 @@ async function renderHistory(){
           ${favBtn}
           ${fccvBtn}
           ${insBtn}
+          <button onclick="event.stopPropagation();_routeOpenModal('${h.id}')" title="Subir/ver recorrido (GPX/FIT) y métricas de altimetría" style="background:#fff;color:#15803d;border:1.5px solid #86efac;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗺️ Recorrido${h.route&&h.route.distance_m?' ✓':''}</button>
           <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer">📂 Cargar</button>
           <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1.5px solid #fecdd3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
         </div>
@@ -32337,3 +32353,713 @@ async function _fccvDbBootLicenciasPanel(){
     _fccvDbRefreshStatusText();
   };
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+// ROUTE · análisis de archivos GPX/FIT/TCX (Fase 1)
+//   - Parser único que normaliza a un track canónico
+//   - Cálculo de métricas (distancia, desnivel, terrain_type)
+//   - Subida del archivo original + JSON simplificado a Supabase Storage
+//   - Persistencia de métricas en races.notes.route
+//   - Modal con mapa Leaflet + perfil Chart.js + tarjeta de métricas
+//   - Esfuerzos individuales con potencia/HR → rider_efforts_fccv
+// ════════════════════════════════════════════════════════════════════════
+
+const ROUTE_BUCKET = 'race-tracks';
+let _routeCurrent = null;  // { raceId, race, canonical, effort, sourceMeta }
+let _routeMapInstance = null;
+let _routeProfileChart = null;
+let _routeMapPositionMarker = null;
+
+// — Distancia haversine en metros entre dos puntos lat/lon —
+function _routeHaversine(lat1, lon1, lat2, lon2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// — Suavizado de altimetría con media móvil (reduce ruido GPS sin perder picos) —
+function _routeSmoothElev(points, window){
+  window = window || 7;
+  const half = Math.floor(window/2);
+  const out = points.map(p => ({...p}));
+  for(let i = 0; i < points.length; i++){
+    let sum = 0, cnt = 0;
+    for(let j = Math.max(0, i-half); j <= Math.min(points.length-1, i+half); j++){
+      if(points[j].ele != null){ sum += points[j].ele; cnt++; }
+    }
+    if(cnt > 0) out[i].ele = sum / cnt;
+  }
+  return out;
+}
+
+// — Suma de desnivel positivo (sobre serie suavizada) —
+function _routeAccumulatedAscent(points){
+  let pos = 0, neg = 0;
+  for(let i = 1; i < points.length; i++){
+    const a = points[i].ele, b = points[i-1].ele;
+    if(a == null || b == null) continue;
+    const d = a - b;
+    if(d > 0) pos += d;
+    else      neg -= d;
+  }
+  return { pos: Math.round(pos), neg: Math.round(neg) };
+}
+
+// — Clasifica el terreno según m de desnivel positivo por km —
+function _routeClassifyTerrain(distMeters, ascentMeters, maxGradePct){
+  if(distMeters < 100) return 'desconocido';
+  const mPerKm = ascentMeters / (distMeters / 1000);
+  if(mPerKm < 5)            return 'llana';
+  if(mPerKm < 12)           return 'rompepiernas';
+  if(mPerKm < 22)           return 'media_montana';
+  return 'montanosa';
+}
+
+// — Pendiente máxima/media en tramos de subida (con ventana 100 m) —
+function _routeGradient(points){
+  if(points.length < 2) return { avg: 0, max: 0 };
+  // Pendiente cada ~50 metros agregando puntos
+  const grads = [];
+  let acc_d = 0, acc_dh = 0, base = 0;
+  for(let i = 1; i < points.length; i++){
+    const d = _routeHaversine(points[i-1].lat, points[i-1].lon, points[i].lat, points[i].lon);
+    if(points[i].ele == null || points[i-1].ele == null) continue;
+    acc_d += d;
+    acc_dh += (points[i].ele - points[i-1].ele);
+    if(acc_d >= 50){
+      const g = (acc_dh / acc_d) * 100;
+      if(isFinite(g) && Math.abs(g) < 35) grads.push(g);
+      acc_d = 0; acc_dh = 0;
+    }
+  }
+  if(!grads.length) return { avg: 0, max: 0 };
+  const pos = grads.filter(g => g > 0);
+  const avg = pos.length ? pos.reduce((s,g)=>s+g, 0) / pos.length : 0;
+  const max = Math.max(...grads, 0);
+  return { avg: Math.round(avg * 10) / 10, max: Math.round(max * 10) / 10 };
+}
+
+// — Construye canonical desde puntos parseados —
+function _routeBuildCanonical(rawPoints, sourceMeta){
+  // Filtramos puntos sin lat/lon (algunos .fit empiezan con records sin GPS).
+  const pts = rawPoints.filter(p => p.lat != null && p.lon != null);
+  if(pts.length < 2) throw new Error('Track sin suficientes puntos GPS');
+
+  // Calculamos distancia acumulada si no viene del archivo
+  let distSum = 0;
+  pts[0].dist = pts[0].dist != null ? pts[0].dist : 0;
+  for(let i = 1; i < pts.length; i++){
+    const stepD = _routeHaversine(pts[i-1].lat, pts[i-1].lon, pts[i].lat, pts[i].lon);
+    distSum += stepD;
+    if(pts[i].dist == null) pts[i].dist = distSum;
+  }
+  const distanceM = pts[pts.length-1].dist || distSum;
+
+  // Suavizado de altimetría + desniveles
+  const smoothed = _routeSmoothElev(pts);
+  const { pos: ascent, neg: descent } = _routeAccumulatedAscent(smoothed);
+  const grad = _routeGradient(smoothed);
+
+  const elevs = smoothed.map(p => p.ele).filter(v => v != null);
+  const altMin = elevs.length ? Math.round(Math.min(...elevs)) : null;
+  const altMax = elevs.length ? Math.round(Math.max(...elevs)) : null;
+  const altAvg = elevs.length ? Math.round(elevs.reduce((s,v)=>s+v, 0) / elevs.length) : null;
+
+  const terrain = _routeClassifyTerrain(distanceM, ascent, grad.max);
+  // Difficulty score 0-100: combina desnivel/km + pendiente máxima
+  const mPerKm = ascent / (distanceM / 1000);
+  const diff = Math.min(100, Math.round(mPerKm * 1.6 + grad.max * 1.8));
+
+  return {
+    points: pts,
+    summary: {
+      source: sourceMeta.kind,
+      source_file: sourceMeta.filename,
+      source_device: sourceMeta.device || null,
+      distance_m: Math.round(distanceM),
+      desnivel_pos_m: ascent,
+      desnivel_neg_m: descent,
+      altitude_min_m: altMin,
+      altitude_max_m: altMax,
+      altitude_avg_m: altAvg,
+      terrain_type: terrain,
+      gradient_avg_pct: grad.avg,
+      gradient_max_pct: grad.max,
+      difficulty_score: diff,
+      points_count: pts.length,
+      has_altitude: elevs.length > 0,
+      uploaded_at: new Date().toISOString()
+    },
+    effort: sourceMeta.effort || null
+  };
+}
+
+// — Parser .gpx (XML, sin librería) —
+function _routeParseGPX(text){
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  const err = xml.querySelector('parsererror');
+  if(err) throw new Error('GPX inválido: '+err.textContent.slice(0, 200));
+  // Buscamos cualquier descendiente por localName, ignorando los namespaces
+  // (Garmin usa ns3:hr / gpxtpx:hr, Strava no usa prefijo, otros usan power).
+  // Para evitar selectores CSS frágiles con namespaces, recorremos a mano.
+  const findChildByLocalName = (parent, names) => {
+    const wanted = new Set(names);
+    const walk = (node) => {
+      for(const ch of node.children){
+        if(wanted.has(ch.localName)) return ch;
+        const deeper = walk(ch);
+        if(deeper) return deeper;
+      }
+      return null;
+    };
+    return walk(parent);
+  };
+  const trkpts = xml.getElementsByTagName('trkpt');
+  const points = [];
+  for(const pt of trkpts){
+    const lat = parseFloat(pt.getAttribute('lat'));
+    const lon = parseFloat(pt.getAttribute('lon'));
+    if(isNaN(lat) || isNaN(lon)) continue;
+    const eleNode  = findChildByLocalName(pt, ['ele']);
+    const timeNode = findChildByLocalName(pt, ['time']);
+    const hrNode   = findChildByLocalName(pt, ['hr','heartrate']);
+    const cadNode  = findChildByLocalName(pt, ['cad','cadence']);
+    const pwNode   = findChildByLocalName(pt, ['power','watts']);
+    const ele = eleNode ? parseFloat(eleNode.textContent) : NaN;
+    const timeStr = timeNode ? timeNode.textContent : '';
+    const time = timeStr ? new Date(timeStr).getTime() : null;
+    const hr  = hrNode  ? parseInt(hrNode.textContent)  : NaN;
+    const cad = cadNode ? parseInt(cadNode.textContent) : NaN;
+    const pw  = pwNode  ? parseInt(pwNode.textContent)  : NaN;
+    points.push({
+      lat, lon,
+      ele: isNaN(ele) ? null : ele,
+      time,
+      hr:  isNaN(hr)  ? null : hr,
+      cad: isNaN(cad) ? null : cad,
+      pw:  isNaN(pw)  ? null : pw
+    });
+  }
+  return points;
+}
+
+// — Parser .tcx (Garmin Training Center XML) — similar a GPX —
+function _routeParseTCX(text){
+  const xml = new DOMParser().parseFromString(text, 'application/xml');
+  const err = xml.querySelector('parsererror');
+  if(err) throw new Error('TCX inválido');
+  const trkpts = xml.querySelectorAll('Trackpoint');
+  const points = [];
+  trkpts.forEach(pt => {
+    const lat = parseFloat(pt.querySelector('Position LatitudeDegrees')?.textContent);
+    const lon = parseFloat(pt.querySelector('Position LongitudeDegrees')?.textContent);
+    if(isNaN(lat) || isNaN(lon)) return;
+    const ele = parseFloat(pt.querySelector('AltitudeMeters')?.textContent);
+    const dist = parseFloat(pt.querySelector('DistanceMeters')?.textContent);
+    const timeStr = pt.querySelector('Time')?.textContent;
+    const time = timeStr ? new Date(timeStr).getTime() : null;
+    const hr = parseInt(pt.querySelector('HeartRateBpm Value')?.textContent);
+    const cad = parseInt(pt.querySelector('Cadence')?.textContent);
+    const pw = parseInt(pt.querySelector('Watts')?.textContent);
+    points.push({
+      lat, lon,
+      ele: isNaN(ele) ? null : ele,
+      dist: isNaN(dist) ? null : dist,
+      time,
+      hr: isNaN(hr) ? null : hr,
+      cad: isNaN(cad) ? null : cad,
+      pw: isNaN(pw) ? null : pw
+    });
+  });
+  return points;
+}
+
+// — Parser .fit usando fit-file-parser CDN —
+async function _routeParseFIT(arrayBuffer){
+  if(typeof FitParser === 'undefined' && typeof window.FitParser === 'undefined'){
+    throw new Error('fit-file-parser no cargado');
+  }
+  const FP = window.FitParser?.default || window.FitParser || FitParser;
+  const parser = new FP({
+    force: true,
+    speedUnit: 'km/h',
+    lengthUnit: 'm',
+    temperatureUnit: 'celsius',
+    elapsedRecordField: true,
+    mode: 'list'
+  });
+  return new Promise((resolve, reject) => {
+    parser.parse(arrayBuffer, (err, data) => {
+      if(err) return reject(new Error('FIT inválido: '+err));
+      // Records → puntos canónicos
+      const recs = data.records || [];
+      const points = recs.map(r => ({
+        lat: r.position_lat,
+        lon: r.position_long,
+        // Garmin Edge a veces solo guarda enhanced_altitude
+        ele: r.altitude != null ? r.altitude : (r.enhanced_altitude != null ? r.enhanced_altitude : null),
+        dist: r.distance,
+        time: r.timestamp instanceof Date ? r.timestamp.getTime() : null,
+        hr: r.heart_rate,
+        cad: r.cadence,
+        pw: r.power
+      }));
+      // Effort summary (datos personales del corredor)
+      const s = data.sessions?.[0] || null;
+      const effort = s ? {
+        start_time: s.start_time instanceof Date ? s.start_time.toISOString() : null,
+        duration_s: Math.round(s.total_elapsed_time || s.total_timer_time || 0),
+        distance_m: Math.round(s.total_distance || 0),
+        hr_avg_bpm: s.avg_heart_rate || null,
+        hr_max_bpm: s.max_heart_rate || null,
+        power_avg_w: s.avg_power || null,
+        power_max_w: s.max_power || null,
+        power_norm_w: s.normalized_power || null,
+        ftp_w: s.threshold_power || null,
+        cadence_avg: s.avg_cadence || null,
+        cadence_max: s.max_cadence || null,
+        calories: s.total_calories || null,
+        work_kj: s.total_work ? Math.round(s.total_work / 1000) : null,
+        temperature_avg: s.avg_temperature || null
+      } : null;
+      const devInfo = (data.file_ids && data.file_ids[0]) || (data.device_infos && data.device_infos[0]) || {};
+      resolve({ points, effort, device: { mfg: devInfo.manufacturer || null, product: devInfo.product || null } });
+    });
+  });
+}
+
+// — Carga un archivo en su parser adecuado y devuelve canonical —
+async function _routeParseFile(file){
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if(ext === 'fit'){
+    const buf = await file.arrayBuffer();
+    const r = await _routeParseFIT(buf);
+    const dev = r.device.mfg ? `${r.device.mfg}${r.device.product?'/'+r.device.product:''}` : null;
+    return _routeBuildCanonical(r.points, { kind:'fit', filename:file.name, device:dev, effort:r.effort });
+  }
+  if(ext === 'gpx'){
+    const text = await file.text();
+    const pts = _routeParseGPX(text);
+    return _routeBuildCanonical(pts, { kind:'gpx', filename:file.name });
+  }
+  if(ext === 'tcx'){
+    const text = await file.text();
+    const pts = _routeParseTCX(text);
+    return _routeBuildCanonical(pts, { kind:'tcx', filename:file.name });
+  }
+  throw new Error('Formato no soportado: '+ext+'. Sube .fit, .gpx o .tcx');
+}
+
+// — Downsample para mapa: cada N metros, suficiente para dibujar línea suave —
+function _routeDownsample(points, everyM){
+  everyM = everyM || 15;
+  if(points.length < 3) return points.slice();
+  const out = [points[0]];
+  let lastDist = 0;
+  for(let i = 1; i < points.length; i++){
+    if((points[i].dist || 0) - lastDist >= everyM){
+      out.push(points[i]);
+      lastDist = points[i].dist || 0;
+    }
+  }
+  out.push(points[points.length-1]);
+  return out;
+}
+
+// — Sube el archivo original + JSON canónico al bucket Storage —
+async function _routeUploadToStorage(raceId, file, canonical){
+  if(!_sb) throw new Error('Supabase no disponible');
+  const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+  const origKey = `${raceId}/original.${ext}`;
+  const courseKey = `${raceId}/course.json`;
+  // 1) Original tal cual
+  const origRes = await _sb.storage.from(ROUTE_BUCKET).upload(origKey, file, { upsert: true, contentType: 'application/octet-stream' });
+  if(origRes.error) throw new Error('Subida original falló: '+origRes.error.message);
+  // 2) JSON canónico (puntos downsample para mapa/perfil)
+  const courseJson = {
+    summary: canonical.summary,
+    points: _routeDownsample(canonical.points, 15).map(p => ({ lat: p.lat, lon: p.lon, ele: p.ele, dist: p.dist }))
+  };
+  const blob = new Blob([JSON.stringify(courseJson)], { type: 'application/json' });
+  const courseRes = await _sb.storage.from(ROUTE_BUCKET).upload(courseKey, blob, { upsert: true, contentType: 'application/json' });
+  if(courseRes.error) throw new Error('Subida JSON curso falló: '+courseRes.error.message);
+  return { origKey, courseKey };
+}
+
+// — Descarga el JSON canónico del curso —
+async function _routeDownloadCourse(raceId){
+  if(!_sb) return null;
+  const courseKey = `${raceId}/course.json`;
+  const { data, error } = await _sb.storage.from(ROUTE_BUCKET).download(courseKey);
+  if(error || !data) return null;
+  try{
+    const text = await data.text();
+    return JSON.parse(text);
+  }catch(e){ return null; }
+}
+
+// — Persiste métricas del curso en races.notes.route —
+async function _routePersistMetrics(raceId, summary){
+  if(!_sb) throw new Error('Supabase no disponible');
+  const { data, error } = await _sb.from('races').select('notes').eq('id', raceId).single();
+  if(error || !data) throw new Error('No se pudo leer la prueba: '+(error?.message||''));
+  let extra = {};
+  try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+  extra.route = summary;
+  const { error: upErr } = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', raceId);
+  if(upErr) throw new Error('Guardado de métricas falló: '+upErr.message);
+  // Actualizar caché local también
+  if(Array.isArray(_cachedHistory)){
+    const h = _cachedHistory.find(x => x.id === raceId);
+    if(h) h.route = summary;
+  }
+}
+
+// — Persiste un esfuerzo individual en rider_efforts_fccv —
+async function _routeSaveEffort(raceId, effort, sourceFile, sourceKind, deviceStr, riderHint){
+  if(!_sb || !effort) return { ok:false };
+  const row = {
+    race_id:        raceId,
+    rider_dni:      null,
+    rider_name_hint: riderHint || (sourceFile ? sourceFile.replace(/\.\w+$/,'') : null),
+    source_file:    sourceFile || null,
+    source_kind:    sourceKind || 'fit',
+    device_mfg:     deviceStr ? deviceStr.split('/')[0] : null,
+    device_product: deviceStr && deviceStr.includes('/') ? deviceStr.split('/')[1] : null,
+    start_time:     effort.start_time || null,
+    duration_s:     effort.duration_s || null,
+    distance_m:     effort.distance_m || null,
+    hr_avg_bpm:     effort.hr_avg_bpm || null,
+    hr_max_bpm:     effort.hr_max_bpm || null,
+    power_avg_w:    effort.power_avg_w || null,
+    power_max_w:    effort.power_max_w || null,
+    power_norm_w:   effort.power_norm_w || null,
+    ftp_w:          effort.ftp_w || null,
+    intensity_factor: (effort.power_norm_w && effort.ftp_w) ? Math.round((effort.power_norm_w / effort.ftp_w) * 100) / 100 : null,
+    cadence_avg:    effort.cadence_avg || null,
+    cadence_max:    effort.cadence_max || null,
+    calories:       effort.calories || null,
+    work_kj:        effort.work_kj || null,
+    temperature_avg: effort.temperature_avg || null
+  };
+  const { error, data } = await _sb.from('rider_efforts_fccv').insert(row).select().single();
+  if(error) return { ok:false, error };
+  return { ok:true, row: data };
+}
+
+async function _routeListEfforts(raceId){
+  if(!_sb) return [];
+  const { data, error } = await _sb.from('rider_efforts_fccv').select('*').eq('race_id', raceId).order('start_time', { ascending: true });
+  if(error){ console.warn('listEfforts', error); return []; }
+  return data || [];
+}
+
+// ── UI del modal ───────────────────────────────────────────────────────
+async function _routeOpenModal(raceId){
+  const hist = _cachedHistory || (typeof _sbLoadHistory==='function' ? await _sbLoadHistory() : []);
+  if(!Array.isArray(_cachedHistory) || !_cachedHistory.length) _cachedHistory = hist;
+  const race = hist.find(h => h.id === raceId);
+  if(!race){ alert('No se encontró la prueba'); return; }
+  _routeInjectStyles();
+  let overlay = document.getElementById('routeOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'routeOverlay';
+    overlay.className = 'route-overlay';
+    overlay.addEventListener('click', e => { if(e.target===overlay) _routeCloseModal(); });
+    document.body.appendChild(overlay);
+  }
+  _routeCurrent = { raceId, race, canonical:null, courseJson:null };
+  overlay.innerHTML = `
+    <div class="route-modal">
+      <div class="route-header">
+        <div>
+          <h2>🗺️ Recorrido y esfuerzos</h2>
+          <div class="route-meta">${escapeHtml(race.raceName||'')} · ${escapeHtml(race.raceDate||'')}${race.localidad?' · '+escapeHtml(race.localidad):''}</div>
+        </div>
+        <button class="route-close" onclick="_routeCloseModal()">✕</button>
+      </div>
+      <div id="routeContent" class="route-content"><div class="route-loading">⏳ Cargando…</div></div>
+    </div>`;
+  document.body.style.overflow = 'hidden';
+  await _routeRenderContent();
+}
+
+function _routeCloseModal(){
+  const ov = document.getElementById('routeOverlay');
+  if(ov) ov.remove();
+  document.body.style.overflow = '';
+  if(_routeMapInstance){ try{ _routeMapInstance.remove(); }catch(e){} _routeMapInstance = null; }
+  if(_routeProfileChart){ try{ _routeProfileChart.destroy(); }catch(e){} _routeProfileChart = null; }
+  _routeCurrent = null;
+}
+
+async function _routeRenderContent(){
+  const content = document.getElementById('routeContent');
+  if(!content || !_routeCurrent) return;
+  const { raceId, race } = _routeCurrent;
+  const hasRoute = race.route && race.route.distance_m;
+  const efforts = await _routeListEfforts(raceId);
+
+  if(!hasRoute){
+    content.innerHTML = `
+      <div class="route-empty">
+        <div class="route-empty-icon">📂</div>
+        <div class="route-empty-title">No hay recorrido cargado para esta prueba</div>
+        <div class="route-empty-sub">Sube el archivo .fit del ciclocomputador de un corredor (Garmin/Wahoo) o el .gpx del organizador.</div>
+        <label class="route-upload-btn">
+          📎 Subir archivo (.fit / .gpx / .tcx)
+          <input type="file" accept=".fit,.gpx,.tcx,.FIT,.GPX,.TCX" onchange="_routeOnFileSelected(event)" style="display:none">
+        </label>
+        ${efforts.length ? `<div class="route-empty-sub" style="margin-top:14px">Sin embargo, hay <b>${efforts.length}</b> esfuerzo(s) subido(s) sin curso de referencia.</div>` : ''}
+      </div>`;
+    return;
+  }
+
+  // Hay curso → cargamos el JSON canónico para pintar mapa+perfil
+  let course = _routeCurrent.courseJson;
+  if(!course){
+    course = await _routeDownloadCourse(raceId);
+    _routeCurrent.courseJson = course;
+  }
+  const r = race.route;
+  const terrainLabels = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa', desconocido:'⚪ Desconocido' };
+  const altRange = (r.altitude_min_m!=null && r.altitude_max_m!=null) ? `${r.altitude_min_m}-${r.altitude_max_m} m` : '—';
+  content.innerHTML = `
+    <div class="route-grid">
+      <div class="route-metrics">
+        <div class="route-metric"><div class="rm-v">${(r.distance_m/1000).toFixed(1)}</div><div class="rm-l">km</div></div>
+        <div class="route-metric"><div class="rm-v">${r.desnivel_pos_m||0}</div><div class="rm-l">desnivel +</div></div>
+        <div class="route-metric"><div class="rm-v" style="font-size:14px;line-height:1.2">${terrainLabels[r.terrain_type]||r.terrain_type}</div><div class="rm-l">terreno</div></div>
+        <div class="route-metric"><div class="rm-v">${r.gradient_max_pct||0}%</div><div class="rm-l">pendiente máx</div></div>
+        <div class="route-metric"><div class="rm-v">${r.gradient_avg_pct||0}%</div><div class="rm-l">pendiente media</div></div>
+        <div class="route-metric"><div class="rm-v">${r.difficulty_score||0}</div><div class="rm-l">dificultad 0-100</div></div>
+        <div class="route-metric"><div class="rm-v" style="font-size:14px">${altRange}</div><div class="rm-l">altitud</div></div>
+        <div class="route-metric"><div class="rm-v" style="font-size:13px">${escapeHtml(r.source||'')}</div><div class="rm-l">fuente</div></div>
+      </div>
+      <div class="route-actions">
+        <label class="route-upload-btn route-upload-btn-sm">
+          🔄 Sustituir recorrido
+          <input type="file" accept=".fit,.gpx,.tcx,.FIT,.GPX,.TCX" onchange="_routeOnFileSelected(event)" style="display:none">
+        </label>
+        <button class="route-btn route-btn-danger" onclick="_routeDeleteRoute()">🗑️ Quitar recorrido</button>
+      </div>
+      <div class="route-map-wrap">
+        <div id="routeMap" class="route-map"></div>
+      </div>
+      ${(r.has_altitude && course && course.points && course.points.some(p=>p.ele!=null)) ? '<div class="route-profile-wrap"><canvas id="routeProfile" class="route-profile"></canvas></div>' : '<div class="route-no-altitude">⚠️ Este archivo no trae altimetría por punto. Sube otro (Wahoo, GPX del organizador…) si quieres ver el perfil altimétrico.</div>'}
+      <div class="route-efforts">
+        <div class="route-efforts-title">📊 Esfuerzos subidos (${efforts.length})</div>
+        ${efforts.length ? efforts.map(e => `
+          <div class="route-effort-row">
+            <span class="re-name">${escapeHtml(e.rider_name_hint||'Sin asignar')}</span>
+            <span class="re-meta">${e.source_kind||''}${e.device_mfg?' · '+escapeHtml(e.device_mfg):''}</span>
+            ${e.duration_s ? `<span class="re-stat">${Math.floor(e.duration_s/60)}:${String(e.duration_s%60).padStart(2,'0')}</span>` : ''}
+            ${e.power_avg_w ? `<span class="re-stat">${e.power_avg_w}W avg</span>` : ''}
+            ${e.power_norm_w ? `<span class="re-stat">${e.power_norm_w}W NP</span>` : ''}
+            ${e.hr_avg_bpm ? `<span class="re-stat">${e.hr_avg_bpm} bpm</span>` : ''}
+            <button class="re-rm" onclick="_routeDeleteEffort('${e.id}')" title="Eliminar este esfuerzo">×</button>
+          </div>
+        `).join('') : '<div class="route-empty-sub" style="text-align:center;padding:8px">Aún no hay esfuerzos individuales. Sube un .fit para añadir uno.</div>'}
+      </div>
+    </div>`;
+
+  // Dibujar mapa y perfil
+  if(course && course.points && course.points.length > 1){
+    setTimeout(() => {
+      _routeDrawMap(course.points);
+      if(r.has_altitude) _routeDrawProfile(course.points);
+    }, 80);
+  }
+}
+
+function _routeDrawMap(points){
+  const el = document.getElementById('routeMap');
+  if(!el || typeof L === 'undefined') return;
+  if(_routeMapInstance){ try{ _routeMapInstance.remove(); }catch(e){} }
+  _routeMapInstance = L.map(el, { preferCanvas: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(_routeMapInstance);
+  const latlngs = points.map(p => [p.lat, p.lon]);
+  L.polyline(latlngs, { color: '#1f6feb', weight: 4, opacity: 0.85 }).addTo(_routeMapInstance);
+  // Marcadores inicio y fin
+  L.circleMarker(latlngs[0], { color: '#15803d', radius: 7, fillOpacity: 1 }).addTo(_routeMapInstance).bindTooltip('Inicio', {permanent: false});
+  L.circleMarker(latlngs[latlngs.length-1], { color: '#b91c1c', radius: 7, fillOpacity: 1 }).addTo(_routeMapInstance).bindTooltip('Fin', {permanent: false});
+  // Marcador móvil sincronizado con el perfil
+  _routeMapPositionMarker = L.circleMarker(latlngs[0], { color:'#7c3aed', fillColor:'#fff', fillOpacity:1, radius:6, weight:2 });
+  _routeMapInstance.fitBounds(L.latLngBounds(latlngs), { padding: [20, 20] });
+}
+
+function _routeDrawProfile(points){
+  const el = document.getElementById('routeProfile');
+  if(!el || typeof Chart === 'undefined') return;
+  if(_routeProfileChart){ try{ _routeProfileChart.destroy(); }catch(e){} _routeProfileChart = null; }
+  const data = points.filter(p => p.ele != null).map(p => ({ x: (p.dist||0)/1000, y: p.ele, lat: p.lat, lon: p.lon }));
+  _routeProfileChart = new Chart(el, {
+    type: 'line',
+    data: {
+      datasets: [{
+        label: 'Altitud (m)',
+        data: data,
+        borderColor: '#1f6feb',
+        backgroundColor: 'rgba(31,111,235,0.15)',
+        fill: true,
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'km' } },
+        y: { title: { display: true, text: 'metros' } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `km ${ctx.parsed.x.toFixed(2)} · ${Math.round(ctx.parsed.y)} m`
+          }
+        }
+      },
+      onHover: (ev, items) => {
+        if(items.length && _routeMapInstance && _routeMapPositionMarker){
+          const p = data[items[0].index];
+          if(p && p.lat != null){
+            _routeMapPositionMarker.setLatLng([p.lat, p.lon]);
+            if(!_routeMapInstance.hasLayer(_routeMapPositionMarker)) _routeMapPositionMarker.addTo(_routeMapInstance);
+          }
+        }
+      }
+    }
+  });
+}
+
+async function _routeOnFileSelected(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file || !_routeCurrent) return;
+  const content = document.getElementById('routeContent');
+  if(content) content.innerHTML = `<div class="route-loading">⏳ Procesando ${escapeHtml(file.name)}…</div>`;
+  try{
+    const canonical = await _routeParseFile(file);
+    const raceId = _routeCurrent.raceId;
+    // 1) Subir al Storage (original + JSON canónico)
+    if(content) content.innerHTML = `<div class="route-loading">☁️ Subiendo recorrido a la nube…</div>`;
+    await _routeUploadToStorage(raceId, file, canonical);
+    // 2) Persistir métricas del curso en races.notes.route
+    await _routePersistMetrics(raceId, canonical.summary);
+    // 3) Si hay esfuerzo individual (potencia/HR), preguntamos a quién pertenece
+    if(canonical.effort && (canonical.effort.power_avg_w || canonical.effort.hr_avg_bpm)){
+      const riderHint = await _routeAskRider(file.name);
+      // Guardar esfuerzo aunque el director no asigne corredor
+      await _routeSaveEffort(raceId, canonical.effort, file.name, canonical.summary.source, canonical.summary.source_device, riderHint);
+    }
+    // 4) Refrescar el modal
+    _routeCurrent.canonical = canonical;
+    _routeCurrent.courseJson = null;
+    _routeCurrent.race.route = canonical.summary;
+    await _routeRenderContent();
+    if(typeof showToast === 'function') showToast(`✅ Recorrido cargado · ${(canonical.summary.distance_m/1000).toFixed(1)} km · ${canonical.summary.desnivel_pos_m} m D+`, 'ok', 4000);
+  }catch(e){
+    console.warn('_routeOnFileSelected', e);
+    alert('❌ Error procesando el archivo:\n\n'+(e.message||e));
+    await _routeRenderContent();
+  }
+}
+
+// — Pregunta al director a qué corredor pertenece el esfuerzo —
+function _routeAskRider(filename){
+  // Intentamos sugerir el rider desde el nombre del archivo
+  const stem = filename.replace(/\.[^.]+$/, '');
+  const guess = stem.split(/[\s_\-]+/).slice(0, 2).join(' ');
+  const choice = prompt(
+    `Este archivo contiene datos de esfuerzo (potencia/FC).\n\n¿De qué corredor son? (escribe nombre y apellidos, o deja vacío para "Sin asignar")\n\nSugerencia desde el nombre del archivo: "${guess}"`,
+    guess
+  );
+  return (choice||'').trim() || null;
+}
+
+async function _routeDeleteRoute(){
+  if(!_routeCurrent) return;
+  const { raceId } = _routeCurrent;
+  if(!confirm('¿Quitar el recorrido de esta prueba?\n\nSe borrarán las métricas, el mapa y el perfil. Los esfuerzos individuales (potencia/FC) se conservan.\n\nPuedes volver a subir otro archivo en cualquier momento.')) return;
+  try{
+    // Borrar de Storage
+    await _sb.storage.from(ROUTE_BUCKET).remove([`${raceId}/original.fit`, `${raceId}/original.gpx`, `${raceId}/original.tcx`, `${raceId}/course.json`]);
+    // Quitar de notes
+    const { data } = await _sb.from('races').select('notes').eq('id', raceId).single();
+    let extra = {};
+    try{ extra = JSON.parse(data?.notes||'{}'); }catch(e){}
+    delete extra.route;
+    await _sb.from('races').update({ notes: JSON.stringify(extra) }).eq('id', raceId);
+    if(Array.isArray(_cachedHistory)){
+      const h = _cachedHistory.find(x => x.id === raceId);
+      if(h) h.route = null;
+    }
+    _routeCurrent.race.route = null;
+    _routeCurrent.canonical = null;
+    _routeCurrent.courseJson = null;
+    await _routeRenderContent();
+    if(typeof showToast === 'function') showToast('🗑️ Recorrido eliminado','ok',2500);
+  }catch(e){
+    alert('Error al borrar: '+(e.message||e));
+  }
+}
+
+async function _routeDeleteEffort(effortId){
+  if(!confirm('¿Eliminar este esfuerzo?')) return;
+  const { error } = await _sb.from('rider_efforts_fccv').delete().eq('id', effortId);
+  if(error){ alert('Error: '+error.message); return; }
+  await _routeRenderContent();
+}
+
+// — Estilos del modal —
+function _routeInjectStyles(){
+  if(document.getElementById('route-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'route-styles';
+  st.textContent = `
+    .route-overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px}
+    .route-modal{background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+    .route-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid #e5e7eb}
+    .route-header h2{margin:0;font-size:18px;color:#0b2f6b}
+    .route-meta{font-size:12px;color:#475569;margin-top:3px}
+    .route-close{background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:4px 10px;font-weight:700;cursor:pointer;font-size:14px}
+    .route-content{padding:16px 20px;min-height:200px}
+    .route-loading{padding:50px 20px;text-align:center;color:#6b7280;font-size:14px}
+    .route-empty{text-align:center;padding:40px 20px}
+    .route-empty-icon{font-size:48px;margin-bottom:10px}
+    .route-empty-title{font-weight:800;color:#0b2f6b;font-size:15px;margin-bottom:6px}
+    .route-empty-sub{font-size:12.5px;color:#6b7280;margin-bottom:18px;line-height:1.55}
+    .route-upload-btn{display:inline-flex;align-items:center;gap:6px;background:#15803d;color:#fff;border-radius:10px;padding:10px 18px;font-weight:800;font-size:13px;cursor:pointer}
+    .route-upload-btn-sm{padding:7px 12px;font-size:12px}
+    .route-btn{border:1px solid;border-radius:10px;padding:7px 12px;font-weight:800;font-size:12px;cursor:pointer;background:#fff}
+    .route-btn-danger{color:#b91c1c;border-color:#fecdd3}
+    .route-grid{display:grid;grid-template-columns:1fr;gap:14px}
+    .route-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+    .route-metric{background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:8px 10px;text-align:center}
+    .rm-v{font-size:20px;font-weight:900;color:#0b2f6b;line-height:1.1}
+    .rm-l{font-size:10px;color:#6b7280;margin-top:3px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+    .route-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .route-map-wrap{background:#f3f4f6;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb}
+    .route-map{height:360px;width:100%}
+    .route-profile-wrap{background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:8px;height:200px}
+    .route-profile{width:100%;height:100%}
+    .route-no-altitude{background:#fef9c3;border:1px solid #fcd34d;color:#92400e;font-size:12px;padding:10px 14px;border-radius:10px}
+    .route-efforts{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
+    .route-efforts-title{font-weight:800;color:#0b2f6b;font-size:13px;margin-bottom:8px}
+    .route-effort-row{display:flex;gap:10px;align-items:center;padding:6px 4px;border-bottom:1px solid #f3f4f6;font-size:12px;flex-wrap:wrap}
+    .re-name{font-weight:700;color:#0b2f6b;min-width:140px}
+    .re-meta{color:#6b7280;font-size:11px}
+    .re-stat{background:#eff6ff;color:#1e40af;border-radius:6px;padding:1px 7px;font-weight:700;font-size:11px}
+    .re-rm{margin-left:auto;background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:1px 7px;font-size:13px;font-weight:800;cursor:pointer}
+  `;
+  document.head.appendChild(st);
+}
