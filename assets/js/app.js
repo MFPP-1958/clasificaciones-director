@@ -22500,6 +22500,7 @@ function _simBuildData(raceId){
     let fatigueInfo = {factor:1.0, racesIn7:0, racesIn14:0, reason:''};
     let specialtyInfo = null;
     let terrainInfo = null;  // Fase 5: factor de afinidad al terreno
+    let predictedPosBaseTerrain = null;  // Fase 5.5: pred antes de aplicar terreno (para calibración)
 
     if(hits.length){
       const validHits = hits.filter(h => h.pos > 0);
@@ -22621,6 +22622,9 @@ function _simBuildData(raceId){
         // — FASE 5: FACTOR DE AFINIDAD AL TERRENO (desde GPX/FIT) —
         // Aplica solo si la prueba actual tiene route.terrain_type detectado
         // y el corredor tiene historial cruzando con ese mismo terreno.
+        // Capturamos la predicción ANTES del factor para que la calibración
+        // (Fase 5.5) pueda comparar con/sin terreno y ver si el ajuste ayudó.
+        predictedPosBaseTerrain = predictedPos;
         terrainInfo = _simTerrainFactor(ins.name, _currentTerrain && _currentTerrain.terrain_type);
         if(terrainInfo){
           predictedPos *= terrainInfo.factor;
@@ -22714,6 +22718,9 @@ function _simBuildData(raceId){
       // Fase 5: factor de afinidad al terreno (route)
       terrainFactor: terrainInfo ? terrainInfo.factor : 1.00,
       terrainReason: terrainInfo ? terrainInfo.reason : '',
+      // Fase 5.5: predicción antes de aplicar el factor de terreno (para
+      // poder comparar con/sin en el panel de calibración Predicho vs Real).
+      predictedPosBaseTerrain: predictedPosBaseTerrain != null ? Math.round(predictedPosBaseTerrain) : null,
       // Tier 2: media ajustada por calidad del pelotón
       avgPosAdjusted: (typeof avgPosAdjusted !== 'undefined') ? avgPosAdjusted : null
     };
@@ -29409,6 +29416,90 @@ function _simOpenPredVsReal(){
         <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:#0b2f6b">${top10Real.length}</div><div class="pvr-kpi-l">Reales en cabeza<br><span class="small">cargados</span></div></div>
       </div>`;
 
+    // ── FASE 5.5: Validación del factor de terreno ──────────────────────
+    // Para cada corredor con terrainFactor != 1.00, comparamos:
+    //   - Pos. predicha SIN factor (predictedPosBaseTerrain)
+    //   - Pos. predicha CON factor (predictedPos)
+    //   - Pos. real (de race.riders)
+    // y vemos si el factor ayudó a aproximar la realidad o no.
+    const terrainLabels2 = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa', desconocido:'⚪ Sin datos' };
+    let terrainCalibHtml = '';
+    const terrainAdjusted = grid.filter(g => g.terrainFactor && g.terrainFactor !== 1 && g.predictedPos != null && g.predictedPosBaseTerrain != null);
+    const tInfo = _simCurrentData && _simCurrentData.terrain;
+    if(terrainAdjusted.length && tInfo){
+      const realByName = new Map();
+      actualRiders.forEach(r => realByName.set(nkey(r.name), parseInt(r.pos)||0));
+      // Por cada corredor afectado, calcular errores con/sin factor
+      const rows = [];
+      let improved = 0, worsened = 0, same = 0;
+      let sumErrWith = 0, sumErrWithout = 0, cnt = 0;
+      terrainAdjusted.forEach(g => {
+        const real = realByName.get(nkey(g.name));
+        if(!real) return;
+        const errWith    = Math.abs(g.predictedPos - real);
+        const errWithout = Math.abs(g.predictedPosBaseTerrain - real);
+        sumErrWith += errWith; sumErrWithout += errWithout; cnt++;
+        let verdict, vColor, vIcon;
+        if(errWith < errWithout - 0.5){ verdict='Mejoró'; vColor='#15803d'; vIcon='✓'; improved++; }
+        else if(errWith > errWithout + 0.5){ verdict='Empeoró'; vColor='#b91c1c'; vIcon='✗'; worsened++; }
+        else { verdict='Sin cambio relevante'; vColor='#6b7280'; vIcon='='; same++; }
+        rows.push(`<tr>
+          <td style="padding:4px 8px;font-weight:700;color:#0b2f6b">${escapeHtml(g.name)}</td>
+          <td style="padding:4px 8px;text-align:center;color:#374151">${g.predictedPosBaseTerrain}º</td>
+          <td style="padding:4px 8px;text-align:center;color:#7c3aed;font-weight:700">${Math.round(g.predictedPos)}º</td>
+          <td style="padding:4px 8px;text-align:center;color:#0b2f6b;font-weight:800">${real}º</td>
+          <td style="padding:4px 8px;text-align:center;color:#6b7280">${errWithout.toFixed(1)}</td>
+          <td style="padding:4px 8px;text-align:center;color:#7c3aed">${errWith.toFixed(1)}</td>
+          <td style="padding:4px 8px;text-align:center;color:${vColor};font-weight:800">${vIcon} ${verdict}</td>
+        </tr>`);
+      });
+      if(rows.length){
+        const maeWith    = sumErrWith / cnt;
+        const maeWithout = sumErrWithout / cnt;
+        const delta      = maeWithout - maeWith;
+        const verdictGlobal = delta > 0.3
+          ? { txt:'El factor de terreno MEJORÓ la predicción media', color:'#15803d', icon:'✅' }
+          : delta < -0.3
+          ? { txt:'El factor de terreno EMPEORÓ la predicción media', color:'#b91c1c', icon:'❌' }
+          : { txt:'El factor de terreno tuvo un efecto neutro', color:'#6b7280', icon:'➖' };
+        terrainCalibHtml = `
+          <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f8fafc">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+              <div style="font-weight:800;color:#0b2f6b;font-size:14px">🗺️ Validación del factor de terreno · ${terrainLabels2[tInfo.terrain_type]||tInfo.terrain_type}</div>
+              <span style="background:${verdictGlobal.color}20;color:${verdictGlobal.color};font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px">${verdictGlobal.icon} ${verdictGlobal.txt}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px">
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:900;color:#0b2f6b">${cnt}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Corredores afectados</div></div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:900;color:#15803d">${improved}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Mejoraron</div></div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:900;color:#b91c1c">${worsened}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Empeoraron</div></div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:900;color:#6b7280">${same}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Sin cambio</div></div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:900;color:#374151">${maeWithout.toFixed(1)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Error medio sin factor</div></div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:900;color:#7c3aed">${maeWith.toFixed(1)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Error medio con factor</div></div>
+              <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:900;color:${delta>0?'#15803d':delta<0?'#b91c1c':'#6b7280'}">${delta>=0?'−':'+'}${Math.abs(delta).toFixed(1)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Δ Error medio</div></div>
+            </div>
+            <details style="margin-top:6px">
+              <summary style="cursor:pointer;font-weight:700;color:#374151;font-size:12px">Ver detalle por corredor (${cnt})</summary>
+              <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;background:#fff">
+                <thead><tr style="background:#f3f4f6">
+                  <th style="padding:5px 8px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Corredor</th>
+                  <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Sin factor</th>
+                  <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Con factor</th>
+                  <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Real</th>
+                  <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Err. sin</th>
+                  <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Err. con</th>
+                  <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Veredicto</th>
+                </tr></thead>
+                <tbody>${rows.join('')}</tbody>
+              </table>
+            </details>
+            <div style="font-size:10.5px;color:#6b7280;margin-top:6px;line-height:1.5">
+              <b>Cómo leer esto:</b> "Sin factor" = predicción que habría salido sin tener en cuenta el terreno · "Con factor" = la que sale ahora · "Real" = la posición que ocurrió en la carrera · Δ&nbsp;Error medio positivo (verde) significa que el factor afina la predicción.<br>
+              Si tras 5-6 pruebas con terreno conocido el Δ es sistemáticamente negativo, podemos ajustar los umbrales del factor.
+            </div>
+          </div>`;
+      }
+    }
+
     const meta = `
       <div class="pvr-race-meta">
         <b>${escapeHtml(race.raceName||'')}</b>
@@ -29443,6 +29534,7 @@ function _simOpenPredVsReal(){
           </div>
         </div>
         ${summaryHtml}
+        ${terrainCalibHtml}
         <div style="padding:0 20px 4px;font-size:11px;color:#6b7280">
           ★ = ciclista de mi equipo · 🟩 verde = posición exacta · 🟨 amarillo = entró en Top 10 (otra pos.) · 🟥 rojo = fuera del Top 10 o sin predicción
         </div>
