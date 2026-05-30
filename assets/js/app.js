@@ -32878,7 +32878,11 @@ async function _routeRenderContent(){
         <div class="route-metric"><div class="rm-v" style="font-size:13px">${escapeHtml(r.source||'')}</div><div class="rm-l">fuente</div></div>
       </div>
       <div class="route-actions">
-        <label class="route-upload-btn route-upload-btn-sm">
+        <label class="route-upload-btn route-upload-btn-sm" style="background:#0369a1" title="Sube un .fit de otro corredor y guarda solo su esfuerzo (potencia/FC). NO toca el recorrido actual.">
+          📎 Añadir solo esfuerzo
+          <input type="file" accept=".fit,.FIT" onchange="_routeOnEffortOnlySelected(event)" style="display:none">
+        </label>
+        <label class="route-upload-btn route-upload-btn-sm" style="background:#92400e" title="Sustituye el recorrido entero por uno nuevo (mapa + perfil + métricas). Úsalo si tienes un archivo mejor del mismo evento.">
           🔄 Sustituir recorrido
           <input type="file" accept=".fit,.gpx,.tcx,.FIT,.GPX,.TCX" onchange="_routeOnFileSelected(event)" style="display:none">
         </label>
@@ -33031,6 +33035,63 @@ async function _routeOnFileSelected(ev){
     console.warn('_routeOnFileSelected', e);
     alert('❌ Error procesando el archivo:\n\n'+(e.message||e));
     await _routeRenderContent();
+  }
+}
+
+// — "Añadir solo esfuerzo" · NO toca el curso, solo guarda la fila en
+//   rider_efforts_fccv. Útil cuando ya tienes un buen recorrido con
+//   altimetría (ej. Karles) y quieres añadir el FIT de otro corredor sin
+//   perder esa altimetría.
+async function _routeOnEffortOnlySelected(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file || !_routeCurrent) return;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if(ext !== 'fit'){
+    alert('Solo .fit contiene datos de esfuerzo (potencia/FC). Para sustituir el recorrido usa el botón naranja.');
+    if(ev.target) ev.target.value = '';
+    return;
+  }
+  const content = document.getElementById('routeContent');
+  // Estado de procesando sin destruir el render actual (lo respeta el render
+  // y restauramos al final).
+  const status = document.createElement('div');
+  status.id = 'routeEffortStatus';
+  status.style.cssText = 'background:#dbeafe;border:1px solid #93c5fd;color:#1e3a8a;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px;font-weight:700';
+  status.textContent = `⏳ Procesando esfuerzo de ${file.name}…`;
+  if(content && content.firstChild) content.insertBefore(status, content.firstChild);
+  try{
+    // Parsear el .fit (sin construir canónico de curso, solo nos interesa el
+    // effort). Reusamos _routeParseFile que devuelve canonical.effort listo.
+    const buf = await file.arrayBuffer();
+    const r = await _routeParseFIT(buf);
+    if(!r.effort || (!r.effort.power_avg_w && !r.effort.hr_avg_bpm)){
+      alert('Este archivo no trae datos de esfuerzo (potencia/FC). No se guarda nada.');
+      return;
+    }
+    const riderHint = await _routeAskRider(file.name);
+    const dev = r.device && r.device.mfg ? `${r.device.mfg}${r.device.product?'/'+r.device.product:''}` : null;
+    status.textContent = `☁️ Guardando esfuerzo de ${riderHint||'Sin asignar'}…`;
+    // También subimos el original al Storage para que quede trazable, pero
+    // con un nombre que indica que es solo esfuerzo (no curso de referencia).
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const origKey = `${_routeCurrent.raceId}/effort-${Date.now()}-${safeName}`;
+    try{
+      await _sb.storage.from(ROUTE_BUCKET).upload(origKey, file, { upsert: false, contentType: 'application/octet-stream' });
+    }catch(e){ /* si falla la subida del original, seguimos: lo importante es la fila */ }
+    const saveRes = await _routeSaveEffort(_routeCurrent.raceId, r.effort, file.name, 'fit', dev, riderHint);
+    if(!saveRes.ok){
+      alert('No se pudo guardar el esfuerzo: '+(saveRes.error?.message||'error desconocido'));
+      return;
+    }
+    if(typeof showToast === 'function') showToast(`✅ Esfuerzo añadido: ${riderHint||'Sin asignar'}`, 'ok', 3000);
+    await _routeRenderContent();
+  }catch(e){
+    console.warn('_routeOnEffortOnlySelected', e);
+    alert('❌ Error procesando el archivo:\n\n'+(e.message||e));
+    const s = document.getElementById('routeEffortStatus');
+    if(s) s.remove();
+  }finally{
+    if(ev.target) ev.target.value = '';
   }
 }
 
