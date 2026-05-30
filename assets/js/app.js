@@ -23881,6 +23881,103 @@ function _simOpenTeamBriefing(){
             <div class="b-summary-card"><div class="l">📋 Mensaje del día</div><div class="v" style="font-size:13px;line-height:1.3">Pelotón ${sorted.length>=5?'numeroso':'reducido'}. Vamos a cuidar la cabeza, ayudar al líder y aprender.</div></div>
           </div>
 
+          <details class="sim-help no-print" style="margin-bottom:14px">
+            <summary>❓ ¿Qué significa cada cosa de este briefing? — Ayuda contextual</summary>
+            <div class="sim-help-body">
+
+              <h4>🟦 La cabecera azul (chips de contexto)</h4>
+              <ul>
+                <li><b>🟢🟡🟠🔴 Terreno</b>: tipo de carrera detectado en el GPX/FIT subido (llana / rompepiernas / media montaña / montañosa). Si no hay GPX, dice "Sin datos".</li>
+                <li><b>🌤️ Clima</b>: previsión meteorológica de la fecha (temperatura, viento km/h, % lluvia) tomada de Open-Meteo.</li>
+                <li><b>🚴 Tipo de circuito</b>: Línea, Circuito, CRI, etc.</li>
+                <li><b>📏 km · ⛰️ desnivel</b>: distancia y desnivel positivo del recorrido, también del GPX.</li>
+                <li><b>⚠️ Dificultad</b>: % de rivales con histórico fuerte. Cuanto más alto, más dura es la parrilla.</li>
+                <li><b>🎯 Predictibilidad</b>: cuán fiables son las predicciones. Si es baja, los corredores tienen poco histórico y hay más sorpresas posibles.</li>
+              </ul>
+
+              <h4>📊 Las 3 tarjetas grandes del resumen</h4>
+              <ul>
+                <li><b>Corredores convocados</b>: cuántos chavales tuyos compiten + cuántos tienen historial.</li>
+                <li><b>🏆 Mejor opción de podio</b>: el corredor con mayor probabilidad de subir al cajón hoy según el simulador.</li>
+                <li><b>📋 Mensaje del día</b>: tu encabezamiento para la charla.</li>
+              </ul>
+
+              <h4>👤 Cada tarjeta de corredor — los datos arriba</h4>
+              <ul>
+                <li><b>Posición esperada</b> (ej. "35º esperado"): la <i>mediana</i> de 1000 simulaciones Monte Carlo. Si simulamos su carrera 1000 veces, en la mitad acaba mejor que ese puesto y en la otra mitad peor.</li>
+                <li><b>"X carreras previas"</b>: cuántas pruebas suyas conocemos en el histórico.</li>
+                <li><b>⬆️ Mejorando / ⬇️ Empeorando / ➡️ Estable</b>: tendencia de sus últimas 3-5 carreras.</li>
+                <li><b>Chip del rol</b> (a la derecha): "🏆 Candidato a podio", "🎯 Objetivo Top 10", etc. Se calcula a partir del puesto esperado y las probabilidades.</li>
+              </ul>
+
+              <h4>📐 Los KPIs azules debajo del nombre</h4>
+              <ul>
+                <li><b>IC 50%: Xº–Yº</b>: <b>Intervalo de Confianza al 50%</b>. La mitad de las simulaciones cayeron dentro de ese rango. Es como decir: "está claramente entre Xº y Yº, no fuera de eso".</li>
+                <li><b>🥇 Podio: X%</b>: probabilidad de hacer top 3 (calculada con Monte Carlo de carrera completa cuando hay datos suficientes, así suma 100% entre todos los corredores).</li>
+                <li><b>🟢 Top 5</b> y <b>🔵 Top 10</b>: análogos, pero para esos rangos.</li>
+              </ul>
+
+              <h4>🏷️ Los chips de colores debajo (factores aplicados)</h4>
+              <p>Aparecen <b>solo cuando hay señal en el histórico</b>. Si un corredor no tiene chips, es que su histórico no muestra ninguna afinidad o aversión clara hasta ahora.</p>
+              <ul>
+                <li><b>🗺️ Terreno</b> (verde si le va bien · rojo si sufre): cómo le rinde el tipo de terreno de hoy según sus carreras pasadas.</li>
+                <li><b>☀️🥶💨🌧️ Clima</b> (verde/rojo): igual pero con calor / frío / viento / lluvia.</li>
+                <li><b>🎯 Especialidad</b>: si destaca en este tipo de circuito (línea, CRI, criterium…).</li>
+                <li><b>😴 Fatiga</b>: si lleva muchas carreras encadenadas en los últimos 7-14 días.</li>
+                <li><b>🧬 Elo</b> (Bloque 1, nuevo): su rating dinámico calculado con todo el histórico. Te lo explico en detalle abajo.</li>
+                <li><b>⚠️ DNF</b>: aviso solo si tiene 15%+ de abandonos en su histórico.</li>
+              </ul>
+
+              <h4>🧬 El chip "Elo 990 (3 carreras) · #63 de la parrilla" — explicado</h4>
+              <p>El <b>Elo</b> es el rating dinámico del corredor, como en ajedrez o tenis. Se construye así:</p>
+              <ul>
+                <li>Todos empiezan en <b>1200</b> puntos.</li>
+                <li>Cada vez que terminan una carrera, ganan puntos por cada rival al que vencen y pierden por cada rival contra quien pierden.</li>
+                <li><b>Vencer a alguien con Elo alto</b> da MÁS puntos que vencer a alguien con Elo bajo. <b>Perder contra alguien con Elo bajo</b> resta MÁS puntos que perder contra un favorito.</li>
+                <li>El sistema procesa <b>todas tus carreras en orden cronológico</b> y va actualizando.</li>
+              </ul>
+              <p><b>Cómo leer "Elo 990 (3 carreras) · #63 de la parrilla":</b></p>
+              <ul>
+                <li><b>990</b>: rating actual (parte de 1200; está por debajo porque sus resultados han sido por detrás de la media del pelotón histórico).</li>
+                <li><b>(3 carreras)</b>: el sistema ha procesado 3 carreras suyas. <b>Cuantas más carreras, más fiable es el Elo</b>. Por debajo de 3 carreras ni siquiera se calcula.</li>
+                <li><b>#63 de la parrilla</b>: en esta carrera concreta, es el corredor número 63 si los ordenamos por Elo (de mejor a peor). Si la parrilla tiene 70 inscritos, está en la zona baja.</li>
+              </ul>
+              <p><b>Interpretación rápida</b>:</p>
+              <ul>
+                <li><b>Elo &gt; 1300</b> (verde): corredor por encima de la media — buen historial frente a rivales fuertes.</li>
+                <li><b>Elo 1150–1300</b> (azul): media del pelotón.</li>
+                <li><b>Elo &lt; 1150</b> (rojo): por debajo de la media, normalmente termina por detrás.</li>
+              </ul>
+
+              <h4>⚠️ El chip DNF — explicado</h4>
+              <p><b>DNF</b> = "Did Not Finish" → carreras donde el corredor se inscribió pero no terminó (abandono, caída, problema mecánico, etc.).</p>
+              <ul>
+                <li>"<b>DNF en 67% de sus carreras (6/9)</b>" significa: en 9 carreras suyas que tenemos registradas, abandonó en 6 (el 67%).</li>
+                <li>Es una <b>señal de aviso</b>: ese corredor tiene tendencia a no acabar. Puede ser falta de constancia, lesiones repetidas, o que aún se está adaptando.</li>
+                <li>Solo aparece el chip si <b>tasa ≥ 15%</b> y hay al menos <b>3 carreras</b> de muestra. Si no aparece, el corredor no tiene problema relevante.</li>
+                <li>En la charla pre-carrera, con un corredor con DNF alto: insiste en "acabar la carrera es ganar", revisa el material y la alimentación, anímalo a no quemarse en los primeros km.</li>
+              </ul>
+
+              <h4>📈 "Últimas carreras: 59º · 48º · 33º · 79º · 80º"</h4>
+              <p>Sus últimos 5 puestos en orden <b>del más reciente al más antiguo</b>. Los colores ayudan a leer de un vistazo:</p>
+              <ul>
+                <li><b style="color:#15803d">Verde</b>: Top 10</li>
+                <li><b style="color:#0b2f6b">Azul</b>: Top 20</li>
+                <li><b style="color:#d97706">Naranja</b>: 21º-40º</li>
+                <li><b style="color:#b91c1c">Rojo</b>: 41º o peor</li>
+              </ul>
+
+              <h4>💡 Los 4 consejos tácticos al final</h4>
+              <p>Se generan automáticamente según el rol que le ha asignado el simulador. Son sugerencias generales — tú conoces a tu corredor mejor que la app y puedes adaptarlos.</p>
+
+              <h4>⚠️ Top 5 rivales a controlar</h4>
+              <p>Los 5 corredores de otros equipos con mejor predicción para esta carrera. Son los que probablemente peleen las primeras posiciones — los que tu equipo tiene que vigilar tácticamente.</p>
+
+              <h4>🖨️ Cómo imprimir bien</h4>
+              <p>Pulsa "Imprimir / PDF". En el diálogo del navegador, <b>asegúrate de que en "Márgenes" pone "Predeterminado"</b> (no "Ninguno") para que el contenido respete los bordes en TODAS las páginas.</p>
+            </div>
+          </details>
+
           ${cardsHtml}
           ${rivalsHtml}
 
