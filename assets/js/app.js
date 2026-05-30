@@ -24164,10 +24164,14 @@ function _simRenderAccuracyPanel(){
 // ── E) HISTÓRICO PRECISIÓN DEL MODELO ────────────────────────────────────
 function _simToggleModelAccuracy(){
   const panel = document.getElementById('simModelAccPanel');
-  if(!panel) return;
+  if(!panel){ alert('Panel de precisión no disponible en esta vista.'); return; }
   const open = panel.style.display !== 'none';
   panel.style.display = open ? 'none' : '';
-  if(!open) _simRenderModelAccuracy();
+  if(!open){
+    _simRenderModelAccuracy();
+    // Hacer scroll suave para que el usuario vea el panel recién abierto
+    try { panel.scrollIntoView({behavior:'smooth', block:'start'}); } catch(e){ panel.scrollIntoView(); }
+  }
 }
 
 function _simRenderModelAccuracy(){
@@ -25868,70 +25872,127 @@ if(typeof window !== 'undefined'){
 // una "alergia" detectada en el histórico del corredor.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Detecta si el corredor empeora en condiciones similares
-// Devuelve {factor, icon, reason} o null si no aplica
+// ─── FASE 7 · TABLA DE FACTORES CLIMÁTICOS AUTOCALIBRABLE ───────────────────
+// 4 buckets conceptuales por condición (calor, frío, viento, lluvia).
+const _CLIMATE_FACTOR_DEFAULTS = Object.freeze({
+  strong_low:  0.93,
+  mild_low:    0.97,
+  mild_high:   1.03,
+  strong_high: 1.08
+});
+const _CLIMATE_FACTORS_KEY = 'tbg.climateFactorsByCondition.v1';
+
+function _loadClimateFactorsTable(){
+  try { const raw = localStorage.getItem(_CLIMATE_FACTORS_KEY); return raw ? JSON.parse(raw) : {}; }
+  catch(e){ return {}; }
+}
+function _saveClimateFactorsTable(map){
+  try { localStorage.setItem(_CLIMATE_FACTORS_KEY, JSON.stringify(map||{})); } catch(e){}
+}
+function _resetClimateFactorsTable(){
+  try { localStorage.removeItem(_CLIMATE_FACTORS_KEY); } catch(e){}
+}
+function _getClimateFactorFor(condition, bucketKey){
+  const all = _loadClimateFactorsTable();
+  const c = all && all[condition];
+  if(c && typeof c[bucketKey] === 'number' && isFinite(c[bucketKey])) return c[bucketKey];
+  return _CLIMATE_FACTOR_DEFAULTS[bucketKey];
+}
+function _bucketKeyFromClimateRatio(ratio){
+  if(ratio < 0.85) return 'strong_low';
+  if(ratio < 0.93) return 'mild_low';
+  if(ratio > 1.25) return 'strong_high';
+  if(ratio > 1.12) return 'mild_high';
+  return null;
+}
+// 4 condiciones detectables: calor (≥24°C), frío (≤12°C), viento (≥15 km/h),
+// lluvia (≥40 % de probabilidad). Umbrales más bajos que la versión anterior.
+function _detectClimateConditions(weather){
+  if(!weather) return [];
+  const conds = [];
+  if(weather.temp != null && weather.temp >= 24) conds.push('hot');
+  if(weather.temp != null && weather.temp <= 12) conds.push('cold');
+  if(weather.wind != null && weather.wind >= 15) conds.push('windy');
+  if((weather.rain||0) >= 40)                    conds.push('rainy');
+  return conds;
+}
+function _climateConditionMatches(cond, w){
+  if(!w) return false;
+  if(cond === 'hot')   return w.temp != null && w.temp >= 24;
+  if(cond === 'cold')  return w.temp != null && w.temp <= 12;
+  if(cond === 'windy') return w.wind != null && w.wind >= 15;
+  if(cond === 'rainy') return (w.rain||0) >= 40;
+  return false;
+}
+function _climateCondLabel(c){ return {hot:'Calor', cold:'Frío', windy:'Viento', rainy:'Lluvia'}[c] || c; }
+function _climateCondIcon(c){  return {hot:'☀️', cold:'🥶', windy:'💨', rainy:'🌧️'}[c] || ''; }
+
+// Detecta tanto fortalezas como debilidades del corredor en cada condición
+// activa de la carrera. Devuelve un factor compuesto (clamp 0.80–1.25) y los
+// buckets que se han activado, para calibración a posteriori.
 function _simClimateFactorForRider(riderName, raceWeather){
   if(!raceWeather) return null;
+  const conds = _detectClimateConditions(raceWeather);
+  if(!conds.length) return null;
   const nk = normalizeForMatching(riderName||'');
   if(!nk) return null;
   const hist = _cachedHistory || [];
-  // Buscar carreras donde el corredor tenga puesto Y la carrera tenga weather guardada
   const hits = [];
   hist.forEach(h => {
     const w = (h.weather) || (h._extraNotes && h._extraNotes.weather);
     if(!w) return;
     const r = (h.riders||[]).find(x => normalizeForMatching(x.name||'') === nk);
     if(!r || !r.pos || r.pos <= 0) return;
-    hits.push({pos: r.pos, temp: w.temp, wind: w.wind});
+    hits.push({pos: r.pos, weather: w});
   });
-  if(hits.length < 3) return null; // muestra insuficiente para una correlación
-
-  // Media global del corredor en las carreras CON weather
+  if(hits.length < 3) return null;
   const avgAll = hits.reduce((s,x)=>s+x.pos,0) / hits.length;
+  if(avgAll <= 0) return null;
 
-  // — Calor extremo —
-  if(raceWeather.temp >= 28){
-    const hot = hits.filter(x => x.temp >= 28);
-    if(hot.length >= 2){
-      const avgHot = hot.reduce((s,x)=>s+x.pos,0) / hot.length;
-      // Si rinde >25% peor en calor → penalización 5%
-      if(avgHot > avgAll * 1.25){
-        return {factor: 1.05, icon: '☀️', reason: `Rinde ${Math.round((avgHot/avgAll-1)*100)}% peor con calor (${hot.length} carreras)`};
-      }
-    }
-  }
-  // — Viento fuerte —
-  if(raceWeather.wind >= 20){
-    const windy = hits.filter(x => x.wind >= 20);
-    if(windy.length >= 2){
-      const avgWindy = windy.reduce((s,x)=>s+x.pos,0) / windy.length;
-      if(avgWindy > avgAll * 1.25){
-        return {factor: 1.05, icon: '💨', reason: `Rinde ${Math.round((avgWindy/avgAll-1)*100)}% peor con viento (${windy.length} carreras)`};
-      }
-    }
-  }
-  return null;
+  let totalFactor = 1.0;
+  const reasons = [], icons = [], bucketsActive = [];
+  conds.forEach(cond => {
+    const match = hits.filter(x => _climateConditionMatches(cond, x.weather));
+    if(match.length < 2) return;
+    const avgCond = match.reduce((s,x)=>s+x.pos,0) / match.length;
+    const ratio = avgCond / avgAll;
+    const bKey = _bucketKeyFromClimateRatio(ratio);
+    if(!bKey) return;
+    const f = _getClimateFactorFor(cond, bKey);
+    totalFactor *= f;
+    const lbl = _climateCondLabel(cond).toLowerCase();
+    const verb = bKey === 'strong_low' ? `va muy bien con ${lbl}` :
+                 bKey === 'mild_low'   ? `cómodo con ${lbl}` :
+                 bKey === 'mild_high'  ? `le cuesta con ${lbl}` : `sufre con ${lbl}`;
+    reasons.push(`${verb} (${match.length} carreras)`);
+    icons.push(_climateCondIcon(cond));
+    bucketsActive.push({ condition: cond, bucketKey: bKey, factor: f, riders: match.length });
+  });
+  if(!bucketsActive.length) return null;
+  // Clamp para que stacking de varias condiciones no produzca multiplicadores absurdos.
+  totalFactor = Math.max(0.80, Math.min(1.25, totalFactor));
+  return { factor: totalFactor, icon: icons.join(''), reason: reasons.join(' · '), buckets: bucketsActive };
 }
 
-// Aplica el factor climático sobre _simCurrentData.grid (post-process)
+// Aplica el factor climático sobre _simCurrentData.grid (post-process).
+// Captura predictedPosBaseClimate ANTES del ajuste para que el calibrador
+// pueda comparar con/sin clima.
 function _simApplyClimateLayer(){
   if(!_simCurrentData || !_simCurrentData.race) return;
   const race = _simCurrentData.race;
   const weather = race.weather || (race._extraNotes && race._extraNotes.weather);
-  if(!weather) return; // sin previsión, nada que hacer
-  // Solo aplicar si las condiciones son extremas (lo que el usuario pidió)
-  const isExtreme = (weather.temp >= 28) || (weather.wind >= 20);
-  if(!isExtreme) return;
+  if(!weather) return;
+  const conds = _detectClimateConditions(weather);
+  if(!conds.length) return;
   _simCurrentData.grid.forEach(g => {
     const adj = _simClimateFactorForRider(g.name, weather);
-    if(adj){
-      // Aplicar factor a predictedPos (y predLower/predUpper proporcionalmente)
-      const origPos = g.predictedPos;
-      g.predictedPosClimateAdj = Math.round(origPos * adj.factor);
-      g.climateIcon = adj.icon;
-      g.climateReason = adj.reason;
-      // Update display value but keep raw
-      g.predictedPos = g.predictedPosClimateAdj;
+    if(adj && g.predictedPos != null){
+      g.predictedPosBaseClimate = Math.round(g.predictedPos);
+      g.predictedPos = Math.max(1, Math.round(g.predictedPos * adj.factor));
+      g.climateFactor  = adj.factor;
+      g.climateIcon    = adj.icon;
+      g.climateReason  = adj.reason;
+      g.climateBuckets = adj.buckets;
       if(g.predLower != null) g.predLower = Math.max(1, Math.round(g.predLower * adj.factor));
       if(g.predUpper != null) g.predUpper = Math.round(g.predUpper * adj.factor);
     }
@@ -30048,6 +30109,369 @@ function _simResetTerrainFactors(){
     try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
   }
   _simOpenTerrainCalibration();
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// FASE 7 — CALIBRACIÓN GLOBAL DEL FACTOR CLIMÁTICO
+// Estructura análoga a la del terreno pero con 4 condiciones detectables
+// (calor / frío / viento / lluvia) en lugar de tipos de terreno.
+// ═════════════════════════════════════════════════════════════════════════
+
+function _simComputeClimateCalibration(){
+  const hist = (typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+  if(!hist.length) return { byCondition:{}, totalRaces:0, totalRiders:0, racesProcessed:[] };
+
+  const prevRaceId = _simSelectedRaceId;
+  const prevData   = _simCurrentData;
+
+  const candidates = hist.filter(h => {
+    const w = h.weather || (h._extraNotes && h._extraNotes.weather);
+    if(!w) return false;
+    if(!_detectClimateConditions(w).length) return false;
+    if(!Array.isArray(h.riders) || !h.riders.some(r => r.pos > 0)) return false;
+    if(!Array.isArray(h.inscritos) || h.inscritos.length < 5) return false;
+    return true;
+  });
+
+  const byCondition = {};
+  const racesProcessed = [];
+  let totalRaces = 0, totalRiders = 0;
+
+  candidates.forEach(race => {
+    try {
+      _simBuildData(race.id);
+      if(!_simCurrentData || !Array.isArray(_simCurrentData.grid)) return;
+      const grid = _simCurrentData.grid;
+      const realByName = new Map();
+      (race.riders||[]).forEach(r => {
+        const nk = normalizeForMatching(r.name||'');
+        if(nk && r.pos > 0) realByName.set(nk, parseInt(r.pos)||0);
+      });
+
+      let raceAffected = 0, raceErrWith = 0, raceErrWithout = 0;
+
+      grid.forEach(g => {
+        if(!g.climateBuckets || !g.climateBuckets.length) return;
+        if(g.predictedPos == null || g.predictedPosBaseClimate == null) return;
+        const real = realByName.get(normalizeForMatching(g.name||''));
+        if(!real) return;
+        const errWith    = Math.abs(g.predictedPos - real);
+        const errWithout = Math.abs(g.predictedPosBaseClimate - real);
+        raceAffected++;
+        raceErrWith += errWith;
+        raceErrWithout += errWithout;
+
+        // Repartir errores por CADA (condición, bucket) activada por el corredor
+        g.climateBuckets.forEach(({condition, bucketKey, factor}) => {
+          if(!byCondition[condition]) byCondition[condition] = {
+            condition,
+            racesSet: new Set(),
+            riders: 0,
+            sumErrWith: 0, sumErrWithout: 0,
+            improved: 0, worsened: 0, same: 0,
+            byBucket: {}
+          };
+          const C = byCondition[condition];
+          C.racesSet.add(race.id);
+          C.riders++;
+          C.sumErrWith    += errWith;
+          C.sumErrWithout += errWithout;
+          if(errWith < errWithout - 0.5)      C.improved++;
+          else if(errWith > errWithout + 0.5) C.worsened++;
+          else                                 C.same++;
+          if(!C.byBucket[bucketKey]) C.byBucket[bucketKey] = {
+            bucketKey,
+            factor,
+            defaultFactor: _CLIMATE_FACTOR_DEFAULTS[bucketKey],
+            riders: 0,
+            sumErrWith: 0, sumErrWithout: 0,
+            sumRealOverBase: 0
+          };
+          const B = C.byBucket[bucketKey];
+          B.riders++;
+          B.sumErrWith    += errWith;
+          B.sumErrWithout += errWithout;
+          if(g.predictedPosBaseClimate > 0){
+            B.sumRealOverBase += (real / g.predictedPosBaseClimate);
+          }
+        });
+      });
+
+      if(raceAffected){
+        totalRaces++;
+        totalRiders += raceAffected;
+        racesProcessed.push({
+          id: race.id,
+          name: race.raceName || race.name || '(sin nombre)',
+          date: race.raceDate || '',
+          ridersAffected: raceAffected,
+          maeWith:    raceErrWith    / raceAffected,
+          maeWithout: raceErrWithout / raceAffected
+        });
+      }
+    } catch(e){
+      console.warn('[fase7] error procesando', race.raceName, e);
+    }
+  });
+
+  // Sustituir Set por número
+  Object.values(byCondition).forEach(C => { C.races = C.racesSet.size; delete C.racesSet; });
+
+  // Restaurar estado del simulador
+  try {
+    if(prevRaceId) _simBuildData(prevRaceId);
+    else _simCurrentData = prevData;
+  } catch(e){ _simCurrentData = prevData; }
+
+  return { byCondition, totalRaces, totalRiders, racesProcessed };
+}
+
+function _simApplyClimateAutoCalibration(){
+  const res = _simComputeClimateCalibration();
+  const current = _loadClimateFactorsTable();
+  const updated = JSON.parse(JSON.stringify(current||{}));
+  const changes = [];
+  Object.keys(res.byCondition).forEach(cond => {
+    const C = res.byCondition[cond];
+    if(!updated[cond]) updated[cond] = {};
+    Object.values(C.byBucket).forEach(B => {
+      const sug = _simSuggestTerrainFactor(B); // misma fórmula 50/50, mismas salvaguardas
+      if(!sug) return;
+      const bKey = B.bucketKey;
+      if(!bKey) return;
+      const prev = (updated[cond][bKey] != null) ? updated[cond][bKey] : _CLIMATE_FACTOR_DEFAULTS[bKey];
+      const next = sug.suggested;
+      if(Math.abs(next - prev) < 0.005) return;
+      updated[cond][bKey] = next;
+      changes.push({ condition: cond, bucket: bKey, from: prev, to: next, n: B.riders });
+    });
+  });
+  _saveClimateFactorsTable(updated);
+  return { changes, totalRaces: res.totalRaces, totalRiders: res.totalRiders };
+}
+
+function _simOpenClimateCalibration(){
+  try {
+    _simInjectPVRStyles();
+    const old = document.getElementById('ccalOverlay');
+    if(old) old.remove();
+
+    const res = _simComputeClimateCalibration();
+    if(!res.totalRaces){
+      alert('Aún no hay suficientes carreras con clima registrado + resultados reales para calibrar el factor climático.\n\nAsegúrate de:\n  • Tener clima guardado en alguna carrera disputada (Open-Meteo Archive vía "Cargar clima histórico")\n  • Tener resultados reales y al menos 5 inscritos en esa carrera\n  • Que la carrera tenga calor (≥24°C), frío (≤12°C), viento (≥15 km/h) o lluvia (≥40%)');
+      return;
+    }
+
+    const condLabels = { hot:'☀️ Calor', cold:'🥶 Frío', windy:'💨 Viento', rainy:'🌧️ Lluvia' };
+    const bucketLabels = { strong_low:'Va muy bien', mild_low:'Cómodo', mild_high:'Le cuesta', strong_high:'Sufre' };
+    const condKeys = Object.keys(res.byCondition).sort();
+
+    const condRows = condKeys.map(cond => {
+      const C = res.byCondition[cond];
+      const mW  = C.sumErrWith    / C.riders;
+      const mWo = C.sumErrWithout / C.riders;
+      const delta = mWo - mW;
+      const dCol = delta > 0.3 ? '#15803d' : delta < -0.3 ? '#b91c1c' : '#6b7280';
+      const dTxt = (delta >= 0 ? '−' : '+') + Math.abs(delta).toFixed(2);
+
+      const bucketRows = Object.values(C.byBucket)
+        .sort((a,b)=>a.factor-b.factor)
+        .map(B => {
+          const sug = _simSuggestTerrainFactor(B);
+          const appliedTxt = (B.factor !== B.defaultFactor)
+            ? `<span style="font-weight:800;color:#0d9488">${B.factor.toFixed(2)}</span><span style="font-size:10px;color:#6b7280">&nbsp;(def ${B.defaultFactor.toFixed(2)})</span>`
+            : `<span style="font-weight:800;color:#0b2f6b">${B.factor.toFixed(2)}</span>`;
+          if(!sug){
+            return `<tr>
+              <td style="padding:4px 8px;text-align:center">${appliedTxt}</td>
+              <td style="padding:4px 8px;text-align:center;color:#374151;font-size:11px">${bucketLabels[B.bucketKey]||B.bucketKey}</td>
+              <td style="padding:4px 8px;text-align:center;color:#374151">${B.riders}</td>
+              <td style="padding:4px 8px;text-align:center;color:#6b7280" colspan="3">— muestra insuficiente (mín. 5) —</td>
+            </tr>`;
+          }
+          return `<tr>
+            <td style="padding:4px 8px;text-align:center">${appliedTxt}</td>
+            <td style="padding:4px 8px;text-align:center;color:#374151;font-size:11px">${bucketLabels[B.bucketKey]||B.bucketKey}</td>
+            <td style="padding:4px 8px;text-align:center;color:#374151">${B.riders}</td>
+            <td style="padding:4px 8px;text-align:center;color:#7c3aed;font-weight:700">${sug.observed.toFixed(3)}</td>
+            <td style="padding:4px 8px;text-align:center;color:#0b2f6b;font-weight:800">${sug.suggested.toFixed(2)}</td>
+            <td style="padding:4px 8px;text-align:center;color:${sug.verdict.color};font-weight:800">${sug.verdict.icon} ${sug.verdict.txt}</td>
+          </tr>`;
+        }).join('');
+
+      return `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <div style="font-weight:800;color:#0b2f6b;font-size:15px">${condLabels[cond]||cond}</div>
+            <span style="background:#f3f4f6;color:#374151;font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px">${C.races} carreras · ${C.riders} corredores</span>
+            <span style="background:${dCol}20;color:${dCol};font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px">Δ MAE = ${dTxt}</span>
+            <span style="background:#15803d20;color:#15803d;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px">✓ ${C.improved}</span>
+            <span style="background:#b91c1c20;color:#b91c1c;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px">✗ ${C.worsened}</span>
+            <span style="background:#6b728020;color:#6b7280;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px">= ${C.same}</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fafbfc;border-radius:6px;overflow:hidden">
+            <thead><tr style="background:#f3f4f6">
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Factor aplicado</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Bucket</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">N</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Ratio real/base obs.</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Sugerido (50/50)</th>
+              <th style="padding:5px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Veredicto</th>
+            </tr></thead>
+            <tbody>${bucketRows || '<tr><td colspan="6" style="padding:6px;text-align:center;color:#6b7280">—</td></tr>'}</tbody>
+          </table>
+        </div>`;
+    }).join('');
+
+    const raceRows = res.racesProcessed
+      .slice()
+      .sort((a,b)=>(b.maeWithout - b.maeWith) - (a.maeWithout - a.maeWith))
+      .map(r => {
+        const delta = r.maeWithout - r.maeWith;
+        const dCol = delta > 0.3 ? '#15803d' : delta < -0.3 ? '#b91c1c' : '#6b7280';
+        const dTxt = (delta >= 0 ? '−' : '+') + Math.abs(delta).toFixed(2);
+        return `<tr>
+          <td style="padding:4px 8px;color:#0b2f6b;font-weight:700">${escapeHtml(r.name)}</td>
+          <td style="padding:4px 8px;text-align:center;color:#6b7280;font-size:11px">${escapeHtml(r.date||'')}</td>
+          <td style="padding:4px 8px;text-align:center;color:#374151">${r.ridersAffected}</td>
+          <td style="padding:4px 8px;text-align:center;color:#374151">${r.maeWithout.toFixed(2)}</td>
+          <td style="padding:4px 8px;text-align:center;color:#7c3aed">${r.maeWith.toFixed(2)}</td>
+          <td style="padding:4px 8px;text-align:center;color:${dCol};font-weight:800">${dTxt}</td>
+        </tr>`;
+      }).join('');
+
+    let globalMaeWith = 0, globalMaeWithout = 0;
+    condKeys.forEach(c => {
+      globalMaeWith    += res.byCondition[c].sumErrWith;
+      globalMaeWithout += res.byCondition[c].sumErrWithout;
+    });
+    const totalContribs = condKeys.reduce((s,c)=>s+res.byCondition[c].riders, 0) || 1;
+    const gW  = globalMaeWith    / totalContribs;
+    const gWo = globalMaeWithout / totalContribs;
+    const gD  = gWo - gW;
+    const gCol = gD > 0.3 ? '#15803d' : gD < -0.3 ? '#b91c1c' : '#6b7280';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ccalOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;z-index:2;flex-wrap:wrap;gap:10px">
+          <div>
+            <h2 style="margin:0;font-size:20px;color:#0b2f6b">🌦️ Calibración global del factor climático</h2>
+            <div style="font-size:11.5px;color:#6b7280;margin-top:2px">Agrega TODAS las carreras del histórico con clima registrado y resultados reales</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn" onclick="_simRunClimateAutoCalibration()" style="background:#0284c7;color:#fff;border:0;font-weight:800" title="Aplica los factores climáticos sugeridos. Persiste en este dispositivo.">🤖 Aplicar autoajuste</button>
+            <button class="btn light" onclick="_simResetClimateFactors()" style="background:#fff;color:#374151;border:1px solid #d1d5db;font-weight:700" title="Vuelve a los factores climáticos por defecto">↺ Restablecer defaults</button>
+            <button class="btn light" onclick="document.getElementById('ccalOverlay').remove()">✕ Cerrar</button>
+          </div>
+        </div>
+        <div style="padding:18px 20px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${res.totalRaces}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Carreras analizadas</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${res.totalRiders}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Corredores afectados</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#374151">${gWo.toFixed(2)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">MAE sin factor</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#7c3aed">${gW.toFixed(2)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">MAE con factor</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:${gCol}">${(gD>=0?'−':'+') + Math.abs(gD).toFixed(2)}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Δ MAE global</div></div>
+          </div>
+
+          <h3 style="margin:0 0 8px;font-size:14px;color:#0b2f6b">🌤️ Por condición climática · sugerencias de calibración</h3>
+          ${condRows || '<div style="color:#6b7280;font-size:12px">Sin datos por condición.</div>'}
+
+          <details style="margin-top:14px">
+            <summary style="cursor:pointer;font-weight:700;color:#0b2f6b;font-size:13px">📋 Ver detalle de las ${res.racesProcessed.length} carreras analizadas</summary>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+              <thead><tr style="background:#f3f4f6">
+                <th style="padding:6px 8px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Carrera</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Fecha</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">N</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">MAE sin</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">MAE con</th>
+                <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Δ MAE</th>
+              </tr></thead>
+              <tbody>${raceRows}</tbody>
+            </table>
+          </details>
+
+          <details class="sim-help" style="margin-top:14px">
+            <summary>❓ ¿Cómo funciona este panel y qué tengo que hacer?</summary>
+            <div class="sim-help-body">
+              <h4>🎯 ¿Para qué sirve?</h4>
+              <p>Igual que con el terreno, este panel afina los multiplicadores que el simulador aplica cuando la carrera del día tiene <b>calor, frío, viento o lluvia</b>. Detecta qué corredores rinden mejor o peor en cada condición a partir de tu histórico y los multiplica adecuadamente.</p>
+
+              <h4>🌡️ Las 4 condiciones detectables</h4>
+              <ul>
+                <li>☀️ <b>Calor</b>: temperatura ≥ 24 °C</li>
+                <li>🥶 <b>Frío</b>: temperatura ≤ 12 °C</li>
+                <li>💨 <b>Viento</b>: viento ≥ 15 km/h</li>
+                <li>🌧️ <b>Lluvia</b>: probabilidad ≥ 40 %</li>
+              </ul>
+              <p>Una misma carrera puede activar varias a la vez (p.ej. calor + viento). Los factores se multiplican y se acotan entre 0.80 y 1.25 para que el ajuste nunca sea absurdo.</p>
+
+              <h4>📊 Los 4 buckets de comportamiento del corredor</h4>
+              <ul>
+                <li><b>Va muy bien</b>: rinde claramente mejor en esa condición (×0.93).</li>
+                <li><b>Cómodo</b>: rinde algo mejor (×0.97).</li>
+                <li><b>Le cuesta</b>: rinde algo peor (×1.03).</li>
+                <li><b>Sufre</b>: rinde claramente peor (×1.08).</li>
+              </ul>
+
+              <h4>🤖 ¿Cuándo pulsar "Aplicar autoajuste"?</h4>
+              <ol>
+                <li>Cuando cargues una carrera nueva con clima conocido + resultados reales.</li>
+                <li>Si ves muchas flechas rojas/azules → pulsa el botón (2-3 veces si hace falta) hasta que la mayoría diga "✓ OK mantener".</li>
+                <li>Cuanta más carrera con clima disputes, más se afinan los factores a tu pelotón.</li>
+              </ol>
+
+              <h4>🛡️ Salvaguardas (no te preocupes)</h4>
+              <ul>
+                <li>Mínimo <b>5 corredores</b> por bucket antes de ajustar.</li>
+                <li>Mezcla <b>50/50</b> entre actual y observado → no sobreajusta con muestras pequeñas.</li>
+                <li>Clamp <b>0.80–1.25</b> en el factor total — nada de predicciones absurdas.</li>
+              </ul>
+
+              <h4>📈 Resumen</h4>
+              <p><b>Abre cuando dispute una carrera con clima cargado, pulsa "Aplicar autoajuste" hasta ver casi todo verde "OK mantener", y olvídate.</b></p>
+            </div>
+          </details>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  } catch(e){
+    console.warn('_simOpenClimateCalibration', e);
+    alert('Error al calcular la calibración climática: '+(e.message||e));
+  }
+}
+
+function _simRunClimateAutoCalibration(){
+  try {
+    const { changes, totalRaces, totalRiders } = _simApplyClimateAutoCalibration();
+    const cLabels = { hot:'☀️ Calor', cold:'🥶 Frío', windy:'💨 Viento', rainy:'🌧️ Lluvia' };
+    const bLabels = { strong_low:'Va muy bien', mild_low:'Cómodo', mild_high:'Le cuesta', strong_high:'Sufre' };
+    if(!changes.length){
+      alert(`✅ Autoajuste climático ejecutado sobre ${totalRaces} carreras y ${totalRiders} corredores.\n\nNo hay cambios relevantes: los factores actuales ya están bien ajustados a los datos.`);
+    } else {
+      const lines = changes.map(c => `  • ${cLabels[c.condition]||c.condition} · ${bLabels[c.bucket]||c.bucket} (n=${c.n}): ${c.from.toFixed(3)} → ${c.to.toFixed(3)}`);
+      alert(`🤖 Autoajuste climático aplicado sobre ${totalRaces} carreras y ${totalRiders} corredores.\n\n${changes.length} factor(es) actualizado(s):\n\n${lines.join('\n')}\n\nSe aplicarán en todas las predicciones futuras. Persistido en este dispositivo.`);
+    }
+    if(typeof _simSelectedRaceId !== 'undefined' && _simSelectedRaceId){
+      try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
+    }
+    _simOpenClimateCalibration();
+  } catch(e){
+    console.warn('_simRunClimateAutoCalibration', e);
+    alert('Error al aplicar el autoajuste climático: '+(e.message||e));
+  }
+}
+
+function _simResetClimateFactors(){
+  if(!confirm('¿Volver a los factores climáticos por defecto (0.93 / 0.97 / 1.03 / 1.08)?\n\nSe perderá todo el autoajuste calibrado a tu histórico.')) return;
+  _resetClimateFactorsTable();
+  if(typeof _simSelectedRaceId !== 'undefined' && _simSelectedRaceId){
+    try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
+  }
+  _simOpenClimateCalibration();
 }
 
 function _simInjectPVRStyles(){
