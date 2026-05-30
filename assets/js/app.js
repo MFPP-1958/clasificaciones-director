@@ -32577,12 +32577,24 @@ function _routeParseTCX(text){
   return points;
 }
 
-// — Parser .fit usando fit-file-parser CDN —
-async function _routeParseFIT(arrayBuffer){
-  if(typeof FitParser === 'undefined' && typeof window.FitParser === 'undefined'){
-    throw new Error('fit-file-parser no cargado');
+// Lazy ESM load de fit-file-parser. La librería es CommonJS y no expone
+// global con un <script> normal, así que la cargamos como módulo ESM la
+// primera vez que se necesita (jsdelivr +esm convierte CJS → ESM al vuelo).
+let _routeFitParserCtor = null;
+async function _routeLoadFitParser(){
+  if(_routeFitParserCtor) return _routeFitParserCtor;
+  try{
+    const mod = await import('https://cdn.jsdelivr.net/npm/fit-file-parser@1.21.0/+esm');
+    _routeFitParserCtor = mod.default || mod.FitParser || mod;
+    return _routeFitParserCtor;
+  }catch(e){
+    throw new Error('No se pudo cargar fit-file-parser desde CDN: '+(e.message||e));
   }
-  const FP = window.FitParser?.default || window.FitParser || FitParser;
+}
+
+// — Parser .fit —
+async function _routeParseFIT(arrayBuffer){
+  const FP = await _routeLoadFitParser();
   const parser = new FP({
     force: true,
     speedUnit: 'km/h',
@@ -32806,16 +32818,17 @@ async function _routeRenderContent(){
 
   if(!hasRoute){
     content.innerHTML = `
-      <div class="route-empty">
+      <div class="route-empty route-dropzone" id="routeDropzone">
         <div class="route-empty-icon">📂</div>
         <div class="route-empty-title">No hay recorrido cargado para esta prueba</div>
-        <div class="route-empty-sub">Sube el archivo .fit del ciclocomputador de un corredor (Garmin/Wahoo) o el .gpx del organizador.</div>
+        <div class="route-empty-sub">Sube el archivo <b>.fit</b> del ciclocomputador (Garmin/Wahoo) o el <b>.gpx</b> del organizador.<br>Arrastra y suelta el archivo aquí, o pulsa el botón.</div>
         <label class="route-upload-btn">
           📎 Subir archivo (.fit / .gpx / .tcx)
           <input type="file" accept=".fit,.gpx,.tcx,.FIT,.GPX,.TCX" onchange="_routeOnFileSelected(event)" style="display:none">
         </label>
         ${efforts.length ? `<div class="route-empty-sub" style="margin-top:14px">Sin embargo, hay <b>${efforts.length}</b> esfuerzo(s) subido(s) sin curso de referencia.</div>` : ''}
       </div>`;
+    _routeWireDropzone(document.getElementById('routeDropzone'));
     return;
   }
 
@@ -32829,7 +32842,7 @@ async function _routeRenderContent(){
   const terrainLabels = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa', desconocido:'⚪ Desconocido' };
   const altRange = (r.altitude_min_m!=null && r.altitude_max_m!=null) ? `${r.altitude_min_m}-${r.altitude_max_m} m` : '—';
   content.innerHTML = `
-    <div class="route-grid">
+    <div class="route-grid" id="routeDropzone">
       <div class="route-metrics">
         <div class="route-metric"><div class="rm-v">${(r.distance_m/1000).toFixed(1)}</div><div class="rm-l">km</div></div>
         <div class="route-metric"><div class="rm-v">${r.desnivel_pos_m||0}</div><div class="rm-l">desnivel +</div></div>
@@ -32874,6 +32887,29 @@ async function _routeRenderContent(){
       if(r.has_altitude) _routeDrawProfile(course.points);
     }, 80);
   }
+  _routeWireDropzone(document.getElementById('routeDropzone'));
+}
+
+// — Engancha drag & drop en una zona del modal. Procesa el primer archivo
+//   soltado. Se aplica tanto al placeholder (cuando no hay curso) como al
+//   grid con mapa/perfil (para sustituir o añadir esfuerzo).
+function _routeWireDropzone(el){
+  if(!el || el._routeDropWired) return;
+  el._routeDropWired = true;
+  const prevent = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+  ['dragenter','dragover'].forEach(ev => el.addEventListener(ev, e => {
+    prevent(e);
+    el.classList.add('route-drag-active');
+  }));
+  ['dragleave','drop'].forEach(ev => el.addEventListener(ev, e => {
+    prevent(e);
+    el.classList.remove('route-drag-active');
+  }));
+  el.addEventListener('drop', async (e) => {
+    const file = e.dataTransfer?.files && e.dataTransfer.files[0];
+    if(!file) return;
+    await _routeOnFileSelected({ target: { files: [file] } });
+  });
 }
 
 function _routeDrawMap(points){
@@ -33035,6 +33071,8 @@ function _routeInjectStyles(){
     .route-content{padding:16px 20px;min-height:200px}
     .route-loading{padding:50px 20px;text-align:center;color:#6b7280;font-size:14px}
     .route-empty{text-align:center;padding:40px 20px}
+    .route-dropzone{border:2px dashed transparent;border-radius:14px;transition:all .15s ease}
+    .route-dropzone.route-drag-active{border-color:#15803d;background:#f0fdf4;box-shadow:inset 0 0 0 2px rgba(21,128,61,.1)}
     .route-empty-icon{font-size:48px;margin-bottom:10px}
     .route-empty-title{font-weight:800;color:#0b2f6b;font-size:15px;margin-bottom:6px}
     .route-empty-sub{font-size:12.5px;color:#6b7280;margin-bottom:18px;line-height:1.55}
