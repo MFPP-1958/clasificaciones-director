@@ -23539,6 +23539,299 @@ function _simRenderMyTeamPanel(){
   }).join('')}</div>`;
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// BRIEFING PRE-CARRERA · resumen imprimible para explicar a los corredores
+// Recoge predicciones, factores aplicados, forma reciente y consejo táctico
+// individual de cada corredor del equipo. Pensado para reunirse antes de la
+// salida y enseñárselo a los chavales (impresión limpia A4).
+// ═════════════════════════════════════════════════════════════════════════
+
+// Convierte una posición esperada en un consejo táctico claro y motivador.
+function _simBriefingAdvice(g, mc){
+  if(g.avgPos == null){
+    return {
+      role:'Aprender y disfrutar',
+      tag:'#94a3b8',
+      tips:[
+        'Es tu primera prueba con datos en el sistema, no te obsesiones con el puesto.',
+        'Aguanta en grupo el mayor tiempo posible: ahí gastas mucha menos energía.',
+        'Toma referencias: cómo se ruedan las curvas, dónde rompe el pelotón, qué corredores parecen fuertes.',
+        'Acabar la carrera ya es ganar información para las siguientes.'
+      ]
+    };
+  }
+  const pred = mc ? mc.predicted : g.predictedPos;
+  const podio = mc ? mc.probTop3 : null;
+  const top10 = mc ? mc.probTop10 : null;
+  if(pred <= 3 || (podio != null && podio >= 25)){
+    return {
+      role:'🏆 Candidato a podio',
+      tag:'#15803d',
+      tips:[
+        'Tienes números reales para subir al cajón hoy. Sé tú el que decide la carrera.',
+        'No te quedes atrás cuando vayan los favoritos: si alguien se va, tú vas detrás.',
+        'Reserva un último cartucho para los 3-5 km finales — no te quemes en ataques largos.',
+        'En el sprint, busca rueda buena y abre el esprint a 200-250 m si es llano.'
+      ]
+    };
+  }
+  if(pred <= 8 || (top10 != null && top10 >= 50)){
+    return {
+      role:'🎯 Objetivo Top 10',
+      tag:'#0369a1',
+      tips:[
+        'Vas con números para meterte entre los 10 primeros. No malgastes energía en cazas inútiles.',
+        'Cuando se forme la primera selección, mete los codos y métete dentro.',
+        'Sigue ataques cortos (≤30 s), deja pasar los kamikazes que se van solos a 30 km de meta.',
+        'Llega fresco al último km: es donde se decide tu puesto.'
+      ]
+    };
+  }
+  if(pred <= 20 || (top10 != null && top10 >= 20)){
+    return {
+      role:'🟢 Trabajar para top 15-20',
+      tag:'#d97706',
+      tips:[
+        'Hoy tu carrera es estar siempre con el grupo principal.',
+        'Métete delante en los puntos clave (subidas cortas, salidas de curva, zonas con viento).',
+        'Si puedes ayudar al líder del equipo, tu puesto sube — y el del equipo también.',
+        'Sprint final: no busques a saco el podio, busca ganar 2-3 posiciones de las tuyas.'
+      ]
+    };
+  }
+  if(pred <= 40){
+    return {
+      role:'🧠 Sumar experiencia y apoyar',
+      tag:'#7c3aed',
+      tips:[
+        'Hoy lo que toca es resistir y aprender. Acabar bien colocado en el pelotón es un éxito.',
+        'Cuando se rompa el pelotón, intenta agarrar el segundo o tercer grupo, no te quedes solo.',
+        'Si el líder pincha o se queda, espéralo y tira tú para devolverlo al pelotón.',
+        'Cada km que acabas con el grupo principal es entrenamiento de nivel real.'
+      ]
+    };
+  }
+  return {
+    role:'🏁 Acabar la carrera con cabeza',
+    tag:'#475569',
+    tips:[
+      'Hoy el objetivo es completar la prueba sin perder tiempo absurdo.',
+      'Ahorra energía: ve siempre dentro del grupo, no en los bordes.',
+      'Si te descuelgas, busca un grupo de 3-4 corredores y rueda con ellos.',
+      'Termina y aprende: cada carrera dura te hace mejor para las próximas.'
+    ]
+  };
+}
+
+// Traduce los factores aplicados (terreno, clima, especialidad, fatiga) en
+// una frase corta y entendible para el corredor.
+function _simBriefingFactorChips(g){
+  const chips = [];
+  if(g.terrainReason)   chips.push({icon:'🗺️', txt: g.terrainReason, color: g.terrainFactor < 1 ? '#15803d' : g.terrainFactor > 1 ? '#b91c1c' : '#475569'});
+  if(g.climateReason)   chips.push({icon: g.climateIcon || '🌤️', txt: g.climateReason, color: (g.climateFactor||1) < 1 ? '#15803d' : (g.climateFactor||1) > 1 ? '#b91c1c' : '#475569'});
+  if(g.specialtyReason) chips.push({icon:'🎯', txt: g.specialtyReason, color:'#0b2f6b'});
+  if(g.fatigueReason)   chips.push({icon:'😴', txt: g.fatigueReason, color: '#d97706'});
+  return chips;
+}
+
+// Inyecta los estilos del briefing (incluye CSS de impresión limpio).
+function _simInjectBriefingStyles(){
+  if(document.getElementById('briefing-styles')) return;
+  const st = document.createElement('style');
+  st.id = 'briefing-styles';
+  st.textContent = `
+    #briefingOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:18px;overflow:auto}
+    #briefingOverlay .briefing{background:#fff;border-radius:12px;max-width:980px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden}
+    #briefingOverlay .b-hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 22px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap;gap:10px;background:linear-gradient(135deg,#0b2f6b,#1e3a8a);color:#fff}
+    #briefingOverlay .b-title{font-size:20px;font-weight:900;margin:0}
+    #briefingOverlay .b-subtitle{font-size:11.5px;opacity:.85;margin-top:2px}
+    #briefingOverlay .b-body{padding:18px 22px}
+    #briefingOverlay .b-meta-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+    #briefingOverlay .b-meta-chip{background:#f1f5f9;border:1px solid #e2e8f0;color:#0b2f6b;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700}
+    #briefingOverlay .b-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:18px}
+    #briefingOverlay .b-summary-card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
+    #briefingOverlay .b-summary-card .l{font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px}
+    #briefingOverlay .b-summary-card .v{font-size:18px;color:#0b2f6b;font-weight:900;margin-top:2px}
+    #briefingOverlay .b-summary-card .n{font-size:12px;color:#374151;margin-top:1px;font-weight:600}
+    #briefingOverlay .b-rider{border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;page-break-inside:avoid;break-inside:avoid}
+    #briefingOverlay .b-rider .br-hdr{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+    #briefingOverlay .b-rider .br-pos{font-size:22px;font-weight:900;color:#0b2f6b;min-width:44px;text-align:right}
+    #briefingOverlay .b-rider .br-name{font-size:15px;font-weight:800;color:#0b2f6b}
+    #briefingOverlay .b-rider .br-cat{font-size:11px;color:#6b7280;font-weight:600;margin-left:4px}
+    #briefingOverlay .b-rider .br-role{margin-left:auto;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;color:#fff}
+    #briefingOverlay .b-rider .br-kpis{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+    #briefingOverlay .b-rider .br-kpi{background:#f3f4f6;color:#0b2f6b;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+    #briefingOverlay .b-rider .br-kpi b{color:#0b2f6b}
+    #briefingOverlay .b-rider .br-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+    #briefingOverlay .b-rider .br-chip{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#fff;border:1px solid #d1d5db}
+    #briefingOverlay .b-rider .br-form{margin-top:6px;font-size:11.5px;color:#374151}
+    #briefingOverlay .b-rider .br-form b{color:#0b2f6b}
+    #briefingOverlay .b-rider .br-tips{margin-top:8px;background:#f8fafc;border-left:3px solid #0b2f6b;padding:8px 12px;border-radius:0 6px 6px 0}
+    #briefingOverlay .b-rider .br-tips ul{margin:0;padding-left:18px}
+    #briefingOverlay .b-rider .br-tips li{font-size:12px;color:#0f172a;line-height:1.5;margin:2px 0}
+    #briefingOverlay .b-rivals{margin-top:18px;padding-top:14px;border-top:1px dashed #cbd5e1}
+    #briefingOverlay .b-rivals h3{margin:0 0 8px;color:#7c2d12;font-size:14px}
+    #briefingOverlay .b-rivals-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+    #briefingOverlay .b-rival{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:12px;color:#7c2d12}
+    #briefingOverlay .b-rival b{color:#9a3412}
+    #briefingOverlay .b-actions{display:flex;gap:8px;flex-wrap:wrap}
+    @media print {
+      @page { size: A4 portrait; margin: 12mm }
+      body { background:#fff !important; }
+      body > *:not(#briefingOverlay) { display: none !important; }
+      #briefingOverlay { position:static !important; padding:0 !important; background:none !important; overflow:visible !important; display:block !important }
+      #briefingOverlay .briefing { box-shadow:none !important; max-width:none !important; border-radius:0 !important }
+      #briefingOverlay .b-hdr { background:#0b2f6b !important; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+      .no-print, #briefingOverlay .b-actions { display:none !important }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+function _simOpenTeamBriefing(){
+  try{
+    if(!_simCurrentData || !myTeam){
+      alert('Selecciona una prueba con corredores de tu equipo inscritos.');
+      return;
+    }
+    const {race, grid, kpis} = _simCurrentData;
+    const mine = grid.filter(g=>g.isMyTeam);
+    if(!mine.length){
+      alert('No hay corredores de tu equipo en esta prueba.');
+      return;
+    }
+    _simInjectBriefingStyles();
+    const old = document.getElementById('briefingOverlay');
+    if(old) old.remove();
+
+    // Ordenar igual que el panel: por puesto previsto ascendente
+    const sorted = mine.slice().sort((a,b)=>{
+      const sa = (a.avgPos == null) ? Infinity : (a.predictedPos ?? a.avgPos ?? Infinity);
+      const sb = (b.avgPos == null) ? Infinity : (b.predictedPos ?? b.avgPos ?? Infinity);
+      if(sa !== sb) return sa - sb;
+      return (a.name||'').localeCompare(b.name||'');
+    });
+
+    // Resumen del día
+    let bestRider = null, bestPodium = -1;
+    sorted.forEach(g=>{
+      if(g.avgPos == null) return;
+      const mc = _simMonteCarlo(g, 1000);
+      if(mc && mc.probTop3 > bestPodium){ bestPodium = mc.probTop3; bestRider = {g, mc}; }
+    });
+    const withData = sorted.filter(g=>g.avgPos != null).length;
+    const debuts   = sorted.length - withData;
+
+    // Top rivales: top 5 de no-mi-equipo por predictedPos
+    const rivals = grid.filter(g=>!g.isMyTeam && g.predictedPos != null)
+      .sort((a,b)=>a.predictedPos - b.predictedPos)
+      .slice(0, 5);
+
+    // Meta de la carrera
+    const terrainLbl = race.route && race.route.terrain_type
+      ? ({llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa'}[race.route.terrain_type] || race.route.terrain_type)
+      : '⚪ Terreno sin datos';
+    const wx = race.weather || (race._extraNotes && race._extraNotes.weather);
+    const wxChip = wx ? `${(typeof _wxIcon==='function'?_wxIcon(wx):'🌤️')} ${wx.temp!=null?wx.temp+'ºC':''}${wx.wind!=null?' · 💨'+wx.wind+'km/h':''}${wx.rain!=null?' · 🌧️'+wx.rain+'%':''}` : '🌤️ Sin previsión';
+
+    // Cards de cada corredor
+    const cardsHtml = sorted.map((g, idx) => {
+      const mc = g.avgPos != null ? _simMonteCarlo(g, 1000) : null;
+      const advice = _simBriefingAdvice(g, mc);
+      const chips = _simBriefingFactorChips(g);
+      const formArr = g.recentForm || [];
+      const formTxt = formArr.length
+        ? formArr.map(p => `<b style="color:${p<=10?'#15803d':p<=20?'#0b2f6b':p<=40?'#d97706':'#b91c1c'}">${p}º</b>`).join(' · ')
+        : '<span style="color:#9ca3af">sin carreras recientes</span>';
+      const trendIcon = g.trend==='up' ? '⬆️ Mejorando' : g.trend==='down' ? '⬇️ Empeorando' : g.trend==='stable' ? '➡️ Estable' : '';
+      const posHtml = mc ? `${mc.predicted}º` : (g.predictedPos != null ? Math.round(g.predictedPos)+'º' : '—');
+      const ivHtml  = mc ? `<span class="br-kpi">📐 IC 50%: <b>${mc.lower}º</b>–<b>${mc.upper}º</b></span>` : '';
+      const probHtml = mc ? `
+        <span class="br-kpi">🥇 Podio: <b>${mc.probTop3}%</b></span>
+        <span class="br-kpi">🟢 Top 5: <b>${mc.probTop5}%</b></span>
+        <span class="br-kpi">🔵 Top 10: <b>${mc.probTop10}%</b></span>` : '';
+      const chipsHtml = chips.length
+        ? `<div class="br-chips">${chips.map(c=>`<span class="br-chip" style="border-color:${c.color}40;color:${c.color}">${c.icon} ${escapeHtml(c.txt)}</span>`).join('')}</div>`
+        : '';
+      return `
+        <div class="b-rider">
+          <div class="br-hdr">
+            <div class="br-pos">${idx+1}.</div>
+            <div>
+              <div class="br-name">${escapeHtml(g.name)} <span class="br-cat">${escapeHtml(g.cat||'')}${g.bib?' · #'+escapeHtml(g.bib):''}</span></div>
+              <div style="font-size:11.5px;color:#374151"><b>${posHtml}</b> esperado · ${g.raceCount||0} carreras previas${trendIcon?' · '+trendIcon:''}</div>
+            </div>
+            <span class="br-role" style="background:${advice.tag}">${advice.role}</span>
+          </div>
+          <div class="br-kpis">
+            ${ivHtml}
+            ${probHtml}
+          </div>
+          ${chipsHtml}
+          <div class="br-form">📈 Últimas carreras: ${formTxt}</div>
+          <div class="br-tips">
+            <ul>${advice.tips.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Rivales
+    const rivalsHtml = rivals.length ? `
+      <div class="b-rivals">
+        <h3>⚠️ Top 5 rivales a controlar</h3>
+        <div class="b-rivals-grid">
+          ${rivals.map((r,i)=>`<div class="b-rival"><b>${i+1}. ${escapeHtml(r.name)}</b> · ${escapeHtml(r.team||'')}<br><span style="font-size:11px">Predicción: ${Math.round(r.predictedPos)}º · ${r.raceCount||0} carreras previas</span></div>`).join('')}
+        </div>
+      </div>` : '';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'briefingOverlay';
+    overlay.innerHTML = `
+      <div class="briefing">
+        <div class="b-hdr">
+          <div>
+            <h2 class="b-title">📋 Briefing pre-carrera · ${escapeHtml(myTeam)}</h2>
+            <div class="b-subtitle">${escapeHtml(race.raceName||'')} · ${escapeHtml(race.raceDate||'')}${race.localidad?' · '+escapeHtml(race.localidad):''}</div>
+          </div>
+          <div class="b-actions no-print">
+            <button class="btn" onclick="window.print()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="document.getElementById('briefingOverlay').remove()">✕ Cerrar</button>
+          </div>
+        </div>
+        <div class="b-body">
+          <div class="b-meta-row">
+            <span class="b-meta-chip">${terrainLbl}</span>
+            <span class="b-meta-chip">${wxChip}</span>
+            ${race.circuitType?`<span class="b-meta-chip">🚴 ${escapeHtml(race.circuitType)}</span>`:''}
+            ${race.route && race.route.distance_m?`<span class="b-meta-chip">📏 ${(race.route.distance_m/1000).toFixed(1)} km</span>`:''}
+            ${race.route && race.route.desnivel_pos_m?`<span class="b-meta-chip">⛰️ +${Math.round(race.route.desnivel_pos_m)} m</span>`:''}
+            ${kpis && kpis.difficulty!=null?`<span class="b-meta-chip">⚠️ Dificultad: ${kpis.difficulty}%</span>`:''}
+            ${kpis && kpis.predictability!=null?`<span class="b-meta-chip">🎯 Predictibilidad: ${kpis.predictability}%</span>`:''}
+          </div>
+
+          <div class="b-summary">
+            <div class="b-summary-card"><div class="l">Corredores convocados</div><div class="v">${sorted.length}</div><div class="n">${withData} con datos · ${debuts} sin datos</div></div>
+            ${bestRider ? `<div class="b-summary-card"><div class="l">🏆 Mejor opción de podio</div><div class="v">${escapeHtml(bestRider.g.name.split(',')[0]||bestRider.g.name)}</div><div class="n">${bestRider.mc.probTop3}% de probabilidad · ${bestRider.mc.predicted}º esperado</div></div>` : ''}
+            <div class="b-summary-card"><div class="l">📋 Mensaje del día</div><div class="v" style="font-size:13px;line-height:1.3">Pelotón ${sorted.length>=5?'numeroso':'reducido'}. Vamos a cuidar la cabeza, ayudar al líder y aprender.</div></div>
+          </div>
+
+          ${cardsHtml}
+          ${rivalsHtml}
+
+          <div class="no-print" style="margin-top:14px;padding:10px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:11.5px;color:#0c4a6e">
+            💡 Este briefing está pensado para enseñárselo a los corredores antes de la carrera. Pulsa <b>🖨️ Imprimir / PDF</b> para guardarlo o llevarlo en papel a la reunión. Los consejos están basados en su histórico, el terreno y el clima previsto.
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    overlay.addEventListener('click', (ev)=>{ if(ev.target === overlay){ overlay.remove(); document.body.style.overflow=''; } });
+  } catch(e){
+    console.warn('_simOpenTeamBriefing', e);
+    alert('Error al abrir el briefing: '+(e.message||e));
+  }
+}
+
 // ── B) HEAD-TO-HEAD ──────────────────────────────────────────────────────
 // Para cada corredor de mi equipo presente en la parrilla, buscar en el histórico
 // rivales contra los que ha competido ≥2 veces y resumir ganados/perdidos.

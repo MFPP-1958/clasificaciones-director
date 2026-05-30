@@ -1712,9 +1712,12 @@
 
       <!-- Fase 2: Predicción Mi Equipo con intervalo de confianza -->
       <section class="panel sim-myteam-panel" id="simMyTeamPanel" style="display:none">
-        <div class="section-title">
-          <h2 style="margin:0;color:#1e3a8a">🔵 Predicción Mi Equipo (con intervalo de confianza)</h2>
-          <span class="small">Simulación Montecarlo · 1000 iteraciones por corredor</span>
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <h2 style="margin:0;color:#1e3a8a">🔵 Predicción Mi Equipo (con intervalo de confianza)</h2>
+            <span class="small">Simulación Montecarlo · 1000 iteraciones por corredor</span>
+          </div>
+          <button class="btn" id="simBriefingBtn" onclick="_simOpenTeamBriefing()" style="background:#0b2f6b;color:#fff;border:0;font-weight:800;padding:9px 16px" title="Abrir briefing pre-carrera para explicar a los corredores">📋 Briefing pre-carrera</button>
         </div>
 
         <details class="sim-help">
