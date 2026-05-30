@@ -33036,11 +33036,51 @@ async function _routeOnFileSelected(ev){
 
 // — Pregunta al director a qué corredor pertenece el esfuerzo —
 function _routeAskRider(filename){
-  // Intentamos sugerir el rider desde el nombre del archivo
+  // Extraer pistas del nombre del archivo:
+  //   "KarlesCubedo-24-05-2026.fit"  →  primer segmento "KarlesCubedo"
+  //   Split por mayúsculas:  ["Karles", "Cubedo"]
+  // Suposición típica: nombre primero, luego apellido.
   const stem = filename.replace(/\.[^.]+$/, '');
-  const guess = stem.split(/[\s_\-]+/).slice(0, 2).join(' ');
+  const firstSeg = stem.split(/[\s_\-]+/)[0] || '';
+  const camelParts = firstSeg.split(/(?=[A-Z])/).filter(s => s.length > 0);
+  let guessName = camelParts[0] || '';
+  let guessApellido = camelParts[1] || '';
+
+  // Buscar coincidencia con las licencias importadas para usar el formato
+  // canónico de la app: "Apellido1, Nombre" (igual que renderiza el resto).
+  let guess = '';
+  try{
+    if(typeof _fccvGetLicencias === 'function'){
+      const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+      const np = norm(guessName);
+      const ap = norm(guessApellido);
+      const all = _fccvGetLicencias();
+      // Probamos en orden: (nombre+apellido), (apellido+nombre), (cualquier
+      // coincidencia de nombre), (cualquier coincidencia de apellido).
+      let match =
+        (np && ap && all.find(l => norm(l.nombre).startsWith(np)    && norm(l.apellidos).startsWith(ap)))    ||
+        (np && ap && all.find(l => norm(l.apellidos).startsWith(np) && norm(l.nombre).startsWith(ap)))    ||
+        (np && all.find(l => norm(l.nombre).startsWith(np)))   ||
+        (ap && all.find(l => norm(l.apellidos).startsWith(ap)));
+      if(match){
+        const ap1 = (match.apellidos||'').trim().split(/\s+/)[0];
+        // Capitalizar primero la primera letra del nombre y apellido para
+        // ser consistentes con cómo se ve en el resto de la app.
+        const titleCase = s => s ? s.split(/\s+/).map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ') : '';
+        guess = `${titleCase(ap1)}, ${titleCase(match.nombre||'')}`;
+      }
+    }
+  }catch(e){ /* silencioso */ }
+
+  // Fallback: si no hay match con licencias, formateamos lo que se haya
+  // sacado del nombre del archivo siguiendo la convención "Apellido, Nombre".
+  if(!guess){
+    if(guessApellido) guess = `${guessApellido}, ${guessName}`;
+    else              guess = guessName;
+  }
+
   const choice = prompt(
-    `Este archivo contiene datos de esfuerzo (potencia/FC).\n\n¿De qué corredor son? (escribe nombre y apellidos, o deja vacío para "Sin asignar")\n\nSugerencia desde el nombre del archivo: "${guess}"`,
+    `Este archivo contiene datos de esfuerzo (potencia/FC).\n\n¿De qué corredor son? · Formato: Apellido, Nombre\n\nDeja vacío para "Sin asignar".`,
     guess
   );
   return (choice||'').trim() || null;
