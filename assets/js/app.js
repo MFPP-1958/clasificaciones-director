@@ -24742,7 +24742,7 @@ function _simOpenTeamsPredVsReal(){
             </div>
           </div>
           <div class="pvr-actions no-print" style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" onclick="window.print()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn" onclick="_simPrintTeamsPredVsReal()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
             <button class="btn light" onclick="_simCloseTeamsPredVsReal()">✕ Cerrar</button>
           </div>
         </div>
@@ -24795,6 +24795,20 @@ function _simCloseTeamsPredVsReal(){
   const o = document.getElementById('tprvOverlay');
   if(o) o.remove();
   document.body.style.overflow = '';
+}
+// Restaurar el overflow del body ANTES de imprimir (igual que en el
+// briefing): si no, el overflow:hidden que aplicamos al abrir el modal
+// puede provocar que el motor de impresión clipe el contenido y la hoja
+// salga en blanco.
+function _simPrintTeamsPredVsReal(){
+  const prev = document.body.style.overflow;
+  document.body.style.overflow = '';
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      if(document.getElementById('tprvOverlay')) document.body.style.overflow = prev;
+    }, 50);
+  }, 10);
 }
 
 function _simRenderTeamsPanel(){
@@ -32039,9 +32053,16 @@ function _simInjectPVRStyles(){
       /* Saca de la maquetación TODO lo que NO sea el modal. display:none
          no reserva espacio (visibility:hidden sí lo hacía y por eso se
          generaban páginas en blanco). */
-      html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; }
-      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay) { display: none !important; }
-      #pvrModalOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
+      html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; padding: 0 !important; }
+      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay):not(#tprvOverlay) { display: none !important; }
+      #pvrModalOverlay, #tprvOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; width: auto !important; }
+      /* Modal de equipos pred vs real: aplica la misma maquetación de impresión */
+      #tprvOverlay .pvr-modal { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; -webkit-box-decoration-break: clone !important; box-decoration-break: clone !important; }
+      #tprvOverlay .pvr-hdr { position: static !important; border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin: 0 0 10px 0 !important; background: #fff !important; }
+      #tprvOverlay .pvr-kpis { background: #fff !important; padding: 0 !important; border-bottom: 0 !important; margin: 0 0 8px 0 !important; }
+      #tprvOverlay .pvr-kpi { border: 1px solid #999 !important; }
+      #tprvOverlay .pvr-table-wrap { padding: 0 !important; grid-template-columns: 1fr 1fr !important; }
+      #tprvOverlay, #tprvOverlay * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
       /* Sin padding interno: dejamos que @page margin gestione TODOS los
          márgenes, así también se respetan en los saltos de página. */
       #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; -webkit-box-decoration-break: clone !important; box-decoration-break: clone !important; }
