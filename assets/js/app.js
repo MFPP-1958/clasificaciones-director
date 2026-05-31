@@ -24258,6 +24258,80 @@ function _simGetSavedPrediction(race){
   return race.prediction || null;
 }
 
+// Escanea TODAS las pruebas de Supabase y lista cuáles tienen
+// notes.prediction guardada. Útil para saber dónde fue a parar una
+// predicción que el usuario creía haber guardado en otra carrera.
+async function _simListAllSavedPredictions(){
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const body = document.getElementById('simAccuracyBody');
+  if(body) body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#0369a1">⏳ Escaneando todas las pruebas en Supabase…</p>';
+  try {
+    const {data, error} = await _sb.from('races').select('id, raceName, raceDate, notes, race_type').eq('race_type','clasificacion');
+    if(error){
+      if(body) body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#b91c1c">Error: ${escapeHtml(error.message||String(error))}</p>`;
+      return;
+    }
+    const withPred = [];
+    (data||[]).forEach(r => {
+      try {
+        const extra = JSON.parse(r.notes || '{}');
+        if(extra && extra.prediction){
+          withPred.push({
+            id: r.id,
+            name: r.raceName || '(sin nombre)',
+            date: r.raceDate || '',
+            savedAt: extra.prediction.savedAt || '',
+            top10n: (extra.prediction.top10||[]).length,
+            myTeamN: (extra.prediction.myTeamPred||[]).length
+          });
+        }
+      } catch(e){}
+    });
+    withPred.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
+    if(!body) return;
+    if(!withPred.length){
+      body.innerHTML = `
+        <div style="text-align:center;padding:18px">
+          <p style="color:#b91c1c;font-weight:700;margin:0 0 6px">🚫 No se ha encontrado NINGUNA predicción guardada en toda la base de datos.</p>
+          <p class="small" style="color:#6b7280;margin:0">Se ha escaneado el campo notes de las ${data?.length||0} pruebas con race_type='clasificacion'. En ninguna existe la clave "prediction".</p>
+          <p class="small" style="color:#6b7280;margin:8px 0 0">Esto significa que el botón "💾 Guardar predicción" no llegó a completarse en ningún momento, o el campo notes se ha sobrescrito desde otro proceso.</p>
+        </div>`;
+      return;
+    }
+    const currentRaceId = _simCurrentData?.race?.id;
+    const rowsHtml = withPred.map(p => {
+      const isCurrent = p.id === currentRaceId;
+      const savedTxt = p.savedAt ? new Date(p.savedAt).toLocaleString('es-ES') : '(sin fecha)';
+      return `<tr style="${isCurrent?'background:#dcfce7':''}">
+        <td style="padding:6px 8px;font-weight:700;color:#0b2f6b">${escapeHtml(p.name)}${isCurrent?' <span style="background:#16a34a;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:4px">SELECCIONADA</span>':''}</td>
+        <td style="padding:6px 8px;color:#374151">${escapeHtml(p.date)}</td>
+        <td style="padding:6px 8px;color:#6b7280;font-size:11px">${escapeHtml(savedTxt)}</td>
+        <td style="padding:6px 8px;text-align:center">${p.top10n}</td>
+        <td style="padding:6px 8px;text-align:center">${p.myTeamN}</td>
+        <td style="padding:6px 8px;font-size:10px;color:#9ca3af;font-family:monospace">${escapeHtml((p.id||'').slice(0,8))}…</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `
+      <div style="padding:12px">
+        <p style="margin:0 0 10px;color:#0b2f6b;font-weight:700">🔎 Encontradas ${withPred.length} predicciones guardadas en Supabase:</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+          <thead><tr style="background:#f3f4f6">
+            <th style="padding:6px 8px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Prueba</th>
+            <th style="padding:6px 8px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Fecha</th>
+            <th style="padding:6px 8px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Guardada en</th>
+            <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Top 10</th>
+            <th style="padding:6px 8px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">Mi equipo</th>
+            <th style="padding:6px 8px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.3px">ID</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <p class="small" style="color:#6b7280;margin:10px 0 0">💡 Si la prueba seleccionada ahora no aparece en verde, significa que la predicción se guardó en una OTRA prueba — abre esa otra prueba en el selector del simulador para ver su comparación predicho vs real.</p>
+      </div>`;
+  } catch(e){
+    if(body) body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#b91c1c">Error inesperado: ${escapeHtml(e.message||String(e))}</p>`;
+  }
+}
+
 // Fuerza una consulta directa a Supabase para ESTA prueba — útil cuando
 // la predicción se guardó pero la caché aún no la había recargado.
 async function _simForceReloadAccuracy(){
@@ -24613,7 +24687,10 @@ function _simRenderAccuracyPanel(){
           <b>Prueba seleccionada:</b> ${escapeHtml(raceName)}<br>
           <b>ID:</b> <code style="font-size:10.5px">${escapeHtml(raceId)}</code>
         </div>
-        <button class="btn" onclick="_simForceReloadAccuracy()" style="background:#0369a1;color:#fff;font-weight:800;font-size:12px;padding:6px 14px">🔄 Forzar recarga desde Supabase</button>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn" onclick="_simForceReloadAccuracy()" style="background:#0369a1;color:#fff;font-weight:800;font-size:12px;padding:6px 14px">🔄 Forzar recarga desde Supabase</button>
+          <button class="btn" onclick="_simListAllSavedPredictions()" style="background:#7c3aed;color:#fff;font-weight:800;font-size:12px;padding:6px 14px">🔎 Buscar TODAS mis predicciones guardadas</button>
+        </div>
         <p class="small" style="color:#6b7280;margin:10px 0 0">Si tras pulsar el botón sigue saliendo este mensaje, es que la predicción guardada estaba en otra prueba (mismo nombre pero distinto id, o se guardó en otra sesión sobre una copia distinta).</p>
       </div>`;
     return;
