@@ -24811,6 +24811,203 @@ function _simPrintTeamsPredVsReal(){
   }, 10);
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// "PREDICHO VS REAL — MI EQUIPO" — modal específico para mostrar cada
+// corredor del equipo, su predicción y su resultado real. Imprimible para
+// poder enviar a los corredores la comparativa.
+// ═════════════════════════════════════════════════════════════════════════
+
+function _simOpenMyTeamPredVsReal(){
+  try {
+    if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+    if(!myTeam){ alert('No tienes equipo seleccionado. Activa "Mi Equipo" arriba del todo.'); return; }
+    const { race, grid } = _simCurrentData;
+    const mine = grid.filter(g => g.isMyTeam);
+    if(!mine.length){ alert('No hay corredores de tu equipo en esta prueba.'); return; }
+    const realRiders = (race.riders||[]).filter(r => r.pos > 0);
+    if(!realRiders.length){ alert('Esta prueba no tiene resultados reales cargados todavía.'); return; }
+    _simInjectPVRStyles();
+    const old = document.getElementById('mtprvOverlay');
+    if(old) old.remove();
+
+    // Mapa rápido nombre → posición real
+    const realByName = new Map();
+    realRiders.forEach(r => {
+      const nk = normalizeForMatching(r.name||'');
+      if(nk) realByName.set(nk, parseInt(r.pos)||0);
+    });
+    const totalFinishers = realRiders.length;
+
+    // Para cada corredor del equipo: predicho vs real
+    const rows = mine.map(g => {
+      const pred = g.predictedPos != null ? Math.round(g.predictedPos) : null;
+      const real = realByName.get(normalizeForMatching(g.name||'')) || null;
+      const diff = (pred != null && real != null) ? real - pred : null;
+      return {
+        name: g.name, cat: g.cat || '', bib: g.bib || '',
+        pred, real, diff,
+        confidence: g.confidence || 'desconocida',
+        terrainReason: g.terrainReason || '',
+        climateReason: g.climateReason || '',
+        elo: g.elo || null
+      };
+    }).sort((a,b) => {
+      // Ordenar por puesto REAL ascendente (con DNFs al final)
+      if(a.real == null && b.real == null) return 0;
+      if(a.real == null) return 1;
+      if(b.real == null) return -1;
+      return a.real - b.real;
+    });
+
+    // Métricas globales
+    let exactHits = 0, within3Hits = 0, within5Hits = 0;
+    let totalErr = 0, comparedCount = 0;
+    let dnfCount = 0;
+    rows.forEach(r => {
+      if(r.real == null){ dnfCount++; return; }
+      if(r.pred == null) return;
+      comparedCount++;
+      const d = Math.abs(r.diff);
+      if(d === 0) exactHits++;
+      if(d <= 3) within3Hits++;
+      if(d <= 5) within5Hits++;
+      totalErr += d;
+    });
+    const mae = comparedCount ? totalErr / comparedCount : null;
+
+    const accColor = (n, base) => {
+      const pct = base > 0 ? n / base : 0;
+      return pct >= 0.7 ? '#16a34a' : pct >= 0.4 ? '#f59e0b' : '#dc2626';
+    };
+    const pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
+
+    // Filas de la tabla
+    const rowsHtml = rows.map(r => {
+      let predTxt, realTxt, diffTxt, rowBg;
+      if(r.real == null){
+        realTxt = '<span style="color:#b91c1c;font-weight:700">DNF / No terminó</span>';
+        predTxt = r.pred != null ? `<b>${r.pred}º</b> esperado` : '—';
+        diffTxt = '<span style="color:#b91c1c;font-weight:700">—</span>';
+        rowBg = '#fee2e2';
+      } else if(r.pred == null){
+        realTxt = `<b>${r.real}º</b> real`;
+        predTxt = '<span style="color:#6b7280">sin predicción</span>';
+        diffTxt = '—';
+        rowBg = '#f3f4f6';
+      } else {
+        const d = r.diff;
+        const dAbs = Math.abs(d);
+        predTxt = `<b>${r.pred}º</b>`;
+        realTxt = `<b>${r.real}º</b>`;
+        if(d === 0){
+          diffTxt = '<span style="background:#dcfce7;color:#15803d;padding:2px 9px;border-radius:6px;font-weight:800;font-size:11px">✓ EXACTO</span>';
+          rowBg = '#dcfce7';
+        } else if(d < 0){
+          diffTxt = `<span style="background:#dbeafe;color:#1e3a8a;padding:2px 9px;border-radius:6px;font-weight:800;font-size:11px">⬆️ ${dAbs} puestos MEJOR</span>`;
+          rowBg = '#dbeafe';
+        } else {
+          diffTxt = `<span style="background:#fef3c7;color:#92400e;padding:2px 9px;border-radius:6px;font-weight:800;font-size:11px">⬇️ ${dAbs} puestos peor</span>`;
+          rowBg = dAbs <= 5 ? '#fef3c7' : '#fed7aa';
+        }
+      }
+      const extraInfo = [];
+      if(r.terrainReason) extraInfo.push('🗺️ ' + escapeHtml(r.terrainReason));
+      if(r.climateReason) extraInfo.push('🌤️ ' + escapeHtml(r.climateReason));
+      if(r.elo != null) extraInfo.push('🧬 Elo ' + r.elo);
+      return `<tr style="background:${rowBg}">
+        <td style="padding:8px 10px"><b>${escapeHtml(r.name)}</b><div style="font-size:11px;color:#475569;margin-top:2px">${escapeHtml(r.cat)}${r.bib?' · #'+escapeHtml(r.bib):''}${extraInfo.length?' · '+extraInfo.join(' · '):''}</div></td>
+        <td style="padding:8px 10px;text-align:center;font-size:14px">${predTxt}</td>
+        <td style="padding:8px 10px;text-align:center;font-size:14px">${realTxt}</td>
+        <td style="padding:8px 10px;text-align:center">${diffTxt}</td>
+      </tr>`;
+    }).join('');
+
+    // Mensaje motivacional según resultados globales
+    let mainMessage = '';
+    if(comparedCount === 0){
+      mainMessage = 'No hay corredores con predicción Y resultado real para evaluar.';
+    } else if(mae != null && mae <= 3){
+      mainMessage = `📍 <b>Predicción casi clavada</b>: error medio de solo ±${mae.toFixed(1)} puestos. El equipo ha rendido tal y como se esperaba.`;
+    } else if(mae != null && mae <= 7){
+      mainMessage = `🎯 <b>Predicción razonable</b>: error medio de ±${mae.toFixed(1)} puestos. Variaciones esperadas; algún corredor rindió por encima o por debajo del pronóstico.`;
+    } else {
+      mainMessage = `📊 <b>Carrera con sorpresas</b>: error medio de ±${mae.toFixed(1)} puestos. Varios corredores se alejaron bastante del pronóstico — pueden ser señales de mejora o de mal día.`;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'mtprvOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
+    overlay.innerHTML = `
+      <div class="pvr-modal" style="background:#fff;border-radius:14px;max-width:980px;width:100%;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div class="pvr-hdr" style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;z-index:2">
+          <div style="display:flex;align-items:center;gap:14px">
+            ${pdfLogoSrc ? `<img src="${pdfLogoSrc}" alt="MFPP Cycling Specialist" class="pvr-logo">` : ''}
+            <div style="min-width:0">
+              <h2 style="margin:0;font-size:20px;color:#0b2f6b">🎯 Predicho vs Real · ${escapeHtml(myTeam)}</h2>
+              <div class="small" style="margin-top:2px">${escapeHtml(race.raceName||'')} · ${escapeHtml(race.raceDate||'')}${race.localidad?' · '+escapeHtml(race.localidad):''}</div>
+            </div>
+          </div>
+          <div class="pvr-actions no-print" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="_simPrintMyTeamPredVsReal()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="_simCloseMyTeamPredVsReal()">✕ Cerrar</button>
+          </div>
+        </div>
+
+        <div class="pvr-kpis" style="padding:14px 22px">
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${accColor(exactHits, comparedCount)}">${exactHits}/${comparedCount}</div><div class="pvr-kpi-l">Puestos<br><span class="small">exactos</span></div></div>
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${accColor(within3Hits, comparedCount)}">${within3Hits}/${comparedCount}</div><div class="pvr-kpi-l">Predichos<br><span class="small">dentro de ±3 puestos</span></div></div>
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${accColor(within5Hits, comparedCount)}">${within5Hits}/${comparedCount}</div><div class="pvr-kpi-l">Predichos<br><span class="small">dentro de ±5 puestos</span></div></div>
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${mae==null?'#9ca3af':(mae<=3?'#16a34a':mae<=7?'#f59e0b':'#dc2626')}">${mae==null?'—':'±'+mae.toFixed(1)}</div><div class="pvr-kpi-l">Error medio<br><span class="small">posiciones</span></div></div>
+        </div>
+
+        <div style="padding:0 22px 6px;font-size:13px;color:#0b2f6b;background:#f0f9ff;border-bottom:1px solid #e0f2fe;margin:0 0 6px">
+          <div style="padding:10px 0">${mainMessage}${dnfCount?' · <b style="color:#b91c1c">'+dnfCount+' DNF</b>':''}</div>
+        </div>
+
+        <div style="padding:0 22px 6px;font-size:11px;color:#6b7280">
+          🟩 verde = puesto exacto · 🟦 azul = MEJOR que la predicción · 🟨 amarillo = peor pero dentro del rango · 🟧 naranja = bastante peor · 🟥 rojo = DNF
+        </div>
+
+        <div class="pvr-table-wrap" style="padding:6px 22px 18px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden">
+            <thead><tr style="background:#1e3a8a;color:#fff">
+              <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px">Corredor</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;width:120px">🔮 Predicho</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;width:120px">🏁 Real</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;width:200px">Diferencia</th>
+            </tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+
+        <div style="padding:0 22px 18px;font-size:11px;color:#475569">
+          <b>Cómo leer la diferencia:</b> ⬆️ azul = el corredor rindió MEJOR de lo previsto (puesto menor) · ⬇️ amarillo = rindió peor pero dentro de rango razonable (≤5 puestos) · ⬇️ naranja = bastante peor de lo esperado · ✓ EXACTO = clavado al puesto previsto.
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    overlay.addEventListener('click', (ev) => { if(ev.target === overlay) _simCloseMyTeamPredVsReal(); });
+  } catch(e){
+    console.warn('_simOpenMyTeamPredVsReal', e);
+    alert('Error al abrir el comparador de Mi Equipo: '+(e.message||e));
+  }
+}
+function _simCloseMyTeamPredVsReal(){
+  const o = document.getElementById('mtprvOverlay');
+  if(o) o.remove();
+  document.body.style.overflow = '';
+}
+function _simPrintMyTeamPredVsReal(){
+  const prev = document.body.style.overflow;
+  document.body.style.overflow = '';
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      if(document.getElementById('mtprvOverlay')) document.body.style.overflow = prev;
+    }, 50);
+  }, 10);
+}
+
 function _simRenderTeamsPanel(){
   const panel = document.getElementById('simTeamsPanel');
   const body = document.getElementById('simTeamsBody');
@@ -32054,15 +32251,16 @@ function _simInjectPVRStyles(){
          no reserva espacio (visibility:hidden sí lo hacía y por eso se
          generaban páginas en blanco). */
       html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0 !important; padding: 0 !important; }
-      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay):not(#tprvOverlay) { display: none !important; }
-      #pvrModalOverlay, #tprvOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; width: auto !important; }
+      body > *:not(#pvrModalOverlay):not(#aiDnfOverlay):not(#simTop10Overlay):not(#simTeamsOverlay):not(#tprvOverlay):not(#mtprvOverlay) { display: none !important; }
+      #pvrModalOverlay, #tprvOverlay, #mtprvOverlay { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; width: auto !important; }
       /* Modal de equipos pred vs real: aplica la misma maquetación de impresión */
-      #tprvOverlay .pvr-modal { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; -webkit-box-decoration-break: clone !important; box-decoration-break: clone !important; }
-      #tprvOverlay .pvr-hdr { position: static !important; border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin: 0 0 10px 0 !important; background: #fff !important; }
-      #tprvOverlay .pvr-kpis { background: #fff !important; padding: 0 !important; border-bottom: 0 !important; margin: 0 0 8px 0 !important; }
-      #tprvOverlay .pvr-kpi { border: 1px solid #999 !important; }
+      #tprvOverlay .pvr-modal, #mtprvOverlay .pvr-modal { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; -webkit-box-decoration-break: clone !important; box-decoration-break: clone !important; }
+      #tprvOverlay .pvr-hdr, #mtprvOverlay .pvr-hdr { position: static !important; border-bottom: 2px solid #0b2f6b !important; padding: 0 0 12px 0 !important; margin: 0 0 10px 0 !important; background: #fff !important; }
+      #tprvOverlay .pvr-kpis, #mtprvOverlay .pvr-kpis { background: #fff !important; padding: 0 !important; border-bottom: 0 !important; margin: 0 0 8px 0 !important; }
+      #tprvOverlay .pvr-kpi, #mtprvOverlay .pvr-kpi { border: 1px solid #999 !important; }
       #tprvOverlay .pvr-table-wrap { padding: 0 !important; grid-template-columns: 1fr 1fr !important; }
-      #tprvOverlay, #tprvOverlay * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+      #mtprvOverlay .pvr-table-wrap { padding: 0 !important; }
+      #tprvOverlay, #tprvOverlay *, #mtprvOverlay, #mtprvOverlay * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
       /* Sin padding interno: dejamos que @page margin gestione TODOS los
          márgenes, así también se respetan en los saltos de página. */
       #pvrModalBox { box-shadow: none !important; max-height: none !important; max-width: 100% !important; width: 100% !important; border-radius: 0 !important; padding: 22mm 18mm 18mm 18mm !important; box-sizing: border-box !important; overflow: visible !important; -webkit-box-decoration-break: clone !important; box-decoration-break: clone !important; }

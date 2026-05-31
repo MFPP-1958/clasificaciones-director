@@ -1769,7 +1769,10 @@
             <h2 style="margin:0;color:#1e3a8a">🔵 Predicción Mi Equipo (con intervalo de confianza)</h2>
             <span class="small">Simulación Montecarlo · 1000 iteraciones por corredor</span>
           </div>
-          <button class="btn" id="simBriefingBtn" onclick="_simOpenTeamBriefing()" style="background:#0b2f6b;color:#fff;border:0;font-weight:800;padding:9px 16px" title="Abrir briefing pre-carrera para explicar a los corredores">📋 Briefing pre-carrera</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="simBriefingBtn" onclick="_simOpenTeamBriefing()" style="background:#0b2f6b;color:#fff;border:0;font-weight:800;padding:9px 16px" title="Abrir briefing pre-carrera para explicar a los corredores">📋 Briefing pre-carrera</button>
+            <button class="btn" id="simMyTeamPredVsRealBtn" onclick="_simOpenMyTeamPredVsReal()" style="background:#dc2626;color:#fff;border:0;font-weight:800;padding:9px 16px" title="Compara las predicciones de los corredores de mi equipo con sus resultados reales">🎯 Predicho vs Real (Mi Equipo)</button>
+          </div>
         </div>
 
         <details class="sim-help">
