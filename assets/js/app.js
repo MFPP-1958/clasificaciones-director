@@ -24268,10 +24268,22 @@ function _simRetroactiveBacktestSingle(){
   body.innerHTML = '<p class="small" style="text-align:center;padding:18px;color:#0369a1">⏳ Reconstruyendo la predicción para esta prueba con solo el histórico anterior…</p>';
   setTimeout(() => {
     try {
-      const { evals } = _simRetroactiveBacktest();
+      const { evals, diag } = _simRetroactiveBacktest();
       const e = evals.find(x => x.raceId === targetId);
       if(!e){
-        body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#9ca3af">No se ha podido evaluar esta prueba retroactivamente. Razones posibles: no había suficientes carreras anteriores en el histórico, o esta prueba no tiene resultados/inscritos suficientes.</p>`;
+        body.innerHTML = `
+          <div style="text-align:center;padding:18px">
+            <p class="small" style="color:#9ca3af;margin:0 0 10px">No se ha podido evaluar esta prueba retroactivamente.</p>
+            <div style="display:inline-block;text-align:left;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;font-size:11.5px;color:#374151">
+              <b>Desglose global del análisis:</b><br>
+              • Histórico total: <b>${diag.totalHist}</b> carreras<br>
+              • Candidatas a evaluar: <b>${diag.candidates}</b><br>
+              • Con histórico previo suficiente: <b>${diag.histOk}</b><br>
+              • Predicción generada: <b>${diag.gridOk}</b><br>
+              • Esta prueba evaluable: <b>NO</b>
+            </div>
+            <p class="small" style="color:#6b7280;margin:10px 0 0">Esta prueba concreta no se ha podido evaluar. Suele pasar si es de las primeras de la temporada (no hay carreras anteriores) o si el matching de nombres falla.</p>
+          </div>`;
         return;
       }
       body.innerHTML = `
@@ -24859,30 +24871,48 @@ function _simRetroactiveBacktest(){
   const prevData   = _simCurrentData;
   const origHist   = _cachedHistory;
 
-  // Carreras válidas: disputadas (≥3 finishers) y con inscritos (≥5) y con fecha
+  // Carreras válidas: disputadas (≥3 finishers) con fecha. Si no hay
+  // inscritos guardados (común en histórico antiguo), usamos los propios
+  // corredores que terminaron como lista a predecir.
   const candidates = hist.filter(h =>
-       Array.isArray(h.riders) && h.riders.filter(r=>r.pos>0).length >= 5
-    && Array.isArray(h.inscritos) && h.inscritos.length >= 5
+       Array.isArray(h.riders) && h.riders.filter(r=>r.pos>0).length >= 3
     && h.raceDate
   );
+  const diag = { totalHist: hist.length, candidates: candidates.length, dateOk:0, histOk:0, gridOk:0, comparable:0 };
 
   const evals = [];
   candidates.forEach(race => {
     try {
       const raceIso = _parseSpanishDate(race.raceDate);
       if(!raceIso) return;
+      diag.dateOk++;
       // Histórico restringido: solo carreras de fecha estrictamente anterior
-      // (y excluyendo la propia carrera). El simulador ya excluye la actual
-      // pero filtramos por seguridad.
       const restricted = hist.filter(h => {
         if(h.id === race.id) return false;
         const iso = _parseSpanishDate(h.raceDate);
         return iso && iso < raceIso;
       });
-      if(restricted.length < 3) return; // no se puede predecir sin histórico previo
+      if(restricted.length < 2) return; // necesitamos al menos 2 carreras previas
+      diag.histOk++;
+
+      // Si la carrera no tiene inscritos guardados, sintetizamos uno temporal
+      // con los corredores que terminaron (sabemos al menos quién participó).
+      const needsSyntheticInscritos = !Array.isArray(race.inscritos) || race.inscritos.length < 3;
+      let restored = null;
+      if(needsSyntheticInscritos){
+        restored = race.inscritos;
+        race.inscritos = (race.riders||[]).filter(r=>r.pos>0).map(r=>({
+          name: r.name, bib: r.bib||'', team: r.team||'', cat: r.cat||''
+        }));
+      }
+
       _cachedHistory = restricted;
-      _simBuildData(race.id);
+      try { _simBuildData(race.id); }
+      finally {
+        if(needsSyntheticInscritos) race.inscritos = restored;
+      }
       if(!_simCurrentData || !Array.isArray(_simCurrentData.grid)) return;
+      diag.gridOk++;
       const grid = _simCurrentData.grid;
 
       // Top 10 predicho: orden por puesto esperado ascendente
@@ -24930,7 +24960,7 @@ function _simRetroactiveBacktest(){
     else _simCurrentData = prevData;
   } catch(e){ _simCurrentData = prevData; }
 
-  return { evals };
+  return { evals, diag };
 }
 
 function _simRenderModelAccuracy(){
@@ -25029,9 +25059,23 @@ function _simRunRetroactiveBacktest(){
   // Damos un tick al navegador para que repinte el mensaje antes del cálculo
   setTimeout(() => {
     try {
-      const { evals } = _simRetroactiveBacktest();
+      const { evals, diag } = _simRetroactiveBacktest();
       if(!evals.length){
-        body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#9ca3af">No se ha podido evaluar ninguna prueba retroactivamente. Necesitas al menos 4-5 carreras disputadas en el histórico para que el backtest tenga sentido (cada una se predice usando solo las anteriores).</p>`;
+        body.innerHTML = `
+          <div style="text-align:center;padding:18px">
+            <p class="small" style="color:#9ca3af;margin:0 0 10px">No se ha podido evaluar ninguna prueba retroactivamente.</p>
+            <div style="display:inline-block;text-align:left;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;font-size:11.5px;color:#374151">
+              <b>Desglose del análisis:</b><br>
+              • Histórico total: <b>${diag.totalHist}</b> carreras<br>
+              • Con resultados suficientes (≥3 finishers) y fecha: <b>${diag.candidates}</b><br>
+              • Con fecha parseable: <b>${diag.dateOk}</b><br>
+              • Con suficientes carreras anteriores: <b>${diag.histOk}</b><br>
+              • Predicción generada con éxito: <b>${diag.gridOk}</b><br>
+              • Comparables con el resultado real: <b>0</b>
+            </div>
+            <p class="small" style="color:#6b7280;margin:10px 0 0">Si <b>histOk &gt; 0</b> pero <b>gridOk = 0</b>, el simulador no encuentra histórico de los corredores aunque haya carreras previas (problema típico: nombres de corredores que no coinciden entre carreras).</p>
+            <p class="small" style="color:#6b7280;margin:6px 0 0">Si <b>gridOk &gt; 0</b> pero comparables = 0, las predicciones no casan con los nombres de los corredores reales de cada carrera.</p>
+          </div>`;
         return;
       }
       evals.sort((a,b)=>{
