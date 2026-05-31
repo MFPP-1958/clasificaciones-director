@@ -24266,7 +24266,7 @@ async function _simListAllSavedPredictions(){
   const body = document.getElementById('simAccuracyBody');
   if(body) body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#0369a1">⏳ Escaneando todas las pruebas en Supabase…</p>';
   try {
-    const {data, error} = await _sb.from('races').select('id, raceName, raceDate, notes, race_type').eq('race_type','clasificacion');
+    const {data, error} = await _sb.from('races').select('id, name, date, notes, race_type').eq('race_type','clasificacion');
     if(error){
       if(body) body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#b91c1c">Error: ${escapeHtml(error.message||String(error))}</p>`;
       return;
@@ -24276,10 +24276,13 @@ async function _simListAllSavedPredictions(){
       try {
         const extra = JSON.parse(r.notes || '{}');
         if(extra && extra.prediction){
+          // El nombre/fecha "visibles" suelen vivir DENTRO de notes (raceName,
+          // raceDate). Las columnas de la tabla (name, date) son redundantes
+          // pero pueden estar vacías. Probamos ambas fuentes.
           withPred.push({
             id: r.id,
-            name: r.raceName || '(sin nombre)',
-            date: r.raceDate || '',
+            name: extra.raceName || r.name || '(sin nombre)',
+            date: extra.raceDate || r.date || '',
             savedAt: extra.prediction.savedAt || '',
             top10n: (extra.prediction.top10||[]).length,
             myTeamN: (extra.prediction.myTeamPred||[]).length
