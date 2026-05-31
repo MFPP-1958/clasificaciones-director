@@ -8287,7 +8287,7 @@ function _ipRenderPreview(){
   const rowsHtml = data.riders.map((r,i)=>`
     <tr style="border-bottom:1px solid #f3f4f6">
       <td style="padding:8px 12px;text-align:center;font-weight:900">${i+1}</td>
-      <td style="padding:8px 12px;font-weight:700;color:#0b2f6b">${escapeHtml(_evolNormName(r.displayName))}</td>
+      <td style="padding:8px 12px;font-weight:700"><a href="#" onclick="event.preventDefault();_ipOpenRiderReport(${JSON.stringify(r.displayName).replace(/"/g,'&quot;')})" style="color:#0b2f6b;text-decoration:none;border-bottom:1.5px dashed #0b2f6b;cursor:pointer" title="Ver informe completo del ciclista">${escapeHtml(_evolNormName(r.displayName))}</a></td>
       <td style="padding:8px 12px;color:#475467;font-size:12px">${escapeHtml(r.cat||'—')}</td>
       <td style="padding:8px 12px;font-size:12px">${r.adn.icon} ${escapeHtml(r.adn.label)}</td>
       <td style="padding:8px 12px;font-weight:800;color:#0b2f6b;text-align:center">${r.avg.toFixed(1)}º</td>
@@ -8327,6 +8327,255 @@ function _ipRenderPreview(){
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>`;
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// INFORME INDIVIDUAL DEL CICLISTA (modal + impresión)
+// Resumen completo de la temporada para un corredor concreto: todas las
+// pruebas en las que ha participado, puesto en cada una, KPIs agregados
+// y trozo imprimible para PDF de fin de temporada.
+// ═════════════════════════════════════════════════════════════════════
+
+function _ipOpenRiderReport(displayName){
+  try {
+    if(!displayName){ alert('Nombre de corredor no válido.'); return; }
+    const hist = (_ipHistory && _ipHistory.length) ? _ipHistory : (_cachedHistory||[]);
+    if(!hist.length){ alert('No hay histórico cargado todavía.'); return; }
+    const year = document.getElementById('ipYearSelect')?.value || '';
+    const teamName = _ipSelectedTeam || '';
+
+    // Buscar todas las apariciones del corredor en el histórico
+    const _norm = (typeof normalizeForMatching === 'function')
+      ? (s)=>normalizeForMatching(s||'')
+      : (s)=>(s||'').trim().toLowerCase();
+    const targetKey = _norm(displayName);
+    const apparitions = [];
+    let inscriptionsCount = 0;
+    let dnfRaces = [];
+    hist.forEach(race => {
+      const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+      if(year && ry !== year) return;
+      // Inscripción (si lleva inscritos guardados, contamos también las
+      // pruebas donde se inscribió pero no terminó)
+      const wasInscrito = Array.isArray(race.inscritos) && race.inscritos.some(i => _norm(i.name) === targetKey);
+      // Aparición con puesto
+      const r = (race.riders||[]).find(x => _norm(x.name) === targetKey);
+      if(r){
+        apparitions.push({
+          raceId: race.id,
+          raceName: race.raceName || '(sin nombre)',
+          raceDate: race.raceDate || '',
+          raceDateIso: _parseSpanishDate(race.raceDate) || '',
+          localidad: race.localidad || '',
+          circuitType: race.circuitType || '',
+          terrain: (race.route && race.route.terrain_type) || '',
+          ccaa: race.ccaa || '',
+          pos: parseInt(r.pos)||0,
+          time: r.time || '',
+          team: r.team || '',
+          cat: r.cat || '',
+          totalRiders: (race.riders||[]).filter(x => x.pos>0).length,
+          totalInscritos: (race.inscritos||[]).length || null
+        });
+        inscriptionsCount++;
+      } else if(wasInscrito){
+        dnfRaces.push({
+          raceName: race.raceName || '(sin nombre)',
+          raceDate: race.raceDate || '',
+          localidad: race.localidad || ''
+        });
+        inscriptionsCount++;
+      }
+    });
+
+    if(!apparitions.length && !dnfRaces.length){
+      alert(`No hay carreras registradas para ${displayName}${year?' en '+year:''}.`);
+      return;
+    }
+
+    // Orden cronológico DESC (más reciente primero)
+    apparitions.sort((a,b)=>(b.raceDateIso||'').localeCompare(a.raceDateIso||''));
+
+    // KPIs agregados
+    const positions = apparitions.map(a=>a.pos).filter(p=>p>0);
+    const races = apparitions.length;
+    const wins = positions.filter(p=>p===1).length;
+    const podiums = positions.filter(p=>p<=3).length;
+    const top5 = positions.filter(p=>p<=5).length;
+    const top10 = positions.filter(p=>p<=10).length;
+    const avg = positions.length ? positions.reduce((s,p)=>s+p,0)/positions.length : null;
+    const best = positions.length ? Math.min(...positions) : null;
+    const worst = positions.length ? Math.max(...positions) : null;
+    const dnfCount = dnfRaces.length;
+    const dnfRate = inscriptionsCount ? dnfCount/inscriptionsCount : 0;
+
+    // Categoría más reciente (la del primer rider en orden cronológico)
+    const recentCat = apparitions[0]?.cat || '—';
+    const recentTeam = apparitions[0]?.team || teamName || '—';
+
+    // Tendencia: últimas 3 vs anteriores 3
+    let trendTxt = '—', trendCol = '#6b7280';
+    if(positions.length >= 4){
+      const recent3 = positions.slice(0,3);
+      const prev3 = positions.slice(3,6);
+      if(prev3.length){
+        const avgR = recent3.reduce((s,p)=>s+p,0)/recent3.length;
+        const avgP = prev3.reduce((s,p)=>s+p,0)/prev3.length;
+        const delta = avgR - avgP;
+        if(delta < -2){ trendTxt = `⬆️ Mejorando (gana ${Math.abs(delta).toFixed(1)} puestos respecto al inicio)`; trendCol = '#15803d'; }
+        else if(delta > 2){ trendTxt = `⬇️ Empeorando (pierde ${delta.toFixed(1)} puestos respecto al inicio)`; trendCol = '#b91c1c'; }
+        else { trendTxt = '➡️ Estable'; trendCol = '#0b2f6b'; }
+      }
+    }
+
+    const terrainLabels = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa' };
+    const colorPos = (p) => p<=3?'#15803d' : p<=10?'#0b2f6b' : p<=20?'#d97706' : '#b91c1c';
+
+    // Filas de la tabla
+    const rowsHtml = apparitions.map((a,i) => {
+      const totalLabel = a.totalRiders ? ` <span style="color:#9ca3af;font-size:11px">/ ${a.totalRiders}</span>` : '';
+      const terrainTxt = a.terrain ? (terrainLabels[a.terrain]||a.terrain) : '';
+      const podiumIcon = a.pos===1 ? '🥇 ' : a.pos===2 ? '🥈 ' : a.pos===3 ? '🥉 ' : '';
+      return `<tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:7px 9px;text-align:center;color:#6b7280;font-size:11px">${i+1}</td>
+        <td style="padding:7px 9px;color:#475569;white-space:nowrap;font-size:11.5px">${escapeHtml(a.raceDate||'—')}</td>
+        <td style="padding:7px 9px;font-weight:700;color:#0b2f6b">${escapeHtml(a.raceName)}</td>
+        <td style="padding:7px 9px;color:#475569;font-size:11.5px">${escapeHtml(a.localidad||'—')}</td>
+        <td style="padding:7px 9px;color:#475569;font-size:11.5px">${escapeHtml(a.circuitType||'—')}${terrainTxt?` · ${terrainTxt}`:''}</td>
+        <td style="padding:7px 9px;text-align:center;font-weight:900;font-size:15px;color:${colorPos(a.pos)}">${podiumIcon}${a.pos}º${totalLabel}</td>
+      </tr>`;
+    }).join('');
+
+    const dnfRowsHtml = dnfRaces.map((d,i)=>`<tr style="border-bottom:1px solid #fee2e2;background:#fff5f5">
+      <td style="padding:6px 9px;text-align:center;color:#9ca3af;font-size:11px">${i+1}</td>
+      <td style="padding:6px 9px;color:#475569;white-space:nowrap;font-size:11.5px">${escapeHtml(d.raceDate||'—')}</td>
+      <td style="padding:6px 9px;font-weight:700;color:#7c2d12">${escapeHtml(d.raceName)}</td>
+      <td style="padding:6px 9px;color:#475569;font-size:11.5px">${escapeHtml(d.localidad||'—')}</td>
+      <td style="padding:6px 9px;color:#b91c1c;font-weight:700;font-size:11.5px" colspan="2">⚠️ DNF / no terminó</td>
+    </tr>`).join('');
+
+    const pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
+    const yearLabel = year || 'Historial completo';
+
+    const old = document.getElementById('ipRiderRptOverlay');
+    if(old) old.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'ipRiderRptOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:18px;overflow:auto';
+    overlay.innerHTML = `
+      <div class="iprr-modal" style="background:#fff;border-radius:14px;max-width:1080px;width:100%;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div class="iprr-hdr" style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;z-index:2">
+          <div style="display:flex;align-items:center;gap:14px">
+            ${pdfLogoSrc ? `<img src="${pdfLogoSrc}" alt="MFPP Cycling Specialist" style="height:46px;width:auto;flex-shrink:0;object-fit:contain">` : ''}
+            <div style="min-width:0">
+              <h2 style="margin:0;font-size:20px;color:#0b2f6b">📋 Informe individual · ${escapeHtml(_evolNormName(displayName))}</h2>
+              <div class="small" style="margin-top:2px">${escapeHtml(recentCat)} · ${escapeHtml(recentTeam)} · Temporada: <b>${escapeHtml(yearLabel)}</b></div>
+            </div>
+          </div>
+          <div class="iprr-actions no-print" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="_ipPrintRiderReport()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="_ipCloseRiderReport()">✕ Cerrar</button>
+          </div>
+        </div>
+
+        <div class="iprr-body" style="padding:18px 22px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin-bottom:18px">
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${races}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Carreras corridas</div></div>
+            <div style="background:${wins?'#f0fdf4':'#f8fafc'};border:1px solid ${wins?'#86efac':'#e5e7eb'};border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:${wins?'#15803d':'#94a3b8'}">${wins}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">🥇 Victorias</div></div>
+            <div style="background:${podiums?'#fef3c7':'#f8fafc'};border:1px solid ${podiums?'#fcd34d':'#e5e7eb'};border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:${podiums?'#b45309':'#94a3b8'}">${podiums}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">🥉 Podios</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${top5}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Top 5</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${top10}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Top 10</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${avg==null?'—':avg.toFixed(1)+'º'}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Media</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#15803d">${best==null?'—':best+'º'}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Mejor puesto</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#b91c1c">${worst==null?'—':worst+'º'}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Peor puesto</div></div>
+            <div style="background:${dnfCount?'#fef2f2':'#f8fafc'};border:1px solid ${dnfCount?'#fecaca':'#e5e7eb'};border-radius:10px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:${dnfCount?'#b91c1c':'#94a3b8'}">${dnfCount}</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;font-weight:700;letter-spacing:.3px">DNF / no acabó</div></div>
+          </div>
+
+          <div style="background:#f0f9ff;border-left:4px solid ${trendCol};padding:10px 14px;border-radius:8px;margin-bottom:14px">
+            <div style="font-size:13px;color:${trendCol};font-weight:800">${trendTxt}</div>
+            ${inscriptionsCount?`<div class="small" style="margin-top:3px;color:#475569">Tasa de finalización: <b>${Math.round((1-dnfRate)*100)}%</b> (${races} finalizadas de ${inscriptionsCount} inscripciones)</div>`:''}
+          </div>
+
+          ${apparitions.length ? `
+          <h3 style="margin:14px 0 8px;font-size:14px;color:#0b2f6b">📅 Detalle de carreras (${apparitions.length})</h3>
+          <div style="overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb">
+            <table style="width:100%;border-collapse:collapse;font-size:12.5px;background:#fff">
+              <thead><tr style="background:#f1f5f9">
+                <th style="padding:7px 9px;text-align:center;font-size:10px;color:#475569;text-transform:uppercase">#</th>
+                <th style="padding:7px 9px;text-align:left;font-size:10px;color:#475569;text-transform:uppercase">Fecha</th>
+                <th style="padding:7px 9px;text-align:left;font-size:10px;color:#475569;text-transform:uppercase">Prueba</th>
+                <th style="padding:7px 9px;text-align:left;font-size:10px;color:#475569;text-transform:uppercase">Localidad</th>
+                <th style="padding:7px 9px;text-align:left;font-size:10px;color:#475569;text-transform:uppercase">Tipo / Terreno</th>
+                <th style="padding:7px 9px;text-align:center;font-size:10px;color:#475569;text-transform:uppercase">Puesto</th>
+              </tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>` : ''}
+
+          ${dnfRaces.length ? `
+          <h3 style="margin:18px 0 8px;font-size:14px;color:#b91c1c">⚠️ Carreras con DNF / no terminadas (${dnfRaces.length})</h3>
+          <div style="overflow-x:auto;border-radius:10px;border:1px solid #fecaca">
+            <table style="width:100%;border-collapse:collapse;font-size:12.5px;background:#fff">
+              <thead><tr style="background:#fee2e2">
+                <th style="padding:6px 9px;text-align:center;font-size:10px;color:#7c2d12;text-transform:uppercase">#</th>
+                <th style="padding:6px 9px;text-align:left;font-size:10px;color:#7c2d12;text-transform:uppercase">Fecha</th>
+                <th style="padding:6px 9px;text-align:left;font-size:10px;color:#7c2d12;text-transform:uppercase">Prueba</th>
+                <th style="padding:6px 9px;text-align:left;font-size:10px;color:#7c2d12;text-transform:uppercase">Localidad</th>
+                <th style="padding:6px 9px;text-align:left;font-size:10px;color:#7c2d12;text-transform:uppercase" colspan="2">Estado</th>
+              </tr></thead>
+              <tbody>${dnfRowsHtml}</tbody>
+            </table>
+          </div>` : ''}
+
+          <p style="margin-top:14px;font-size:11px;color:#9ca3af;text-align:center">Generado el ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})} · MFPP Cycling Specialist</p>
+        </div>
+      </div>`;
+
+    // Estilos de impresión (idempotente — solo se inyectan una vez)
+    if(!document.getElementById('iprr-print-styles')){
+      const st = document.createElement('style');
+      st.id = 'iprr-print-styles';
+      st.textContent = `
+        @media print {
+          @page { size: A4 portrait; margin: 14mm }
+          html, body { background:#fff !important; margin:0 !important; padding:0 !important; overflow:visible !important; height:auto !important }
+          body > *:not(#ipRiderRptOverlay) { display: none !important; }
+          #ipRiderRptOverlay { position:static !important; inset:auto !important; padding:0 !important; background:none !important; overflow:visible !important; display:block !important; height:auto !important; width:auto !important }
+          #ipRiderRptOverlay .iprr-modal { box-shadow:none !important; max-width:none !important; max-height:none !important; border-radius:0 !important; margin:0 !important; overflow:visible !important }
+          #ipRiderRptOverlay .iprr-hdr { position:static !important; padding:0 0 8mm 0 !important; border-bottom:2px solid #0b2f6b !important }
+          #ipRiderRptOverlay .iprr-body { padding:6mm 0 0 0 !important }
+          #ipRiderRptOverlay table { page-break-inside:auto }
+          #ipRiderRptOverlay tr { page-break-inside:avoid }
+          #ipRiderRptOverlay thead { display:table-header-group }
+          #ipRiderRptOverlay .iprr-actions, .no-print { display:none !important }
+          #ipRiderRptOverlay, #ipRiderRptOverlay * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; color-adjust:exact !important }
+        }
+      `;
+      document.head.appendChild(st);
+    }
+
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    overlay.addEventListener('click', (ev) => { if(ev.target === overlay) _ipCloseRiderReport(); });
+  } catch(e){
+    console.warn('_ipOpenRiderReport', e);
+    alert('Error al abrir el informe del ciclista: '+(e.message||e));
+  }
+}
+function _ipCloseRiderReport(){
+  const o = document.getElementById('ipRiderRptOverlay');
+  if(o) o.remove();
+  document.body.style.overflow = '';
+}
+function _ipPrintRiderReport(){
+  const prev = document.body.style.overflow;
+  document.body.style.overflow = '';
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      if(document.getElementById('ipRiderRptOverlay')) document.body.style.overflow = prev;
+    }, 50);
+  }, 10);
 }
 
 async function _ipExportPDF(){
