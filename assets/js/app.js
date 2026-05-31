@@ -24582,6 +24582,219 @@ function _simShowRiderHistory(riderName){
   document.body.appendChild(overlay);
 }
 
+// Toggle plegar/desplegar el cuerpo del panel "Predicción por equipos".
+// Persiste el estado en localStorage para que sobreviva a recargas.
+const _TEAMS_PANEL_COLLAPSE_KEY = 'tbg.teamsPanelCollapsed.v1';
+function _simToggleTeamsPanelCollapse(){
+  const body = document.getElementById('simTeamsCollapseBody');
+  const btn  = document.getElementById('simTeamsCollapseBtn');
+  if(!body || !btn) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  btn.textContent    = collapsed ? '⊟' : '⊞';
+  btn.title          = collapsed ? 'Plegar el bloque' : 'Desplegar el bloque';
+  try { localStorage.setItem(_TEAMS_PANEL_COLLAPSE_KEY, collapsed ? '0' : '1'); } catch(e){}
+}
+// Aplicar el estado guardado al render inicial
+function _simApplyTeamsPanelCollapsedState(){
+  try {
+    const stored = localStorage.getItem(_TEAMS_PANEL_COLLAPSE_KEY);
+    if(stored === '1'){
+      const body = document.getElementById('simTeamsCollapseBody');
+      const btn  = document.getElementById('simTeamsCollapseBtn');
+      if(body) body.style.display = 'none';
+      if(btn) { btn.textContent = '⊞'; btn.title = 'Desplegar el bloque'; }
+    }
+  } catch(e){}
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// "PREDICHO VS REAL (EQUIPOS)" — modal análogo al individual pero por equipos
+// Compara el ranking predicho por Σ top3 con la clasificación real por
+// equipos (computada de los riders reales sumando los 3 mejores de cada
+// equipo). Botón de impresión incluido.
+// ═════════════════════════════════════════════════════════════════════════
+
+// Computa la clasificación real por equipos a partir de los riders reales
+// de la carrera (los que tienen pos > 0). Igual fórmula que la predicción:
+// suma de los 3 mejores puestos de cada equipo, ascendente.
+function _simComputeRealTeamRanking(riders){
+  const byTeam = new Map();
+  (riders||[]).forEach(r => {
+    if(!r || !r.pos || r.pos <= 0) return;
+    const t = (r.team||'').trim() || '(Sin equipo)';
+    if(!byTeam.has(t)) byTeam.set(t, []);
+    byTeam.get(t).push({ name: r.name, pos: parseInt(r.pos)||0, cat: r.cat||'' });
+  });
+  const out = [];
+  const mk = (myTeam||'').toLowerCase();
+  byTeam.forEach((list, team) => {
+    if(list.length < 3) return;
+    list.sort((a,b) => a.pos - b.pos);
+    const top3 = list.slice(0, 3);
+    const sumTop3 = top3.reduce((s,r) => s + r.pos, 0);
+    out.push({ team, top3, sumTop3, count: list.length, isMyTeam: mk && team.toLowerCase() === mk });
+  });
+  out.sort((a,b) => a.sumTop3 - b.sumTop3);
+  return out;
+}
+
+function _simOpenTeamsPredVsReal(){
+  try {
+    if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+    const { race, grid } = _simCurrentData;
+    const realRiders = (race.riders||[]).filter(r => r.pos > 0);
+    if(realRiders.length < 9){
+      alert('No hay suficientes resultados reales en esta prueba para construir un ranking por equipos. Se necesitan al menos 3 equipos con 3 finishers cada uno (≥9 corredores en meta).');
+      return;
+    }
+    _simInjectPVRStyles();
+    const old = document.getElementById('tprvOverlay');
+    if(old) old.remove();
+
+    const predTeams = _simComputeTeamPredictions(grid).slice(0, 10);
+    const realTeams = _simComputeRealTeamRanking(realRiders).slice(0, 10);
+    if(!predTeams.length || !realTeams.length){
+      alert('No se ha podido construir uno de los dos rankings (predicho o real). Cada uno necesita al menos 3 equipos con ≥3 corredores.');
+      return;
+    }
+
+    // Indexar real por equipo para emparejar
+    const realByTeam = new Map();
+    realTeams.forEach((t, i) => realByTeam.set(t.team.toLowerCase(), { rank: i+1, sumTop3: t.sumTop3 }));
+    const predByTeam = new Map();
+    predTeams.forEach((t, i) => predByTeam.set(t.team.toLowerCase(), { rank: i+1, sumTop3: t.sumTop3 }));
+
+    // Métricas: aciertos exactos, aciertos en top 5, MAE de posición de equipo
+    let exactHits = 0, top5Hits = 0;
+    let totalErr = 0, comparedCount = 0;
+    predTeams.forEach((p, i) => {
+      const realInfo = realByTeam.get(p.team.toLowerCase());
+      if(!realInfo) return;
+      comparedCount++;
+      const predRank = i + 1;
+      if(predRank === realInfo.rank) exactHits++;
+      if(realInfo.rank <= 5 && predRank <= 5) top5Hits++;
+      totalErr += Math.abs(predRank - realInfo.rank);
+    });
+    const mae = comparedCount ? (totalErr / comparedCount) : null;
+
+    // Render: dos columnas con flechas/iconos comparativos
+    const predRowsHtml = predTeams.map((p, i) => {
+      const realInfo = realByTeam.get(p.team.toLowerCase());
+      const predRank = i + 1;
+      let badge;
+      if(!realInfo){
+        badge = `<span style="background:#fee2e2;color:#991b1b;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700">❌ Fuera del Top 10 real</span>`;
+      } else if(realInfo.rank === predRank){
+        badge = `<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700">✓ Exacto · ${realInfo.rank}º real</span>`;
+      } else {
+        const diff = realInfo.rank - predRank;
+        badge = `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700">${realInfo.rank}º real (Δ ${diff>0?'+':''}${diff})</span>`;
+      }
+      const rowBg = realInfo && realInfo.rank===predRank ? '#dcfce7'
+                  : !realInfo ? '#fee2e2'
+                  : '#fef3c7';
+      return `<tr style="background:${rowBg}">
+        <td style="padding:6px 8px;text-align:center;font-weight:800;color:#0b2f6b">${predRank}</td>
+        <td style="padding:6px 8px"><b>${p.isMyTeam?'⭐ ':''}${escapeHtml(p.team)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">Σ ${p.sumTop3.toFixed(1)} · ${p.top3.map(g=>escapeHtml(g.name.split(',')[0]||g.name)).join(' · ')}</div></td>
+        <td style="padding:6px 8px;text-align:right">${badge}</td>
+      </tr>`;
+    }).join('');
+
+    const realRowsHtml = realTeams.map((t, i) => {
+      const predInfo = predByTeam.get(t.team.toLowerCase());
+      const realRank = i + 1;
+      let badge;
+      if(!predInfo){
+        badge = `<span style="background:#dbeafe;color:#1e3a8a;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700">🆕 No predicho en Top 10</span>`;
+      } else if(predInfo.rank === realRank){
+        badge = `<span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700">✓ Predicho ${predInfo.rank}º</span>`;
+      } else {
+        const diff = predInfo.rank - realRank;
+        badge = `<span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700">Predicho ${predInfo.rank}º (Δ ${diff>0?'+':''}${diff})</span>`;
+      }
+      const rowBg = predInfo && predInfo.rank===realRank ? '#dcfce7'
+                  : !predInfo ? '#dbeafe'
+                  : '#fef3c7';
+      return `<tr style="background:${rowBg}">
+        <td style="padding:6px 8px;text-align:center;font-weight:800;color:#15803d">${realRank}</td>
+        <td style="padding:6px 8px"><b>${t.isMyTeam?'⭐ ':''}${escapeHtml(t.team)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">Σ ${t.sumTop3} · ${t.top3.map(r=>escapeHtml(r.name.split(',')[0]||r.name)).join(' · ')}</div></td>
+        <td style="padding:6px 8px;text-align:right">${badge}</td>
+      </tr>`;
+    }).join('');
+
+    const accColor = (n) => n>=7?'#16a34a':n>=4?'#f59e0b':'#dc2626';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'tprvOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
+    overlay.innerHTML = `
+      <div class="pvr-modal" style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div class="pvr-hdr" style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;z-index:2">
+          <div style="display:flex;align-items:center;gap:14px">
+            ${_pdfLogoSrc ? `<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="pvr-logo">` : ''}
+            <div style="min-width:0">
+              <h2 style="margin:0;font-size:20px;color:#0b2f6b">🏅 Predicho vs Real (equipos)</h2>
+              <div class="small" style="margin-top:2px">${escapeHtml(race.raceName||'')} · ${escapeHtml(race.raceDate||'')}${race.localidad?' · '+escapeHtml(race.localidad):''}</div>
+            </div>
+          </div>
+          <div class="pvr-actions no-print" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="window.print()" style="background:#dc2626;color:#fff;border:0;font-weight:800">🖨️ Imprimir / PDF</button>
+            <button class="btn light" onclick="_simCloseTeamsPredVsReal()">✕ Cerrar</button>
+          </div>
+        </div>
+
+        <div class="pvr-kpis" style="padding:14px 22px">
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${accColor(exactHits*2)}">${exactHits}/${Math.min(predTeams.length,realTeams.length)}</div><div class="pvr-kpi-l">Posiciones exactas<br><span class="small">de equipo</span></div></div>
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${accColor(top5Hits*2)}">${top5Hits}/5</div><div class="pvr-kpi-l">Aciertos Top 5<br><span class="small">(equipo en su rango)</span></div></div>
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:${mae==null?'#9ca3af':(mae<=1?'#16a34a':mae<=3?'#f59e0b':'#dc2626')}">${mae==null?'—':mae.toFixed(1)}</div><div class="pvr-kpi-l">Error medio<br><span class="small">posiciones de equipo</span></div></div>
+          <div class="pvr-kpi"><div class="pvr-kpi-v" style="color:#0b2f6b">${realTeams.length}</div><div class="pvr-kpi-l">Equipos reales<br><span class="small">en clasificación</span></div></div>
+        </div>
+
+        <div style="padding:0 22px 6px;font-size:11px;color:#6b7280">
+          ⭐ = mi equipo · 🟩 verde = posición exacta · 🟨 amarillo = predicho/real distinto · 🟥 rojo = predicho fuera del Top 10 real · 🟦 azul = real no estaba en el Top 10 predicho
+        </div>
+
+        <div class="pvr-table-wrap" style="padding:6px 22px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div style="background:#1f6feb;color:#fff;font-weight:800;padding:8px 12px;border-radius:8px 8px 0 0;font-size:13px">🔮 Top 10 Predicho por equipos</div>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #cbd5e1;border-radius:0 0 8px 8px;overflow:hidden">
+              <thead><tr style="background:#f1f5f9">
+                <th style="padding:5px 8px;width:38px;font-size:10px;color:#475569;text-transform:uppercase">#</th>
+                <th style="padding:5px 8px;text-align:left;font-size:10px;color:#475569;text-transform:uppercase">Equipo · Σ top3</th>
+                <th style="padding:5px 8px;text-align:right;font-size:10px;color:#475569;text-transform:uppercase">Realidad</th>
+              </tr></thead>
+              <tbody>${predRowsHtml}</tbody>
+            </table>
+          </div>
+          <div>
+            <div style="background:#16a34a;color:#fff;font-weight:800;padding:8px 12px;border-radius:8px 8px 0 0;font-size:13px">🏁 Top 10 Real por equipos</div>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid #cbd5e1;border-radius:0 0 8px 8px;overflow:hidden">
+              <thead><tr style="background:#f1f5f9">
+                <th style="padding:5px 8px;width:38px;font-size:10px;color:#475569;text-transform:uppercase">#</th>
+                <th style="padding:5px 8px;text-align:left;font-size:10px;color:#475569;text-transform:uppercase">Equipo · Σ top3</th>
+                <th style="padding:5px 8px;text-align:right;font-size:10px;color:#475569;text-transform:uppercase">Predicción</th>
+              </tr></thead>
+              <tbody>${realRowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    overlay.addEventListener('click', (ev) => { if(ev.target === overlay) _simCloseTeamsPredVsReal(); });
+  } catch(e){
+    console.warn('_simOpenTeamsPredVsReal', e);
+    alert('Error al abrir el comparador por equipos: '+(e.message||e));
+  }
+}
+function _simCloseTeamsPredVsReal(){
+  const o = document.getElementById('tprvOverlay');
+  if(o) o.remove();
+  document.body.style.overflow = '';
+}
+
 function _simRenderTeamsPanel(){
   const panel = document.getElementById('simTeamsPanel');
   const body = document.getElementById('simTeamsBody');
@@ -24632,6 +24845,8 @@ function _simRenderTeamsPanel(){
     </div>`;
   }).join('')}</div>
   <p class="small" style="margin-top:10px;color:#6b7280">Ranking por Σ top3 (menor = mejor). 🎯 = nº esperado de Top10 (Bernoulli). 🥇 = prob. de podio individual del top3 (logística). 🚨 = riesgo medio de corte.</p>`;
+  // Bloque movido + colapsable: aplicar el estado guardado en localStorage
+  _simApplyTeamsPanelCollapsedState();
 }
 
 // ── D) ANÁLISIS POR LOCALIDAD ─────────────────────────────────────────────

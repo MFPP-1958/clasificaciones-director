@@ -1712,6 +1712,56 @@
         <div id="simTopBody"></div>
       </section>
 
+      <!-- Predicción por equipos · MOVIDA AQUÍ debajo del Top 10 (antes estaba más abajo) -->
+      <section class="panel" id="simTeamsPanel" style="display:none">
+        <div class="section-title" style="flex-wrap:wrap;gap:8px">
+          <h2 style="margin:0;color:#854d0e">🏅 Predicción por equipos · Top 3 esperado</h2>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span class="small">Σ menor = mejor equipo</span>
+            <button class="btn light" onclick="_simOpenTeamsReport()" id="simTeamsReportBtn"
+              style="background:#7c3aed;color:#fff;border:0;font-weight:800;font-size:12px;padding:6px 11px"
+              title="Abrir informe imprimible de la predicción por equipos (PDF)">
+              📤 Compartir / PDF
+            </button>
+            <button class="btn light" onclick="_simOpenTeamsPredVsReal()" id="simTeamsPredVsRealBtn"
+              style="background:#dc2626;color:#fff;border:0;font-weight:800;font-size:12px;padding:6px 11px"
+              title="Comparar la predicción por equipos con la clasificación real por equipos">
+              🎯 Predicho vs Real (equipos)
+            </button>
+            <button class="btn light" onclick="_simToggleTeamsPanelCollapse()" id="simTeamsCollapseBtn"
+              style="background:#e2e8f0;color:#0b2f6b;border:0;font-weight:800;font-size:12px;padding:6px 10px;min-width:34px"
+              title="Plegar / desplegar el bloque">
+              ⊟
+            </button>
+          </div>
+        </div>
+        <div id="simTeamsCollapseBody">
+          <details class="sim-help">
+            <summary>❓ ¿Cómo se ordena el ranking de equipos y por qué hay tantos 72.0º?</summary>
+            <div class="sim-help-body">
+              <h4>🏅 ¿Qué es el ranking por equipos?</h4>
+              <p>En ciclismo base la clasificación oficial por equipos se calcula sumando los puestos finales de los <b>3 mejores corredores de cada equipo</b>. <b>Suma más baja = mejor equipo</b> (lógico: si tus 3 mejores acaban 1º, 2º y 3º, la suma es 6 — imposible bajar de ahí).</p>
+              <p>Este bloque hace lo mismo pero con <b>predicciones de la IA</b> en lugar de puestos reales: agarra los 3 mejores corredores de cada equipo según su Pos. IA, suma sus puestos, y ordena los equipos de menor a mayor Σ.</p>
+              <h4>📊 Cada tarjeta de equipo</h4>
+              <ul>
+                <li><b>Posición y nombre del equipo</b> en la cabecera (1º, 2º, 3º…)</li>
+                <li><b>Σ X.X</b>: la suma de los 3 puestos predichos. El número clave</li>
+                <li><b>Los 3 corredores top3</b> con su puesto IA y flecha de tendencia ⬆️⬇️</li>
+                <li><b>Mejor: X.Xº</b>: el puesto del corredor MÁS alto del top3</li>
+                <li><b>🎯 X esperados Top10</b>: suma de probabilidades individuales Top 10 — cuántos corredores del top3 deberían entrar en Top 10</li>
+                <li><b>🥇 X%</b>: prob. de que ALGUNO del top3 haga podio individual (no podio por equipos)</li>
+                <li><b>🚨 X%</b>: solo aparece si el riesgo medio de corte/abandono del top3 es elevado (&gt;25%)</li>
+              </ul>
+              <h4>🤔 ¿Por qué hay tantos corredores con "72.0º"?</h4>
+              <p>72 es el <b>número de inscritos</b> en la prueba. Si la predicción IA de un corredor sale superior a 72 (porque su histórico es muy malo o tiene fuerte penalización por baja fiabilidad), la <b>recortamos al máximo físico</b> — no se puede acabar 130º en una carrera de 72.</p>
+              <h4>🔍 ¡VERIFICA TÚ MISMO los datos!</h4>
+              <p>Haz <b>click sobre el nombre del corredor</b> en cualquier tarjeta para ver todas sus carreras del histórico.</p>
+            </div>
+          </details>
+          <div id="simTeamsBody"></div>
+        </div>
+      </section>
+
       <!-- Fase 2: Predicción Mi Equipo con intervalo de confianza -->
       <section class="panel sim-myteam-panel" id="simMyTeamPanel" style="display:none">
         <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -2136,80 +2186,8 @@
         <div id="simLocalityBody"></div>
       </section>
 
-      <!-- Fase 3: Predicción de equipos -->
-      <section class="panel" id="simTeamsPanel" style="display:none">
-        <div class="section-title">
-          <h2 style="margin:0;color:#854d0e">🏅 Predicción por equipos · Top 3 esperado</h2>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <span class="small">Suma de las 3 mejores predicciones individuales (Σ menor = mejor equipo)</span>
-            <button class="btn light" onclick="_simOpenTeamsReport()" id="simTeamsReportBtn"
-              style="background:#7c3aed;color:#fff;border:0;font-weight:800;font-size:12px;padding:7px 13px"
-              title="Abrir informe imprimible de la predicción por equipos (PDF)">
-              📤 Compartir / PDF
-            </button>
-          </div>
-        </div>
-
-        <details class="sim-help">
-          <summary>❓ ¿Cómo se ordena el ranking de equipos y por qué hay tantos 72.0º?</summary>
-          <div class="sim-help-body">
-
-            <h4>🏅 ¿Qué es el ranking por equipos?</h4>
-            <p>En ciclismo base la clasificación oficial por equipos se calcula sumando los puestos finales de los <b>3 mejores corredores de cada equipo</b>. <b>Suma más baja = mejor equipo</b> (lógico: si tus 3 mejores acaban 1º, 2º y 3º, la suma es 6 — imposible bajar de ahí).</p>
-            <p>Este bloque hace lo mismo pero con <b>predicciones de la IA</b> en lugar de puestos reales: agarra los 3 mejores corredores de cada equipo según su Pos. IA, suma sus puestos, y ordena los equipos de menor a mayor Σ.</p>
-
-            <h4>📊 Cada tarjeta de equipo</h4>
-            <ul>
-              <li><b>Posición y nombre del equipo</b> en la cabecera (1º, 2º, 3º…)</li>
-              <li><b>Σ X.X</b>: la suma de los 3 puestos predichos. El número clave</li>
-              <li><b>Los 3 corredores top3</b> con su puesto IA y flecha de tendencia ⬆️⬇️</li>
-              <li><b>Mejor: X.Xº</b>: el puesto del corredor MÁS alto del top3</li>
-              <li><b>🎯 X esperados Top10</b>: suma de probabilidades individuales Top 10 — cuántos corredores del top3 deberían entrar en Top 10</li>
-              <li><b>🥇 X%</b>: prob. de que ALGUNO del top3 haga podio individual (no podio por equipos)</li>
-              <li><b>🚨 X%</b>: solo aparece si el riesgo medio de corte/abandono del top3 es elevado (&gt;25%)</li>
-            </ul>
-
-            <h4>🎨 Los colores de las tarjetas</h4>
-            <ul>
-              <li><span style="background:linear-gradient(135deg,#fef3c7,#fde68a);padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;border:1px solid #f59e0b">Dorado</span>: 1º equipo</li>
-              <li><span style="background:linear-gradient(135deg,#f1f5f9,#e2e8f0);padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;border:1px solid #94a3b8">Plateado</span>: 2º</li>
-              <li><span style="background:linear-gradient(135deg,#fed7aa,#fdba74);padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;border:1px solid #ea580c">Bronce</span>: 3º</li>
-              <li><span style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;border:1.5px solid #3b82f6">Azul</span>: tu equipo (siempre destacado, sea cual sea su posición)</li>
-            </ul>
-
-            <h4>🤔 ¿Por qué hay tantos corredores con "72.0º"?</h4>
-            <p>72 es el <b>número de inscritos</b> en la prueba. Si la predicción IA de un corredor sale superior a 72 (porque su histórico es muy malo o tiene fuerte penalización por baja fiabilidad), la <b>recortamos al máximo físico</b> — no se puede acabar 130º en una carrera de 72.</p>
-            <p>Cuando ves <b>varios 72.0º</b> en tarjetas de la parte baja del ranking significa que sus predicciones eran tan altas que todas chocaron contra el tope. Es honesto pero pierde información — todos quedan iguales aunque uno fuera predicho 80 y otro 130.</p>
-
-            <h4>🔍 ¡VERIFICA TÚ MISMO los datos!</h4>
-            <p>Si una predicción te parece rara (p. ej. "Alcon, Manuel: 72.0º" cuando crees que ese chaval no ha terminado nunca tan abajo), <b>haz click sobre el nombre del corredor</b> en cualquier tarjeta. Se abrirá un modal con:</p>
-            <ul>
-              <li>Todas las carreras del histórico donde aparece (con fecha, localidad, tipo de circuito)</li>
-              <li>El puesto exacto en cada una</li>
-              <li>El número de inscritos de aquella prueba</li>
-              <li>Total de finalizadas vs DNF/DS</li>
-              <li>Media, mejor y peor puesto</li>
-            </ul>
-            <div class="example">
-              <b>Si los puestos NO cuadran</b> con lo que tú sabes del corredor (p.ej. tu cadete que siempre acaba 20-30 te aparece con resultados de 80-90) → probablemente hay un <b>problema de matching de nombres</b> en el histórico: otro corredor distinto con el mismo nombre/apellido se está mezclando con sus datos. Avísame para investigarlo.
-            </div>
-
-            <h4>📋 Filtros del ranking</h4>
-            <ul>
-              <li>Solo aparecen equipos con <b>≥3 corredores con datos</b> en la parrilla (en ciclismo base no puedes puntuar por equipos con menos de 3)</li>
-              <li>Se muestran los <b>10 mejores equipos</b> (los con menor Σ)</li>
-              <li>El ranking ordena por la <b>Σ top3 estricta</b>, sin desempates por otras métricas — esto puede empatar 2 equipos con la misma Σ pero distinto perfil de riesgo</li>
-            </ul>
-
-            <div class="tip">
-              💡 <b>Lectura táctica:</b> Si la diferencia de Σ con el equipo inmediatamente superior es <b>≤5 puntos</b>, está al alcance — cualquier corredor que mejore unos puestos te puede subir una posición. Si la diferencia es <b>≥15</b>, es prácticamente inalcanzable. Para los equipos por debajo tuyo, mira el indicador 🚨: si un rival cercano tiene riesgo de corte alto, es probable que <b>caigan en el ranking real</b> y tú subas sin hacer nada extra.
-            </div>
-
-          </div>
-        </details>
-
-        <div id="simTeamsBody"></div>
-      </section>
+      <!-- Fase 3: Predicción de equipos · MOVIDA arriba debajo del Top 10 -->
+      <!-- (el bloque vivía aquí; ahora está justo debajo de simTopPanel) -->
 
       <!-- Fase 3: Comparar predicción vs resultado real (solo si carrera disputada con predicción guardada) -->
       <section class="panel" id="simAccuracyPanel" style="display:none">
