@@ -14392,11 +14392,19 @@ function _saveRiderCatOverrides(arr){
 function getRiderCorrectCat(riderName, year, rawCat){
   if(!rawCat) return rawCat;
   const y=year?parseInt(year):_getRaceYear();
-  const nameKey=(riderName||'').trim().toLowerCase();
+  if(!riderName) return rawCat;
   const overrides=_loadRiderCatOverrides();
-  const hit=overrides.find(o=>
-    o.riderName.trim().toLowerCase()===nameKey &&
-    parseInt(o.year)===y &&
+  // Normalizador robusto: usa normalizeForMatching si está disponible para
+  // que "HUERTAS, MARTIN" y "Martin Huertas" se consideren el mismo rider.
+  // Fallback al método anterior si no existe.
+  const _norm = (s) => {
+    if(typeof normalizeForMatching === 'function') return normalizeForMatching(s||'');
+    return (s||'').trim().toLowerCase();
+  };
+  const nameKey = _norm(riderName);
+  const hit = overrides.find(o =>
+    _norm(o.riderName) === nameKey &&
+    parseInt(o.year) === y &&
     o.correctCat !== '__ignored__'
   );
   return hit ? hit.correctCat : rawCat;
