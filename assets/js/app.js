@@ -8531,8 +8531,11 @@ function _ipOpenRiderReport(displayName){
         </div>
       </div>`;
 
-    // Estilos de impresión (idempotente — solo se inyectan una vez)
-    if(!document.getElementById('iprr-print-styles')){
+    // Estilos de impresión: removemos los previos (si los hay) y re-inyectamos
+    // la versión actual. Así si actualizamos las reglas no quedan cacheadas.
+    const oldStyles = document.getElementById('iprr-print-styles');
+    if(oldStyles) oldStyles.remove();
+    {
       const st = document.createElement('style');
       st.id = 'iprr-print-styles';
       st.textContent = `
@@ -8541,10 +8544,26 @@ function _ipOpenRiderReport(displayName){
           html, body { background:#fff !important; margin:0 !important; padding:0 !important; overflow:visible !important; height:auto !important }
           body > *:not(#ipRiderRptOverlay) { display: none !important; }
           #ipRiderRptOverlay { position:static !important; inset:auto !important; padding:0 !important; background:none !important; overflow:visible !important; display:block !important; height:auto !important; width:auto !important }
-          #ipRiderRptOverlay .iprr-modal { box-shadow:none !important; max-width:none !important; max-height:none !important; border-radius:0 !important; margin:0 !important; overflow:visible !important }
-          #ipRiderRptOverlay .iprr-hdr { position:static !important; padding:0 0 8mm 0 !important; border-bottom:2px solid #0b2f6b !important }
-          #ipRiderRptOverlay .iprr-body { padding:6mm 0 0 0 !important }
-          #ipRiderRptOverlay table { page-break-inside:auto }
+          /* Padding propio del modal + box-decoration-break clone para que los
+             márgenes laterales/superior se respeten en TODAS las páginas, no
+             solo en la primera (mismo patrón que el PVR y el briefing). */
+          #ipRiderRptOverlay .iprr-modal {
+            box-shadow:none !important; max-width:none !important; max-height:none !important;
+            border-radius:0 !important; margin:0 !important; overflow:visible !important;
+            padding: 8mm 10mm 10mm 10mm !important;
+            box-sizing: border-box !important;
+            -webkit-box-decoration-break: clone !important;
+            box-decoration-break: clone !important;
+          }
+          #ipRiderRptOverlay .iprr-hdr {
+            position:static !important;
+            padding:0 0 8mm 0 !important; margin:0 0 8mm 0 !important;
+            border-bottom:2px solid #0b2f6b !important;
+            background:#fff !important;
+            display:flex !important; justify-content:space-between !important; align-items:flex-start !important; gap:14px !important
+          }
+          #ipRiderRptOverlay .iprr-body { padding:0 !important }
+          #ipRiderRptOverlay table { page-break-inside:auto; width:100% !important }
           #ipRiderRptOverlay tr { page-break-inside:avoid }
           #ipRiderRptOverlay thead { display:table-header-group }
           #ipRiderRptOverlay .iprr-actions, .no-print { display:none !important }
