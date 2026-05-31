@@ -24258,6 +24258,51 @@ function _simGetSavedPrediction(race){
   return race.prediction || null;
 }
 
+// Fuerza una consulta directa a Supabase para ESTA prueba — útil cuando
+// la predicción se guardó pero la caché aún no la había recargado.
+async function _simForceReloadAccuracy(){
+  if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const race = _simCurrentData.race;
+  if(!race || !race.id){ alert('La prueba seleccionada no tiene id.'); return; }
+  const body = document.getElementById('simAccuracyBody');
+  if(body) body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#0369a1">⏳ Consultando Supabase…</p>';
+  try {
+    const {data, error} = await _sb.from('races').select('id, notes, race_type').eq('id', race.id).single();
+    if(error){
+      if(body) body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#b91c1c">Error consultando Supabase: ${escapeHtml(error.message||String(error))}</p>`;
+      return;
+    }
+    let extra = {};
+    try { extra = JSON.parse(data?.notes || '{}'); } catch(e){
+      if(body) body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#b91c1c">El campo notes de Supabase no es JSON válido: ${escapeHtml(e.message)}</p>`;
+      return;
+    }
+    if(!extra.prediction){
+      if(body){
+        const keys = Object.keys(extra);
+        body.innerHTML = `
+          <div style="text-align:center;padding:14px">
+            <p class="small" style="color:#9ca3af;margin:0 0 8px">Supabase confirma: <b>esta prueba no tiene predicción guardada</b> en su campo notes.</p>
+            <p class="small" style="color:#475569;margin:0">notes contiene las claves: <code>${keys.length? keys.map(k=>escapeHtml(k)).join(', ') : '(vacío)'}</code></p>
+            <p class="small" style="color:#6b7280;margin:8px 0 0">race_type = <code>${escapeHtml(data.race_type||'(null)')}</code></p>
+            <p class="small" style="color:#6b7280;margin:8px 0 0">Posibles causas:<br>• Guardaste la predicción en OTRA prueba con nombre parecido pero distinto id<br>• El guardado falló silenciosamente sin que te enteraras (revisa la consola)<br>• Borraste el campo notes manualmente en Supabase</p>
+          </div>`;
+      }
+      return;
+    }
+    // ¡Hay predicción! Refrescamos la caché y re-renderizamos
+    race.prediction = extra.prediction;
+    if(_cachedHistory){
+      const h = _cachedHistory.find(x => x.id === race.id);
+      if(h) h.prediction = extra.prediction;
+    }
+    _simRenderAccuracyPanel();
+  } catch(e){
+    if(body) body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#b91c1c">Error inesperado: ${escapeHtml(e.message||String(e))}</p>`;
+  }
+}
+
 // ── C) PREDICCIÓN POR EQUIPOS ─────────────────────────────────────────────
 // Para cada equipo con ≥3 inscritos con datos, calcular Σ top 3 puestos esperados.
 // Devuelve array ordenado asc por sumTop3 (menor = mejor).
@@ -24559,7 +24604,18 @@ function _simRenderAccuracyPanel(){
   if(savePanel) savePanel.style.display = 'none';
   if(!saved){
     panel.style.display = '';
-    body.innerHTML = `<p class="small" style="text-align:center;padding:14px;color:#9ca3af">No se guardó una predicción antes de esta prueba. Para futuras pruebas, pulsa <b>"💾 Guardar predicción"</b> antes de que se disputen para poder evaluar la precisión del modelo.</p>`;
+    const raceId = race.id || '(sin id)';
+    const raceName = race.raceName || '(sin nombre)';
+    body.innerHTML = `
+      <div style="text-align:center;padding:14px">
+        <p class="small" style="color:#9ca3af;margin:0 0 10px">No se ha encontrado predicción guardada para esta prueba en la caché local.</p>
+        <div style="font-size:11.5px;color:#475569;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;margin:0 auto 10px;max-width:520px;text-align:left">
+          <b>Prueba seleccionada:</b> ${escapeHtml(raceName)}<br>
+          <b>ID:</b> <code style="font-size:10.5px">${escapeHtml(raceId)}</code>
+        </div>
+        <button class="btn" onclick="_simForceReloadAccuracy()" style="background:#0369a1;color:#fff;font-weight:800;font-size:12px;padding:6px 14px">🔄 Forzar recarga desde Supabase</button>
+        <p class="small" style="color:#6b7280;margin:10px 0 0">Si tras pulsar el botón sigue saliendo este mensaje, es que la predicción guardada estaba en otra prueba (mismo nombre pero distinto id, o se guardó en otra sesión sobre una copia distinta).</p>
+      </div>`;
     return;
   }
   panel.style.display = '';
