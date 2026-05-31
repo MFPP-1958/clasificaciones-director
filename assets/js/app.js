@@ -27752,6 +27752,118 @@ function _simRefreshEloBlendBtnLabel(){
 setTimeout(()=>_simRefreshEloBlendBtnLabel(), 600);
 
 // ═══════════════════════════════════════════════════════════════════════════
+// COLAPSO GENÉRICO DE PANELES DEL SIMULADOR
+// Añade un botón "▾ Plegar / ▸ Desplegar" a la cabecera de TODOS los paneles
+// del simulador para que el usuario pueda compactarlos a su gusto y reducir
+// el scroll. Estado persistido por panel en localStorage. Idempotente:
+// puede llamarse varias veces sin duplicar botones.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Paneles que NO se pliegan: el placeholder vacío, los chips KPI rápidos y
+// el aviso de "Guardar predicción" (todos pequeños o sin sentido plegarlos).
+// simTeamsPanel tiene su propio botón específico (no lo tocamos).
+const _SIM_COLLAPSE_SKIP_IDS = new Set([
+  'simEmptyPanel',
+  'simKpiPanel',
+  'simSavePanel',
+  'simTeamsPanel'  // ya tiene su propio botón ▾ Plegar
+]);
+const _SIM_COLLAPSE_LSKEY_PREFIX = 'tbg.simPanelCollapsed.';
+
+function _simInitCollapsibleSections(){
+  const view = document.getElementById('view-simulador');
+  if(!view) return;
+  const panels = view.querySelectorAll('section.panel[id^="sim"]');
+  panels.forEach(panel => {
+    if(!panel.id) return;
+    if(_SIM_COLLAPSE_SKIP_IDS.has(panel.id)) return;
+    if(panel.dataset.collapseWired === '1') return;
+
+    // Localizar la cabecera (.section-title) o caerse al primer hijo
+    let title = panel.querySelector(':scope > .section-title');
+    if(!title){
+      const h2 = panel.querySelector(':scope > h2');
+      if(h2) title = h2.parentElement;
+    }
+    if(!title) return;
+
+    // Crear el wrapper del cuerpo colapsable: todo lo que esté DESPUÉS del
+    // section-title pasa dentro de un div con id único.
+    const bodyId = 'collapseBody_' + panel.id;
+    let body = document.getElementById(bodyId);
+    if(!body){
+      body = document.createElement('div');
+      body.id = bodyId;
+      // Mover todos los hermanos siguientes al body
+      let cursor = title.nextSibling;
+      while(cursor){
+        const next = cursor.nextSibling;
+        body.appendChild(cursor);
+        cursor = next;
+      }
+      panel.appendChild(body);
+    }
+
+    // Crear el botón de colapso y añadirlo al final de la cabecera
+    const btnId = 'collapseBtn_' + panel.id;
+    let btn = document.getElementById(btnId);
+    if(!btn){
+      btn = document.createElement('button');
+      btn.id = btnId;
+      btn.type = 'button';
+      btn.className = 'btn light';
+      btn.style.cssText = 'background:#475569;color:#fff;border:0;font-weight:800;font-size:12px;padding:6px 11px;margin-left:auto;flex-shrink:0';
+      btn.title = 'Plegar / desplegar el bloque';
+      btn.textContent = '▾ Plegar';
+      btn.addEventListener('click', () => _simToggleGenericCollapse(panel.id));
+      title.appendChild(btn);
+      // Asegurar que la cabecera es flex y permite wrap
+      if(getComputedStyle(title).display !== 'flex'){
+        title.style.display = 'flex';
+        title.style.alignItems = 'center';
+        title.style.justifyContent = 'space-between';
+        title.style.flexWrap = 'wrap';
+        title.style.gap = '8px';
+      }
+    }
+
+    // Aplicar el estado guardado
+    try {
+      if(localStorage.getItem(_SIM_COLLAPSE_LSKEY_PREFIX + panel.id) === '1'){
+        body.style.display = 'none';
+        btn.textContent = '▸ Desplegar';
+        btn.title = 'Desplegar el bloque';
+      }
+    } catch(e){}
+
+    panel.dataset.collapseWired = '1';
+  });
+}
+
+function _simToggleGenericCollapse(panelId){
+  const body = document.getElementById('collapseBody_' + panelId);
+  const btn  = document.getElementById('collapseBtn_' + panelId);
+  if(!body || !btn) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  btn.textContent    = collapsed ? '▾ Plegar' : '▸ Desplegar';
+  btn.title          = collapsed ? 'Plegar el bloque' : 'Desplegar el bloque';
+  try { localStorage.setItem(_SIM_COLLAPSE_LSKEY_PREFIX + panelId, collapsed ? '0' : '1'); } catch(e){}
+}
+
+// Inicializar al cargar la app y re-aplicar después de cada render del
+// simulador (por si aparecen nuevos paneles ocultos que el usuario aún no
+// había visto).
+setTimeout(_simInitCollapsibleSections, 700);
+const _origSimRenderCurrent_Collapse = (typeof _simRenderCurrent === 'function') ? _simRenderCurrent : null;
+if(_origSimRenderCurrent_Collapse){
+  window._simRenderCurrent = function(){
+    _origSimRenderCurrent_Collapse.apply(this, arguments);
+    try { _simInitCollapsibleSections(); } catch(e){ console.warn('[collapse]', e); }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // BACKFILL CLIMÁTICO — Herramienta de admin
 // Recorre las carreras pasadas sin weather y captura el clima histórico de
 // Open-Meteo Archive. Throttle de 1.5 s entre llamadas para no saturar la API.
