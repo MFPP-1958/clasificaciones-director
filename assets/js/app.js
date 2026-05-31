@@ -24258,6 +24258,50 @@ function _simGetSavedPrediction(race){
   return race.prediction || null;
 }
 
+// Backtest retroactivo solo para la prueba actualmente seleccionada.
+// Reusa _simRetroactiveBacktest filtrando por raceId.
+function _simRetroactiveBacktestSingle(){
+  const body = document.getElementById('simAccuracyBody');
+  if(!body) return;
+  if(!_simCurrentData || !_simCurrentData.race){ alert('Selecciona una prueba primero.'); return; }
+  const targetId = _simCurrentData.race.id;
+  body.innerHTML = '<p class="small" style="text-align:center;padding:18px;color:#0369a1">⏳ Reconstruyendo la predicción para esta prueba con solo el histórico anterior…</p>';
+  setTimeout(() => {
+    try {
+      const { evals } = _simRetroactiveBacktest();
+      const e = evals.find(x => x.raceId === targetId);
+      if(!e){
+        body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#9ca3af">No se ha podido evaluar esta prueba retroactivamente. Razones posibles: no había suficientes carreras anteriores en el histórico, o esta prueba no tiene resultados/inscritos suficientes.</p>`;
+        return;
+      }
+      body.innerHTML = `
+        <div style="padding:8px 10px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;margin-bottom:12px;font-size:12px;color:#166534">
+          ✅ <b>Backtest retroactivo honesto</b> — predicción reconstruida con el histórico que existía justo antes del <b>${escapeHtml(e.raceDate)}</b> (${e.historySize} carreras previas disponibles).
+        </div>
+        <div class="sim-model-summary">
+          <div class="sim-model-card">
+            <div class="m-l">🎯 Precisión Top 10</div>
+            <div class="m-v">${e.accuracyTop10}%</div>
+            <div class="m-s">${e.hitsTop10}/${e.total} aciertos</div>
+          </div>
+          <div class="sim-model-card">
+            <div class="m-l">🥇 Aciertos podio</div>
+            <div class="m-v">${e.hitsTop3}/3</div>
+            <div class="m-s">de los 3 primeros</div>
+          </div>
+          <div class="sim-model-card">
+            <div class="m-l">📐 Error medio (MAE)</div>
+            <div class="m-v">±${e.mae.toFixed(1)}</div>
+            <div class="m-s">posiciones</div>
+          </div>
+        </div>
+        <p class="small" style="margin-top:10px;color:#6b7280">Para ver la comparación detallada predicho vs real abre el botón <b>🎯 Predicho vs Real</b> de la cabecera del simulador (usa el predictor actual con TODOS los datos, no el backtest retroactivo, así que los números pueden no coincidir exactamente).</p>`;
+    } catch(err){
+      body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#b91c1c">Error: ${escapeHtml(err.message||String(err))}</p>`;
+    }
+  }, 50);
+}
+
 // Escanea TODAS las pruebas de Supabase y lista cuáles tienen
 // notes.prediction guardada. Útil para saber dónde fue a parar una
 // predicción que el usuario creía haber guardado en otra carrera.
@@ -24693,8 +24737,9 @@ function _simRenderAccuracyPanel(){
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
           <button class="btn" onclick="_simForceReloadAccuracy()" style="background:#0369a1;color:#fff;font-weight:800;font-size:12px;padding:6px 14px">🔄 Forzar recarga desde Supabase</button>
           <button class="btn" onclick="_simListAllSavedPredictions()" style="background:#7c3aed;color:#fff;font-weight:800;font-size:12px;padding:6px 14px">🔎 Buscar TODAS mis predicciones guardadas</button>
+          <button class="btn" onclick="_simRetroactiveBacktestSingle()" style="background:#16a34a;color:#fff;font-weight:800;font-size:12px;padding:6px 14px" title="Predice esta prueba como si no la conociéramos y compara con el resultado real">🔁 Backtest retroactivo de esta prueba</button>
         </div>
-        <p class="small" style="color:#6b7280;margin:10px 0 0">Si tras pulsar el botón sigue saliendo este mensaje, es que la predicción guardada estaba en otra prueba (mismo nombre pero distinto id, o se guardó en otra sesión sobre una copia distinta).</p>
+        <p class="small" style="color:#6b7280;margin:10px 0 0">El <b>backtest retroactivo</b> reconstruye la predicción usando solo el histórico anterior a la fecha de esta carrera — no necesita que hayas guardado nada en su momento.</p>
       </div>`;
     return;
   }
@@ -24798,14 +24843,112 @@ function _simToggleModelAccuracy(){
   }
 }
 
+// Backtest retroactivo HONESTO: para cada carrera del histórico, le decimos
+// al simulador "haz como si no conocieras esta carrera ni nada posterior" y
+// generamos la predicción que el modelo habría hecho en su día. Después la
+// comparamos contra el resultado real.
+//
+// Implementación: hot-swap temporal de _cachedHistory por una versión
+// filtrada solo con carreras de fecha ESTRICTAMENTE anterior, luego restauramos.
+function _simRetroactiveBacktest(){
+  const hist = (typeof _cachedHistory !== 'undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+  if(!hist.length) return { evals:[] };
+
+  // Guardar estado del simulador
+  const prevRaceId = _simSelectedRaceId;
+  const prevData   = _simCurrentData;
+  const origHist   = _cachedHistory;
+
+  // Carreras válidas: disputadas (≥3 finishers) y con inscritos (≥5) y con fecha
+  const candidates = hist.filter(h =>
+       Array.isArray(h.riders) && h.riders.filter(r=>r.pos>0).length >= 5
+    && Array.isArray(h.inscritos) && h.inscritos.length >= 5
+    && h.raceDate
+  );
+
+  const evals = [];
+  candidates.forEach(race => {
+    try {
+      const raceIso = _parseSpanishDate(race.raceDate);
+      if(!raceIso) return;
+      // Histórico restringido: solo carreras de fecha estrictamente anterior
+      // (y excluyendo la propia carrera). El simulador ya excluye la actual
+      // pero filtramos por seguridad.
+      const restricted = hist.filter(h => {
+        if(h.id === race.id) return false;
+        const iso = _parseSpanishDate(h.raceDate);
+        return iso && iso < raceIso;
+      });
+      if(restricted.length < 3) return; // no se puede predecir sin histórico previo
+      _cachedHistory = restricted;
+      _simBuildData(race.id);
+      if(!_simCurrentData || !Array.isArray(_simCurrentData.grid)) return;
+      const grid = _simCurrentData.grid;
+
+      // Top 10 predicho: orden por puesto esperado ascendente
+      const predRanked = grid.filter(g => g.predictedPos != null)
+        .sort((a,b)=>a.predictedPos - b.predictedPos)
+        .slice(0, 10)
+        .map((g,i) => ({ rank: i+1, name: g.name, isMyTeam: !!g.isMyTeam }));
+      if(!predRanked.length) return;
+
+      const realByName = new Map();
+      (race.riders||[]).forEach(r => {
+        if(r && r.pos > 0 && r.name) realByName.set(normalizeForMatching(r.name), parseInt(r.pos)||0);
+      });
+      const compare = predRanked.map(p => {
+        const real = realByName.get(normalizeForMatching(p.name));
+        return real ? { predRank: p.rank, realPos: real, diff: real - p.rank } : null;
+      }).filter(Boolean);
+      if(!compare.length) return;
+
+      const hitsTop10 = compare.filter(c => c.realPos <= 10).length;
+      const hitsTop3  = predRanked.slice(0,3).reduce((s,p) => s + ((realByName.get(normalizeForMatching(p.name))||999) <= 3 ? 1 : 0), 0);
+      const mae = compare.reduce((s,c)=>s+Math.abs(c.diff),0) / compare.length;
+
+      evals.push({
+        raceId: race.id,
+        raceName: race.raceName || '(sin nombre)',
+        raceDate: race.raceDate || '',
+        localidad: race.localidad || '',
+        total: predRanked.length,
+        hitsTop10,
+        hitsTop3,
+        mae,
+        accuracyTop10: Math.round(hitsTop10 / predRanked.length * 100),
+        historySize: restricted.length
+      });
+    } catch(e){
+      console.warn('[retrobacktest]', race.raceName, e);
+    }
+  });
+
+  // Restaurar histórico y estado del simulador
+  _cachedHistory = origHist;
+  try {
+    if(prevRaceId) _simBuildData(prevRaceId);
+    else _simCurrentData = prevData;
+  } catch(e){ _simCurrentData = prevData; }
+
+  return { evals };
+}
+
 function _simRenderModelAccuracy(){
   const body = document.getElementById('simModelAccBody');
   if(!body) return;
   const hist = _cachedHistory || [];
-  // Pruebas con predicción Y resultado real
+  // Pruebas con predicción guardada Y resultado real (camino clásico)
   const withBoth = hist.filter(h => h.prediction && Array.isArray(h.riders) && h.riders.length>=3);
+
+  // Si no hay ninguna predicción guardada, lanzamos el backtest retroactivo
+  // automáticamente y enseñamos esos números.
   if(!withBoth.length){
-    body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#9ca3af">Aún no hay predicciones guardadas que se hayan podido contrastar contra resultados reales.<br>Cuando guardes una predicción antes de una carrera y luego se dispute, aparecerá aquí.</p>`;
+    body.innerHTML = `
+      <div style="text-align:center;padding:14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;margin-bottom:14px">
+        <p style="margin:0;color:#92400e;font-weight:700">ℹ️ No hay predicciones guardadas (botón 💾 nunca ejecutado), pero podemos evaluar el modelo igualmente.</p>
+        <p class="small" style="margin:6px 0 10px;color:#78350f">Vamos a hacer un <b>backtest retroactivo honesto</b>: para cada carrera ya disputada, predecimos como si no conociéramos esa carrera ni nada posterior, y comparamos con el resultado real.</p>
+        <button class="btn" onclick="_simRunRetroactiveBacktest()" style="background:#0369a1;color:#fff;font-weight:800;padding:8px 16px">🔁 Ejecutar backtest retroactivo</button>
+      </div>`;
     return;
   }
   // Calcular precisión por prueba
@@ -24876,6 +25019,77 @@ function _simRenderModelAccuracy(){
         }).join('')}</tbody>
       </table>
     </div>`;
+}
+
+// Dispara el backtest retroactivo y pinta los resultados en el panel.
+function _simRunRetroactiveBacktest(){
+  const body = document.getElementById('simModelAccBody');
+  if(!body) return;
+  body.innerHTML = '<p class="small" style="text-align:center;padding:20px;color:#0369a1">⏳ Ejecutando backtest retroactivo… (esto puede tardar unos segundos según el tamaño del histórico)</p>';
+  // Damos un tick al navegador para que repinte el mensaje antes del cálculo
+  setTimeout(() => {
+    try {
+      const { evals } = _simRetroactiveBacktest();
+      if(!evals.length){
+        body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#9ca3af">No se ha podido evaluar ninguna prueba retroactivamente. Necesitas al menos 4-5 carreras disputadas en el histórico para que el backtest tenga sentido (cada una se predice usando solo las anteriores).</p>`;
+        return;
+      }
+      evals.sort((a,b)=>{
+        const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+        const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+        return db.localeCompare(da);
+      });
+      const totalEvals = evals.length;
+      const avgAccTop10 = Math.round(evals.reduce((s,e)=>s+e.accuracyTop10,0)/totalEvals);
+      const totalHitsPodium = evals.reduce((s,e)=>s+e.hitsTop3,0);
+      const totalPodiumPossible = totalEvals * 3;
+      const podiumPct = Math.round(totalHitsPodium/totalPodiumPossible*100);
+      const maes = evals.filter(e=>e.mae!=null).map(e=>e.mae);
+      const avgMae = maes.length ? Math.round(maes.reduce((s,v)=>s+v,0)/maes.length*10)/10 : null;
+      body.innerHTML = `
+        <div style="padding:8px 10px;background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;margin-bottom:12px;font-size:12px;color:#1e3a8a">
+          ✅ <b>Backtest retroactivo honesto</b> sobre ${totalEvals} carreras del histórico. Cada predicción se generó usando SOLO el histórico anterior a la fecha de la carrera (no contamos datos del futuro). Útil para saber cómo de bien predice el modelo SIN haber guardado nada en su día.
+        </div>
+        <div class="sim-model-summary">
+          <div class="sim-model-card">
+            <div class="m-l">🎯 Precisión Top 10 (media)</div>
+            <div class="m-v">${avgAccTop10}%</div>
+            <div class="m-s">en ${totalEvals} pruebas</div>
+          </div>
+          <div class="sim-model-card">
+            <div class="m-l">🥇 Aciertos podio</div>
+            <div class="m-v">${totalHitsPodium}/${totalPodiumPossible}</div>
+            <div class="m-s">${podiumPct}% del total</div>
+          </div>
+          ${avgMae!=null?`<div class="sim-model-card">
+            <div class="m-l">📐 Error medio (MAE)</div>
+            <div class="m-v">±${avgMae}</div>
+            <div class="m-s">posiciones</div>
+          </div>`:''}
+        </div>
+        <div class="table-wrap" style="max-height:380px;overflow:auto">
+          <table class="sim-acc-table">
+            <thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th><th style="text-align:center">Hist.usado</th><th style="text-align:center">Top 10</th><th style="text-align:center">Podio</th><th style="text-align:center">MAE</th></tr></thead>
+            <tbody>${evals.map(e=>{
+              const accCls = e.accuracyTop10>=70?'good':e.accuracyTop10>=40?'ok':'bad';
+              return `<tr>
+                <td style="color:#475569;white-space:nowrap">${escapeHtml(e.raceDate||'—')}</td>
+                <td><b>${escapeHtml(e.raceName||'')}</b></td>
+                <td>${escapeHtml(e.localidad||'—')}</td>
+                <td style="text-align:center;color:#6b7280;font-size:11px">${e.historySize} carreras</td>
+                <td style="text-align:center"><span class="sim-diff-badge ${e.accuracyTop10>=70?'perfect':e.accuracyTop10>=40?'close':'far'}">${e.accuracyTop10}% (${e.hitsTop10}/${e.total})</span></td>
+                <td style="text-align:center;font-weight:800;color:${e.hitsTop3===3?'#16a34a':e.hitsTop3>=2?'#f59e0b':'#dc2626'}">${e.hitsTop3}/3</td>
+                <td style="text-align:center;color:#475569">±${e.mae.toFixed(1)}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        </div>
+        <p class="small" style="margin-top:10px;color:#6b7280">💡 La columna <b>Hist.usado</b> muestra cuántas carreras anteriores tenía disponibles el modelo para predecir esa carrera. Carreras tempranas en la temporada tendrán menos histórico y por tanto menor precisión esperada.</p>`;
+    } catch(e){
+      body.innerHTML = `<p class="small" style="text-align:center;padding:18px;color:#b91c1c">Error en el backtest: ${escapeHtml(e.message||String(e))}</p>`;
+      console.warn('_simRunRetroactiveBacktest', e);
+    }
+  }, 50);
 }
 
 // Asegurar que _sbLoadHistory expone prediction desde notes
