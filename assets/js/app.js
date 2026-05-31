@@ -24591,7 +24591,7 @@ function _simToggleTeamsPanelCollapse(){
   if(!body || !btn) return;
   const collapsed = body.style.display === 'none';
   body.style.display = collapsed ? '' : 'none';
-  btn.textContent    = collapsed ? '⊟' : '⊞';
+  btn.textContent    = collapsed ? '▾ Plegar' : '▸ Desplegar';
   btn.title          = collapsed ? 'Plegar el bloque' : 'Desplegar el bloque';
   try { localStorage.setItem(_TEAMS_PANEL_COLLAPSE_KEY, collapsed ? '0' : '1'); } catch(e){}
 }
@@ -24603,7 +24603,7 @@ function _simApplyTeamsPanelCollapsedState(){
       const body = document.getElementById('simTeamsCollapseBody');
       const btn  = document.getElementById('simTeamsCollapseBtn');
       if(body) body.style.display = 'none';
-      if(btn) { btn.textContent = '⊞'; btn.title = 'Desplegar el bloque'; }
+      if(btn) { btn.textContent = '▸ Desplegar'; btn.title = 'Desplegar el bloque'; }
     }
   } catch(e){}
 }
@@ -24725,6 +24725,8 @@ function _simOpenTeamsPredVsReal(){
     }).join('');
 
     const accColor = (n) => n>=7?'#16a34a':n>=4?'#f59e0b':'#dc2626';
+    // Logo de cabecera (mismo patrón que otros modales PVR)
+    const pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
 
     const overlay = document.createElement('div');
     overlay.id = 'tprvOverlay';
@@ -24733,7 +24735,7 @@ function _simOpenTeamsPredVsReal(){
       <div class="pvr-modal" style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
         <div class="pvr-hdr" style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;z-index:2">
           <div style="display:flex;align-items:center;gap:14px">
-            ${_pdfLogoSrc ? `<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="pvr-logo">` : ''}
+            ${pdfLogoSrc ? `<img src="${pdfLogoSrc}" alt="MFPP Cycling Specialist" class="pvr-logo">` : ''}
             <div style="min-width:0">
               <h2 style="margin:0;font-size:20px;color:#0b2f6b">🏅 Predicho vs Real (equipos)</h2>
               <div class="small" style="margin-top:2px">${escapeHtml(race.raceName||'')} · ${escapeHtml(race.raceDate||'')}${race.localidad?' · '+escapeHtml(race.localidad):''}</div>
