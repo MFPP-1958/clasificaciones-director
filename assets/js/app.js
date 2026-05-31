@@ -25140,6 +25140,155 @@ function _simRunRetroactiveBacktest(){
   }, 50);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// OPTIMIZADOR DEL PESO ELO
+// Ejecuta el backtest retroactivo con varios pesos del blend Elo y devuelve
+// cuál minimiza el MAE global. Permite aplicarlo automáticamente.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _simRunEloWeightOptimization(){
+  const body = document.getElementById('simModelAccBody');
+  if(!body) return;
+  const weights = [0, 0.10, 0.20, 0.30, 0.40, 0.50];
+  body.innerHTML = `
+    <div style="text-align:center;padding:18px">
+      <p style="color:#0369a1;font-weight:700;margin:0 0 8px">⏳ Optimizando peso del rating Elo…</p>
+      <p class="small" style="color:#6b7280;margin:0">Probando ${weights.length} pesos diferentes contra todas tus carreras. Puede tardar 20-40 segundos.</p>
+      <div id="eloOptProgress" style="margin-top:12px;font-size:13px;color:#0b2f6b;font-weight:700"></div>
+    </div>`;
+
+  // Guardar estado actual del simulador para restaurarlo al final
+  const prevSelectedRaceId = _simSelectedRaceId;
+  const prevData = _simCurrentData;
+  const prevOverride = _eloBlendOverride;
+
+  // Ejecutar las pruebas SECUENCIALMENTE con setTimeout encadenado para no
+  // bloquear el navegador y poder actualizar el indicador de progreso.
+  const results = [];
+  let idx = 0;
+  const progressEl = () => document.getElementById('eloOptProgress');
+
+  const runNext = () => {
+    if(idx >= weights.length){
+      // Restaurar estado y mostrar resultados
+      _eloBlendOverride = prevOverride;
+      try { if(prevSelectedRaceId) _simBuildData(prevSelectedRaceId); else _simCurrentData = prevData; } catch(e){ _simCurrentData = prevData; }
+      _renderEloOptimizationResults(results);
+      return;
+    }
+    const w = weights[idx];
+    if(progressEl()) progressEl().textContent = `Probando peso ${(w*100).toFixed(0)}% del Elo… (${idx+1}/${weights.length})`;
+    setTimeout(() => {
+      try {
+        _eloBlendOverride = w;
+        const { evals } = _simRetroactiveBacktest();
+        if(evals.length){
+          const avgAccTop10 = evals.reduce((s,e)=>s+e.accuracyTop10,0)/evals.length;
+          const hitsPodium  = evals.reduce((s,e)=>s+e.hitsTop3,0);
+          const possible    = evals.length * 3;
+          const podiumPct   = hitsPodium / possible * 100;
+          const maes        = evals.filter(e=>e.mae!=null).map(e=>e.mae);
+          const avgMae      = maes.reduce((s,v)=>s+v,0)/maes.length;
+          results.push({
+            weight: w, races: evals.length,
+            avgAccTop10, podiumPct, avgMae,
+            hitsPodium, possiblePodium: possible
+          });
+        }
+      } catch(e){ console.warn('[elo-opt]', w, e); }
+      idx++;
+      runNext();
+    }, 30);
+  };
+  runNext();
+}
+
+function _renderEloOptimizationResults(results){
+  const body = document.getElementById('simModelAccBody');
+  if(!body) return;
+  if(!results.length){
+    body.innerHTML = '<p class="small" style="text-align:center;padding:18px;color:#b91c1c">No se ha podido completar la optimización.</p>';
+    return;
+  }
+  // Mejor peso = menor MAE (criterio principal). Empate → mayor precisión Top 10.
+  results.sort((a,b)=> a.avgMae - b.avgMae || b.avgAccTop10 - a.avgAccTop10);
+  const best = results[0];
+  // Reordenar por peso ASC para la tabla
+  const tableRows = results.slice().sort((a,b)=>a.weight - b.weight);
+  const baselineMae = results.find(r => r.weight === 0)?.avgMae;
+  const baselineAcc = results.find(r => r.weight === 0)?.avgAccTop10;
+
+  const rowsHtml = tableRows.map(r => {
+    const isBest = r.weight === best.weight;
+    const deltaMae = baselineMae != null ? r.avgMae - baselineMae : 0;
+    const deltaAcc = baselineAcc != null ? r.avgAccTop10 - baselineAcc : 0;
+    const dMaeColor = deltaMae < -0.3 ? '#15803d' : deltaMae > 0.3 ? '#b91c1c' : '#6b7280';
+    const dAccColor = deltaAcc > 1 ? '#15803d' : deltaAcc < -1 ? '#b91c1c' : '#6b7280';
+    return `<tr style="${isBest?'background:#dcfce7;font-weight:700':''}">
+      <td style="padding:6px 8px;text-align:center;font-weight:800;color:${isBest?'#15803d':'#0b2f6b'}">${(r.weight*100).toFixed(0)}%${isBest?' 🏆':''}</td>
+      <td style="padding:6px 8px;text-align:center">${r.races}</td>
+      <td style="padding:6px 8px;text-align:center">${r.avgAccTop10.toFixed(0)}%</td>
+      ${r.weight !== 0 ? `<td style="padding:6px 8px;text-align:center;color:${dAccColor}">${deltaAcc>=0?'+':''}${deltaAcc.toFixed(1)}%</td>` : '<td style="padding:6px 8px;text-align:center;color:#9ca3af">baseline</td>'}
+      <td style="padding:6px 8px;text-align:center">${r.podiumPct.toFixed(0)}% (${r.hitsPodium}/${r.possiblePodium})</td>
+      <td style="padding:6px 8px;text-align:center;font-weight:800">±${r.avgMae.toFixed(1)}</td>
+      ${r.weight !== 0 ? `<td style="padding:6px 8px;text-align:center;color:${dMaeColor};font-weight:700">${deltaMae>=0?'+':''}${deltaMae.toFixed(2)}</td>` : '<td style="padding:6px 8px;text-align:center;color:#9ca3af">baseline</td>'}
+    </tr>`;
+  }).join('');
+
+  const bestImprovement = best.weight === 0
+    ? null
+    : { mae: baselineMae - best.avgMae, acc: best.avgAccTop10 - baselineAcc };
+
+  const verdictHtml = best.weight === 0
+    ? `<div style="background:#fef3c7;border:1px solid #fde68a;color:#92400e;padding:10px 14px;border-radius:8px;font-size:13px">
+        🟡 <b>El predictor heurístico puro (0% Elo) es la mejor opción</b> con tu histórico actual.<br>
+        <span style="font-size:11.5px">Posibles razones: histórico aún pequeño (12 carreras), corredores aparecen pocas veces, el rating Elo no ha tenido tiempo de estabilizarse. Vuelve a ejecutar esto cuando hayas cargado más carreras.</span>
+      </div>`
+    : `<div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:10px 14px;border-radius:8px;font-size:13px">
+        🏆 <b>El peso óptimo del Elo es ${(best.weight*100).toFixed(0)}%</b> — mejora MAE en <b>${Math.abs(bestImprovement.mae).toFixed(2)} puestos</b> y precisión Top 10 en <b>${bestImprovement.acc>=0?'+':''}${bestImprovement.acc.toFixed(1)} puntos</b> vs el predictor sin Elo.<br>
+        <span style="font-size:11.5px">Esto significa que para tu pelotón el rating Elo del corredor es un buen ajuste a la fórmula heurística. Pulsa el botón de abajo para aplicarlo en TODAS las predicciones futuras.</span>
+      </div>`;
+
+  const applyBtn = best.weight === 0
+    ? `<button class="btn" onclick="_simApplyEloWeight(0)" style="background:#fff;color:#374151;border:1px solid #d1d5db;font-weight:700">↺ Desactivar Elo (peso 0%)</button>`
+    : `<button class="btn" onclick="_simApplyEloWeight(${best.weight})" style="background:#15803d;color:#fff;border:0;font-weight:800;padding:9px 18px">✅ Aplicar peso óptimo ${(best.weight*100).toFixed(0)}%</button>`;
+
+  body.innerHTML = `
+    ${verdictHtml}
+    <table class="sim-acc-table" style="margin-top:14px;width:100%">
+      <thead><tr>
+        <th>Peso Elo</th>
+        <th style="text-align:center">Carreras</th>
+        <th style="text-align:center">Precisión Top 10</th>
+        <th style="text-align:center">Δ vs sin Elo</th>
+        <th style="text-align:center">Aciertos podio</th>
+        <th style="text-align:center">Error medio (MAE)</th>
+        <th style="text-align:center">Δ MAE</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      ${applyBtn}
+      <button class="btn light" onclick="_simRunRetroactiveBacktest()" style="font-weight:700">↻ Volver al backtest normal</button>
+    </div>
+    <p class="small" style="margin-top:10px;color:#6b7280">💡 El criterio de optimización es el <b>MAE (error medio en puestos)</b>. Empates se resuelven por mayor precisión Top 10. Si pulsas "Aplicar", el peso se guarda en este navegador y el botón <b>🧬 Mezcla Elo</b> de la cabecera se pone en ON automáticamente.</p>`;
+}
+
+function _simApplyEloWeight(w){
+  _saveEloBlendWeight(w);
+  _saveEloBlendEnabled(w > 0);
+  alert(w > 0
+    ? `✅ Peso Elo ${(w*100).toFixed(0)}% aplicado.\n\nTodas las predicciones futuras usarán esta mezcla. Persistido en este navegador.`
+    : `↺ Elo desactivado (peso 0%).\n\nVuelves al predictor heurístico puro.`);
+  // Recalcular la prueba activa
+  if(typeof _simSelectedRaceId !== 'undefined' && _simSelectedRaceId){
+    try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
+  }
+  if(typeof _simRefreshEloBlendBtnLabel === 'function') _simRefreshEloBlendBtnLabel();
+  // Re-mostrar el backtest normal
+  _simRunRetroactiveBacktest();
+}
+
 // Asegurar que _sbLoadHistory expone prediction desde notes
 const _origSbLoadHistory_F3 = (typeof _sbLoadHistory==='function') ? _sbLoadHistory : null;
 if(_origSbLoadHistory_F3){
@@ -26912,8 +27061,27 @@ if(_origSimBuildData_WX){
 const _ELO_K_FACTOR = 32;
 const _ELO_BASE = 1200;
 const _ELO_MIN_GAMES_FOR_USE = 3;
-const _ELO_BLEND_KEY = 'tbg.eloBlendEnabled.v1';
-const _ELO_BLEND_WEIGHT = 0.30; // 30% Elo + 70% predictor heurístico
+const _ELO_BLEND_KEY = 'tbg.eloBlendEnabled.v1';     // ON/OFF (true/false)
+const _ELO_WEIGHT_KEY = 'tbg.eloBlendWeight.v1';     // peso 0..0.5
+const _ELO_BLEND_WEIGHT_DEFAULT = 0.30;              // peso por defecto cuando está activado
+let _eloBlendOverride = null; // si != null, prevalece sobre localStorage (lo usa el optimizador)
+
+function _loadEloBlendWeight(){
+  try {
+    const v = parseFloat(localStorage.getItem(_ELO_WEIGHT_KEY));
+    if(isFinite(v) && v >= 0 && v <= 0.5) return v;
+  } catch(e){}
+  return _ELO_BLEND_WEIGHT_DEFAULT;
+}
+function _saveEloBlendWeight(w){
+  try { localStorage.setItem(_ELO_WEIGHT_KEY, String(Math.max(0, Math.min(0.5, w)))); } catch(e){}
+}
+// Peso efectivo a usar en el blend: override > peso persistido si flag ON > 0
+function _effectiveEloWeight(){
+  if(_eloBlendOverride !== null) return _eloBlendOverride;
+  if(_loadEloBlendEnabled()) return _loadEloBlendWeight();
+  return 0;
+}
 
 let _eloCache = null, _eloCacheKey = null;
 let _dnfCache = null, _dnfCacheKey = null;
@@ -27048,21 +27216,19 @@ function _simEnrichGridBloque1(){
   const sortedByElo = withElo.slice().sort((a,b) => b.elo - a.elo);
   sortedByElo.forEach((g, idx) => { g.eloRank = idx + 1; });
 
-  // Mezcla opt-in: si está activada y el corredor tiene Elo válido,
-  // modificamos predictedPos guardando el original para diagnóstico.
-  if(_loadEloBlendEnabled() && sortedByElo.length >= 5){
-    const totalRank = sortedByElo.length;
+  // Mezcla opt-in: peso 0 = sin mezcla. Override del optimizador prevalece.
+  const eloWeight = _effectiveEloWeight();
+  if(eloWeight > 0 && sortedByElo.length >= 5){
     grid.forEach(g => {
       if(g.eloRank == null || g.predictedPos == null) return;
-      // Escalamos eloRank al rango del pelotón actual (no a los inscritos
-      // con Elo). Aproximación: misma posición absoluta.
       g.predictedPosBaseElo = g.predictedPos;
-      g.predictedPos = (1 - _ELO_BLEND_WEIGHT) * g.predictedPos + _ELO_BLEND_WEIGHT * g.eloRank;
+      g.predictedPos = (1 - eloWeight) * g.predictedPos + eloWeight * g.eloRank;
     });
-    // Recalcular eloMixed flag para que la UI pueda mostrarlo
     _simCurrentData._eloBlendApplied = true;
+    _simCurrentData._eloBlendWeight = eloWeight;
   } else {
     _simCurrentData._eloBlendApplied = false;
+    _simCurrentData._eloBlendWeight = 0;
   }
 }
 

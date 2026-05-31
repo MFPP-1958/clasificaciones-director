@@ -2280,9 +2280,12 @@
 
       <!-- Fase 3: Histórico de precisión del modelo -->
       <section class="panel" id="simModelAccPanel" style="display:none;border-left:4px solid #16a34a">
-        <div class="section-title">
+        <div class="section-title" style="flex-wrap:wrap;gap:8px">
           <h2 style="margin:0;color:#166534">📊 Histórico de precisión del modelo</h2>
-          <button class="btn light" onclick="_simRenderModelAccuracy()" style="padding:5px 11px;font-size:12px">🔄 Recalcular</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn light" onclick="_simRenderModelAccuracy()" style="padding:5px 11px;font-size:12px">🔄 Recalcular</button>
+            <button class="btn" onclick="_simRunEloWeightOptimization()" style="padding:5px 11px;font-size:12px;background:#7c3aed;color:#fff;border:0;font-weight:800" title="Prueba 6 pesos del Elo (0%, 10%, 20%, 30%, 40%, 50%) contra todas tus carreras y te dice cuál minimiza el error">🧪 Optimizar peso Elo</button>
+          </div>
         </div>
         <div id="simModelAccBody"></div>
       </section>
