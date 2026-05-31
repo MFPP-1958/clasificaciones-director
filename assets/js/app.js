@@ -24886,14 +24886,18 @@ function _simRetroactiveBacktest(){
       const raceIso = _parseSpanishDate(race.raceDate);
       if(!raceIso) return;
       diag.dateOk++;
-      // Histórico restringido: solo carreras de fecha estrictamente anterior
-      const restricted = hist.filter(h => {
+      // Histórico restringido: la prueba objetivo (para que el simulador
+      // pueda encontrarla y predecirla) + SOLO carreras con fecha
+      // estrictamente anterior. El simulador ya filtra internamente la
+      // prueba actual para no usarla como entrenamiento de sí misma.
+      const previousRaces = hist.filter(h => {
         if(h.id === race.id) return false;
         const iso = _parseSpanishDate(h.raceDate);
         return iso && iso < raceIso;
       });
-      if(restricted.length < 2) return; // necesitamos al menos 2 carreras previas
+      if(previousRaces.length < 2) return; // necesitamos al menos 2 carreras previas
       diag.histOk++;
+      const restricted = [race, ...previousRaces];
 
       // Si la carrera no tiene inscritos guardados, sintetizamos uno temporal
       // con los corredores que terminaron (sabemos al menos quién participó).
@@ -24946,7 +24950,7 @@ function _simRetroactiveBacktest(){
         hitsTop3,
         mae,
         accuracyTop10: Math.round(hitsTop10 / predRanked.length * 100),
-        historySize: restricted.length
+        historySize: previousRaces.length
       });
     } catch(e){
       console.warn('[retrobacktest]', race.raceName, e);
