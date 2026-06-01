@@ -1805,10 +1805,13 @@ function _calRaceModalGotoRider(riderName){
 // devolviendo respuestas vacías/rate-limited en muchos sitios. Por eso va el
 // primero. También exigimos un mínimo razonable de tamaño para detectar
 // respuestas truncadas.
+// Reordenado tras detectar problemas con codetabs (a veces devuelve pages de
+// rate-limit aunque sean >200KB, lo que engaña al heurístico de tamaño y
+// hace que el parser saque 0 carreras). corsproxy.io es el más estable hoy.
 const _FCCV_PROXIES = [
-  url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
 ];
 
 let _fccvLastResults = [];
@@ -2894,6 +2897,44 @@ async function _fccvParseExcelFile(file){
   }
 }
 
+// Abre el HTML que devolvió el último proxy en una ventana nueva, así
+// el usuario puede verificar si el contenido es realmente la página del
+// calendario FCCV o algo que devolvió el proxy (página de error, captcha,
+// rate limit, etc.). Útil para diagnosticar fallos de scraping.
+function _fccvShowRawHtml(){
+  const html = (typeof _fccvLastRawHtml === 'string' && _fccvLastRawHtml) ? _fccvLastRawHtml : '';
+  if(!html){
+    alert('No hay HTML recibido todavía. Pulsa primero "Sincronizar con Federación".');
+    return;
+  }
+  const w = window.open('', '_blank');
+  if(!w){ alert('Tu navegador ha bloqueado la ventana emergente. Permítelas y reintenta.'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><title>HTML recibido FCCV (${(html.length/1024).toFixed(1)} KB)</title>
+    <style>
+      body{font-family:Menlo,Consolas,monospace;margin:0;padding:0;background:#0b0f1a;color:#cbd5e1}
+      .toolbar{background:#1e293b;padding:10px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:0;border-bottom:1px solid #334155}
+      .toolbar h2{font-size:14px;color:#fef3c7;margin:0;flex:1}
+      .toolbar button{background:#f59e0b;color:#1e293b;border:0;border-radius:6px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:12px}
+      .toolbar button.danger{background:#dc2626;color:#fff}
+      pre{margin:0;padding:14px;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-all}
+    </style>
+  </head><body>
+    <div class="toolbar">
+      <h2>HTML recibido del proxy FCCV · ${(html.length/1024).toFixed(1)} KB</h2>
+      <button onclick="const iframe=document.getElementById('rendered');iframe.style.display=iframe.style.display==='none'?'':'none';this.textContent=iframe.style.display==='none'?'🌐 Ver renderizado':'📄 Ver HTML crudo'">🌐 Ver renderizado</button>
+      <button class="danger" onclick="window.close()">✕ Cerrar</button>
+    </div>
+    <pre id="raw"></pre>
+    <iframe id="rendered" srcdoc="" style="width:100%;height:calc(100vh - 56px);border:0;display:none;background:#fff"></iframe>
+  </body></html>`);
+  w.document.close();
+  // Inyectar el HTML después de que la ventana esté lista (escape para mostrar como texto)
+  const pre = w.document.getElementById('raw');
+  if(pre) pre.textContent = html;
+  const ifr = w.document.getElementById('rendered');
+  if(ifr) ifr.srcdoc = html;
+}
+
 async function _fccvSync(){
   _fccvInitYears();
   const year = document.getElementById('fccvYear')?.value || new Date().getFullYear();
@@ -3002,9 +3043,34 @@ async function _fccvSync(){
     }
     if(status) status.textContent = `📄 HTML recibido (${(html.length/1024).toFixed(1)} KB) · ${chosenUrl===baseUrl?'sin filtro de fechas':'con filtro de fechas'} · ${all.length} carreras detectadas`;
     if(!all.length){
+      // Limpiar la URL cacheada que ya no funciona — la próxima ejecución
+      // probará todas las variantes desde cero en lugar de pegarse contra
+      // una URL que devuelve respuestas válidas en tamaño pero vacías de
+      // contenido útil.
+      try { localStorage.removeItem('fccvWorkingUrl_'+yyyy); } catch(_){}
+      const preview = (html||'').slice(0, 240).replace(/\s+/g,' ').replace(/</g,'&lt;');
+      const stats = window._fccvLastStats || {};
       if(results) results.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b;font-size:13px">
-        ⚠️ Se recibió el HTML pero no se detectó ninguna carrera con el formato esperado.<br>
-        Puede que la estructura de la web haya cambiado. <a href="${fccvUrl}" target="_blank" style="color:#dc2626;font-weight:700">Abrir calendario FCCV en nueva pestaña</a> para inspeccionar.
+        ⚠️ <b>Se recibió HTML pero no se detectó ninguna carrera con el formato esperado.</b><br>
+        <div style="margin-top:8px;font-size:11.5px;color:#7c2d12">
+          • Tamaño del HTML recibido: <b>${(html.length/1024).toFixed(1)} KB</b><br>
+          • Tablas detectadas en el HTML: <b>${stats.tablesFound ?? '—'}</b><br>
+          • Filas (TR) totales: <b>${stats.rowsTotal ?? '—'}</b><br>
+          • Filas con celdas TD: <b>${stats.rowsWithTd ?? '—'}</b><br>
+          • Filas con ≥3 celdas: <b>${stats.rowsWith3plus ?? '—'}</b><br>
+          • Filas con fecha parseable: <b>${stats.rowsWithDate ?? '—'}</b><br>
+          • Filas aceptadas como carrera: <b>${stats.rowsAccepted ?? 0}</b>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:#7c2d12">
+          <b>Primeros 240 caracteres del HTML:</b><br>
+          <code style="display:block;background:#fff;padding:6px 8px;border:1px solid #fca5a5;border-radius:6px;margin-top:4px;font-size:10.5px;line-height:1.4;color:#374151;word-break:break-all">${preview || '(vacío)'}</code>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="_fccvShowRawHtml()" style="background:#dc2626;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px">🧪 Ver HTML recibido</button>
+          <button onclick="_fccvSync()" style="background:#fff;color:#7c2d12;border:1px solid #fca5a5;border-radius:6px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px">🔄 Reintentar (caché limpia)</button>
+          <a href="${fccvUrl}" target="_blank" style="background:#fff;color:#7c2d12;border:1px solid #fca5a5;border-radius:6px;padding:6px 12px;font-weight:700;text-decoration:none;font-size:12px">🌐 Abrir FCCV en nueva pestaña</a>
+        </div>
+        <p class="small" style="margin-top:8px;color:#7c2d12;font-size:11px">Si el HTML recibido empieza con "&lt;html&gt;" y tiene cabecera FCCV pero 0 filas aceptadas, ha cambiado la estructura. Si empieza con un error (403, rate limit, página de proxy), es problema del proxy CORS.</p>
       </div>`;
       if(status) status.textContent = '';
       return;
