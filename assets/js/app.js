@@ -4629,12 +4629,19 @@ async function _sbLoadHistory(){
       inscritos: Array.isArray(extra.inscritos) ? extra.inscritos : [],
       riders: (race.race_results||[]).sort((a,b)=>a.pos-b.pos).map(r=>{
         const normName=normalizeRiderName(r.name);
+        // Si la carrera está marcada como Challenge, calculamos en el momento
+        // los puntos correspondientes a esta posición. Es un campo DERIVADO
+        // (no se persiste en Supabase), así el sistema funciona sin alterar
+        // el esquema de la tabla race_results.
+        const isChallenge = !!extra.challengeCV;
+        const challengePoints = (isChallenge && r.pos > 0) ? calcularPuntosChallenge(r.pos) : null;
         return {
           id:r.id, raceId:race.id, // ← claves para poder borrar la fila individual
           pos:r.pos, bib:r.bib, name:normName, team:r.team, cat:r.cat,
           time:normalizeTimeStr(r.time),
           gapSeconds:r.gap_seconds, totalSeconds:r.total_seconds,
-          region:(extra.regions||{})[r.name]||(extra.regions||{})[normName]||''
+          region:(extra.regions||{})[r.name]||(extra.regions||{})[normName]||'',
+          challengePoints
         };
       })
     };
@@ -5851,6 +5858,48 @@ function _titleCase(s){if(!s)return'';return cleanSpaces(s).toLowerCase().replac
    2. Comma:  "BELTRAN SULLER, ALEX"  → "Beltran, Alex"
    3. Mixed:  "Ivan Sanchez Toral"    → "Sanchez, Ivan"  (first word = nombre)
    4. AllCaps:"SANCHEZ TORAL IVAN"    → "Sanchez, Ivan"  (last word = nombre, first = apellido) */
+// ═══════════════════════════════════════════════════════════════════════════
+// SISTEMA DE PUNTUACIÓN OFICIAL DE LA CHALLENGE (Comunitat Valenciana)
+// ─────────────────────────────────────────────────────────────────────────
+// Devuelve los puntos correspondientes a un puesto de llegada en una prueba
+// que pertenezca a la Challenge. Distribución:
+//   1º → 45 · 2º → 42 · 3º → 40 · 4º → 38 · 5º → 36
+//   6º al 39º → 35, 34, 33, ... 2 (baja 1 punto por puesto)
+//   40º o peor → 1 punto
+//   Posiciones inválidas (null, 0, DNF, no numéricas) → 0
+// ═══════════════════════════════════════════════════════════════════════════
+function calcularPuntosChallenge(posicion){
+  const p = parseInt(posicion);
+  if(!Number.isFinite(p) || p <= 0) return 0;
+  if(p === 1) return 45;
+  if(p === 2) return 42;
+  if(p === 3) return 40;
+  if(p === 4) return 38;
+  if(p === 5) return 36;
+  if(p >= 6 && p <= 39) return 41 - p;   // 6→35, 7→34, …, 39→2
+  return 1;                              // 40º o más
+}
+
+// Devuelve puntos Challenge para un rider concreto dentro de una carrera.
+// • null  → la carrera NO es de la Challenge (no aplica el sistema).
+// • 0     → el corredor no tiene puesto válido (DNF, posición sin terminar).
+// • N>0   → puntos calculados según la tabla.
+function _riderChallengePoints(race, rider){
+  if(!race || !race.challengeCV) return null;
+  if(!rider || !rider.pos || rider.pos <= 0) return 0;
+  return calcularPuntosChallenge(rider.pos);
+}
+
+// Atajo: enriquece TODOS los riders de una carrera con su campo
+// `challengePoints` (o null si la carrera no es Challenge). Útil al cargar.
+function _enrichRidersWithChallengePoints(race){
+  if(!race || !Array.isArray(race.riders)) return;
+  const isChallenge = !!race.challengeCV;
+  race.riders.forEach(r => {
+    r.challengePoints = isChallenge && r.pos > 0 ? calcularPuntosChallenge(r.pos) : null;
+  });
+}
+
 function normalizeRiderName(rawName, nombre, apellido1, apellido2){
   // ── LIMPIEZA DEFENSIVA: eliminar sufijos de posición/categoría que a veces
   // se quedan pegados al nombre cuando el CSV o PDF mezcla columnas. Patrones:
