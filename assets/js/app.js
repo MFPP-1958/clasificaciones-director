@@ -5900,6 +5900,148 @@ function _enrichRidersWithChallengePoints(race){
   });
 }
 
+// ─── DESEMPATE OFICIAL DE LA CHALLENGE ─────────────────────────────────────
+// Cuando dos corredores acaban con los MISMOS puntos al final de la
+// temporada, se aplican los siguientes criterios EN ORDEN:
+//   1) Mayor número de primeros puestos.
+//   2) Si siguen empatados → mayor número de segundos puestos.
+//   3) Si siguen empatados → mayor número de terceros puestos.
+//   4) Y así sucesivamente hasta el último puesto.
+//   5) Si TODO está empatado → mejor posición en la ÚLTIMA prueba puntuable
+//      de la Challenge (el que llegó por delante en la última carrera gana).
+//   6) Si tampoco hubo última carrera o ambos faltaron, quedan empatados.
+//
+// Devuelve un número negativo si "a" debe ir ANTES que "b" en la
+// clasificación (es decir, "a" rinde mejor). Pensado para usar en .sort().
+function _compararChallengeRiders(a, b){
+  // 1) Puntos totales (criterio principal)
+  if((a.totalPoints||0) !== (b.totalPoints||0)) return (b.totalPoints||0) - (a.totalPoints||0);
+
+  // 2..N) Conteo de puestos lexicográfico: primero los 1ºs, luego 2ºs, ...
+  const maxPos = Math.max(
+    0,
+    ...Object.keys(a.positionCounts||{}).map(Number),
+    ...Object.keys(b.positionCounts||{}).map(Number)
+  );
+  for(let p = 1; p <= maxPos; p++){
+    const cA = (a.positionCounts||{})[p] || 0;
+    const cB = (b.positionCounts||{})[p] || 0;
+    if(cA !== cB) return cB - cA;   // más puestos del valor p → mejor clasificación
+  }
+
+  // N+1) Mejor posición en la ÚLTIMA carrera puntuable. Si uno no
+  // participó (null), pierde el desempate (se trata como "peor que cualquier").
+  const lpA = (a.lastChallengeRacePos == null) ? Infinity : a.lastChallengeRacePos;
+  const lpB = (b.lastChallengeRacePos == null) ? Infinity : b.lastChallengeRacePos;
+  if(lpA !== lpB) return lpA - lpB;
+
+  return 0; // empate total irresoluble
+}
+
+// Devuelve una frase corta explicando POR QUÉ "a" gana el desempate a "b".
+// Útil para mostrar el motivo en la UI junto al ranking.
+function _explicarDesempateChallenge(a, b){
+  if((a.totalPoints||0) !== (b.totalPoints||0)){
+    return 'puntos distintos (no hay desempate)';
+  }
+  const maxPos = Math.max(
+    0,
+    ...Object.keys(a.positionCounts||{}).map(Number),
+    ...Object.keys(b.positionCounts||{}).map(Number)
+  );
+  for(let p = 1; p <= maxPos; p++){
+    const cA = (a.positionCounts||{})[p] || 0;
+    const cB = (b.positionCounts||{})[p] || 0;
+    if(cA !== cB){
+      const ganador = cA > cB ? 'a' : 'b';
+      return `${ganador}: más puestos de ${p}º (${Math.max(cA,cB)} vs ${Math.min(cA,cB)})`;
+    }
+  }
+  if((a.lastChallengeRacePos||Infinity) !== (b.lastChallengeRacePos||Infinity)){
+    const lpA = a.lastChallengeRacePos == null ? '—' : a.lastChallengeRacePos + 'º';
+    const lpB = b.lastChallengeRacePos == null ? '—' : b.lastChallengeRacePos + 'º';
+    return `mejor posición en la última prueba puntuable (${lpA} vs ${lpB})`;
+  }
+  return 'empate técnico (sin criterio de desempate aplicable)';
+}
+
+// Construye la clasificación general de la Challenge a partir de un histórico
+// (típicamente `_cachedHistory`). Aplica el desempate completo y devuelve un
+// array ordenado de ganador a último. Cada entrada incluye los detalles
+// necesarios para enseñar al usuario el porqué del orden.
+//
+// Si pasas `optYear` (p.ej. "2026") se filtran solo las carreras de ese año.
+function buildChallengeStandings(history, optYear){
+  const races = (history||[]).filter(r => r && r.challengeCV);
+  if(!races.length) return { standings: [], lastRace: null, totalRaces: 0 };
+
+  // Filtro por año opcional
+  const filtered = optYear
+    ? races.filter(r => ((_parseSpanishDate(r.raceDate)||'').slice(0,4)) === String(optYear))
+    : races;
+  if(!filtered.length) return { standings: [], lastRace: null, totalRaces: 0 };
+
+  // Última carrera Challenge (más reciente por fecha) para el desempate final
+  const sortedByDate = filtered.slice().sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate) || '0000-00-00';
+    const db = _parseSpanishDate(b.raceDate) || '0000-00-00';
+    return da.localeCompare(db);
+  });
+  const lastRace = sortedByDate[sortedByDate.length - 1];
+  const lastRacePosByRider = new Map();
+  (lastRace?.riders || []).forEach(r => {
+    if(r.pos > 0) lastRacePosByRider.set(normalizeForMatching(r.name), parseInt(r.pos));
+  });
+
+  // Agregación por corredor
+  const byRider = new Map();
+  filtered.forEach(race => {
+    (race.riders || []).forEach(r => {
+      if(!r.pos || r.pos <= 0) return;
+      const key = normalizeForMatching(r.name);
+      if(!key) return;
+      const pts = calcularPuntosChallenge(r.pos);
+      if(!byRider.has(key)){
+        byRider.set(key, {
+          key,
+          name: r.name,
+          team: r.team || '',
+          cat: r.cat || '',
+          totalPoints: 0,
+          positionCounts: {},
+          races: [],
+          lastChallengeRacePos: null
+        });
+      }
+      const e = byRider.get(key);
+      e.totalPoints += pts;
+      e.positionCounts[r.pos] = (e.positionCounts[r.pos] || 0) + 1;
+      e.races.push({
+        raceId: race.id, raceName: race.raceName, raceDate: race.raceDate,
+        localidad: race.localidad || '', pos: r.pos, points: pts
+      });
+      // Usar el displayName más informativo (más largo) y el equipo más reciente
+      if((r.name||'').length > (e.name||'').length) e.name = r.name;
+      if(r.team) e.team = r.team;
+      if(r.cat)  e.cat  = r.cat;
+    });
+  });
+
+  // Inyectar posición en la última carrera puntuable
+  byRider.forEach(e => {
+    e.lastChallengeRacePos = lastRacePosByRider.get(e.key) ?? null;
+  });
+
+  // Ordenar aplicando el desempate completo
+  const standings = Array.from(byRider.values()).sort(_compararChallengeRiders);
+
+  return {
+    standings,
+    lastRace: lastRace ? { id: lastRace.id, name: lastRace.raceName, date: lastRace.raceDate } : null,
+    totalRaces: filtered.length
+  };
+}
+
 function normalizeRiderName(rawName, nombre, apellido1, apellido2){
   // ── LIMPIEZA DEFENSIVA: eliminar sufijos de posición/categoría que a veces
   // se quedan pegados al nombre cuando el CSV o PDF mezcla columnas. Patrones:
