@@ -6151,6 +6151,28 @@ function _chgRender(){
     }
   }
 
+  // Lista de pruebas Challenge filtradas por año (orden cronológico ASC).
+  // Para mostrar una columna por prueba con los puntos exactos que sumó cada
+  // corredor en ella → así el director puede verificar a ojo que la suma
+  // total cuadra con la columna "Puntos".
+  const challengeRacesAll = (hist||[]).filter(r => r && r.challengeCV);
+  const filteredRaces = year
+    ? challengeRacesAll.filter(r => ((_parseSpanishDate(r.raceDate)||'').slice(0,4)) === String(year))
+    : challengeRacesAll;
+  filteredRaces.sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate) || '';
+    const db = _parseSpanishDate(b.raceDate) || '';
+    return da.localeCompare(db);
+  });
+  // Construir etiqueta corta y legible para cada prueba (fecha DD/MM +
+  // primera palabra de la localidad si está disponible).
+  const _raceShortLabel = (r) => {
+    const iso = _parseSpanishDate(r.raceDate)||'';
+    const dm = iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}` : (r.raceDate||'').slice(0,5);
+    const loc = (r.localidad||'').split(/\s+/)[0] || '';
+    return loc ? `${dm}<br><span style="font-size:9px;color:#92400e;font-weight:600">${escapeHtml(loc)}</span>` : dm;
+  };
+
   const rowsHtml = standings.map((s, idx) => {
     const rank = idx + 1;
     const mk = (myTeam||'').toLowerCase();
@@ -6163,6 +6185,15 @@ function _chgRender(){
       ? `<span style="background:#fde68a;color:#78350f;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;margin-left:6px" title="${escapeHtml(tieReasons.get(s.key))}">desempate</span>`
       : '';
     const rowBg = isMine ? '#dbeafe' : (rank<=3 ? '#fef3c7' : 'transparent');
+    // Mapa raceId → {points, pos} para mostrar lo que sumó esta persona en cada prueba
+    const racePtsMap = new Map();
+    s.races.forEach(r => racePtsMap.set(r.raceId, { points: r.points, pos: r.pos }));
+    const perRaceCells = filteredRaces.map(race => {
+      const e = racePtsMap.get(race.id);
+      if(!e) return `<td style="padding:6px 7px;text-align:center;color:#cbd5e1;font-size:11px" title="No participó / no terminó">—</td>`;
+      return `<td style="padding:6px 7px;text-align:center;font-weight:800;color:#7c2d12;font-size:13px" title="${escapeHtml(race.raceName||'')} · ${e.pos}º">${e.points}</td>`;
+    }).join('');
+
     return `<tr style="background:${rowBg};border-bottom:1px solid #f3f4f6">
       <td style="padding:9px 12px;text-align:center;font-weight:900;font-size:15px;color:#0b2f6b;width:54px">${medal||rank+'º'}</td>
       <td style="padding:9px 12px">
@@ -6170,7 +6201,8 @@ function _chgRender(){
         ${tieChip}
         <div style="font-size:11px;color:#6b7280;margin-top:2px">${escapeHtml(s.cat||'—')} · ${escapeHtml(s.team||'(sin equipo)')}</div>
       </td>
-      <td style="padding:9px 12px;text-align:center;font-size:20px;font-weight:900;color:#7c2d12">${s.totalPoints}</td>
+      <td style="padding:9px 12px;text-align:center;font-size:20px;font-weight:900;color:#7c2d12;background:#fffbeb">${s.totalPoints}</td>
+      ${perRaceCells}
       <td style="padding:9px 12px;text-align:center;color:${wins?'#15803d':'#9ca3af'};font-weight:800">${wins||'—'}</td>
       <td style="padding:9px 12px;text-align:center;color:${podiums?'#b45309':'#9ca3af'};font-weight:800">${podiums||'—'}</td>
       <td style="padding:9px 12px;text-align:center;font-weight:700">${top10||'—'}</td>
@@ -6179,13 +6211,19 @@ function _chgRender(){
     </tr>`;
   }).join('');
 
+  // Cabeceras de las pruebas
+  const raceHeadersHtml = filteredRaces.map(r => `
+    <th style="padding:8px 6px;text-align:center;font-size:11px;text-transform:none;letter-spacing:0;font-weight:800;background:#fde68a;color:#78350f;min-width:54px" title="${escapeHtml(r.raceName||'')} · ${escapeHtml(r.localidad||'')}">${_raceShortLabel(r)}</th>
+  `).join('');
+
   rankingBox.innerHTML = `
     <div style="overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb;background:#fff">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:#fef3c7;color:#78350f">
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px">#</th>
           <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Ciclista · Categoría · Equipo</th>
-          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Puntos</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px;background:#fde68a">Total</th>
+          ${raceHeadersHtml}
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px" title="Victorias">🥇</th>
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px" title="Podios (1º+2º+3º)">🥉</th>
           <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Top 10</th>
@@ -6331,6 +6369,23 @@ function _chgOpenPrintReport(){
   }
   if(!standings.length){ alert('No hay corredores en el ranking actual para imprimir.'); return; }
 
+  // Lista de pruebas Challenge (igual que en el render en pantalla)
+  const challengeRacesAll = (hist||[]).filter(r => r && r.challengeCV);
+  const filteredRaces = year
+    ? challengeRacesAll.filter(r => ((_parseSpanishDate(r.raceDate)||'').slice(0,4)) === String(year))
+    : challengeRacesAll;
+  filteredRaces.sort((a,b)=>{
+    const da = _parseSpanishDate(a.raceDate)||'';
+    const db = _parseSpanishDate(b.raceDate)||'';
+    return da.localeCompare(db);
+  });
+  const _shortLabelPrint = (r) => {
+    const iso = _parseSpanishDate(r.raceDate)||'';
+    const dm = iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}` : (r.raceDate||'').slice(0,5);
+    const loc = (r.localidad||'').split(/\s+/)[0] || '';
+    return loc ? `${dm}<br><span style="font-size:9px;font-weight:600">${escapeHtml(loc)}</span>` : dm;
+  };
+
   const pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
   const dateStr = new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
 
@@ -6340,12 +6395,21 @@ function _chgOpenPrintReport(){
     const wins = s.positionCounts[1]||0;
     const podiums = (s.positionCounts[1]||0)+(s.positionCounts[2]||0)+(s.positionCounts[3]||0);
     const top10 = Object.entries(s.positionCounts).reduce((sum,[p,c])=>sum+(parseInt(p)<=10?c:0),0);
+    const racePtsMap = new Map();
+    s.races.forEach(r => racePtsMap.set(r.raceId, r.points));
+    const perRaceCells = filteredRaces.map(race => {
+      const pts = racePtsMap.get(race.id);
+      return pts == null
+        ? `<td style="text-align:center;color:#cbd5e1;font-size:11px">—</td>`
+        : `<td style="text-align:center;font-weight:800;color:#7c2d12;font-size:12.5px">${pts}</td>`;
+    }).join('');
     return `<tr>
       <td style="text-align:center;font-weight:800">${medal||rank+'º'}</td>
       <td style="font-weight:700">${escapeHtml(_evolNormName(s.name))}</td>
       <td style="color:#475569;font-size:11px">${escapeHtml(s.cat||'—')}</td>
       <td style="color:#475569;font-size:11px">${escapeHtml(s.team||'—')}</td>
-      <td style="text-align:center;font-weight:800;color:#7c2d12;font-size:14px">${s.totalPoints}</td>
+      <td style="text-align:center;font-weight:800;color:#7c2d12;font-size:14px;background:#fffbeb">${s.totalPoints}</td>
+      ${perRaceCells}
       <td style="text-align:center">${wins||'—'}</td>
       <td style="text-align:center">${podiums||'—'}</td>
       <td style="text-align:center">${top10||'—'}</td>
@@ -6353,10 +6417,14 @@ function _chgOpenPrintReport(){
     </tr>`;
   }).join('');
 
+  const raceHeadersPrint = filteredRaces.map(r =>
+    `<th style="text-align:center;background:#fde68a;min-width:48px" title="${escapeHtml(r.raceName||'')}">${_shortLabelPrint(r)}</th>`
+  ).join('');
+
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>Clasificación Challenge ${escapeHtml(year||'')}</title>
     <style>
-      @page { size:A4 portrait; margin:14mm }
+      @page { size:A4 landscape; margin:12mm }
       *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
       body{font-family:Arial,sans-serif;color:#111;margin:0;padding:24px;max-width:1000px;margin:0 auto}
       .hdr{background:linear-gradient(135deg,#f59e0b,#7c2d12);color:#fff;padding:22px 26px;border-radius:12px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;gap:20px}
@@ -6389,7 +6457,8 @@ function _chgOpenPrintReport(){
         <th>Ciclista</th>
         <th>Cat.</th>
         <th>Equipo</th>
-        <th style="text-align:center">Puntos</th>
+        <th style="text-align:center;background:#fde68a">Total</th>
+        ${raceHeadersPrint}
         <th style="text-align:center">🥇</th>
         <th style="text-align:center">🥉</th>
         <th style="text-align:center">Top 10</th>
