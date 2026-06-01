@@ -6048,8 +6048,20 @@ function buildChallengeStandings(history, optYear){
 // VISTA "🏆 CHALLENGE CV" — Render del ranking, filtros y modales
 // ═══════════════════════════════════════════════════════════════════════════
 
-function _chgInit(){
-  // Poblar select de años con los que aparecen en el histórico Challenge
+async function _chgInit(){
+  // Pintar mensaje de "cargando" mientras esperamos al histórico (si no está
+  // ya en caché). Sin esto, abrir la vista directa desde el menú dejaba la
+  // pantalla vacía hasta que el usuario tocara los filtros.
+  const rankingBox = document.getElementById('chgRanking');
+  if(rankingBox && !rankingBox.innerHTML.trim()){
+    rankingBox.innerHTML = `<div style="padding:30px;text-align:center;color:#0369a1">
+      ⏳ Cargando histórico de pruebas Challenge…
+    </div>`;
+  }
+  // Asegurar histórico cargado (igual que hace _ipInit)
+  if(typeof _ensureHistory === 'function'){
+    try { await _ensureHistory(); } catch(e){ console.warn('[chg]', e); }
+  }
   const hist = _cachedHistory || [];
   const years = new Set();
   hist.forEach(r => {
