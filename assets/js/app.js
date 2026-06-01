@@ -684,6 +684,7 @@ function showView(viewId){
       if(viewId==='view-inicio') renderInicio();
       if(viewId==='view-calendario') { if(typeof _calInit==='function') _calInit(); if(typeof _gfApplyDefaultsToView==='function') _gfApplyDefaultsToView('view-calendario'); }
       if(viewId==='view-informe-plantilla') { if(typeof _ipInit==='function') _ipInit(); }
+      if(viewId==='view-challenge') { if(typeof _chgInit==='function') _chgInit(); }
       if(viewId==='view-equipos-ccaa') { if(typeof _eqCcaaInit==='function') _eqCcaaInit(); }
       if(viewId==='view-ciclistas-cat') { if(typeof _riderCatInit==='function') _riderCatInit(); }
       if(viewId==='view-historial') renderHistory();
