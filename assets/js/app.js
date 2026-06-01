@@ -6424,19 +6424,29 @@ function _chgOpenPrintReport(){
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>Clasificación Challenge ${escapeHtml(year||'')}</title>
     <style>
-      @page { size:A4 landscape; margin:12mm }
+      /* Márgenes físicos del papel: 14mm arriba/abajo y 12mm lados. Esto
+         se respeta en TODAS las páginas (no solo la primera) siempre que
+         el usuario tenga "Márgenes: Predeterminado" en el diálogo de
+         impresión, no "Ninguno". */
+      @page { size:A4 landscape; margin:14mm 12mm }
       *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-      body{font-family:Arial,sans-serif;color:#111;margin:0;padding:24px;max-width:1000px;margin:0 auto}
-      .hdr{background:linear-gradient(135deg,#f59e0b,#7c2d12);color:#fff;padding:22px 26px;border-radius:12px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;gap:20px}
-      .hdr .ttl{font-size:24px;font-weight:900}
-      .hdr .sub{font-size:13px;opacity:.9;margin-top:4px}
-      .hdr img{height:56px;width:auto;background:#fff;border-radius:8px;padding:6px}
+      /* Body sin padding/margin propios — dejamos que @page gestione los 4
+         márgenes para que se mantengan idénticos en cada página. */
+      html, body{font-family:Arial,sans-serif;color:#111;margin:0!important;padding:0!important;background:#fff}
+      .hdr{background:linear-gradient(135deg,#f59e0b,#7c2d12);color:#fff;padding:18px 22px;border-radius:12px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+      .hdr .ttl{font-size:22px;font-weight:900}
+      .hdr .sub{font-size:12.5px;opacity:.9;margin-top:4px}
+      .hdr img{height:52px;width:auto;background:#fff;border-radius:8px;padding:6px}
       table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
       thead tr{background:#fef3c7;color:#7c2d12}
+      /* Repetir cabeceras de la tabla en cada página + evitar partir filas
+         por la mitad cuando hay salto de página. */
+      thead{display:table-header-group}
+      tr{page-break-inside:avoid}
       th{padding:8px 9px;text-align:left;font-size:10px;text-transform:uppercase;font-weight:800;letter-spacing:.4px}
       td{padding:7px 9px;border-bottom:1px solid #f3f4f6}
       tr:nth-child(-n+3) td{background:#fffbeb}
-      .toolbar{position:fixed;top:14px;right:14px}
+      .toolbar{position:fixed;top:14px;right:14px;z-index:10}
       .toolbar button{background:#dc2626;color:#fff;border:0;padding:9px 16px;border-radius:9px;font-weight:800;cursor:pointer;margin-left:6px}
       .toolbar button.close{background:#6b7280}
       @media print{.toolbar{display:none}}
