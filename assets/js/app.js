@@ -3059,7 +3059,9 @@ async function _fccvSync(){
           • Filas con celdas TD: <b>${stats.rowsWithTd ?? '—'}</b><br>
           • Filas con ≥3 celdas: <b>${stats.rowsWith3plus ?? '—'}</b><br>
           • Filas con fecha parseable: <b>${stats.rowsWithDate ?? '—'}</b><br>
-          • Filas aceptadas como carrera: <b>${stats.rowsAccepted ?? 0}</b>
+          • Filas con nombre válido: <b>${stats.rowsWithValidName ?? '—'}</b><br>
+          • Filas aceptadas como carrera: <b>${stats.rowsAccepted ?? 0}</b><br>
+          ${stats.samples && stats.samples.length ? `<br><b>Muestras de filas rechazadas:</b><br><pre style="background:#fff;padding:6px;border:1px solid #fca5a5;border-radius:4px;max-height:200px;overflow:auto;font-size:10px;line-height:1.4">${escapeHtml(JSON.stringify(stats.samples, null, 2))}</pre>` : ''}
         </div>
         <div style="margin-top:10px;font-size:11px;color:#7c2d12">
           <b>Primeros 240 caracteres del HTML:</b><br>
