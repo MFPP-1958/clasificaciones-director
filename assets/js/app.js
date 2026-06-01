@@ -6424,15 +6424,20 @@ function _chgOpenPrintReport(){
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>Clasificación Challenge ${escapeHtml(year||'')}</title>
     <style>
-      /* Márgenes físicos del papel: 14mm arriba/abajo y 12mm lados. Esto
-         se respeta en TODAS las páginas (no solo la primera) siempre que
-         el usuario tenga "Márgenes: Predeterminado" en el diálogo de
-         impresión, no "Ninguno". */
-      @page { size:A4 landscape; margin:14mm 12mm }
+      /* @page margin:0 → quitamos el margen variable del navegador. El
+         margen real lo aplicamos nosotros con padding en .page-wrap +
+         box-decoration-break:clone para que se REPITA en cada página
+         fragmentada. Así no depende de lo que el usuario seleccione en
+         el diálogo de impresión (Predeterminado/Ninguno/Personalizado). */
+      @page { size:A4 landscape; margin:0 }
       *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-      /* Body sin padding/margin propios — dejamos que @page gestione los 4
-         márgenes para que se mantengan idénticos en cada página. */
       html, body{font-family:Arial,sans-serif;color:#111;margin:0!important;padding:0!important;background:#fff}
+      .page-wrap{
+        padding:14mm 12mm;
+        box-sizing:border-box;
+        -webkit-box-decoration-break:clone;
+        box-decoration-break:clone;
+      }
       .hdr{background:linear-gradient(135deg,#f59e0b,#7c2d12);color:#fff;padding:18px 22px;border-radius:12px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:20px}
       .hdr .ttl{font-size:22px;font-weight:900}
       .hdr .sub{font-size:12.5px;opacity:.9;margin-top:4px}
@@ -6453,6 +6458,7 @@ function _chgOpenPrintReport(){
     </style>
   </head><body>
     <div class="toolbar"><button onclick="window.print()">🖨️ Imprimir</button><button class="close" onclick="window.close()">✕</button></div>
+    <div class="page-wrap">
     <div class="hdr">
       ${pdfLogoSrc?`<img src="${pdfLogoSrc}" alt="MFPP">`:''}
       <div style="flex:1">
@@ -6478,6 +6484,7 @@ function _chgOpenPrintReport(){
     </table>
     ${built.lastRace?`<p style="margin-top:14px;font-size:11px;color:#6b7280">Última prueba puntuable usada para el desempate: <b>${escapeHtml(built.lastRace.name||'')}</b> (${escapeHtml(built.lastRace.date||'')}).</p>`:''}
     <p style="margin-top:8px;font-size:11px;color:#6b7280;text-align:center">MFPP Cycling Specialist · Sistema oficial de puntuación FCCV</p>
+    </div>
   </body></html>`);
   w.document.close();
 }
