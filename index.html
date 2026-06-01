@@ -131,6 +131,7 @@
 
     <div class="nav-section" data-section="resumen">
       <button class="nav-btn" data-view="view-resumen" data-label="Resumen Temporada" onclick="showView('view-resumen')"><span class="nav-icon">🏅</span><span class="nav-label"> Resumen Temporada</span></button>
+      <button class="nav-btn" data-view="view-challenge" data-label="Challenge CV" onclick="showView('view-challenge')"><span class="nav-icon">🏆</span><span class="nav-label"> Challenge CV</span></button>
     </div>
 
     <div class="nav-section" data-section="gestion">
@@ -2828,6 +2829,74 @@
         </div>
 
         <div id="ipPreview"></div>
+      </section>
+    </div>
+
+    <div id="view-challenge" class="spa-view">
+      <section class="panel" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-left:6px solid #f59e0b">
+        <div style="display:flex;align-items:center;gap:14px;padding:6px 0">
+          <div style="font-size:34px">🏆</div>
+          <div>
+            <div style="font-size:22px;font-weight:900;color:#7c2d12">Challenge Comunitat Valenciana</div>
+            <div style="font-size:13px;color:#92400e;margin-top:2px">Clasificación general acumulada · Sistema oficial de puntuación FCCV</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title" style="flex-wrap:wrap;gap:10px">
+          <h2 style="margin:0;color:#7c2d12">📊 Clasificación general</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <label style="font-size:12px;color:#475569;font-weight:700;display:flex;align-items:center;gap:6px">
+              📅 Año
+              <select id="chgYearSelect" onchange="_chgRender()" style="padding:6px 10px;border-radius:8px;border:1px solid #d0d5dd;background:#fff;font-weight:700">
+                <option value="">(todos)</option>
+              </select>
+            </label>
+            <label style="font-size:12px;color:#475569;font-weight:700;display:flex;align-items:center;gap:6px">
+              🎽 Categoría
+              <select id="chgCatSelect" onchange="_chgRender()" style="padding:6px 10px;border-radius:8px;border:1px solid #d0d5dd;background:#fff;font-weight:700">
+                <option value="">(todas)</option>
+              </select>
+            </label>
+            <label style="font-size:12px;color:#475569;font-weight:700;display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="chgOnlyMyTeam" onchange="_chgRender()" style="accent-color:#f59e0b">
+              Solo mi equipo
+            </label>
+            <button class="btn" onclick="_chgOpenPrintReport()" style="background:#dc2626;color:#fff;border:0;font-weight:800;padding:8px 14px">🖨️ Imprimir / PDF</button>
+          </div>
+        </div>
+
+        <details class="sim-help">
+          <summary>❓ ¿Cómo funciona la Challenge y cómo se calculan los puntos?</summary>
+          <div class="sim-help-body">
+            <h4>🏆 ¿Qué es la Challenge Comunitat Valenciana?</h4>
+            <p>Es la clasificación oficial de la FCCV que va acumulando puntos de las pruebas que se marcan como puntuables a lo largo de la temporada. Cuando creas o editas una carrera, marcas el check <b>"Challenge CV"</b> para que cuente. Solo se suman los puntos de las pruebas marcadas.</p>
+
+            <h4>📌 Sistema oficial de puntuación</h4>
+            <ul>
+              <li><b>1º</b> → 45 puntos · <b>2º</b> → 42 · <b>3º</b> → 40 · <b>4º</b> → 38 · <b>5º</b> → 36</li>
+              <li>Del <b>6º al 39º</b> → baja 1 punto por puesto (6º=35, 7º=34, ..., 39º=2)</li>
+              <li>Del <b>40º</b> en adelante → 1 punto fijo</li>
+              <li>DNF / no terminó → 0 puntos</li>
+            </ul>
+
+            <h4>⚖️ Criterio de desempate (en cascada)</h4>
+            <ol>
+              <li><b>Mismos puntos totales?</b> → mira el conteo de primeros puestos. Gana quien tenga más.</li>
+              <li><b>Mismo nº de 1ºs?</b> → mira los segundos. Y así sucesivamente.</li>
+              <li><b>TODO empatado?</b> → mejor posición en la <b>última prueba puntuable</b> de la Challenge.</li>
+              <li>Si tampoco así se rompe → empate técnico.</li>
+            </ol>
+            <p>La aplicación lo hace automáticamente. En el ranking verás una etiqueta <span style="background:#fde68a;color:#78350f;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">desempate</span> junto a los corredores que han necesitado uno de los criterios secundarios, indicando cuál se aplicó.</p>
+
+            <h4>🔍 Verificar el detalle de un corredor</h4>
+            <p>Haz click sobre el nombre de cualquier corredor para abrir un modal con TODAS las pruebas Challenge en las que ha sumado y los puntos exactos de cada una. Útil para validar el ranking si algo te chirría.</p>
+          </div>
+        </details>
+
+        <div id="chgKpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0"></div>
+        <div id="chgRanking"></div>
       </section>
     </div>
 

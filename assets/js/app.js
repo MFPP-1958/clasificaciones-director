@@ -115,7 +115,7 @@ if(document.readyState==='loading'){
 // ═══════════════════════════════════════════════════════════════════════════
 const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
 const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
-const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica','view-simulador'];
+const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-challenge','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica','view-simulador'];
 
 let _globalFilters = {
   year:     localStorage.getItem('gf_year')     || '',
@@ -549,6 +549,7 @@ function _gfTriggerCurrentViewRerender(){
     if(id==='view-historial'   && typeof renderHistory==='function')     renderHistory();
     if(id==='view-tactica'     && typeof renderTactica==='function')     renderTactica();
     if(id==='view-informe-plantilla' && typeof _ipInit==='function')     _ipInit();
+    if(id==='view-challenge'         && typeof _chgInit==='function')    _chgInit();
     if(id==='view-equipos-ccaa'      && typeof _eqCcaaInit==='function') _eqCcaaInit();
     if(id==='view-ciclistas-cat'     && typeof _riderCatInit==='function') _riderCatInit();
     if(id==='view-calendario'  && typeof _calRender==='function')        _calRender();
@@ -818,6 +819,7 @@ const ALL_VIEWS = [
   {id:'view-calendario',         icon:'📅', label:'Calendario'},
   {id:'view-informe-plantilla',  icon:'📋', label:'Informe de Plantilla'},
   {id:'view-resumen',            icon:'🏅', label:'Resumen Temporada'},
+  {id:'view-challenge',          icon:'🏆', label:'Challenge CV'},
   {id:'view-gestion',            icon:'⚙️', label:'Gestión'},
 ];
 const ROLES = ['SUPERADMIN','ADMIN','DIRECTOR','CICLISTA','LECTOR'];
@@ -6040,6 +6042,352 @@ function buildChallengeStandings(history, optYear){
     lastRace: lastRace ? { id: lastRace.id, name: lastRace.raceName, date: lastRace.raceDate } : null,
     totalRaces: filtered.length
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISTA "🏆 CHALLENGE CV" — Render del ranking, filtros y modales
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _chgInit(){
+  // Poblar select de años con los que aparecen en el histórico Challenge
+  const hist = _cachedHistory || [];
+  const years = new Set();
+  hist.forEach(r => {
+    if(!r || !r.challengeCV) return;
+    const y = (_parseSpanishDate(r.raceDate)||'').slice(0,4);
+    if(y) years.add(y);
+  });
+  const yearSel = document.getElementById('chgYearSelect');
+  if(yearSel){
+    const sortedYears = Array.from(years).sort().reverse();
+    const currentVal = yearSel.value;
+    yearSel.innerHTML = '<option value="">(todos)</option>' +
+      sortedYears.map(y => `<option value="${y}">${y}</option>`).join('');
+    // Mantener selección si sigue siendo válida; si no, seleccionar el año más reciente
+    if(currentVal && sortedYears.includes(currentVal)) yearSel.value = currentVal;
+    else if(sortedYears.length) yearSel.value = sortedYears[0];
+  }
+  // Poblar select de categorías con las que aparezcan en las pruebas Challenge
+  const cats = new Set();
+  hist.forEach(r => {
+    if(!r || !r.challengeCV) return;
+    (r.riders||[]).forEach(x => { if(x.cat) cats.add(x.cat); });
+  });
+  const catSel = document.getElementById('chgCatSelect');
+  if(catSel){
+    const currentVal = catSel.value;
+    catSel.innerHTML = '<option value="">(todas)</option>' +
+      Array.from(cats).sort().map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    if(currentVal && cats.has(currentVal)) catSel.value = currentVal;
+  }
+  _chgRender();
+}
+
+function _chgRender(){
+  const hist = _cachedHistory || [];
+  const year = document.getElementById('chgYearSelect')?.value || '';
+  const cat  = document.getElementById('chgCatSelect')?.value || '';
+  const onlyMine = !!document.getElementById('chgOnlyMyTeam')?.checked;
+
+  const built = buildChallengeStandings(hist, year || undefined);
+  let standings = built.standings;
+
+  // Filtros adicionales (cat / mi equipo) aplicados sobre el ranking ya ordenado
+  if(cat) standings = standings.filter(s => (s.cat||'') === cat);
+  if(onlyMine && myTeam){
+    const mk = (myTeam||'').toLowerCase();
+    standings = standings.filter(s => (s.team||'').toLowerCase() === mk);
+  }
+
+  // KPIs
+  const kpisHtml = _chgRenderKpis(built, standings);
+  const kpisBox = document.getElementById('chgKpis');
+  if(kpisBox) kpisBox.innerHTML = kpisHtml;
+
+  // Ranking
+  const rankingBox = document.getElementById('chgRanking');
+  if(!rankingBox) return;
+
+  if(!built.totalRaces){
+    rankingBox.innerHTML = `<div style="padding:40px 20px;text-align:center;color:#94a3b8">
+      <div style="font-size:42px;margin-bottom:10px">🏁</div>
+      <p style="font-size:15px;font-weight:700;color:#374151;margin:0">Aún no hay pruebas marcadas como Challenge en este año.</p>
+      <p style="font-size:12.5px;color:#6b7280;margin-top:6px">Activa el check "Challenge CV" en una prueba al crearla o editarla, y aparecerá aquí cuando se carguen sus resultados.</p>
+    </div>`;
+    return;
+  }
+  if(!standings.length){
+    rankingBox.innerHTML = `<div style="padding:30px 20px;text-align:center;color:#94a3b8">
+      <p>No hay corredores que cumplan los filtros seleccionados.</p>
+    </div>`;
+    return;
+  }
+
+  // Calcular motivos de desempate: para cada par de corredores consecutivos
+  // con los mismos puntos, llamamos a _explicarDesempateChallenge.
+  const tieReasons = new Map();
+  for(let i = 1; i < standings.length; i++){
+    const prev = standings[i-1];
+    const cur  = standings[i];
+    if((prev.totalPoints||0) === (cur.totalPoints||0)){
+      // El que va antes ha ganado el desempate; etiquetamos a AMBOS.
+      const reason = _explicarDesempateChallenge(prev, cur);
+      // El reason viene como "a: ...": lo limpiamos a una frase neutra.
+      tieReasons.set(prev.key, reason.replace(/^[ab]:\s*/, ''));
+      if(!tieReasons.has(cur.key)) tieReasons.set(cur.key, '—'); // el perdedor también lleva chip
+    }
+  }
+
+  const rowsHtml = standings.map((s, idx) => {
+    const rank = idx + 1;
+    const mk = (myTeam||'').toLowerCase();
+    const isMine = mk && (s.team||'').toLowerCase() === mk;
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+    const wins = s.positionCounts[1] || 0;
+    const podiums = (s.positionCounts[1]||0) + (s.positionCounts[2]||0) + (s.positionCounts[3]||0);
+    const top10 = Object.entries(s.positionCounts).reduce((sum,[p,c]) => sum + (parseInt(p)<=10 ? c : 0), 0);
+    const tieChip = tieReasons.has(s.key)
+      ? `<span style="background:#fde68a;color:#78350f;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;margin-left:6px" title="${escapeHtml(tieReasons.get(s.key))}">desempate</span>`
+      : '';
+    const rowBg = isMine ? '#dbeafe' : (rank<=3 ? '#fef3c7' : 'transparent');
+    return `<tr style="background:${rowBg};border-bottom:1px solid #f3f4f6">
+      <td style="padding:9px 12px;text-align:center;font-weight:900;font-size:15px;color:#0b2f6b;width:54px">${medal||rank+'º'}</td>
+      <td style="padding:9px 12px">
+        <a href="#" onclick="event.preventDefault();_chgOpenRiderDetail(${JSON.stringify(s.key).replace(/"/g,'&quot;')})" style="color:#0b2f6b;text-decoration:none;border-bottom:1.5px dashed #0b2f6b;cursor:pointer;font-weight:700">${isMine?'⭐ ':''}${escapeHtml(_evolNormName(s.name))}</a>
+        ${tieChip}
+        <div style="font-size:11px;color:#6b7280;margin-top:2px">${escapeHtml(s.cat||'—')} · ${escapeHtml(s.team||'(sin equipo)')}</div>
+      </td>
+      <td style="padding:9px 12px;text-align:center;font-size:20px;font-weight:900;color:#7c2d12">${s.totalPoints}</td>
+      <td style="padding:9px 12px;text-align:center;color:${wins?'#15803d':'#9ca3af'};font-weight:800">${wins||'—'}</td>
+      <td style="padding:9px 12px;text-align:center;color:${podiums?'#b45309':'#9ca3af'};font-weight:800">${podiums||'—'}</td>
+      <td style="padding:9px 12px;text-align:center;font-weight:700">${top10||'—'}</td>
+      <td style="padding:9px 12px;text-align:center;color:#475569">${s.races.length}</td>
+      <td style="padding:9px 12px;text-align:center;color:${s.lastChallengeRacePos==null?'#9ca3af':'#0b2f6b'};font-weight:700">${s.lastChallengeRacePos==null?'—':s.lastChallengeRacePos+'º'}</td>
+    </tr>`;
+  }).join('');
+
+  rankingBox.innerHTML = `
+    <div style="overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb;background:#fff">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#fef3c7;color:#78350f">
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px">#</th>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Ciclista · Categoría · Equipo</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Puntos</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px" title="Victorias">🥇</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px" title="Podios (1º+2º+3º)">🥉</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Top 10</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px">Pruebas</th>
+          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px" title="Posición en la última prueba Challenge">Última</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+    ${built.lastRace ? `<p class="small" style="margin-top:10px;color:#6b7280">📍 Última prueba puntuable: <b>${escapeHtml(built.lastRace.name||'')}</b> (${escapeHtml(built.lastRace.date||'')}) · Usada como criterio final de desempate.</p>` : ''}
+    <p class="small" style="margin-top:6px;color:#6b7280">💡 Pulsa el nombre de un corredor para ver TODAS sus pruebas Challenge y los puntos exactos de cada una.</p>
+  `;
+}
+
+function _chgRenderKpis(built, filteredStandings){
+  const totalRiders = filteredStandings.length;
+  const totalRaces = built.totalRaces;
+  const leader = filteredStandings[0];
+  const totalPoints = filteredStandings.reduce((s,r)=>s+(r.totalPoints||0), 0);
+  // Métricas de mi equipo
+  const mk = (myTeam||'').toLowerCase();
+  const mineRiders = mk ? filteredStandings.filter(r => (r.team||'').toLowerCase() === mk) : [];
+  const minePoints = mineRiders.reduce((s,r)=>s+(r.totalPoints||0), 0);
+  return `
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:900;color:#7c2d12">${totalRaces}</div>
+      <div style="font-size:10px;color:#7c2d12;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Pruebas Challenge</div>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:900;color:#7c2d12">${totalRiders}</div>
+      <div style="font-size:10px;color:#7c2d12;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Corredores con puntos</div>
+    </div>
+    ${leader ? `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:14px;font-weight:900;color:#7c2d12">🥇 ${escapeHtml(_evolNormName(leader.name).split(',')[0]||leader.name)}</div>
+      <div style="font-size:18px;font-weight:900;color:#7c2d12;margin-top:2px">${leader.totalPoints} pts</div>
+      <div style="font-size:10px;color:#7c2d12;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Líder actual</div>
+    </div>` : ''}
+    ${mineRiders.length ? `<div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:900;color:#1e3a8a">${minePoints}</div>
+      <div style="font-size:10px;color:#1e3a8a;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Puntos de ${escapeHtml(myTeam||'mi equipo')}</div>
+      <div class="small" style="margin-top:2px;color:#1e3a8a">${mineRiders.length} corredor(es) sumando</div>
+    </div>` : ''}
+  `;
+}
+
+// Modal con el desglose prueba a prueba de un corredor concreto
+function _chgOpenRiderDetail(riderKey){
+  try {
+    if(!riderKey){ alert('Corredor no válido.'); return; }
+    const hist = _cachedHistory || [];
+    const year = document.getElementById('chgYearSelect')?.value || '';
+    const built = buildChallengeStandings(hist, year || undefined);
+    const rider = built.standings.find(s => s.key === riderKey);
+    if(!rider){ alert('No se ha podido encontrar el corredor.'); return; }
+
+    const old = document.getElementById('chgDetailOverlay');
+    if(old) old.remove();
+
+    // Ordenar las carreras del corredor DESC por fecha
+    const racesSorted = rider.races.slice().sort((a,b)=>{
+      const da = _parseSpanishDate(a.raceDate)||'';
+      const db = _parseSpanishDate(b.raceDate)||'';
+      return db.localeCompare(da);
+    });
+
+    const colorPos = (p) => p<=3?'#15803d' : p<=10?'#0b2f6b' : p<=20?'#d97706' : '#b91c1c';
+    const podiumIcon = (p) => p===1?'🥇 ':p===2?'🥈 ':p===3?'🥉 ':'';
+
+    const rowsHtml = racesSorted.map((r,i)=>`
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:7px 9px;text-align:center;color:#6b7280;font-size:11px">${i+1}</td>
+        <td style="padding:7px 9px;color:#475569;white-space:nowrap;font-size:11.5px">${escapeHtml(r.raceDate||'—')}</td>
+        <td style="padding:7px 9px;font-weight:700;color:#0b2f6b">${escapeHtml(r.raceName||'')}</td>
+        <td style="padding:7px 9px;color:#475569;font-size:11.5px">${escapeHtml(r.localidad||'—')}</td>
+        <td style="padding:7px 9px;text-align:center;font-weight:900;font-size:14px;color:${colorPos(r.pos)}">${podiumIcon(r.pos)}${r.pos}º</td>
+        <td style="padding:7px 9px;text-align:center;font-weight:900;font-size:15px;color:#7c2d12">+${r.points}</td>
+      </tr>`).join('');
+
+    const wins = rider.positionCounts[1] || 0;
+    const podiums = (rider.positionCounts[1]||0)+(rider.positionCounts[2]||0)+(rider.positionCounts[3]||0);
+    const top10 = Object.entries(rider.positionCounts).reduce((sum,[p,c])=>sum+(parseInt(p)<=10?c:0), 0);
+    const pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'chgDetailOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:18px;overflow:auto';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;max-width:920px;width:100%;max-height:94vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;z-index:2">
+          <div style="display:flex;align-items:center;gap:14px">
+            ${pdfLogoSrc ? `<img src="${pdfLogoSrc}" style="height:42px;width:auto" alt="MFPP">` : ''}
+            <div>
+              <h2 style="margin:0;font-size:18px;color:#0b2f6b">🏆 ${escapeHtml(_evolNormName(rider.name))}</h2>
+              <div style="font-size:12px;color:#475569;margin-top:2px">${escapeHtml(rider.cat||'—')} · ${escapeHtml(rider.team||'(sin equipo)')}${year?' · '+escapeHtml(year):''}</div>
+            </div>
+          </div>
+          <button class="btn light" onclick="document.getElementById('chgDetailOverlay').remove()">✕ Cerrar</button>
+        </div>
+        <div style="padding:18px 22px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px">
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#7c2d12">${rider.totalPoints}</div><div style="font-size:10px;color:#7c2d12;text-transform:uppercase;font-weight:700">Puntos</div></div>
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#15803d">${wins}</div><div style="font-size:10px;color:#475569;text-transform:uppercase;font-weight:700">🥇 Victorias</div></div>
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#b45309">${podiums}</div><div style="font-size:10px;color:#475569;text-transform:uppercase;font-weight:700">🥉 Podios</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${top10}</div><div style="font-size:10px;color:#475569;text-transform:uppercase;font-weight:700">Top 10</div></div>
+            <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:#0b2f6b">${rider.races.length}</div><div style="font-size:10px;color:#475569;text-transform:uppercase;font-weight:700">Pruebas</div></div>
+          </div>
+          <h3 style="margin:10px 0 6px;color:#7c2d12;font-size:14px">📅 Detalle prueba a prueba</h3>
+          <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:12.5px;background:#fff">
+              <thead><tr style="background:#fef3c7">
+                <th style="padding:7px 9px;text-align:center;font-size:10px;color:#7c2d12;text-transform:uppercase">#</th>
+                <th style="padding:7px 9px;text-align:left;font-size:10px;color:#7c2d12;text-transform:uppercase">Fecha</th>
+                <th style="padding:7px 9px;text-align:left;font-size:10px;color:#7c2d12;text-transform:uppercase">Prueba</th>
+                <th style="padding:7px 9px;text-align:left;font-size:10px;color:#7c2d12;text-transform:uppercase">Localidad</th>
+                <th style="padding:7px 9px;text-align:center;font-size:10px;color:#7c2d12;text-transform:uppercase">Puesto</th>
+                <th style="padding:7px 9px;text-align:center;font-size:10px;color:#7c2d12;text-transform:uppercase">Puntos</th>
+              </tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (ev)=>{ if(ev.target===overlay) overlay.remove(); });
+  } catch(e){
+    console.warn('_chgOpenRiderDetail', e);
+    alert('Error al abrir el detalle: '+(e.message||e));
+  }
+}
+
+// Imprimir / PDF del ranking completo (versión imprimible en ventana nueva)
+function _chgOpenPrintReport(){
+  const hist = _cachedHistory || [];
+  const year = document.getElementById('chgYearSelect')?.value || '';
+  const cat  = document.getElementById('chgCatSelect')?.value || '';
+  const onlyMine = !!document.getElementById('chgOnlyMyTeam')?.checked;
+  const built = buildChallengeStandings(hist, year || undefined);
+  let standings = built.standings;
+  if(cat) standings = standings.filter(s => (s.cat||'') === cat);
+  if(onlyMine && myTeam){
+    const mk = (myTeam||'').toLowerCase();
+    standings = standings.filter(s => (s.team||'').toLowerCase() === mk);
+  }
+  if(!standings.length){ alert('No hay corredores en el ranking actual para imprimir.'); return; }
+
+  const pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
+  const dateStr = new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+
+  const rowsHtml = standings.map((s,i) => {
+    const rank = i+1;
+    const medal = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
+    const wins = s.positionCounts[1]||0;
+    const podiums = (s.positionCounts[1]||0)+(s.positionCounts[2]||0)+(s.positionCounts[3]||0);
+    const top10 = Object.entries(s.positionCounts).reduce((sum,[p,c])=>sum+(parseInt(p)<=10?c:0),0);
+    return `<tr>
+      <td style="text-align:center;font-weight:800">${medal||rank+'º'}</td>
+      <td style="font-weight:700">${escapeHtml(_evolNormName(s.name))}</td>
+      <td style="color:#475569;font-size:11px">${escapeHtml(s.cat||'—')}</td>
+      <td style="color:#475569;font-size:11px">${escapeHtml(s.team||'—')}</td>
+      <td style="text-align:center;font-weight:800;color:#7c2d12;font-size:14px">${s.totalPoints}</td>
+      <td style="text-align:center">${wins||'—'}</td>
+      <td style="text-align:center">${podiums||'—'}</td>
+      <td style="text-align:center">${top10||'—'}</td>
+      <td style="text-align:center;color:#475569">${s.races.length}</td>
+    </tr>`;
+  }).join('');
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Clasificación Challenge ${escapeHtml(year||'')}</title>
+    <style>
+      @page { size:A4 portrait; margin:14mm }
+      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+      body{font-family:Arial,sans-serif;color:#111;margin:0;padding:24px;max-width:1000px;margin:0 auto}
+      .hdr{background:linear-gradient(135deg,#f59e0b,#7c2d12);color:#fff;padding:22px 26px;border-radius:12px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+      .hdr .ttl{font-size:24px;font-weight:900}
+      .hdr .sub{font-size:13px;opacity:.9;margin-top:4px}
+      .hdr img{height:56px;width:auto;background:#fff;border-radius:8px;padding:6px}
+      table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+      thead tr{background:#fef3c7;color:#7c2d12}
+      th{padding:8px 9px;text-align:left;font-size:10px;text-transform:uppercase;font-weight:800;letter-spacing:.4px}
+      td{padding:7px 9px;border-bottom:1px solid #f3f4f6}
+      tr:nth-child(-n+3) td{background:#fffbeb}
+      .toolbar{position:fixed;top:14px;right:14px}
+      .toolbar button{background:#dc2626;color:#fff;border:0;padding:9px 16px;border-radius:9px;font-weight:800;cursor:pointer;margin-left:6px}
+      .toolbar button.close{background:#6b7280}
+      @media print{.toolbar{display:none}}
+    </style>
+  </head><body>
+    <div class="toolbar"><button onclick="window.print()">🖨️ Imprimir</button><button class="close" onclick="window.close()">✕</button></div>
+    <div class="hdr">
+      ${pdfLogoSrc?`<img src="${pdfLogoSrc}" alt="MFPP">`:''}
+      <div style="flex:1">
+        <div class="ttl">🏆 Clasificación Challenge CV ${escapeHtml(year||'')}</div>
+        <div class="sub">${built.totalRaces} pruebas puntuables · ${standings.length} corredores ${cat?'· Categoría '+escapeHtml(cat):''} ${onlyMine&&myTeam?'· Solo '+escapeHtml(myTeam):''}</div>
+        <div class="sub">Generado el ${dateStr}</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="text-align:center">#</th>
+        <th>Ciclista</th>
+        <th>Cat.</th>
+        <th>Equipo</th>
+        <th style="text-align:center">Puntos</th>
+        <th style="text-align:center">🥇</th>
+        <th style="text-align:center">🥉</th>
+        <th style="text-align:center">Top 10</th>
+        <th style="text-align:center">Pruebas</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    ${built.lastRace?`<p style="margin-top:14px;font-size:11px;color:#6b7280">Última prueba puntuable usada para el desempate: <b>${escapeHtml(built.lastRace.name||'')}</b> (${escapeHtml(built.lastRace.date||'')}).</p>`:''}
+    <p style="margin-top:8px;font-size:11px;color:#6b7280;text-align:center">MFPP Cycling Specialist · Sistema oficial de puntuación FCCV</p>
+  </body></html>`);
+  w.document.close();
 }
 
 function normalizeRiderName(rawName, nombre, apellido1, apellido2){
