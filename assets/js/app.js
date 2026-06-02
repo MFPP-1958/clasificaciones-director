@@ -39034,7 +39034,7 @@ function _plRoster(history, team, year){
   const addPerson=(name, team2, bib, cat, ry, esCV)=>{
     if(getCanonicalTeam(team2||'').toLowerCase()!==teamCanon) return;
     const nk=normalizeRiderName(name||'').trim(); if(!nk) return;
-    if(!map[nk]) map[nk]={name:name||nk, bibsCV:{}, bibsAll:{}, cats:{}};
+    if(!map[nk]) map[nk]={key:nk, name:name||nk, bibsCV:{}, bibsAll:{}, cats:{}};
     const b=String(bib||'').trim();
     if(b){
       map[nk].bibsAll[b]=(map[nk].bibsAll[b]||0)+1;
@@ -39057,7 +39057,7 @@ function _plRoster(history, team, year){
     const catRaw=mode(r.cats);
     const dorsalCV=mode(r.bibsCV);
     const dorsal = dorsalCV || mode(r.bibsAll);
-    return { name:_evolNormName(r.name), nameRaw:r.name, dorsal, dorsalEsCV:!!dorsalCV, catNorm:_dxNormCat(catRaw), catRaw };
+    return { key:r.key, name:_evolNormName(r.name), nameRaw:r.name, dorsal, dorsalEsCV:!!dorsalCV, catNorm:_dxNormCat(catRaw), catRaw };
   }).sort((a,b)=> ((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999)) || a.name.localeCompare(b.name));
 }
 
@@ -39071,6 +39071,13 @@ function _plYears(history, team){
   }
   return [...ys].sort((a,b)=>b.localeCompare(a));
 }
+
+// Láminas ya generadas, por equipo+temporada (en memoria durante la sesión).
+// { 'equipo|año': [ {key,name,dorsal,catNorm,year,photo} ] }
+let _plGenerated = {};
+function _plGenKey(){ return _plState.team+'|'+_plState.year; }
+function _plGenList(){ const k=_plGenKey(); return _plGenerated[k] || (_plGenerated[k]=[]); }
+function _plRiderByKey(key){ return _plState.roster.find(r=>r.key===key); }
 
 async function _plOpenModal(){
   const team = (typeof myTeam!=='undefined' && myTeam) ? myTeam : '';
@@ -39113,10 +39120,11 @@ async function _plOpenModal(){
       </div>
       <input type="file" id="_plFile" accept="image/*" style="display:none" onchange="_plFileInput(event)">
     </div>
-    <div style="padding:6px 22px 20px;display:flex;gap:10px">
+    <div style="padding:4px 22px 14px;display:flex;gap:10px">
       <button id="_plCreateBtn" onclick="_plCreate()" style="flex:1;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">🖨️ Crear lámina (A4)</button>
       <button onclick="document.getElementById('_plModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
     </div>
+    <div id="_plGenBox"></div>
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
@@ -39126,31 +39134,36 @@ async function _plOpenModal(){
   drop.addEventListener('dragleave',e=>{ e.preventDefault(); drop.style.background='#f8fbff'; drop.style.borderColor='#93c5fd'; });
   drop.addEventListener('drop',e=>{ e.preventDefault(); drop.style.background='#f8fbff'; drop.style.borderColor='#93c5fd'; const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) _plReadPhoto(f); });
   _plRenderRiders();
+  _plRenderGenerated();
 }
 
 function _plRenderRiders(){
   const sel=document.getElementById('_plRider'); if(!sel) return;
-  const rs=_plState.roster;
-  sel.innerHTML = rs.length
-    ? rs.map((r,i)=>`<option value="${i}">${escapeHtml(r.name)}${r.dorsal?(' · #'+escapeHtml(r.dorsal)):''}</option>`).join('')
-    : `<option value="">— Sin ciclistas en ${escapeHtml(_plState.year)} —</option>`;
+  const generados=new Set(_plGenList().map(l=>l.key));
+  // Excluye los ciclistas que ya tienen lámina (evita duplicados)
+  const avail=_plState.roster.filter(r=>!generados.has(r.key));
+  sel.innerHTML = avail.length
+    ? avail.map(r=>`<option value="${escapeAttr(r.key)}">${escapeHtml(r.name)}${r.dorsal?(' · #'+escapeHtml(r.dorsal)):''}</option>`).join('')
+    : `<option value="">— ${_plState.roster.length? 'Todos los ciclistas ya tienen lámina' : 'Sin ciclistas en '+escapeHtml(_plState.year)} —</option>`;
   _plPickRider();
 }
 function _plChangeYear(){
   const y=document.getElementById('_plYear')?.value||'';
   _plState.year=y;
   _plState.roster=_plRoster(_plState._history, _plState.team, y);
+  _plResetForm();
   _plRenderRiders();
+  _plRenderGenerated();
 }
 function _plPickRider(){
-  const idx=document.getElementById('_plRider')?.value;
+  const key=document.getElementById('_plRider')?.value;
   const info=document.getElementById('_plInfo'); if(!info) return;
-  const r=_plState.roster[idx];
-  if(!r){ info.innerHTML='No hay datos para esta temporada.'; return; }
+  const r=_plRiderByKey(key);
+  if(!r){ info.innerHTML='Selecciona un ciclista (o ya tienen todos su lámina).'; return; }
   const dorsal = r.dorsal ? ('#'+r.dorsal) : '⚠️ sin dorsal registrado';
   const cat = r.catNorm || '⚠️ sin categoría';
   const avisoCV = (r.dorsal && !r.dorsalEsCV) ? ` <span style="color:#b45309;font-weight:700">⚠️ no hay dorsal de prueba CV; mostrando el de otra prueba</span>` : '';
-  info.innerHTML = `🎽 Dorsal (CV) de temporada: <b>${escapeHtml(dorsal)}</b> &nbsp;·&nbsp; 🏷️ Categoría: <b>${escapeHtml(cat)}</b>${r.catNorm?` <span style="font-weight:600;color:#475569">(${escapeHtml(_plCatFriendly(r.catNorm))})</span>`:''}${avisoCV}`;
+  info.innerHTML = `🎽 Dorsal (CV) de temporada: <b>${escapeHtml(dorsal)}</b> &nbsp;·&nbsp; 🏷️ Categoría: <b>${escapeHtml(cat)}</b>${avisoCV}`;
 }
 function _plFileInput(e){ const f=e.target.files&&e.target.files[0]; if(f) _plReadPhoto(f); }
 function _plReadPhoto(file){
@@ -39163,26 +39176,42 @@ function _plReadPhoto(file){
   };
   rd.readAsDataURL(file);
 }
+// Limpia la foto y el recuadro de drag&drop
+function _plResetForm(){
+  _plState.photo=null; _plState.photoName='';
+  const drop=document.getElementById('_plDrop');
+  if(drop) drop.innerHTML=`<div id="_plDropHint" style="color:#64748b;font-size:13px;padding:18px">📷 Arrastra una foto aquí<br><span style="font-size:11px">o haz clic para seleccionarla</span></div>`;
+}
 
 function _plCreate(){
-  const idx=document.getElementById('_plRider')?.value;
-  const r=_plState.roster[idx];
+  const key=document.getElementById('_plRider')?.value;
+  const r=_plRiderByKey(key);
   if(!r){ alert('Selecciona un ciclista.'); return; }
   if(!_plState.photo){ alert('Añade la foto del ciclista (arrástrala o haz clic en el recuadro).'); return; }
-  const year=_plState.year;
+  // Guarda/actualiza la lámina por CLAVE estable del ciclista (no por posición)
+  const lam={ key:r.key, name:r.name, dorsal:r.dorsal||'', catNorm:r.catNorm||'', year:_plState.year, photo:_plState.photo };
+  const list=_plGenList();
+  const ix=list.findIndex(l=>l.key===r.key);
+  if(ix>=0) list[ix]=lam; else list.push(lam);
+  _plPrintLamina(lam);
+  _plResetForm();
+  _plRenderRiders();      // el ciclista desaparece del desplegable
+  _plRenderGenerated();   // aparece en el listado de generadas
+}
+
+// Construye y abre la ventana de impresión de UNA lámina (A4 apaisado)
+function _plPrintLamina(lam){
   const team=_plState.team;
-  const catPlural=_plCatPlural(r.catNorm);
-  const titulo=`Plantilla equipo ${team} · Temporada ${year}${catPlural?(' '+catPlural):''}`;
-  const dorsal=r.dorsal||'';
-  const catFriendly=_plCatFriendly(r.catNorm);
-  const footer=`${r.name}${catFriendly?(' · '+catFriendly):(r.catNorm?(' · '+r.catNorm):'')}`;
+  const catPlural=_plCatPlural(lam.catNorm);
+  const titulo=`Plantilla equipo ${team} · Temporada ${lam.year}${catPlural?(' '+catPlural):''}`;
+  // Pie: SOLO siglas cortas normalizadas (CAD-1, CAD-2, JUV-1…)
+  const footer=`${lam.name}${lam.catNorm?(' · '+lam.catNorm):''}`;
   const tbgSVG=(typeof _infLogoSVG==='function')? _infLogoSVG(86) : '';
   const mfppSrc=document.querySelector('.brand-logo')?.src || '';
-
   const w=window.open('','_blank');
   if(!w){ alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
   w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-  <title>Lámina ${escapeHtml(r.name)} · ${escapeHtml(year)}</title>
+  <title>Lámina ${escapeHtml(lam.name)} · ${escapeHtml(lam.year)}</title>
   <style>
     @page{size:A4 landscape;margin:0}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
@@ -39211,12 +39240,56 @@ function _plCreate(){
       <div class="logo-r">${mfppSrc?`<img src="${mfppSrc}" alt="MFPP">`:''}</div>
     </div>
     <div class="body">
-      ${dorsal?`<div class="dorsal">${escapeHtml(dorsal)}</div>`:''}
-      <div class="photo-box"><img src="${_plState.photo}" alt="${escapeHtml(r.name)}"></div>
+      ${lam.dorsal?`<div class="dorsal">${escapeHtml(lam.dorsal)}</div>`:''}
+      <div class="photo-box"><img src="${lam.photo}" alt="${escapeHtml(lam.name)}"></div>
       <div class="footer">${escapeHtml(footer)}</div>
     </div>
   </div>
   <script>window.onload=function(){setTimeout(function(){window.print();},450);};<\/script>
   </body></html>`);
   w.document.close();
+}
+
+// Listado de láminas generadas con acciones (reimprimir / editar / borrar)
+function _plRenderGenerated(){
+  const box=document.getElementById('_plGenBox'); if(!box) return;
+  const list=_plGenList();
+  if(!list.length){ box.innerHTML=''; return; }
+  box.innerHTML=`
+    <div style="border-top:1px solid #e2e8f0;padding:14px 22px 20px">
+      <div style="font-size:12px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Láminas generadas (${list.length})</div>
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto">
+        ${list.map(l=>`
+          <div style="display:flex;align-items:center;gap:10px;background:#f8fbff;border:1px solid #dbeafe;border-radius:9px;padding:7px 10px">
+            <img src="${l.photo}" alt="" style="width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #cbd5e1">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:800;font-size:13px;color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(l.name)}</div>
+              <div style="font-size:11px;color:#64748b">${l.dorsal?('#'+escapeHtml(l.dorsal)):'sin dorsal'}${l.catNorm?(' · '+escapeHtml(l.catNorm)):''}</div>
+            </div>
+            <button onclick="_plReprint('${escapeAttr(l.key)}')" title="Reimprimir" style="background:#eef2f7;color:#0b2f6b;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🖨️</button>
+            <button onclick="_plEditLamina('${escapeAttr(l.key)}')" title="Editar (cambiar foto o datos)" style="background:#dbeafe;color:#1d4ed8;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">✏️</button>
+            <button onclick="_plDeleteLamina('${escapeAttr(l.key)}')" title="Borrar lámina" style="background:#fee2e2;color:#dc2626;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+function _plReprint(key){ const l=_plGenList().find(x=>x.key===key); if(l) _plPrintLamina(l); }
+function _plDeleteLamina(key){
+  const list=_plGenList();
+  const ix=list.findIndex(l=>l.key===key);
+  if(ix>=0) list.splice(ix,1);
+  _plRenderRiders();     // el ciclista vuelve a estar disponible
+  _plRenderGenerated();
+}
+function _plEditLamina(key){
+  const list=_plGenList();
+  const l=list.find(x=>x.key===key); if(!l) return;
+  // Sacamos la lámina del listado para que el ciclista vuelva al desplegable…
+  _plDeleteLamina(key);
+  // …lo seleccionamos y recuperamos su foto para corregir lo que haga falta
+  const sel=document.getElementById('_plRider'); if(sel) sel.value=key;
+  _plState.photo=l.photo; _plState.photoName='';
+  const drop=document.getElementById('_plDrop');
+  if(drop && l.photo) drop.innerHTML=`<img src="${l.photo}" style="max-width:100%;max-height:230px;object-fit:contain;border-radius:8px" alt="preview">`;
+  _plPickRider();
 }
