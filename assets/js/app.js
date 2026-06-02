@@ -39012,19 +39012,37 @@ function _plCatPlural(catNorm){
   return ({cadete:'CADETES',juvenil:'JUVENILES',sub23:'SUB-23',elite:'ÉLITE',master:'MÁSTER',fem:'FÉMINAS',infantil:'INFANTILES',alevin:'ALEVINES',escuela:'ESCUELAS'})[g.key] || g.label.toUpperCase();
 }
 
-// Construye la plantilla de un equipo/año: nombre, dorsal (moda de bib) y categoría (moda)
+// ¿La prueba cuenta para el dorsal de la Comunidad Valenciana?
+// Sí salvo que se identifique claramente otra comunidad. Las Challenge CV
+// son de la CV. Fuera de la CV asignan otro dorsal, así que se excluye.
+function _plEsCV(race){
+  if(race.challengeCV) return true;
+  const ccaa = (typeof _infDetectCCAA==='function')
+    ? _infDetectCCAA(race.raceName, race.localidad, '', race.ccaa)
+    : (race.ccaa||'');
+  return !(ccaa && ccaa!=='Comunitat Valenciana');
+}
+
+// Construye la plantilla de un equipo/año: nombre, dorsal y categoría.
+// El DORSAL es el de la Comunidad Valenciana (moda del bib SOLO en pruebas CV);
+// si el ciclista no tiene ninguna prueba CV, se usa como respaldo el dorsal de
+// cualquier prueba (marcado como no-CV para avisar).
 function _plRoster(history, team, year){
   const teamCanon=getCanonicalTeam(team).toLowerCase();
   const map={};
   for(const race of (history||[])){
     const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
     if(year && ry!==year) continue;
+    const esCV=_plEsCV(race);
     for(const r of (race.riders||[])){
       if(getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) continue;
       const nk=normalizeRiderName(r.name||'').trim(); if(!nk) continue;
-      if(!map[nk]) map[nk]={name:r.name||nk, bibs:{}, cats:{}};
+      if(!map[nk]) map[nk]={name:r.name||nk, bibsCV:{}, bibsAll:{}, cats:{}};
       const bib=String(r.bib||'').trim();
-      if(bib) map[nk].bibs[bib]=(map[nk].bibs[bib]||0)+1;
+      if(bib){
+        map[nk].bibsAll[bib]=(map[nk].bibsAll[bib]||0)+1;
+        if(esCV) map[nk].bibsCV[bib]=(map[nk].bibsCV[bib]||0)+1;
+      }
       const rc=getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) || r.cat || '';
       if(rc) map[nk].cats[rc]=(map[nk].cats[rc]||0)+1;
     }
@@ -39032,7 +39050,9 @@ function _plRoster(history, team, year){
   const mode=(obj)=>{ let best='',n=-1; for(const k in obj){ if(obj[k]>n){n=obj[k]; best=k;} } return best; };
   return Object.values(map).map(r=>{
     const catRaw=mode(r.cats);
-    return { name:_evolNormName(r.name), nameRaw:r.name, dorsal:mode(r.bibs), catNorm:_dxNormCat(catRaw), catRaw };
+    const dorsalCV=mode(r.bibsCV);
+    const dorsal = dorsalCV || mode(r.bibsAll);
+    return { name:_evolNormName(r.name), nameRaw:r.name, dorsal, dorsalEsCV:!!dorsalCV, catNorm:_dxNormCat(catRaw), catRaw };
   }).sort((a,b)=> ((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999)) || a.name.localeCompare(b.name));
 }
 
@@ -39124,7 +39144,8 @@ function _plPickRider(){
   if(!r){ info.innerHTML='No hay datos para esta temporada.'; return; }
   const dorsal = r.dorsal ? ('#'+r.dorsal) : '⚠️ sin dorsal registrado';
   const cat = r.catNorm || '⚠️ sin categoría';
-  info.innerHTML = `🎽 Dorsal de temporada: <b>${escapeHtml(dorsal)}</b> &nbsp;·&nbsp; 🏷️ Categoría: <b>${escapeHtml(cat)}</b>${r.catNorm?` <span style="font-weight:600;color:#475569">(${escapeHtml(_plCatFriendly(r.catNorm))})</span>`:''}`;
+  const avisoCV = (r.dorsal && !r.dorsalEsCV) ? ` <span style="color:#b45309;font-weight:700">⚠️ no hay dorsal de prueba CV; mostrando el de otra prueba</span>` : '';
+  info.innerHTML = `🎽 Dorsal (CV) de temporada: <b>${escapeHtml(dorsal)}</b> &nbsp;·&nbsp; 🏷️ Categoría: <b>${escapeHtml(cat)}</b>${r.catNorm?` <span style="font-weight:600;color:#475569">(${escapeHtml(_plCatFriendly(r.catNorm))})</span>`:''}${avisoCV}`;
 }
 function _plFileInput(e){ const f=e.target.files&&e.target.files[0]; if(f) _plReadPhoto(f); }
 function _plReadPhoto(file){
