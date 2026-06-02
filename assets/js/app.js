@@ -38641,3 +38641,278 @@ async function _infAnnualToPNG(){
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
   },'image/png');
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MÓDULO: EXPORTACIÓN MASIVA DE DATOS (DATA LAKE) PARA MODELO PREDICTIVO
+   Genera un CSV tabular "sábana": 1 fila = 1 ciclista en 1 carrera.
+   JOIN de races + notes(clima/track) + race_results + rider_efforts_fccv.
+   Aplana dinámicamente cualquier campo escalar presente en notes.
+   No inventa datos: lo que no existe queda vacío.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// Orden y nombres de las columnas OBLIGATORIAS (el resto se añaden tras estas)
+const _DX_BASE_COLS = [
+  'ID_Carrera','Fecha','Nombre_Prueba','Localidad','Comunidad_Autonoma',
+  'Categoria_Prueba','Modalidad','Es_Challenge',
+  'Ciclistas_Inscritos','Ciclistas_Finalizados',
+  'Inscritos_Categoria','Finalizados_Categoria',
+  'ID_Ciclista','Nombre_Ciclista','Equipo_Ciclista','Categoria_Ciclista','Region_Ciclista',
+  'Posicion_Final','Puntos_Obtenidos',
+  'Dorsal','Tiempo','Gap_Segundos','Tiempo_Total_Segundos'
+];
+
+function _dxNormName(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+function _dxYield(){ return new Promise(r=>setTimeout(r,0)); }
+
+// Aplana escalares de un objeto a target con prefijo. Recurre en objetos planos. Ignora arrays.
+function _dxAddScalars(target, obj, prefix, skip){
+  if(!obj || typeof obj!=='object') return;
+  for(const k in obj){
+    if(skip && skip.has(k)) continue;
+    const v = obj[k];
+    if(v==null){ target[prefix+k]=''; continue; }
+    const t = typeof v;
+    if(t==='string'||t==='number'||t==='boolean'){ target[prefix+k]=v; }
+    else if(Array.isArray(v)){ /* arrays: se tratan aparte (inscritos, regions, points) */ }
+    else if(t==='object'){ _dxAddScalars(target, v, prefix+k+'_', skip); }
+  }
+}
+
+// Abre el modal de exportación
+async function _dxOpenModal(){
+  let ov=document.getElementById('_dxModal'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_dxModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.72);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  ov.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:620px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:18px 22px">
+      <div style="font-size:18px;font-weight:900">🧠 Exportación de datos (Data Lake)</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px">Genera un CSV tabular para tu modelo predictivo. Una fila = un ciclista en una carrera, con todas las variables de contexto disponibles.</div>
+    </div>
+    <div style="padding:20px 22px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label style="font-size:12px;font-weight:800;color:#475569">Desde (fecha)</label>
+        <input type="date" id="_dxFrom" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;margin-top:4px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:800;color:#475569">Hasta (fecha)</label>
+        <input type="date" id="_dxTo" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;margin-top:4px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:800;color:#475569">Categoría</label>
+        <select id="_dxCat" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;margin-top:4px;font-weight:700"><option value="">Todas</option></select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:800;color:#475569">Modalidad</label>
+        <select id="_dxMod" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;margin-top:4px;font-weight:700"><option value="">Todas</option></select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:800;color:#475569">Puntuabilidad (Challenge)</label>
+        <select id="_dxChal" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;margin-top:4px;font-weight:700"><option value="">Todas</option><option value="si">Solo Challenge (Sí)</option><option value="no">No Challenge</option></select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:800;color:#475569">Separador CSV</label>
+        <select id="_dxSep" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;margin-top:4px;font-weight:700"><option value=",">Coma (,) — pandas/Python</option><option value=";">Punto y coma (;) — Excel español</option></select>
+      </div>
+    </div>
+    <div style="padding:0 22px">
+      <div id="_dxStatus" style="font-size:12.5px;color:#64748b;min-height:18px;margin-bottom:8px"></div>
+      <div id="_dxBarWrap" style="display:none;height:8px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:12px"><div id="_dxBar" style="height:100%;width:0;background:linear-gradient(90deg,#1565c0,#10b981);transition:width .15s"></div></div>
+    </div>
+    <div style="padding:6px 22px 20px;display:flex;gap:10px;flex-wrap:wrap">
+      <button id="_dxBtnGo" onclick="_dxExport()" style="flex:1;min-width:200px;background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">⬇️ Generar y descargar CSV</button>
+      <button onclick="document.getElementById('_dxModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
+    </div>
+    <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:10px 22px;font-size:11px;color:#94a3b8;line-height:1.5">El CSV se genera con codificación UTF-8 (BOM) para abrirse correctamente en Excel. Incluye, si existen: clima, topografía del track (desnivel, pendientes, altitud) y biometría (pulso, potencia, cadencia). Campos sin dato se dejan vacíos.</div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  await _dxPopulateFilters();
+}
+
+// Rellena los selectores de categoría y modalidad con valores reales de los datos
+async function _dxPopulateFilters(){
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){}
+  const groups=new Set(), mods=new Set();
+  history.forEach(r=>{
+    (r.riders||[]).forEach(p=>{ const g=_calCatGroup(p.cat); if(g) groups.add(g.key); });
+    (r.inscritos||[]).forEach(p=>{ const g=_calCatGroup(p.cat); if(g) groups.add(g.key); });
+    const m=(r.modality||r.circuitType||'').trim(); if(m) mods.add(m);
+  });
+  const catSel=document.getElementById('_dxCat');
+  if(catSel) catSel.innerHTML='<option value="">Todas</option>'+_CAL_CAT_GROUPS.filter(g=>groups.has(g.key)).map(g=>`<option value="${g.key}">${g.label}</option>`).join('');
+  const modSel=document.getElementById('_dxMod');
+  if(modSel) modSel.innerHTML='<option value="">Todas</option>'+[...mods].sort().map(m=>`<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join('');
+}
+
+// Construye TODAS las filas aplanadas aplicando los filtros. Devuelve {rows, columns}.
+async function _dxBuildRows(filters, onProgress){
+  if(!_sb) throw new Error('Base de datos no disponible.');
+  // 1) Carreras de clasificación con notes completo + resultados
+  const {data:races, error} = await _sb.from('races')
+    .select('id, name, date, race_type, notes, race_results(id, pos, bib, name, team, cat, time, gap_seconds, total_seconds)')
+    .eq('race_type','clasificacion')
+    .order('date',{ascending:true});
+  if(error) throw new Error('Error leyendo carreras: '+error.message);
+
+  // 2) Esfuerzos biométricos (LEFT JOIN por race_id + nombre). Tabla opcional.
+  const effByRace = new Map();
+  try{
+    const {data:effs} = await _sb.from('rider_efforts_fccv').select('*');
+    (effs||[]).forEach(e=>{
+      if(!effByRace.has(e.race_id)) effByRace.set(e.race_id, []);
+      effByRace.get(e.race_id).push(e);
+    });
+  }catch(_){ /* sin biometría disponible */ }
+
+  const rows=[]; const colSet=new Set(_DX_BASE_COLS);
+  const total=(races||[]).length; let done=0;
+
+  for(const race of (races||[])){
+    let extra={}; try{ extra=JSON.parse(race.notes||'{}'); }catch(_){}
+    const isoDate = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(extra.raceDate||race.date||'') : '') || (extra.raceDate||race.date||'');
+
+    // ── Filtros a nivel de carrera ──
+    if(filters.from && isoDate && isoDate < filters.from){ done++; continue; }
+    if(filters.to   && isoDate && isoDate > filters.to){ done++; continue; }
+    const isChal = !!extra.challengeCV;
+    if(filters.chal==='si' && !isChal){ done++; continue; }
+    if(filters.chal==='no' &&  isChal){ done++; continue; }
+    const modality = (extra.modality||extra.circuitType||'').trim();
+    if(filters.mod && modality!==filters.mod){ done++; continue; }
+
+    const results   = race.race_results||[];
+    const inscritos = Array.isArray(extra.inscritos)? extra.inscritos : [];
+    const regions   = extra.regions||{};
+
+    // Grupos de categoría presentes en la prueba
+    const raceGroups = new Set();
+    [...results,...inscritos].forEach(p=>{ const g=_calCatGroup(p&&p.cat); if(g) raceGroups.add(g.key); });
+
+    // Conteos por categoría (si hay filtro de categoría activo)
+    const catKey = filters.cat;
+    const inscCat = catKey ? inscritos.filter(p=>{const g=_calCatGroup(p.cat); return g&&g.key===catKey;}).length : inscritos.length;
+    const finCat  = catKey ? results.filter(p=>{const g=_calCatGroup(p.cat); return g&&g.key===catKey;}).length : results.length;
+
+    // Comunidad autónoma (campo o detección por nombre/localidad)
+    const ccaa = extra.ccaa || (typeof _infDetectCCAA==='function' ? _infDetectCCAA(race.name, extra.localidad, '', '') : '') || '';
+
+    // Objeto de carrera común (se repite en cada fila de ciclista)
+    const raceCommon = {
+      'ID_Carrera': race.id,
+      'Fecha': isoDate,
+      'Nombre_Prueba': race.name||'',
+      'Localidad': extra.localidad||'',
+      'Comunidad_Autonoma': ccaa,
+      'Categoria_Prueba': [...raceGroups].map(_calCatLabel).join(' | '),
+      'Modalidad': modality,
+      'Es_Challenge': isChal?'Sí':'No',
+      'Ciclistas_Inscritos': inscritos.length||'',
+      'Ciclistas_Finalizados': results.length,
+      'Inscritos_Categoria': inscCat||'',
+      'Finalizados_Categoria': finCat
+    };
+    // Escalares extra de la carrera (km, avg, hora_inicio, lat, lon, circuitType…) — dinámico
+    _dxAddScalars(raceCommon, extra, 'carrera_', new Set(['weather','route','inscritos','regions','raceDate','localidad','ccaa','challengeCV','modality']));
+    // Clima
+    if(extra.weather) _dxAddScalars(raceCommon, extra.weather, 'clima_');
+    // Topografía del track
+    if(extra.route)   _dxAddScalars(raceCommon, extra.route, 'track_', new Set(['points']));
+
+    Object.keys(raceCommon).forEach(k=>colSet.add(k));
+
+    // Mapa de esfuerzos por nombre normalizado para esta carrera
+    const effs = effByRace.get(race.id)||[];
+    const effByName = new Map();
+    effs.forEach(e=>{ const key=_dxNormName(e.rider_name_hint); if(key && !effByName.has(key)) effByName.set(key, e); });
+
+    // ── Una fila por ciclista clasificado ──
+    for(const rr of results){
+      const g = _calCatGroup(rr.cat);
+      if(catKey && !(g && g.key===catKey)) continue; // filtro de categoría a nivel ciclista
+      const normName = (typeof normalizeRiderName==='function') ? normalizeRiderName(rr.name) : (rr.name||'');
+      const pts = (isChal && rr.pos>0 && typeof calcularPuntosChallenge==='function') ? calcularPuntosChallenge(rr.pos) : '';
+      const row = Object.assign({}, raceCommon, {
+        'ID_Ciclista': rr.id||rr.bib||'',
+        'Nombre_Ciclista': normName,
+        'Equipo_Ciclista': rr.team||'',
+        'Categoria_Ciclista': rr.cat||'',
+        'Region_Ciclista': regions[rr.name]||regions[normName]||'',
+        'Posicion_Final': rr.pos||'',
+        'Puntos_Obtenidos': pts,
+        'Dorsal': rr.bib||'',
+        'Tiempo': rr.time||'',
+        'Gap_Segundos': rr.gap_seconds!=null?rr.gap_seconds:'',
+        'Tiempo_Total_Segundos': rr.total_seconds!=null?rr.total_seconds:''
+      });
+      // Biometría (LEFT JOIN por nombre normalizado) — prefijo fit_
+      const eff = effByName.get(_dxNormName(rr.name)) || effByName.get(normName ? _dxNormName(normName) : '');
+      if(eff) _dxAddScalars(row, eff, 'fit_', new Set(['race_id','rider_name_hint','id','rider_dni','source_file','source_kind']));
+      Object.keys(row).forEach(k=>colSet.add(k));
+      rows.push(row);
+    }
+
+    done++;
+    if(onProgress && (done%5===0 || done===total)){ onProgress(done,total,rows.length); await _dxYield(); }
+  }
+
+  // Orden de columnas: base primero, luego el resto en orden de aparición
+  const rest=[...colSet].filter(c=>!_DX_BASE_COLS.includes(c));
+  const columns=[..._DX_BASE_COLS, ...rest];
+  return {rows, columns};
+}
+
+// Serializa a CSV (con BOM) por trozos para no bloquear el navegador
+async function _dxToCSV(rows, columns, sep, onProgress){
+  const esc = (v)=>{
+    if(v==null) return '';
+    let s=String(v);
+    if(s.includes('"')||s.includes(sep)||s.includes('\n')||s.includes('\r')) s='"'+s.replace(/"/g,'""')+'"';
+    return s;
+  };
+  const parts=['﻿'+columns.map(esc).join(sep)+'\r\n'];
+  const N=rows.length; const CHUNK=2000;
+  for(let i=0;i<N;i++){
+    const r=rows[i];
+    parts.push(columns.map(c=>esc(r[c])).join(sep)+'\r\n');
+    if(i>0 && i%CHUNK===0){ if(onProgress) onProgress(i,N); await _dxYield(); }
+  }
+  return new Blob(parts, {type:'text/csv;charset=utf-8'});
+}
+
+async function _dxExport(){
+  const st=document.getElementById('_dxStatus');
+  const bar=document.getElementById('_dxBar'); const barWrap=document.getElementById('_dxBarWrap');
+  const btn=document.getElementById('_dxBtnGo');
+  const filters={
+    from: document.getElementById('_dxFrom')?.value || '',
+    to:   document.getElementById('_dxTo')?.value || '',
+    cat:  document.getElementById('_dxCat')?.value || '',
+    mod:  document.getElementById('_dxMod')?.value || '',
+    chal: document.getElementById('_dxChal')?.value || '',
+    sep:  document.getElementById('_dxSep')?.value || ','
+  };
+  try{
+    if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='⏳ Generando…'; }
+    if(barWrap) barWrap.style.display='block';
+    if(st) st.textContent='Leyendo carreras y resultados…';
+    const {rows, columns} = await _dxBuildRows(filters, (done,total,nrows)=>{
+      if(st) st.textContent=`Procesando carreras… ${done}/${total} · ${nrows} filas`;
+      if(bar) bar.style.width=Math.round(done/Math.max(1,total)*70)+'%';
+    });
+    if(!rows.length){ if(st) st.textContent='⚠️ No hay datos con esos filtros.'; if(btn){btn.disabled=false;btn.style.opacity='1';btn.textContent='⬇️ Generar y descargar CSV';} return; }
+    if(st) st.textContent=`Construyendo CSV… ${rows.length} filas × ${columns.length} columnas`;
+    const blob=await _dxToCSV(rows, columns, filters.sep, (i,n)=>{ if(bar) bar.style.width=(70+Math.round(i/Math.max(1,n)*28))+'%'; });
+    if(bar) bar.style.width='100%';
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    const stamp=new Date().toISOString().slice(0,10);
+    const catTag=filters.cat?('_'+filters.cat):'';
+    a.href=url; a.download=`datalake_ciclismo${catTag}_${stamp}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000);
+    if(st) st.innerHTML=`✅ Exportadas <b>${rows.length}</b> filas y <b>${columns.length}</b> columnas.`;
+  }catch(e){
+    if(st) st.textContent='❌ '+(e.message||e);
+  }finally{
+    if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent='⬇️ Generar y descargar CSV'; }
+  }
+}
