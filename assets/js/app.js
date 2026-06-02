@@ -1018,8 +1018,28 @@ async function _calInit(){
 async function _calLoadData(){
   // Carreras disputadas del historial
   const history = await _ensureHistory();
+  const myKey = (typeof myTeam!=='undefined' && myTeam && typeof teamKey==='function') ? teamKey(myTeam) : '';
   _calPast = history.map(r=>{
     const ds = _parseSpanishDate(r.raceDate);
+    const riders = r.riders||[];
+    const inscritos = Array.isArray(r.inscritos)? r.inscritos : [];
+    // Grupos de categoría presentes en la prueba (derivados de corredores + inscritos)
+    const catGroups = new Set();
+    const catRaw = new Set();
+    [...riders, ...inscritos].forEach(p=>{
+      const c=(p&&p.cat)||''; if(c){ catRaw.add(c); const g=_calCatGroup(c); if(g) catGroups.add(g.key); }
+    });
+    // Mejor resultado de nuestro equipo en esta prueba
+    let bestMine=null, mineCount=0;
+    if(myKey){
+      riders.forEach(p=>{
+        if(typeof teamKey==='function' && teamKey(p.team||'')===myKey){
+          mineCount++;
+          const pos=parseInt(p.pos,10);
+          if(!isNaN(pos)&&pos>0 && (!bestMine||pos<bestMine.pos)) bestMine={pos, name:p.name||''};
+        }
+      });
+    }
     return {
       id:   r.id || null,             // ← para abrir detalle al hacer click
       date: ds ? new Date(ds+'T12:00:00') : null,
@@ -1028,7 +1048,12 @@ async function _calLoadData(){
       localidad: r.localidad||'',
       km:   r.km||'',
       avg:  r.avg||'',
-      ridersCount: (r.riders||[]).length,
+      ridersCount: riders.length,
+      cats: [...catGroups],                              // grupos de categoría
+      catRaw: [...catRaw],                               // categorías tal cual
+      inscritosCount: inscritos.length || null,          // participantes que tomaron la salida
+      finishCount: riders.length,                        // clasificados (terminaron)
+      mineCount, bestMine,                               // rendimiento de nuestro equipo
       type: 'past'
     };
   }).filter(r=>r.date);
@@ -1068,17 +1093,128 @@ function _calSetView(v){
   _calRender();
 }
 
+/* ═══════════════ FILTRADO POR CATEGORÍA DEL CALENDARIO ═══════════════════
+   _calCat = grupo de categoría activo ('' = todas). El selector de la barra
+   lo controla y sincroniza título + eventos + informes.                     */
+let _calCat = '';
+const _CAL_CAT_GROUPS = [
+  {key:'cadete',   label:'Cadetes',    re:/cadet|\bcad\b|\bcad[-\s]?\d/i},
+  {key:'juvenil',  label:'Juveniles',  re:/juvenil|j[uú]nior|\bjuv\b|\bjun\b/i},
+  {key:'sub23',    label:'Sub-23',     re:/sub[-\s]?23/i},
+  {key:'elite',    label:'Élite',      re:/[eé]lite|\belit\b/i},
+  {key:'master',   label:'Máster',     re:/m[aá]ster|veterano/i},
+  {key:'fem',      label:'Féminas',    re:/femen|f[eé]mina|mujer|dones/i},
+  {key:'infantil', label:'Infantiles', re:/infantil/i},
+  {key:'alevin',   label:'Alevines',   re:/alev[ií]n/i},
+  {key:'escuela',  label:'Escuelas',   re:/escuela|promesa|principiante/i}
+];
+function _calCatGroup(raw){ const s=String(raw||''); for(const g of _CAL_CAT_GROUPS){ if(g.re.test(s)) return g; } return null; }
+function _calCatLabel(key){ const g=_CAL_CAT_GROUPS.find(x=>x.key===key); return g?g.label:''; }
+function _calRaceCatGroups(r){
+  if(r.type==='planned'){ const g=_calCatGroup(r.cat); return g?[g.key]:[]; }
+  return r.cats||[];
+}
+// ¿La prueba corresponde a la categoría activa? (sin filtro → todas; sin datos de cat → no se oculta)
+function _calRaceMatchesCat(r){
+  if(!_calCat) return true;
+  const gs=_calRaceCatGroups(r);
+  if(!gs.length) return true;          // prueba sin metadato de categoría: no la ocultamos
+  return gs.includes(_calCat);
+}
+// Grupos de categoría realmente presentes en los datos cargados
+function _calAvailableCats(){
+  const present=new Set();
+  [..._calPast, ..._calPlanned].forEach(r=>_calRaceCatGroups(r).forEach(k=>present.add(k)));
+  return _CAL_CAT_GROUPS.filter(g=>present.has(g.key));
+}
+function _calPopulateCatSelect(){
+  const sel=document.getElementById('calCatSelect'); if(!sel) return;
+  const avail=_calAvailableCats();
+  const cur=_calCat;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' +
+    avail.map(g=>`<option value="${g.key}">${g.label}</option>`).join('');
+  // Mantener selección si sigue disponible
+  sel.value = avail.some(g=>g.key===cur) ? cur : '';
+  if(sel.value!==cur) _calCat = sel.value;
+}
+function _calSetCat(v){ _calCat = v||''; _calRender(); }
+
 function _calRender(){
   const body  = document.getElementById('calBody');
   const title = document.getElementById('calTitle');
   if(!body) return;
+  _calPopulateCatSelect();
+  const catSuffix = _calCat ? ' · '+_calCatLabel(_calCat) : '';
+  // Encabezado de la sección refleja la categoría activa: "Calendario — Cadetes"
+  const h2=document.getElementById('calHeading');
+  if(h2) h2.textContent = '📅 Calendario de carreras' + (_calCat? ' — '+_calCatLabel(_calCat) : '');
   if(_calView==='annual'){
-    if(title) title.textContent = 'Año '+_calYear;
+    if(title) title.textContent = 'Año '+_calYear+catSuffix;
     body.innerHTML = _calBuildAnnual();
   } else {
-    if(title) title.textContent = _CAL_MONTHS_ES[_calMonth]+' '+_calYear;
+    if(title) title.textContent = _CAL_MONTHS_ES[_calMonth]+' '+_calYear+catSuffix;
     body.innerHTML = _calBuildMonth(_calYear, _calMonth);
   }
+  _calBindTooltips();
+}
+
+/* ═══════════════ TOOLTIP LIGERO (hover ratón / pulsación táctil) ══════════
+   Un único <div> reutilizable + delegación de eventos sobre #calBody.       */
+function _calTooltipEl(){
+  let t=document.getElementById('_calTip');
+  if(!t){
+    t=document.createElement('div'); t.id='_calTip';
+    t.style.cssText='position:fixed;z-index:99999;max-width:280px;background:#0b2f6b;color:#fff;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.45;box-shadow:0 8px 28px rgba(0,0,0,.28);pointer-events:none;opacity:0;transition:opacity .08s;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+    document.body.appendChild(t);
+  }
+  return t;
+}
+function _calTooltipHTML(y,m,d){
+  const races=_calGetRacesForDay(y,m,d).filter(_calRaceMatchesCat);
+  if(!races.length) return '';
+  return races.map(r=>{
+    const lugar = r.localidad ? `<div>📍 ${escapeHtml(r.localidad)}</div>` : '';
+    let cuerpo='';
+    if(r.type==='planned'){
+      cuerpo = `<div style="opacity:.85;margin-top:3px">📋 Prueba planificada</div>` +
+               (r.cat?`<div style="opacity:.85">🏷️ ${escapeHtml(r.cat)}</div>`:'');
+    } else {
+      const part = (r.inscritosCount!=null) ? r.inscritosCount : (r.finishCount||null);
+      const partTxt = part!=null ? `<div>👥 Participantes: <b>${part}</b></div>` : `<div>👥 Participantes: No disponible</div>`;
+      const finTxt  = (r.finishCount!=null) ? `<div>🏁 Finalizaron: <b>${r.finishCount}</b></div>` : '';
+      let mineTxt='';
+      if(r.mineCount>0){
+        const best = r.bestMine ? ` · mejor: <b>${r.bestMine.pos}º</b>${r.bestMine.name?' '+escapeHtml(r.bestMine.name):''}` : '';
+        mineTxt = `<div style="margin-top:3px;color:#bfe3ff">🚴 Nuestro equipo: <b>${r.mineCount}</b>${best}</div>`;
+      }
+      cuerpo = partTxt + finTxt + mineTxt;
+    }
+    return `<div style="padding:2px 0"><div style="font-weight:800;margin-bottom:2px">${escapeHtml(r.name)}</div>${lugar}${cuerpo}</div>`;
+  }).join('<div style="height:1px;background:rgba(255,255,255,.18);margin:6px 0"></div>');
+}
+function _calShowTip(cell, clientX, clientY){
+  const y=+cell.getAttribute('data-cy'), m=+cell.getAttribute('data-cm'), d=+cell.getAttribute('data-cd');
+  if(isNaN(y)) return;
+  const html=_calTooltipHTML(y,m,d); if(!html) return;
+  const t=_calTooltipEl(); t.innerHTML=html; t.style.opacity='1';
+  // Posición: junto al cursor, recolocada para no salir de la pantalla
+  const r=t.getBoundingClientRect();
+  let x=clientX+14, ty=clientY+14;
+  if(x+r.width>window.innerWidth-8) x=clientX-r.width-14;
+  if(ty+r.height>window.innerHeight-8) ty=clientY-r.height-14;
+  if(x<8)x=8; if(ty<8)ty=8;
+  t.style.left=x+'px'; t.style.top=ty+'px';
+}
+function _calHideTip(){ const t=document.getElementById('_calTip'); if(t) t.style.opacity='0'; }
+function _calBindTooltips(){
+  const body=document.getElementById('calBody'); if(!body || body._tipBound) return;
+  body._tipBound=true;
+  body.addEventListener('mouseover', e=>{ const c=e.target.closest('[data-cal-day]'); if(c) _calShowTip(c, e.clientX, e.clientY); });
+  body.addEventListener('mousemove', e=>{ const c=e.target.closest('[data-cal-day]'); if(c){ const t=document.getElementById('_calTip'); if(t&&t.style.opacity==='1') _calShowTip(c, e.clientX, e.clientY); } });
+  body.addEventListener('mouseout', e=>{ const c=e.target.closest('[data-cal-day]'); if(c && !c.contains(e.relatedTarget)) _calHideTip(); });
+  // Táctil (iPad): pulsar un día muestra el tooltip; tocar fuera lo cierra
+  body.addEventListener('touchstart', e=>{ const c=e.target.closest('[data-cal-day]'); if(c){ const tch=e.touches[0]; _calShowTip(c, tch.clientX, tch.clientY); } }, {passive:true});
+  document.addEventListener('touchstart', e=>{ if(!e.target.closest('[data-cal-day]')) _calHideTip(); }, {passive:true});
 }
 
 function _calGetRacesForDay(y, m, d){
@@ -1106,17 +1242,18 @@ function _calBuildMonth(y, m){
   for(let day=1;day<=daysInMonth;day++){
     const isToday = today.getFullYear()===y && today.getMonth()===m && today.getDate()===day;
     const isPast  = new Date(y,m,day) < new Date(today.getFullYear(),today.getMonth(),today.getDate());
-    const races   = _calGetRacesForDay(y,m,day);
+    const races   = _calGetRacesForDay(y,m,day).filter(_calRaceMatchesCat);
     const hasPast = races.some(r=>r.type==='past');
     const hasPlan = races.some(r=>r.type==='planned');
-    const raceInfo = races.map(r=>`${escapeHtml(r.name)}${r.localidad?' · '+escapeHtml(r.localidad):''}`).join('\n');
 
     const bgColor = isToday ? '#fef2f2' : races.length>0 ? (hasPast&&!hasPlan?'#eff6ff':hasPlan&&!hasPast?'#f0fdf4':'#fefce8') : isPast?'#f9fafb':'#fff';
     const border  = isToday ? '2px solid #ef4444' : races.length>0 ? '1.5px solid #e0e7ff' : '1px solid #f3f4f6';
     const dayColor= isToday ? '#ef4444' : isPast&&races.length===0 ? '#9ca3af' : '#111827';
     const cursor  = !isPast || races.length>0 ? 'pointer' : 'default';
+    // data-* marca los días con carrera para el tooltip ligero (hover / táctil)
+    const tipAttrs = races.length>0 ? ` data-cal-day="1" data-cy="${y}" data-cm="${m}" data-cd="${day}"` : '';
 
-    html += `<div title="${escapeHtml(raceInfo)}" onclick="_calDayClick(${y},${m},${day})"
+    html += `<div${tipAttrs} onclick="_calDayClick(${y},${m},${day})"
       style="min-height:72px;border-radius:10px;border:${border};background:${bgColor};padding:6px 8px;cursor:${cursor};transition:box-shadow .15s"
       onmouseenter="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseleave="this.style.boxShadow=''">
       <div style="font-size:13px;font-weight:${isToday?'900':'700'};color:${dayColor};margin-bottom:4px">${day}</div>
@@ -1135,7 +1272,7 @@ function _calBuildMonth(y, m){
 
   // Lista de carreras del mes
   const monthRaces = [..._calPast, ..._calPlanned].filter(r=>{
-    return r.date && r.date.getFullYear()===y && r.date.getMonth()===m;
+    return r.date && r.date.getFullYear()===y && r.date.getMonth()===m && _calRaceMatchesCat(r);
   }).sort((a,b)=>a.date-b.date);
 
   if(monthRaces.length>0){
@@ -1184,7 +1321,7 @@ function _calBuildMonth(y, m){
 function _calBuildAnnual(){
   let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">`;
   for(let m=0;m<12;m++){
-    const races = [..._calPast,..._calPlanned].filter(r=>r.date&&r.date.getFullYear()===_calYear&&r.date.getMonth()===m);
+    const races = [..._calPast,..._calPlanned].filter(r=>r.date&&r.date.getFullYear()===_calYear&&r.date.getMonth()===m&&_calRaceMatchesCat(r));
     html += `<div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
       <div style="background:${races.length>0?'#0b2f6b':'#f3f4f6'};color:${races.length>0?'#fff':'#6b7280'};padding:8px 12px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="_calGoMonth(${m})">
         <span>${_CAL_MONTHS_ES[m]}</span>
@@ -38306,7 +38443,7 @@ function _infRaceCategoria(r){
 }
 
 // Construye el SVG completo del calendario anual (A4 apaisado, viewBox 1123x794)
-function _infBuildAnnualSVG(year, teamName, races){
+function _infBuildAnnualSVG(year, teamName, races, catLabel){
   const W=1123, H=794, esTBG=/tbg|wixum/i.test(teamName);
   // Mapa: monthIdx -> { day -> {color, planned, items:[...]} }
   const byMonth = Array.from({length:12},()=>({}));
@@ -38341,7 +38478,7 @@ function _infBuildAnnualSVG(year, teamName, races){
   svg+=`<rect x="0" y="0" width="${W}" height="92" fill="#0e4d73"/>`;
   svg+=`<rect x="0" y="92" width="${W}" height="6" fill="#f5c518"/>`;
   svg+=`<text x="40" y="44" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="900" fill="#ffffff">CALENDARIO DE COMPETICIONES</text>`;
-  svg+=`<text x="40" y="76" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#cde8f7">TEMPORADA ${year} · ${_infEsc(teamName)}</text>`;
+  svg+=`<text x="40" y="76" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#cde8f7">TEMPORADA ${year} · ${_infEsc(teamName)}${catLabel?' · '+_infEsc(catLabel):''}</text>`;
   // Logo arriba derecha
   if(esTBG){ svg+=`<g transform="translate(${W-104},10)"><rect x="-6" y="-2" width="84" height="84" rx="12" fill="#ffffff"/><svg x="2" y="6" width="64" height="64" viewBox="0 0 310 310">${_infLogoInner()}</svg></g>`; }
   else { svg+=`<circle cx="${W-58}" cy="46" r="34" fill="#ffffff"/><text x="${W-58}" y="56" font-family="Segoe UI,Arial" font-size="26" font-weight="900" fill="#0e4d73" text-anchor="middle">${_infEsc((teamName||'').slice(0,2).toUpperCase())}</text>`; }
@@ -38437,7 +38574,8 @@ async function _infGenerateAnnual(){
   if(!races.length){ if(st) st.innerHTML=_infDiagNoData(history, opts.year, team.key); return; }
   races.forEach(r=>{ r._catInfo=_infRaceCategoria(r); });
 
-  _infAnnualSVG=_infBuildAnnualSVG(opts.year, team.name, races);
+  const catLabel = opts.catSel ? _infCatLabel(opts.catSel) : '';
+  _infAnnualSVG=_infBuildAnnualSVG(opts.year, team.name, races, catLabel);
   _infAnnualYear=opts.year; _infAnnualTeam=team.name;
   _infShowAnnualPreview();
   if(st) st.textContent='✅ Calendario anual generado. Revísalo y expórtalo.';

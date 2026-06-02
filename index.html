@@ -2704,7 +2704,7 @@
       </section>
 
       <section class="panel">
-        <div class="section-title"><h2>📅 Calendario de carreras</h2></div>
+        <div class="section-title"><h2 id="calHeading">📅 Calendario de carreras</h2></div>
 
         <!-- Controles -->
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
@@ -2714,6 +2714,9 @@
             <button onclick="_calNext()" style="background:#f0f5ff;border:1.5px solid #c7d7f5;border-radius:9px;padding:7px 12px;cursor:pointer;font-size:16px;color:#1a56db;font-weight:900">▶</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="calCatSelect" onchange="_calSetCat(this.value)" title="Filtra el calendario por categoría" style="padding:7px 12px;border-radius:9px;border:1.5px solid #c7d7f5;background:#f0f5ff;color:#0b2f6b;font-weight:800;font-size:13px;cursor:pointer">
+              <option value="">Todas las categorías</option>
+            </select>
             <button id="calBtnMonthly" onclick="_calSetView('monthly')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #1a56db;background:#1a56db;color:#fff;font-weight:700;font-size:13px;cursor:pointer">Mensual</button>
             <button id="calBtnAnnual" onclick="_calSetView('annual')" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Anual</button>
             <button onclick="_calToday()" style="padding:7px 14px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;font-size:13px;cursor:pointer">Hoy</button>
@@ -3337,6 +3340,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=informe-temporada-10"></script>
+<script src="assets/js/app.js?v=informe-temporada-11"></script>
 </body>
 </html>
