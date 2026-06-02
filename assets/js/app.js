@@ -37286,19 +37286,93 @@ function _infTipoPrueba(name, cat){
   return 'Ruta en línea';
 }
 
-// Parsea provincia (y CCAA) de la localidad si viene como "PUEBLO (PROVINCIA)"
+// Normaliza texto: minúsculas, sin acentos, sin signos
+function _infNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
+
+// Mapa COMPLETO de provincias españolas → Comunidad Autónoma (clave normalizada)
 const _INF_PROV_CCAA = {
-  'ALICANTE':'Comunitat Valenciana','ALACANT':'Comunitat Valenciana',
-  'CASTELLON':'Comunitat Valenciana','CASTELLÓ':'Comunitat Valenciana','CASTELLO':'Comunitat Valenciana',
-  'VALENCIA':'Comunitat Valenciana','VALÈNCIA':'Comunitat Valenciana'
+  // Comunitat Valenciana
+  'alicante':'Comunitat Valenciana','alacant':'Comunitat Valenciana',
+  'castellon':'Comunitat Valenciana','castello':'Comunitat Valenciana',
+  'valencia':'Comunitat Valenciana',
+  // Andalucía
+  'almeria':'Andalucía','cadiz':'Andalucía','cordoba':'Andalucía','granada':'Andalucía','huelva':'Andalucía','jaen':'Andalucía','malaga':'Andalucía','sevilla':'Andalucía',
+  // Aragón
+  'huesca':'Aragón','teruel':'Aragón','zaragoza':'Aragón',
+  // Asturias
+  'asturias':'Asturias','oviedo':'Asturias',
+  // Illes Balears
+  'baleares':'Illes Balears','illes balears':'Illes Balears','mallorca':'Illes Balears',
+  // Canarias
+  'las palmas':'Canarias','santa cruz de tenerife':'Canarias','tenerife':'Canarias',
+  // Cantabria
+  'cantabria':'Cantabria','santander':'Cantabria',
+  // Castilla-La Mancha
+  'albacete':'Castilla-La Mancha','ciudad real':'Castilla-La Mancha','cuenca':'Castilla-La Mancha','guadalajara':'Castilla-La Mancha','toledo':'Castilla-La Mancha',
+  // Castilla y León
+  'avila':'Castilla y León','burgos':'Castilla y León','leon':'Castilla y León','palencia':'Castilla y León','salamanca':'Castilla y León','segovia':'Castilla y León','soria':'Castilla y León','valladolid':'Castilla y León','zamora':'Castilla y León',
+  // Cataluña
+  'barcelona':'Cataluña','girona':'Cataluña','gerona':'Cataluña','lleida':'Cataluña','lerida':'Cataluña','tarragona':'Cataluña',
+  // Extremadura
+  'badajoz':'Extremadura','caceres':'Extremadura',
+  // Galicia
+  'a coruna':'Galicia','la coruna':'Galicia','coruna':'Galicia','lugo':'Galicia','ourense':'Galicia','orense':'Galicia','pontevedra':'Galicia',
+  // Madrid
+  'madrid':'Comunidad de Madrid',
+  // Murcia
+  'murcia':'Región de Murcia',
+  // Navarra
+  'navarra':'Navarra','pamplona':'Navarra',
+  // País Vasco
+  'alava':'País Vasco','araba':'País Vasco','guipuzcoa':'País Vasco','gipuzkoa':'País Vasco','vizcaya':'País Vasco','bizkaia':'País Vasco',
+  // La Rioja
+  'la rioja':'La Rioja','rioja':'La Rioja','logrono':'La Rioja',
+  // Ceuta / Melilla
+  'ceuta':'Ceuta','melilla':'Melilla'
 };
+
+// Palabras clave (en nombre o localidad) que identifican CCAA fuera de la lista de provincias.
+// Cada entrada: [regex sobre texto normalizado, CCAA]. Orden: lo más específico primero.
+const _INF_CCAA_KW = [
+  [/\bextremadura\b/, 'Extremadura'],
+  [/\bbajo aragon\b|\baragon\b|\bmaestrazgo turolense\b/, 'Aragón'],
+  [/\bvinedos\b|\bvillarrobledo\b|\bla mancha\b|\bmancha\b/, 'Castilla-La Mancha'],
+  [/\bcastilla y leon\b/, 'Castilla y León'],
+  [/\bcatalunya\b|\bcataluna\b/, 'Cataluña'],
+  [/\bandalucia\b/, 'Andalucía'],
+  [/\bregion de murcia\b|\bmurcia\b/, 'Región de Murcia'],
+  [/\bpais vasco\b|\beuskadi\b/, 'País Vasco'],
+  [/\bgalicia\b/, 'Galicia'],
+  [/\bnavarra\b/, 'Navarra'],
+  [/\bla rioja\b/, 'La Rioja'],
+  [/\bcomunidad de madrid\b|\bmadrid\b/, 'Comunidad de Madrid'],
+  [/\basturias\b/, 'Asturias'],
+  [/\bcantabria\b/, 'Cantabria'],
+  [/\billes balears\b|\bislas baleares\b|\bmallorca\b/, 'Illes Balears'],
+  [/\bcanarias\b|\btenerife\b/, 'Canarias']
+];
+
+// Parsea provincia (y CCAA) de la localidad si viene como "PUEBLO (PROVINCIA)"
 function _infProvincia(loc){
   if(!loc) return {prov:'', ccaa:''};
   const m = String(loc).match(/\(([^)]+)\)\s*$/);
   if(!m) return {prov:'', ccaa:''};
-  const prov = m[1].trim().toUpperCase();
-  const ccaa = _INF_PROV_CCAA[prov] || '';
-  return {prov: m[1].trim(), ccaa};
+  const prov = m[1].trim();
+  const ccaa = _INF_PROV_CCAA[_infNorm(prov)] || '';
+  return {prov, ccaa};
+}
+
+// Determina la CCAA de una prueba combinando todas las señales disponibles.
+// Devuelve '' solo si no hay ninguna pista (entonces se asume CV por ser calendario FCCV).
+function _infDetectCCAA(name, localidad, prov, ccaaField){
+  if(ccaaField && String(ccaaField).trim()) return String(ccaaField).trim();
+  if(prov){ const c=_INF_PROV_CCAA[_infNorm(prov)]; if(c) return c; }
+  const txt = _infNorm((name||'') + ' ' + (localidad||''));
+  // Provincia mencionada en el texto (palabra completa)
+  for(const k in _INF_PROV_CCAA){ if(new RegExp('\\b'+k.replace(/ /g,'\\s')+'\\b').test(txt)) return _INF_PROV_CCAA[k]; }
+  // Palabras clave de región
+  for(const [re,c] of _INF_CCAA_KW){ if(re.test(txt)) return c; }
+  return '';
 }
 // Limpia la localidad quitando el paréntesis de provincia
 function _infLimpiaLoc(loc){
@@ -38221,9 +38295,14 @@ function _infIsCVProv(prov){
 function _infRaceCategoria(r){
   // Challenge CV = SOLO las pruebas con el checkbox "Challenge CV" activado al introducirlas
   if(r.challengeCV) return {cat:3, label:'Challenge CV', color:_INF_CAL_COLORS.challenge};
-  const cv = (r.ccaa==='Comunitat Valenciana') || _infIsCVProv(r.prov) || !r.prov;
-  if(cv) return {cat:1, label:'Comunidad Valenciana', color:_INF_CAL_COLORS.cv};
-  return {cat:2, label:'Fuera Comunidad Valenciana', color:_INF_CAL_COLORS.fuera};
+  // Determina la comunidad por todas las señales (ccaa guardada, provincia, nombre, localidad)
+  const ccaa = _infDetectCCAA(r.name, r.localidad, r.prov, r.ccaa);
+  // Fuera de CV solo si se ha identificado una comunidad distinta de la Valenciana.
+  // Si no hay ninguna pista, se asume CV (calendario de la federación valenciana).
+  if(ccaa && ccaa!=='Comunitat Valenciana'){
+    return {cat:2, label:'Fuera Comunidad Valenciana', color:_INF_CAL_COLORS.fuera};
+  }
+  return {cat:1, label:'Comunidad Valenciana', color:_INF_CAL_COLORS.cv};
 }
 
 // Construye el SVG completo del calendario anual (A4 apaisado, viewBox 1123x794)
