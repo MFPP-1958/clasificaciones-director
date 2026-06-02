@@ -37344,9 +37344,26 @@ function _infBuildDataByKey(history, opts){
   const catMatch = (c)=>{
     if(!o.catSel) return true;
     const cc = (c||'').toLowerCase();
-    if(o.catSel==='cadete')  return /cadet/.test(cc);
-    if(o.catSel==='juvenil') return /junior|juvenil/.test(cc);
+    if(o.catSel==='cadete')  return /cadet|\bcad\b/.test(cc);
+    if(o.catSel==='juvenil') return /juvenil|junior|j[uú]nior|\bjun\b/.test(cc);
     return true;
+  };
+  // Resuelve la categoría de un corredor en una carrera con varios respaldos:
+  // override → cat del corredor → categoría/clase de la carrera → nombre de la
+  // prueba. Devuelve {cat, known}. Si no se puede determinar, known=false.
+  const resolveCat = (r, race, ry)=>{
+    let c = (typeof getRiderCorrectCat==='function'
+      ? getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) : '') || '';
+    if(!c) c = (r.cat||'').trim();
+    if(c) return {cat:c, known:true};
+    // Respaldo a nivel de carrera
+    const rc = (race.cat||race.category||race.categoria||'').trim();
+    if(rc) return {cat:rc, known:true};
+    // Inferir del nombre de la prueba
+    const nm = (race.raceName||'').toLowerCase();
+    if(/cadet/.test(nm)) return {cat:'Cadete', known:true};
+    if(/juvenil|junior|j[uú]nior/.test(nm)) return {cat:'Juvenil', known:true};
+    return {cat:'', known:false};
   };
   const inDate = (iso)=>{
     if(o.dateFrom && iso && iso < o.dateFrom) return false;
@@ -37366,9 +37383,11 @@ function _infBuildDataByKey(history, opts){
       const mine = [];
       for(const r of (race.riders||[])){
         if(!isTeam(r.team||'')) continue;
-        const rcat = (typeof getRiderCorrectCat==='function'
-          ? getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) : (r.cat||''));
-        if(!catMatch(rcat)) continue;
+        const {cat:rcat, known} = resolveCat(r, race, ry);
+        // Si hay filtro de categoría: descartar solo cuando la categoría es
+        // CONOCIDA y no coincide. Si es desconocida, no se descarta (mejor
+        // mostrar la prueba que ocultar el calendario del equipo).
+        if(o.catSel && known && !catMatch(rcat)) continue;
         mine.push({ name:r.name||'', pos:r.pos, cat:rcat });
       }
       if(!mine.length) continue;
@@ -37657,7 +37676,7 @@ async function _infGeneratePDF(){
   let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
   const team=opts.teams[0];
   const D=_infBuildDataByKey(history, _infFilters(opts, team));
-  if(!D.realizadas.length && !D.planificadas.length){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+  if(!D.realizadas.length && !D.planificadas.length){ if(st) st.innerHTML=_infDiagNoData(history, opts.year, team.key); return; }
   if(st) st.textContent='✅ Abriendo el PDF…';
   const teamName=team.name, R=D.resumen;
   const hoy=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
@@ -37793,7 +37812,7 @@ async function _infGenerateInfografia(fmt){
   const team=opts.teams[0];
   const D=_infBuildDataByKey(history, _infFilters(opts, team));
   const R=D.resumen;
-  if(!R.totalPruebas){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+  if(!R.totalPruebas){ if(st) st.innerHTML=_infDiagNoData(history, opts.year, team.key); return; }
   const teamName=team.name;
 
   const sq=fmt==='ig'; const W=sq?1080:1200, H=sq?1080:675;
@@ -37876,7 +37895,7 @@ async function _infCopyPost(){
   let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
   const team=opts.teams[0];
   const D=_infBuildDataByKey(history, _infFilters(opts, team)); const R=D.resumen;
-  if(!R.totalPruebas){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+  if(!R.totalPruebas){ if(st) st.innerHTML=_infDiagNoData(history, opts.year, team.key); return; }
   const teamName=team.name;
   const tipos=R.tipos.length?R.tipos.join(', '):'';
   const post=`🚴 UNA TEMPORADA DE OPORTUNIDADES — ${teamName} ${opts.year}
@@ -38113,14 +38132,27 @@ async function _infGenerateComparativeInfografia(){
 }
 
 // ── Diagnóstico cuando no se encuentran pruebas ──────────────────────────
-function _infDiagNoData(history, year){
+function _infDiagNoData(history, year, teamKeyWanted){
   const counts={};
+  // Categorías reales del equipo seleccionado, para detectar discrepancias
+  const teamCats={};
   for(const race of (history||[])){
     const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
     if(year && ry!==year) continue;
-    for(const r of (race.riders||[])){ const t=(r.team||'').trim(); if(t) counts[t]=(counts[t]||0)+1; }
+    for(const r of (race.riders||[])){
+      const t=(r.team||'').trim(); if(t) counts[t]=(counts[t]||0)+1;
+      if(teamKeyWanted && typeof teamKey==='function' && teamKey(t)===teamKeyWanted){
+        const c=(r.cat||'').trim()||'(sin categoría)';
+        teamCats[c]=(teamCats[c]||0)+1;
+      }
+    }
+  }
+  if(!Object.keys(counts).length) return `⚠️ No hay datos cargados para ${escapeHtml(year)}. Comprueba que el historial de esa temporada está cargado.`;
+  // Si el equipo SÍ tiene participaciones pero el filtro las descarta, muéstralo
+  if(teamKeyWanted && Object.keys(teamCats).length){
+    const cats=Object.entries(teamCats).sort((a,b)=>b[1]-a[1]).map(([c,n])=>escapeHtml(c)+' ('+n+')').join(', ');
+    return `⚠️ El equipo tiene participaciones en ${escapeHtml(year)}, pero ningún resultado pasa los filtros (probablemente la <b>categoría</b>).<br><span style="color:#64748b">Categorías registradas para este equipo: ${cats}.</span><br>Prueba con <b>categoría «Ambas»</b> o ajusta el estado/filtros.`;
   }
   const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if(!Object.keys(counts).length) return `⚠️ No hay datos cargados para ${escapeHtml(year)}. Comprueba que el historial de esa temporada está cargado.`;
   return `⚠️ No se encontraron pruebas con los filtros aplicados.<br><span style="color:#64748b">Equipos con más participaciones en ${escapeHtml(year)}: ${top.map(([t,n])=>escapeHtml(t)+' ('+n+')').join(', ')}.</span><br>Ajusta el equipo, la categoría o los filtros y vuelve a intentarlo.`;
 }
