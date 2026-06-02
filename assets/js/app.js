@@ -37380,6 +37380,7 @@ function _infBuildDataByKey(history, opts){
       const ry = iso.slice(0,4);
       if(o.year && ry!==o.year) continue;
       if(!inDate(iso)) continue;
+      // Clasificados (finishers) de mi equipo
       const mine = [];
       for(const r of (race.riders||[])){
         if(!isTeam(r.team||'')) continue;
@@ -37390,9 +37391,22 @@ function _infBuildDataByKey(history, opts){
         if(o.catSel && known && !catMatch(rcat)) continue;
         mine.push({ name:r.name||'', pos:r.pos, cat:rcat });
       }
-      if(!mine.length) continue;
+      // Inscritos de mi equipo (lista de salida). Permite reflejar la
+      // participación real: muchas veces se inscriben más de los que
+      // terminan/clasifican (abandonos, descalificaciones de jueces, etc.).
+      const insList = Array.isArray(race.inscritos) ? race.inscritos : [];
+      const hasIns = insList.length>0;
+      const mineIns = [];
+      for(const ins of insList){
+        if(!isTeam(ins.team||'')) continue;
+        const ic = (ins.cat||'').trim();
+        if(o.catSel && ic && !catMatch(ic)) continue; // solo excluye si la cat es conocida y no casa
+        mineIns.push({ name: ins.name||'', cat: ic });
+      }
+      // La prueba cuenta si el equipo estuvo presente: clasificó o se inscribió
+      if(!mine.length && !mineIns.length) continue;
       const {prov, ccaa} = _infProvincia(race.localidad);
-      const cats = [...new Set(mine.map(m=>m.cat).filter(Boolean))];
+      const cats = [...new Set([...mine.map(m=>m.cat), ...mineIns.map(m=>m.cat)].filter(Boolean))];
       const tipo = _infTipoPrueba(race.raceName, cats.join(' '));
       if(!tipoMatch(tipo)) continue;
       if(!provMatch(prov)) continue;
@@ -37404,8 +37418,10 @@ function _infBuildDataByKey(history, opts){
         prov, ccaa, cats, tipo,
         km: (race.km && String(race.km).trim()) ? String(race.km).trim() : '',
         totalParticipantes: (race.riders||[]).length,
-        misCorredores: mine.length,
-        nombresMios: mine.map(m=>m.name),
+        totalInscritos: hasIns ? insList.length : null,
+        misCorredores: mine.length,                 // clasificados (finishers)
+        misInscritos: hasIns ? mineIns.length : null, // inscritos del equipo
+        nombresMios: (mine.length? mine.map(m=>m.name) : mineIns.map(m=>m.name)),
         estado:'realizada'
       });
     }
@@ -37428,7 +37444,7 @@ function _infBuildDataByKey(history, opts){
         iso, fecha: iso? iso.split('-').reverse().join('/'):'',
         name: p.name||'', localidad:_infLimpiaLoc(p.localidad),
         prov, ccaa, cats:p.cat?[p.cat]:[], tipo,
-        km:'', totalParticipantes:0, misCorredores:0, nombresMios:[], estado:'planificada'
+        km:'', totalParticipantes:0, totalInscritos:null, misCorredores:0, misInscritos:null, nombresMios:[], estado:'planificada'
       });
     }
     planificadas.sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
@@ -37445,6 +37461,10 @@ function _infBuildDataByKey(history, opts){
   const nombresUnicos = [...new Set(realizadas.flatMap(r=>r.nombresMios).map(n=>(typeof _evolNormName==='function'?_evolNormName(n):n)).filter(Boolean))];
   const con3 = realizadas.filter(r=>r.misCorredores>=3).length;
   const menos3 = realizadas.length - con3;
+  // Inscritos (solo pruebas con lista de inscritos disponible)
+  const conInscritos = realizadas.filter(r=>r.misInscritos!=null);
+  const totalInscritos = conInscritos.reduce((s,r)=>s+r.misInscritos,0);
+  const pruebasConInscritos = conInscritos.length;
 
   return {
     realizadas, planificadas,
@@ -37452,8 +37472,11 @@ function _infBuildDataByKey(history, opts){
       totalPruebas: realizadas.length,
       vueltas,
       localidades: locs, provincias: provs, ccaas,
-      participaciones: totalPart,
+      participaciones: totalPart,               // clasificados (finishers)
       mediaPorPrueba: realizadas.length ? (totalPart/realizadas.length) : 0,
+      inscripciones: totalInscritos,            // inscritos del equipo (donde hay lista)
+      pruebasConInscritos,
+      mediaInscritos: pruebasConInscritos ? (totalInscritos/pruebasConInscritos) : 0,
       tipos,
       kmTotal: kmList.length ? kmTotal : null,
       kmConDato: kmList.length,
@@ -37688,12 +37711,14 @@ async function _infGeneratePDF(){
     stat(R.totalPruebas,'Pruebas disputadas'),
     stat(R.localidades.length||'—','Localidades visitadas'),
     stat(R.provincias.length||'—','Provincias'),
-    stat(R.participaciones,'Participaciones'),
-    stat(R.mediaPorPrueba?R.mediaPorPrueba.toFixed(1):'—','Media ciclistas/prueba'),
+    R.pruebasConInscritos?stat(R.inscripciones,'Inscripciones del equipo'):null,
+    stat(R.participaciones,'Clasificaciones (finalizadas)'),
+    R.pruebasConInscritos?stat(R.mediaInscritos?R.mediaInscritos.toFixed(1):'—','Media inscritos/prueba'):null,
+    stat(R.mediaPorPrueba?R.mediaPorPrueba.toFixed(1):'—','Media clasificados/prueba'),
     stat(R.ciclistasUnicos.length||'—','Ciclistas distintos'),
     stat(R.vueltas||'—','Vueltas / por etapas'),
-    stat(R.con3,'Pruebas con ≥3 ciclistas')
-  ].join('');
+    stat(R.con3,'Pruebas con ≥3 clasificados')
+  ].filter(Boolean).join('');
 
   const ficha=(r)=>{
     const cats=r.cats.length?r.cats.join(', '):'No disponible';
@@ -37706,8 +37731,10 @@ async function _infGeneratePDF(){
       ['Categorías', cats],
       ['Tipo de prueba', r.tipo||'No disponible'],
       r.km?['Kilómetros', r.km+' km']:null,
-      r.estado==='realizada'?['Participantes totales', String(r.totalParticipantes||'No disponible')]:null,
-      r.estado==='realizada'?['Ciclistas del equipo', String(r.misCorredores)]:null
+      r.estado==='realizada'?['Inscritos totales', r.totalInscritos!=null?String(r.totalInscritos):'No disponible']:null,
+      r.estado==='realizada'?['Clasificados totales', String(r.totalParticipantes||'No disponible')]:null,
+      r.estado==='realizada'?['Inscritos del equipo', r.misInscritos!=null?String(r.misInscritos):'No disponible']:null,
+      r.estado==='realizada'?['Clasificados del equipo', String(r.misCorredores)]:null
     ].filter(Boolean).map(x=>`<tr><td class="fk">${x[0]}</td><td class="fv">${escapeHtml(String(x[1]))}</td></tr>`).join('');
     return `<div class="ficha"><div class="ficha-h"><div class="ficha-fecha">${escapeHtml(r.fecha||'')}</div><div class="ficha-name">${escapeHtml(r.name||'')}</div>${badge}</div><table class="ficha-t">${rows}</table>${nombres?`<div class="ficha-riders"><span class="fr-lab">Ciclistas:</span> ${nombres}</div>`:''}</div>`;
   };
@@ -37774,6 +37801,7 @@ async function _infGeneratePDF(){
       <div class="rs-grid">${resumenCards}</div>
       ${R.tipos.length?`<div class="info-line"><b>Tipos de prueba disputadas:</b></div><div class="chips">${R.tipos.map(t=>`<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>`:''}
       ${R.localidades.length?`<div class="info-line" style="margin-top:10px"><b>Localidades visitadas:</b></div><div class="chips">${R.localidades.map(l=>`<span class="chip">📍 ${escapeHtml(l)}</span>`).join('')}</div>`:''}
+      ${R.pruebasConInscritos?`<div class="info-line" style="margin-top:10px"><b>Inscritos vs clasificados:</b> el equipo sumó <b>${R.inscripciones}</b> inscripciones (lista de salida) y <b>${R.participaciones}</b> clasificaciones (finalizadas) en las ${R.pruebasConInscritos} pruebas con lista de inscritos registrada. La diferencia corresponde a abandonos, descalificaciones u otras causas ajenas a la participación.</div>`:''}
       ${R.kmTotal==null?`<div class="info-line" style="margin-top:10px;color:#94a3b8">Kilómetros y desnivel: <b>No disponible</b> en los datos cargados.</div>`:(R.kmConDato<R.totalPruebas?`<div class="info-line" style="margin-top:8px;color:#94a3b8">* Km sobre ${R.kmConDato} de ${R.totalPruebas} pruebas con dato.</div>`:'')}
       <div class="disc">⚠️ ${_INF_DISCLAIMER}</div>
     </div>
@@ -37961,15 +37989,21 @@ async function _infGenerateComparativePDF(){
   if(st) st.textContent='✅ Abriendo la comparativa…';
   const hoy=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
 
-  // Tabla comparativa
+  // Tabla comparativa. Distinguimos INSCRITOS (lista de salida) de
+  // CLASIFICADOS (finishers en resultados), porque el nº de finalizados suele
+  // ser menor que el de inscritos (abandonos, descalificaciones, etc.).
+  const insVal = td => td.D.resumen.pruebasConInscritos ? String(td.D.resumen.inscripciones) : 's/d';
+  const mediaInsVal = td => td.D.resumen.pruebasConInscritos ? td.D.resumen.mediaInscritos.toFixed(1) : 's/d';
   const cols=[
     ['Pruebas realizadas', td=>td.D.resumen.totalPruebas],
     ['Vueltas / etapas', td=>td.D.resumen.vueltas],
     ['Localidades', td=>td.D.resumen.localidades.length],
     ['Provincias', td=>td.D.resumen.provincias.length],
-    ['Participaciones', td=>td.D.resumen.participaciones],
-    ['Media ciclistas/prueba', td=>td.D.resumen.mediaPorPrueba?td.D.resumen.mediaPorPrueba.toFixed(1):'—'],
-    ['Pruebas con ≥3 ciclistas', td=>td.D.resumen.con3],
+    ['Inscripciones (lista de salida)', insVal],
+    ['Clasificaciones (finalizadas)', td=>td.D.resumen.participaciones],
+    ['Media inscritos/prueba', mediaInsVal],
+    ['Media clasificados/prueba', td=>td.D.resumen.mediaPorPrueba?td.D.resumen.mediaPorPrueba.toFixed(1):'—'],
+    ['Pruebas con ≥3 clasificados', td=>td.D.resumen.con3],
     ['Puntuables por equipos (≥3)', td=>td.D.resumen.con3],
     ['Sin equipo completo (<3)', td=>td.D.resumen.menos3]
   ];
@@ -37993,10 +38027,14 @@ async function _infGenerateComparativePDF(){
   const exclusivasBlocks = C.teamsData.map((td,i)=>`<div style="margin-bottom:10px"><div style="font-weight:800;color:${_INF_PALETTE[i%_INF_PALETTE.length]};font-size:12.5px;margin-bottom:3px">Solo ${escapeHtml(td.team.name)} (${td.exclusivas.length})</div>${td.exclusivas.length?`<ul class="lst">${td.exclusivas.slice(0,40).map(r=>`<li><b>${escapeHtml(r.fecha)}</b> — ${escapeHtml(r.name)}</li>`).join('')}${td.exclusivas.length>40?`<li style="color:#94a3b8">… y ${td.exclusivas.length-40} más</li>`:''}</ul>`:`<p style="color:#94a3b8;font-size:11.5px;margin:2px 0">—</p>`}</div>`).join('');
 
   // Resumen objetivo (solo datos)
-  const resumenObj = C.teamsData.map(td=>`<li><b>${escapeHtml(td.team.name)}</b>: ${td.D.resumen.totalPruebas} pruebas, ${td.D.resumen.participaciones} participaciones, ${td.D.resumen.localidades.length} localidades, media ${td.D.resumen.mediaPorPrueba?td.D.resumen.mediaPorPrueba.toFixed(1):'—'} ciclistas/prueba.</li>`).join('');
+  const resumenObj = C.teamsData.map(td=>{
+    const R=td.D.resumen;
+    const insTxt = R.pruebasConInscritos ? `${R.inscripciones} inscripciones, ` : '';
+    return `<li><b>${escapeHtml(td.team.name)}</b>: ${R.totalPruebas} pruebas, ${insTxt}${R.participaciones} clasificaciones, ${R.localidades.length} localidades, media ${R.mediaPorPrueba?R.mediaPorPrueba.toFixed(1):'—'} clasificados/prueba.</li>`;
+  }).join('');
 
   // Listas por equipo
-  const listasEquipo = C.teamsData.map((td,i)=>`<div class="sec-block"><h2 class="sec-t" style="border-color:${_INF_PALETTE[i%_INF_PALETTE.length]}">📋 ${escapeHtml(td.team.name)} — pruebas (${td.D.realizadas.length})</h2>${td.D.realizadas.length?`<table class="lt"><thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th><th>Tipo</th><th>Cicl.</th></tr></thead><tbody>${td.D.realizadas.map(r=>`<tr><td>${escapeHtml(r.fecha)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.localidad||'—')}</td><td>${escapeHtml(r.tipo)}</td><td style="text-align:center">${r.misCorredores}</td></tr>`).join('')}</tbody></table>`:`<p style="color:#94a3b8">Sin pruebas registradas con los filtros aplicados.</p>`}</div>`).join('');
+  const listasEquipo = C.teamsData.map((td,i)=>`<div class="sec-block"><h2 class="sec-t" style="border-color:${_INF_PALETTE[i%_INF_PALETTE.length]}">📋 ${escapeHtml(td.team.name)} — pruebas (${td.D.realizadas.length})</h2>${td.D.realizadas.length?`<table class="lt"><thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th><th>Tipo</th><th title="Inscritos del equipo">Insc.</th><th title="Clasificados del equipo">Clasif.</th></tr></thead><tbody>${td.D.realizadas.map(r=>`<tr><td>${escapeHtml(r.fecha)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.localidad||'—')}</td><td>${escapeHtml(r.tipo)}</td><td style="text-align:center">${r.misInscritos!=null?r.misInscritos:'s/d'}</td><td style="text-align:center">${r.misCorredores}</td></tr>`).join('')}</tbody></table>`:`<p style="color:#94a3b8">Sin pruebas registradas con los filtros aplicados.</p>`}</div>`).join('');
 
   const w=window.open('','_blank');
   if(!w){ alert('El navegador bloqueó la ventana. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
@@ -38042,10 +38080,11 @@ async function _infGenerateComparativePDF(){
 
     <h2 class="sec-t">📊 Tabla comparativa</h2>
     <table class="cmp"><thead><tr><th style="text-align:left">Métrica</th>${headTeams}</tr></thead><tbody>${bodyRows}${tiposRow}</tbody></table>
-    <p style="font-size:10px;color:#94a3b8">* Se considera "puntuable por equipos" a partir de 3 ciclistas clasificados, criterio habitual en clasificación por equipos. Ajustable según el reglamento de cada prueba.</p>
+    <p style="font-size:10px;color:#94a3b8">* <b>Inscripciones</b> = ciclistas en la lista de salida; <b>Clasificaciones</b> = ciclistas que finalizaron y aparecen en resultados. El nº de clasificados suele ser menor (abandonos, descalificaciones, etc.). "s/d" = no hay lista de inscritos registrada para esa prueba. "Puntuable por equipos" se considera a partir de 3 ciclistas clasificados (ajustable según el reglamento de cada prueba).</p>
 
     ${barChart('Pruebas realizadas', td=>td.D.resumen.totalPruebas, maxPr)}
-    ${barChart('Participaciones de ciclistas', td=>td.D.resumen.participaciones, maxPa)}
+    ${C.teamsData.some(td=>td.D.resumen.pruebasConInscritos)?barChart('Inscripciones (lista de salida)', td=>td.D.resumen.inscripciones, Math.max(1,...C.teamsData.map(td=>td.D.resumen.inscripciones))):''}
+    ${barChart('Clasificaciones (ciclistas finalizados)', td=>td.D.resumen.participaciones, maxPa)}
 
     <h2 class="sec-t">🔗 Coincidencias</h2>
     <div style="font-weight:800;color:#0e4d73;font-size:12.5px;margin-bottom:4px">Pruebas disputadas por TODOS los equipos (${C.comunes.length})</div>
