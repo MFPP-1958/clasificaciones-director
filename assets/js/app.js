@@ -37219,10 +37219,8 @@ const _INF_COL = {
 };
 
 // Logo TBG en SVG (string) — reutilizable en PDF e infografías
-function _infLogoSVG(size){
-  const s = size||90;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 310" width="${s}" height="${s}">
-    <circle cx="155" cy="155" r="148" fill="#c8c8c8" stroke="#111111" stroke-width="8"/>
+function _infLogoInner(){
+  return `<circle cx="155" cy="155" r="148" fill="#c8c8c8" stroke="#111111" stroke-width="8"/>
     <text x="159" y="120" font-family="Arial Black,Impact,sans-serif" font-size="82" font-weight="900" text-anchor="middle" fill="#0e4d73" opacity="0.55">TBG</text>
     <text x="155" y="116" font-family="Arial Black,Impact,sans-serif" font-size="82" font-weight="900" text-anchor="middle" fill="#2B91C8">TBG</text>
     <g transform="translate(155,192)">
@@ -37230,9 +37228,14 @@ function _infLogoSVG(size){
       <path d="M0,0 C-5,18 -27,32 -46,28 C-65,24 -70,8 -60,-6 C-50,-20 -8,-22 0,0 Z" fill="#c8c8c8"/>
       <path d="M0,0 C5,18 27,32 46,28 C65,24 70,8 60,-6 C50,-20 8,-22 0,0 Z" fill="#c8c8c8"/>
     </g>
-    <text x="155" y="270" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a" letter-spacing="2.5">SECCION DEPORTIVA</text>
-  </svg>`;
+    <text x="155" y="270" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle" fill="#1a1a1a" letter-spacing="2.5">SECCION DEPORTIVA</text>`;
 }
+function _infLogoSVG(size){
+  const s = size||90;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 310" width="${s}" height="${s}">${_infLogoInner()}</svg>`;
+}
+// Colores configurables de las categorías del calendario anual
+const _INF_CAL_COLORS = { cv:'#2B91C8', fuera:'#f59e0b', challenge:'#dc2626', planned:'#94a3b8' };
 
 // Nombre del equipo a usar en el informe
 function _infTeamName(){
@@ -37572,6 +37575,9 @@ async function _infOpenModal(){
         <button onclick="_infGenerateInfografia('ig')" style="background:linear-gradient(135deg,#C13584,#833AB4);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">📸 Infografía Instagram</button>
         <button onclick="_infGenerateInfografia('fb')" style="background:#1877F2;color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">📘 Infografía Facebook</button>
         <button onclick="_infCopyPost()" style="grid-column:1/3;background:#fff;color:#0e4d73;border:1.5px solid #2B91C8;border-radius:11px;padding:11px;font-weight:800;font-size:13px;cursor:pointer">📝 Copiar texto para la publicación</button>
+        <div style="grid-column:1/3;height:1px;background:#e2e8f0;margin:4px 0"></div>
+        <button onclick="_infGenerateAnnual('pdf')" style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">🗓️ Calendario anual PDF</button>
+        <button onclick="_infGenerateAnnual('png')" style="background:#0e4d73;color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">🖼️ Calendario anual PNG</button>
       </div>
 
       <!-- BOTONES COMPARATIVO -->
@@ -38194,4 +38200,200 @@ function _infDiagNoData(history, year, teamKeyWanted){
   }
   const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
   return `⚠️ No se encontraron pruebas con los filtros aplicados.<br><span style="color:#64748b">Equipos con más participaciones en ${escapeHtml(year)}: ${top.map(([t,n])=>escapeHtml(t)+' ('+n+')').join(', ')}.</span><br>Ajusta el equipo, la categoría o los filtros y vuelve a intentarlo.`;
+}
+
+/* ═══════════════════════ CALENDARIO ANUAL DE TEMPORADA ══════════════════
+   12 meses en una sola página A4 apaisada, días coloreados por categoría
+   (Comunitat Valenciana / Fuera CV / Challenge CV), leyenda cronológica,
+   logo y título. Exporta PDF (impresión A4 horizontal) y PNG alta resolución.
+   Se construye una sola vez como SVG y se usa para ambos formatos.
+   ═══════════════════════════════════════════════════════════════════════ */
+const _INF_MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+const _INF_MES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const _INF_DOW = ['L','M','X','J','V','S','D'];
+
+function _infIsCVProv(prov){
+  const p=(prov||'').toUpperCase();
+  return /ALICANTE|ALACANT|CASTELL|VALENCIA|VAL[ÈE]NCIA/.test(p);
+}
+// Clasifica una prueba en una de las 3 categorías visuales
+function _infRaceCategoria(r){
+  if(/challenge/i.test(r.name||'')) return {cat:3, label:'Challenge CV', color:_INF_CAL_COLORS.challenge};
+  const cv = (r.ccaa==='Comunitat Valenciana') || _infIsCVProv(r.prov) || !r.prov;
+  if(cv) return {cat:1, label:'Comunidad Valenciana', color:_INF_CAL_COLORS.cv};
+  return {cat:2, label:'Fuera Comunidad Valenciana', color:_INF_CAL_COLORS.fuera};
+}
+
+// Construye el SVG completo del calendario anual (A4 apaisado, viewBox 1123x794)
+function _infBuildAnnualSVG(year, teamName, races){
+  const W=1123, H=794, esTBG=/tbg|wixum/i.test(teamName);
+  // Mapa: monthIdx -> { day -> {color, planned, items:[...]} }
+  const byMonth = Array.from({length:12},()=>({}));
+  races.forEach(r=>{
+    if(!r.iso) return;
+    const [y,m,d] = r.iso.split('-').map(Number);
+    if(String(y)!==String(year)) return;
+    const mi=m-1, day=d;
+    const catInfo = r._catInfo;
+    const cell = byMonth[mi][day] || (byMonth[mi][day]={color:null, planned:true, items:[], cat:0});
+    cell.items.push(r);
+    if(r.estado==='realizada'){
+      cell.planned=false;
+      // prioridad: Challenge(3) > Fuera(2) > CV(1)
+      if(catInfo.cat >= cell.cat){ cell.cat=catInfo.cat; cell.color=catInfo.color; }
+    } else if(cell.color==null){
+      cell.color=_INF_CAL_COLORS.planned;
+    }
+  });
+
+  // Layout meses: 4 columnas x 3 filas
+  const cols=4, rows=3;
+  const gridTop=120, gridLeft=24, gridRight=24, gridBottom=H-250;
+  const cellW=(W-gridLeft-gridRight)/cols;
+  const cellH=(gridBottom-gridTop)/rows;
+  const pad=10;
+
+  let svg='';
+  // Fondo
+  svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`;
+  // Cabecera
+  svg+=`<rect x="0" y="0" width="${W}" height="92" fill="#0e4d73"/>`;
+  svg+=`<rect x="0" y="92" width="${W}" height="6" fill="#f5c518"/>`;
+  svg+=`<text x="40" y="44" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="900" fill="#ffffff">CALENDARIO DE COMPETICIONES</text>`;
+  svg+=`<text x="40" y="76" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#cde8f7">TEMPORADA ${year} · ${_infEsc(teamName)}</text>`;
+  // Logo arriba derecha
+  if(esTBG){ svg+=`<g transform="translate(${W-104},10)"><rect x="-6" y="-2" width="84" height="84" rx="12" fill="#ffffff"/><svg x="2" y="6" width="64" height="64" viewBox="0 0 310 310">${_infLogoInner()}</svg></g>`; }
+  else { svg+=`<circle cx="${W-58}" cy="46" r="34" fill="#ffffff"/><text x="${W-58}" y="56" font-family="Segoe UI,Arial" font-size="26" font-weight="900" fill="#0e4d73" text-anchor="middle">${_infEsc((teamName||'').slice(0,2).toUpperCase())}</text>`; }
+
+  // Leyenda de colores (bajo cabecera)
+  const leg=[['Comunidad Valenciana',_INF_CAL_COLORS.cv],['Fuera Comunidad Valenciana',_INF_CAL_COLORS.fuera],['Challenge CV',_INF_CAL_COLORS.challenge]];
+  let lx=40;
+  leg.forEach(([lab,col])=>{
+    svg+=`<rect x="${lx}" y="103" width="16" height="16" rx="3" fill="${col}"/>`;
+    svg+=`<text x="${lx+22}" y="116" font-family="Segoe UI,Arial" font-size="13" font-weight="700" fill="#334155">${_infEsc(lab)}</text>`;
+    lx += 30 + lab.length*7.2;
+  });
+
+  // Meses
+  for(let mi=0; mi<12; mi++){
+    const c=mi%cols, rRow=Math.floor(mi/cols);
+    const mx=gridLeft+c*cellW, my=gridTop+rRow*cellH;
+    const innerW=cellW-pad*2, innerX=mx+pad;
+    // Cabecera del mes
+    svg+=`<rect x="${innerX}" y="${my}" width="${innerW}" height="22" rx="5" fill="#0e4d73"/>`;
+    svg+=`<text x="${innerX+innerW/2}" y="${my+15}" font-family="Segoe UI,Arial" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">${_INF_MESES[mi]}</text>`;
+    // Cuadrícula de días
+    const gx=innerX, gy=my+26;
+    const dcw=innerW/7, dch=(cellH-34)/7; // 1 fila cabecera + 6 filas
+    // Cabecera días
+    for(let i=0;i<7;i++){
+      svg+=`<text x="${gx+dcw*i+dcw/2}" y="${gy+9}" font-family="Segoe UI,Arial" font-size="9" font-weight="800" fill="#94a3b8" text-anchor="middle">${_INF_DOW[i]}</text>`;
+    }
+    // Días
+    const first=new Date(year,mi,1); let dow=first.getDay()-1; if(dow<0) dow=6;
+    const ndays=new Date(year,mi+1,0).getDate();
+    for(let day=1; day<=ndays; day++){
+      const idx=dow+day-1; const col=idx%7, row=Math.floor(idx/7);
+      const x=gx+col*dcw, y=gy+12+row*dch;
+      const cell=byMonth[mi][day];
+      let numColor='#475569';
+      if(cell){
+        if(cell.planned && cell.color===_INF_CAL_COLORS.planned){
+          svg+=`<rect x="${x+1}" y="${y}" width="${dcw-2}" height="${dch-1}" rx="3" fill="none" stroke="${cell.color}" stroke-width="1.5" stroke-dasharray="2,2"/>`;
+          numColor='#475569';
+        } else {
+          svg+=`<rect x="${x+1}" y="${y}" width="${dcw-2}" height="${dch-1}" rx="3" fill="${cell.color}"/>`;
+          numColor='#ffffff';
+        }
+      }
+      svg+=`<text x="${x+dcw/2}" y="${y+dch/2+3}" font-family="Segoe UI,Arial" font-size="10" font-weight="${cell?'800':'600'}" fill="${numColor}" text-anchor="middle">${day}</text>`;
+    }
+  }
+
+  // ── Leyenda inferior: relación cronológica de todas las pruebas ──
+  const legY=gridBottom+14;
+  svg+=`<line x1="40" y1="${legY-4}" x2="${W-40}" y2="${legY-4}" stroke="#e2e8f0" stroke-width="1.5"/>`;
+  svg+=`<text x="40" y="${legY+12}" font-family="Segoe UI,Arial" font-size="14" font-weight="900" fill="#0e4d73">RELACIÓN DE COMPETICIONES (${races.length})</text>`;
+  const listTop=legY+24;
+  const ncols=3, colGap=18;
+  const colW=(W-80-(ncols-1)*colGap)/ncols;
+  const rowsAvail=Math.floor((H-listTop-16)/15);
+  const perCol=Math.max(1, Math.ceil(races.length/ncols));
+  const lineH=Math.min(15, Math.max(11,(H-listTop-16)/perCol));
+  races.forEach((r,i)=>{
+    const col=Math.floor(i/perCol), row=i%perCol;
+    if(col>=ncols) return;
+    const x=40+col*(colW+colGap), y=listTop+row*lineH;
+    const ci=r._catInfo;
+    svg+=`<rect x="${x}" y="${y-7}" width="9" height="9" rx="2" fill="${r.estado==='realizada'?ci.color:_INF_CAL_COLORS.planned}"/>`;
+    const fecha=`${(r.iso.split('-')[2])} ${_INF_MES_CORTO[parseInt(r.iso.split('-')[1])-1]}`;
+    let txt=`${fecha} · ${r.name}`;
+    const maxChars=Math.floor(colW/4.6);
+    if(txt.length>maxChars) txt=txt.slice(0,maxChars-1)+'…';
+    const sub=`${r.localidad||'—'}${r.localidad&&ci.label?' · ':''}${ci.cat===3?'Challenge CV':ci.cat===2?'Fuera CV':'CV'}`;
+    svg+=`<text x="${x+14}" y="${y}" font-family="Segoe UI,Arial" font-size="9.5" font-weight="700" fill="#1f2937">${_infEsc(txt)}</text>`;
+    if(lineH>=13){
+      // (compacto: en una línea ya va fecha+nombre; el lugar/cat va en gris a la derecha si cabe)
+    }
+  });
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Segoe UI,Arial,sans-serif">${svg}</svg>`;
+}
+function _infEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function _infGenerateAnnual(fmt){
+  const opts=_infReadOpts();
+  const st=document.getElementById('_infStatus');
+  if(!opts.teams.length){ if(st) st.textContent='⚠️ Selecciona un equipo.'; return; }
+  if(st) st.textContent='⏳ Generando calendario anual…';
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
+  const team=opts.teams[0];
+  // Para el calendario anual incluimos realizadas + planificadas si procede
+  const D=_infBuildDataByKey(history, Object.assign(_infFilters(opts, team), {includePlanned:true}));
+  let races=[...D.realizadas, ...D.planificadas].filter(r=>r.iso);
+  races.sort((a,b)=>(a.iso||'').localeCompare(b.iso||''));
+  if(!races.length){ if(st) st.innerHTML=_infDiagNoData(history, opts.year, team.key); return; }
+  races.forEach(r=>{ r._catInfo=_infRaceCategoria(r); });
+
+  const svg=_infBuildAnnualSVG(opts.year, team.name, races);
+
+  if(fmt==='png'){
+    const scale=2.2, W=1123, H=794;
+    const cv=document.createElement('canvas'); cv.width=Math.round(W*scale); cv.height=Math.round(H*scale);
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.scale(scale,scale);
+    await _infDrawSVGToCanvas(ctx, svg, 0,0,W,H);
+    cv.toBlob((blob)=>{
+      const url=URL.createObjectURL(blob); const a=document.createElement('a');
+      const safe=team.name.replace(/[^a-z0-9]+/gi,'-');
+      a.href=url; a.download=`calendario_${safe}_${opts.year}.png`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+      if(st) st.textContent='✅ Calendario anual PNG descargado.';
+    },'image/png');
+    return;
+  }
+
+  // PDF: ventana de impresión A4 apaisado con el SVG a página completa
+  const w=window.open('','_blank');
+  if(!w){ alert('El navegador bloqueó la ventana. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+  <title>Calendario de competiciones ${escapeHtml(opts.year)} – ${escapeHtml(team.name)}</title>
+  <style>
+    @page{size:A4 landscape;margin:0}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+    html,body{margin:0;padding:0}
+    .no-print{position:fixed;top:8px;right:8px;z-index:9}
+    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;margin-left:8px;font-size:13px;font-family:Segoe UI,Arial}
+    .no-print button.sec{background:#f3f4f6;color:#374151;border:1px solid #d0d5dd}
+    .cal{width:100%;height:100vh;display:flex;align-items:center;justify-content:center}
+    .cal svg{width:100%;height:auto;max-height:100vh}
+    @media print{.no-print{display:none}}
+  </style></head><body>
+  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
+  <div class="cal">${svg}</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+  </body></html>`);
+  w.document.close();
+  if(st) st.textContent='✅ Calendario anual PDF abierto.';
 }
