@@ -38992,3 +38992,205 @@ async function _dxDownload(){
     if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent='⬇️ Generar y descargar CSV'; }
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MÓDULO: LÁMINAS DE PLANTILLA INDIVIDUALES (A4 horizontal)
+   Extrae automáticamente de la BD el dorsal de temporada, el nombre y la
+   categoría actual del ciclista. La foto se añade por arrastrar y soltar.
+   Genera un A4 apaisado vía ventana de impresión (PDF nativo, sin librerías).
+   ═══════════════════════════════════════════════════════════════════════════ */
+let _plState = { team:'', year:'', roster:[], photo:null, photoName:'' };
+
+// Categoría → etiqueta amigable para el pie de foto
+function _plCatFriendly(catNorm){
+  const m={'CAD-1':'Cadete de 1º año','CAD-2':'Cadete de 2º año','JUV-1':'Juvenil de 1º año','JUV-2':'Juvenil de 2º año','CADETE':'Cadete','JUVENIL':'Juvenil'};
+  return m[catNorm] || catNorm || '';
+}
+// Categoría → nombre "general" en plural para la cabecera
+function _plCatPlural(catNorm){
+  const g=_calCatGroup(catNorm); if(!g) return '';
+  return ({cadete:'CADETES',juvenil:'JUVENILES',sub23:'SUB-23',elite:'ÉLITE',master:'MÁSTER',fem:'FÉMINAS',infantil:'INFANTILES',alevin:'ALEVINES',escuela:'ESCUELAS'})[g.key] || g.label.toUpperCase();
+}
+
+// Construye la plantilla de un equipo/año: nombre, dorsal (moda de bib) y categoría (moda)
+function _plRoster(history, team, year){
+  const teamCanon=getCanonicalTeam(team).toLowerCase();
+  const map={};
+  for(const race of (history||[])){
+    const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
+    if(year && ry!==year) continue;
+    for(const r of (race.riders||[])){
+      if(getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) continue;
+      const nk=normalizeRiderName(r.name||'').trim(); if(!nk) continue;
+      if(!map[nk]) map[nk]={name:r.name||nk, bibs:{}, cats:{}};
+      const bib=String(r.bib||'').trim();
+      if(bib) map[nk].bibs[bib]=(map[nk].bibs[bib]||0)+1;
+      const rc=getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) || r.cat || '';
+      if(rc) map[nk].cats[rc]=(map[nk].cats[rc]||0)+1;
+    }
+  }
+  const mode=(obj)=>{ let best='',n=-1; for(const k in obj){ if(obj[k]>n){n=obj[k]; best=k;} } return best; };
+  return Object.values(map).map(r=>{
+    const catRaw=mode(r.cats);
+    return { name:_evolNormName(r.name), nameRaw:r.name, dorsal:mode(r.bibs), catNorm:_dxNormCat(catRaw), catRaw };
+  }).sort((a,b)=> ((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999)) || a.name.localeCompare(b.name));
+}
+
+// Años con datos para el equipo (más reciente primero)
+function _plYears(history, team){
+  const teamCanon=getCanonicalTeam(team).toLowerCase();
+  const ys=new Set();
+  for(const race of (history||[])){
+    const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4); if(!ry) continue;
+    if((race.riders||[]).some(r=>getCanonicalTeam(r.team||'').toLowerCase()===teamCanon)) ys.add(ry);
+  }
+  return [...ys].sort((a,b)=>b.localeCompare(a));
+}
+
+async function _plOpenModal(){
+  const team = (typeof myTeam!=='undefined' && myTeam) ? myTeam : '';
+  if(!team){ alert('Primero configura "Mi Equipo" en la pestaña de Carga y Resumen.'); return; }
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){}
+  const years=_plYears(history, team);
+  const defYear = years[0] || String(new Date().getFullYear());
+  _plState={ team, year:defYear, roster:_plRoster(history, team, defYear), photo:null, photoName:'' };
+  _plState._history=history; _plState._years=years;
+
+  let ov=document.getElementById('_plModal'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_plModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.72);display:flex;align-items:flex-start;justify-content:center;padding:26px 16px;overflow:auto;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  ov.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;padding:18px 22px">
+      <div style="font-size:18px;font-weight:900">🪪 Generar lámina de plantilla</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px">${escapeHtml(team)} · datos extraídos automáticamente de la base de datos</div>
+    </div>
+    <div style="padding:20px 22px">
+      <div style="display:grid;grid-template-columns:1fr 130px;gap:12px">
+        <div>
+          <label style="font-size:12px;font-weight:800;color:#475569">Ciclista</label>
+          <select id="_plRider" onchange="_plPickRider()" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-top:4px"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:800;color:#475569">Temporada</label>
+          <select id="_plYear" onchange="_plChangeYear()" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;margin-top:4px">
+            ${years.map(y=>`<option value="${y}" ${y===defYear?'selected':''}>${y}</option>`).join('')||`<option value="${defYear}">${defYear}</option>`}
+          </select>
+        </div>
+      </div>
+
+      <div id="_plInfo" style="margin-top:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:13px;color:#0b2f6b;font-weight:700"></div>
+
+      <label style="font-size:12px;font-weight:800;color:#475569;display:block;margin-top:16px">Foto del ciclista (arrastra aquí o haz clic)</label>
+      <div id="_plDrop" onclick="document.getElementById('_plFile').click()"
+        style="margin-top:6px;border:2px dashed #93c5fd;border-radius:12px;min-height:170px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;background:#f8fbff;transition:.15s;overflow:hidden">
+        <div id="_plDropHint" style="color:#64748b;font-size:13px;padding:18px">📷 Arrastra una foto aquí<br><span style="font-size:11px">o haz clic para seleccionarla</span></div>
+      </div>
+      <input type="file" id="_plFile" accept="image/*" style="display:none" onchange="_plFileInput(event)">
+    </div>
+    <div style="padding:6px 22px 20px;display:flex;gap:10px">
+      <button id="_plCreateBtn" onclick="_plCreate()" style="flex:1;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">🖨️ Crear lámina (A4)</button>
+      <button onclick="document.getElementById('_plModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  // Drag & drop
+  const drop=document.getElementById('_plDrop');
+  drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.style.background='#e0f2fe'; drop.style.borderColor='#2B91C8'; });
+  drop.addEventListener('dragleave',e=>{ e.preventDefault(); drop.style.background='#f8fbff'; drop.style.borderColor='#93c5fd'; });
+  drop.addEventListener('drop',e=>{ e.preventDefault(); drop.style.background='#f8fbff'; drop.style.borderColor='#93c5fd'; const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) _plReadPhoto(f); });
+  _plRenderRiders();
+}
+
+function _plRenderRiders(){
+  const sel=document.getElementById('_plRider'); if(!sel) return;
+  const rs=_plState.roster;
+  sel.innerHTML = rs.length
+    ? rs.map((r,i)=>`<option value="${i}">${escapeHtml(r.name)}${r.dorsal?(' · #'+escapeHtml(r.dorsal)):''}</option>`).join('')
+    : `<option value="">— Sin ciclistas en ${escapeHtml(_plState.year)} —</option>`;
+  _plPickRider();
+}
+function _plChangeYear(){
+  const y=document.getElementById('_plYear')?.value||'';
+  _plState.year=y;
+  _plState.roster=_plRoster(_plState._history, _plState.team, y);
+  _plRenderRiders();
+}
+function _plPickRider(){
+  const idx=document.getElementById('_plRider')?.value;
+  const info=document.getElementById('_plInfo'); if(!info) return;
+  const r=_plState.roster[idx];
+  if(!r){ info.innerHTML='No hay datos para esta temporada.'; return; }
+  const dorsal = r.dorsal ? ('#'+r.dorsal) : '⚠️ sin dorsal registrado';
+  const cat = r.catNorm || '⚠️ sin categoría';
+  info.innerHTML = `🎽 Dorsal de temporada: <b>${escapeHtml(dorsal)}</b> &nbsp;·&nbsp; 🏷️ Categoría: <b>${escapeHtml(cat)}</b>${r.catNorm?` <span style="font-weight:600;color:#475569">(${escapeHtml(_plCatFriendly(r.catNorm))})</span>`:''}`;
+}
+function _plFileInput(e){ const f=e.target.files&&e.target.files[0]; if(f) _plReadPhoto(f); }
+function _plReadPhoto(file){
+  if(!/^image\//.test(file.type)){ alert('El archivo debe ser una imagen.'); return; }
+  const rd=new FileReader();
+  rd.onload=()=>{
+    _plState.photo=rd.result; _plState.photoName=file.name;
+    const drop=document.getElementById('_plDrop');
+    if(drop) drop.innerHTML=`<img src="${rd.result}" style="max-width:100%;max-height:230px;object-fit:contain;border-radius:8px" alt="preview">`;
+  };
+  rd.readAsDataURL(file);
+}
+
+function _plCreate(){
+  const idx=document.getElementById('_plRider')?.value;
+  const r=_plState.roster[idx];
+  if(!r){ alert('Selecciona un ciclista.'); return; }
+  if(!_plState.photo){ alert('Añade la foto del ciclista (arrástrala o haz clic en el recuadro).'); return; }
+  const year=_plState.year;
+  const team=_plState.team;
+  const catPlural=_plCatPlural(r.catNorm);
+  const titulo=`Plantilla equipo ${team} · Temporada ${year}${catPlural?(' '+catPlural):''}`;
+  const dorsal=r.dorsal||'';
+  const catFriendly=_plCatFriendly(r.catNorm);
+  const footer=`${r.name}${catFriendly?(' · '+catFriendly):(r.catNorm?(' · '+r.catNorm):'')}`;
+  const tbgSVG=(typeof _infLogoSVG==='function')? _infLogoSVG(86) : '';
+  const mfppSrc=document.querySelector('.brand-logo')?.src || '';
+
+  const w=window.open('','_blank');
+  if(!w){ alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+  <title>Lámina ${escapeHtml(r.name)} · ${escapeHtml(year)}</title>
+  <style>
+    @page{size:A4 landscape;margin:0}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
+    html,body{margin:0;padding:0;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
+    .sheet{width:297mm;height:209mm;padding:12mm 14mm;display:flex;flex-direction:column}
+    .hdr{display:grid;grid-template-columns:110px 1fr 150px;align-items:center;gap:14px;border-bottom:4px solid #2B91C8;padding-bottom:10px}
+    .hdr .logo-l{display:flex;align-items:center}
+    .hdr .logo-r{display:flex;justify-content:flex-end;align-items:center}
+    .hdr .logo-r img{max-height:74px;max-width:150px;object-fit:contain}
+    .title{text-align:center;font-size:26px;font-weight:900;line-height:1.2}
+    .body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding-top:6px}
+    .dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:96px;font-weight:900;color:#b8860b;line-height:1;letter-spacing:2px}
+    .photo-box{border:4px solid #2B91C8;border-radius:10px;padding:8px;background:#fff;display:flex;align-items:center;justify-content:center;height:118mm;max-width:150mm}
+    .photo-box img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block}
+    .footer{margin-top:6px;font-size:26px;font-weight:900;color:#0b2f6b;text-align:center}
+    .no-print{position:fixed;top:8px;right:8px;display:flex;gap:8px}
+    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px}
+    .no-print button.sec{background:#eef2f7;color:#374151}
+    @media print{.no-print{display:none}}
+  </style></head><body>
+  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
+  <div class="sheet">
+    <div class="hdr">
+      <div class="logo-l">${tbgSVG}</div>
+      <div class="title">${escapeHtml(titulo)}</div>
+      <div class="logo-r">${mfppSrc?`<img src="${mfppSrc}" alt="MFPP">`:''}</div>
+    </div>
+    <div class="body">
+      ${dorsal?`<div class="dorsal">${escapeHtml(dorsal)}</div>`:''}
+      <div class="photo-box"><img src="${_plState.photo}" alt="${escapeHtml(r.name)}"></div>
+      <div class="footer">${escapeHtml(footer)}</div>
+    </div>
+  </div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},450);};<\/script>
+  </body></html>`);
+  w.document.close();
+}
