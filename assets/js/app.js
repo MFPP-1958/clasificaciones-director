@@ -1039,7 +1039,7 @@ async function _calLoadData(){
     if(data) _calPlanned = data.map(r=>{
       let extra={};
       try{ extra=JSON.parse(r.notes||'{}'); }catch(e){}
-      return { id:r.id, date: new Date(r.date+'T12:00:00'), dateStr:r.date, name:r.name, localidad:extra.localidad||'', cat:extra.cat||'', modality:extra.modality||'', fccvId:extra.fccvId||'', fccvDetailUrl:extra.fccvDetailUrl||'', notes:extra.notes||'', type:'planned' };
+      return { id:r.id, date: new Date(r.date+'T12:00:00'), dateStr:r.date, name:r.name, localidad:extra.localidad||'', cat:extra.cat||'', modality:extra.modality||'', challengeCV:!!extra.challengeCV, ccaa:extra.ccaa||'', fccvId:extra.fccvId||'', fccvDetailUrl:extra.fccvDetailUrl||'', notes:extra.notes||'', type:'planned' };
     });
   }
 }
@@ -37419,6 +37419,7 @@ function _infBuildDataByKey(history, opts){
         name: race.raceName||'',
         localidad: _infLimpiaLoc(race.localidad),
         prov, ccaa, cats, tipo,
+        challengeCV: !!race.challengeCV,
         km: (race.km && String(race.km).trim()) ? String(race.km).trim() : '',
         totalParticipantes: (race.riders||[]).length,
         totalInscritos: hasIns ? insList.length : null,
@@ -37446,7 +37447,8 @@ function _infBuildDataByKey(history, opts){
       planificadas.push({
         iso, fecha: iso? iso.split('-').reverse().join('/'):'',
         name: p.name||'', localidad:_infLimpiaLoc(p.localidad),
-        prov, ccaa, cats:p.cat?[p.cat]:[], tipo,
+        prov, ccaa: ccaa||p.ccaa||'', cats:p.cat?[p.cat]:[], tipo,
+        challengeCV: !!p.challengeCV,
         km:'', totalParticipantes:0, totalInscritos:null, misCorredores:0, misInscritos:null, nombresMios:[], estado:'planificada'
       });
     }
@@ -37576,8 +37578,7 @@ async function _infOpenModal(){
         <button onclick="_infGenerateInfografia('fb')" style="background:#1877F2;color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">📘 Infografía Facebook</button>
         <button onclick="_infCopyPost()" style="grid-column:1/3;background:#fff;color:#0e4d73;border:1.5px solid #2B91C8;border-radius:11px;padding:11px;font-weight:800;font-size:13px;cursor:pointer">📝 Copiar texto para la publicación</button>
         <div style="grid-column:1/3;height:1px;background:#e2e8f0;margin:4px 0"></div>
-        <button onclick="_infGenerateAnnual('pdf')" style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">🗓️ Calendario anual PDF</button>
-        <button onclick="_infGenerateAnnual('png')" style="background:#0e4d73;color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">🖼️ Calendario anual PNG</button>
+        <button onclick="_infGenerateAnnual()" style="grid-column:1/3;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">🗓️ Ver calendario anual (PDF / PNG)</button>
       </div>
 
       <!-- BOTONES COMPARATIVO -->
@@ -38218,7 +38219,8 @@ function _infIsCVProv(prov){
 }
 // Clasifica una prueba en una de las 3 categorías visuales
 function _infRaceCategoria(r){
-  if(/challenge/i.test(r.name||'')) return {cat:3, label:'Challenge CV', color:_INF_CAL_COLORS.challenge};
+  // Challenge CV = SOLO las pruebas con el checkbox "Challenge CV" activado al introducirlas
+  if(r.challengeCV) return {cat:3, label:'Challenge CV', color:_INF_CAL_COLORS.challenge};
   const cv = (r.ccaa==='Comunitat Valenciana') || _infIsCVProv(r.prov) || !r.prov;
   if(cv) return {cat:1, label:'Comunidad Valenciana', color:_INF_CAL_COLORS.cv};
   return {cat:2, label:'Fuera Comunidad Valenciana', color:_INF_CAL_COLORS.fuera};
@@ -38312,14 +38314,16 @@ function _infBuildAnnualSVG(year, teamName, races){
 
   // ── Leyenda inferior: relación cronológica de todas las pruebas ──
   const legY=gridBottom+14;
-  svg+=`<line x1="40" y1="${legY-4}" x2="${W-40}" y2="${legY-4}" stroke="#e2e8f0" stroke-width="1.5"/>`;
-  svg+=`<text x="40" y="${legY+12}" font-family="Segoe UI,Arial" font-size="14" font-weight="900" fill="#0e4d73">RELACIÓN DE COMPETICIONES (${races.length})</text>`;
-  const listTop=legY+24;
-  const ncols=3, colGap=18;
+  svg+=`<line x1="40" y1="${legY-6}" x2="${W-40}" y2="${legY-6}" stroke="#e2e8f0" stroke-width="1.5"/>`;
+  svg+=`<text x="40" y="${legY+18}" font-family="Segoe UI,Arial" font-size="14" font-weight="900" fill="#0e4d73">RELACIÓN DE COMPETICIONES (${races.length})</text>`;
+  // Separación clara entre la línea/cabecera y el listado de pruebas
+  const listTop=legY+42;
+  const ncols=3, colGap=22;
   const colW=(W-80-(ncols-1)*colGap)/ncols;
-  const rowsAvail=Math.floor((H-listTop-16)/15);
+  const fontPx=9, charW=4.95, boxOff=14;
   const perCol=Math.max(1, Math.ceil(races.length/ncols));
   const lineH=Math.min(15, Math.max(11,(H-listTop-16)/perCol));
+  const maxChars=Math.max(8, Math.floor((colW-boxOff)/charW));
   races.forEach((r,i)=>{
     const col=Math.floor(i/perCol), row=i%perCol;
     if(col>=ncols) return;
@@ -38328,20 +38332,19 @@ function _infBuildAnnualSVG(year, teamName, races){
     svg+=`<rect x="${x}" y="${y-7}" width="9" height="9" rx="2" fill="${r.estado==='realizada'?ci.color:_INF_CAL_COLORS.planned}"/>`;
     const fecha=`${(r.iso.split('-')[2])} ${_INF_MES_CORTO[parseInt(r.iso.split('-')[1])-1]}`;
     let txt=`${fecha} · ${r.name}`;
-    const maxChars=Math.floor(colW/4.6);
-    if(txt.length>maxChars) txt=txt.slice(0,maxChars-1)+'…';
-    const sub=`${r.localidad||'—'}${r.localidad&&ci.label?' · ':''}${ci.cat===3?'Challenge CV':ci.cat===2?'Fuera CV':'CV'}`;
-    svg+=`<text x="${x+14}" y="${y}" font-family="Segoe UI,Arial" font-size="9.5" font-weight="700" fill="#1f2937">${_infEsc(txt)}</text>`;
-    if(lineH>=13){
-      // (compacto: en una línea ya va fecha+nombre; el lugar/cat va en gris a la derecha si cabe)
-    }
+    if(txt.length>maxChars) txt=txt.slice(0,maxChars-1).trimEnd()+'…';
+    svg+=`<text x="${x+boxOff}" y="${y}" font-family="Segoe UI,Arial" font-size="${fontPx}" font-weight="700" fill="#1f2937">${_infEsc(txt)}</text>`;
   });
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Segoe UI,Arial,sans-serif">${svg}</svg>`;
 }
 function _infEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-async function _infGenerateAnnual(fmt){
+// Estado del calendario anual ya generado (para exportar sin recalcular)
+let _infAnnualSVG=null, _infAnnualYear=null, _infAnnualTeam=null;
+
+// Botón único → genera el SVG y abre la previsualización dentro de la app
+async function _infGenerateAnnual(){
   const opts=_infReadOpts();
   const st=document.getElementById('_infStatus');
   if(!opts.teams.length){ if(st) st.textContent='⚠️ Selecciona un equipo.'; return; }
@@ -38355,45 +38358,69 @@ async function _infGenerateAnnual(fmt){
   if(!races.length){ if(st) st.innerHTML=_infDiagNoData(history, opts.year, team.key); return; }
   races.forEach(r=>{ r._catInfo=_infRaceCategoria(r); });
 
-  const svg=_infBuildAnnualSVG(opts.year, team.name, races);
+  _infAnnualSVG=_infBuildAnnualSVG(opts.year, team.name, races);
+  _infAnnualYear=opts.year; _infAnnualTeam=team.name;
+  _infShowAnnualPreview();
+  if(st) st.textContent='✅ Calendario anual generado. Revísalo y expórtalo.';
+}
 
-  if(fmt==='png'){
-    const scale=2.2, W=1123, H=794;
-    const cv=document.createElement('canvas'); cv.width=Math.round(W*scale); cv.height=Math.round(H*scale);
-    const ctx=cv.getContext('2d');
-    ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
-    ctx.scale(scale,scale);
-    await _infDrawSVGToCanvas(ctx, svg, 0,0,W,H);
-    cv.toBlob((blob)=>{
-      const url=URL.createObjectURL(blob); const a=document.createElement('a');
-      const safe=team.name.replace(/[^a-z0-9]+/gi,'-');
-      a.href=url; a.download=`calendario_${safe}_${opts.year}.png`;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
-      if(st) st.textContent='✅ Calendario anual PNG descargado.';
-    },'image/png');
-    return;
-  }
+// Modal de previsualización: muestra el calendario y ofrece exportar a PDF o PNG
+function _infShowAnnualPreview(){
+  let ov=document.getElementById('_infAnnualOverlay');
+  if(ov) ov.remove();
+  ov=document.createElement('div');
+  ov.id='_infAnnualOverlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.75);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:18px;overflow:auto;font-family:Segoe UI,Arial,sans-serif';
+  ov.innerHTML=`
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <span style="color:#fff;font-weight:800;font-size:15px;margin-right:6px">📅 Calendario ${escapeHtml(_infAnnualTeam)} · ${escapeHtml(_infAnnualYear)}</span>
+      <button id="_infAnnBtnPDF" style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:800;font-size:13px;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>
+      <button id="_infAnnBtnPNG" style="background:#0e4d73;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:800;font-size:13px;cursor:pointer">🖼️ Descargar PNG</button>
+      <button id="_infAnnBtnClose" style="background:#f3f4f6;color:#374151;border:1px solid #d0d5dd;border-radius:9px;padding:10px 16px;font-weight:800;font-size:13px;cursor:pointer">✕ Cerrar</button>
+    </div>
+    <div style="background:#fff;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.4);width:min(100%,1123px);max-width:1123px">
+      <div style="width:100%">${_infAnnualSVG}</div>
+    </div>`;
+  // El SVG ya trae width/height fijos; lo hacemos responsive dentro del contenedor
+  const svgEl=ov.querySelector('svg'); if(svgEl){ svgEl.removeAttribute('width'); svgEl.removeAttribute('height'); svgEl.style.width='100%'; svgEl.style.height='auto'; svgEl.style.display='block'; }
+  document.body.appendChild(ov);
+  ov.querySelector('#_infAnnBtnClose').onclick=()=>ov.remove();
+  ov.addEventListener('click',(e)=>{ if(e.target===ov) ov.remove(); });
+  ov.querySelector('#_infAnnBtnPDF').onclick=_infAnnualToPDF;
+  ov.querySelector('#_infAnnBtnPNG').onclick=_infAnnualToPNG;
+}
 
-  // PDF: ventana de impresión A4 apaisado con el SVG a página completa
+function _infAnnualToPDF(){
+  if(!_infAnnualSVG) return;
   const w=window.open('','_blank');
   if(!w){ alert('El navegador bloqueó la ventana. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
   w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-  <title>Calendario de competiciones ${escapeHtml(opts.year)} – ${escapeHtml(team.name)}</title>
+  <title>Calendario de competiciones ${escapeHtml(_infAnnualYear)} – ${escapeHtml(_infAnnualTeam)}</title>
   <style>
     @page{size:A4 landscape;margin:0}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
     html,body{margin:0;padding:0}
-    .no-print{position:fixed;top:8px;right:8px;z-index:9}
-    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;margin-left:8px;font-size:13px;font-family:Segoe UI,Arial}
-    .no-print button.sec{background:#f3f4f6;color:#374151;border:1px solid #d0d5dd}
     .cal{width:100%;height:100vh;display:flex;align-items:center;justify-content:center}
     .cal svg{width:100%;height:auto;max-height:100vh}
-    @media print{.no-print{display:none}}
   </style></head><body>
-  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
-  <div class="cal">${svg}</div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+  <div class="cal">${_infAnnualSVG}</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},350);};<\/script>
   </body></html>`);
   w.document.close();
-  if(st) st.textContent='✅ Calendario anual PDF abierto.';
+}
+
+async function _infAnnualToPNG(){
+  if(!_infAnnualSVG) return;
+  const scale=2.2, W=1123, H=794;
+  const cv=document.createElement('canvas'); cv.width=Math.round(W*scale); cv.height=Math.round(H*scale);
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.scale(scale,scale);
+  await _infDrawSVGToCanvas(ctx, _infAnnualSVG, 0,0,W,H);
+  cv.toBlob((blob)=>{
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    const safe=String(_infAnnualTeam).replace(/[^a-z0-9]+/gi,'-');
+    a.href=url; a.download=`calendario_${safe}_${_infAnnualYear}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  },'image/png');
 }
