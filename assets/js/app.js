@@ -38664,6 +38664,20 @@ const _DX_BASE_COLS = [
 function _dxNormName(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
 function _dxYield(){ return new Promise(r=>setTimeout(r,0)); }
 
+// Normalización ESTRICTA de categoría a formato con guion: CAD-1 / CAD-2 / JUV-1 / JUV-2.
+// Si es cadete/juvenil pero no se puede determinar el año, devuelve CADETE / JUVENIL.
+// Cualquier otra categoría se devuelve tal cual (sin inventar).
+function _dxNormCat(raw){
+  const s=String(raw||'').trim();
+  if(!s) return '';
+  const up=s.toUpperCase();
+  const ym=up.match(/[12]/);            // primer dígito 1 o 2 = año (CAD-1, "-2,00 CAD", "Cadete 2º"…)
+  const year=ym?ym[0]:null;
+  if(/JUV|JUNIOR|J[UÚ]NIOR/.test(up)) return year?('JUV-'+year):'JUVENIL';
+  if(/CAD/.test(up))                  return year?('CAD-'+year):'CADETE';
+  return s;
+}
+
 // Aplana escalares de un objeto a target con prefijo. Recurre en objetos planos. Ignora arrays.
 function _dxAddScalars(target, obj, prefix, skip){
   if(!obj || typeof obj!=='object') return;
@@ -38720,7 +38734,7 @@ async function _dxOpenModal(){
       <div id="_dxBarWrap" style="display:none;height:8px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:12px"><div id="_dxBar" style="height:100%;width:0;background:linear-gradient(90deg,#1565c0,#10b981);transition:width .15s"></div></div>
     </div>
     <div style="padding:6px 22px 20px;display:flex;gap:10px;flex-wrap:wrap">
-      <button id="_dxBtnGo" onclick="_dxExport()" style="flex:1;min-width:200px;background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">⬇️ Generar y descargar CSV</button>
+      <button id="_dxBtnGo" onclick="_dxPreview()" style="flex:1;min-width:200px;background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">👁️ Previsualizar datos</button>
       <button onclick="document.getElementById('_dxModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
     </div>
     <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:10px 22px;font-size:11px;color:#94a3b8;line-height:1.5">El CSV se genera con codificación UTF-8 (BOM) para abrirse correctamente en Excel. Incluye, si existen: clima, topografía del track (desnivel, pendientes, altitud) y biometría (pulso, potencia, cadencia). Campos sin dato se dejan vacíos.</div>
@@ -38836,7 +38850,7 @@ async function _dxBuildRows(filters, onProgress){
         'ID_Ciclista': rr.id||rr.bib||'',
         'Nombre_Ciclista': normName,
         'Equipo_Ciclista': rr.team||'',
-        'Categoria_Ciclista': rr.cat||'',
+        'Categoria_Ciclista': _dxNormCat(rr.cat),
         'Region_Ciclista': regions[rr.name]||regions[normName]||'',
         'Posicion_Final': rr.pos||'',
         'Puntos_Obtenidos': pts,
@@ -38880,7 +38894,11 @@ async function _dxToCSV(rows, columns, sep, onProgress){
   return new Blob(parts, {type:'text/csv;charset=utf-8'});
 }
 
-async function _dxExport(){
+// Datos generados en la última previsualización (para descargar sin recalcular)
+let _dxLast=null;
+
+// Paso 1: aplica filtros, construye las filas y abre el modal de PREVISUALIZACIÓN
+async function _dxPreview(){
   const st=document.getElementById('_dxStatus');
   const bar=document.getElementById('_dxBar'); const barWrap=document.getElementById('_dxBarWrap');
   const btn=document.getElementById('_dxBtnGo');
@@ -38898,20 +38916,78 @@ async function _dxExport(){
     if(st) st.textContent='Leyendo carreras y resultados…';
     const {rows, columns} = await _dxBuildRows(filters, (done,total,nrows)=>{
       if(st) st.textContent=`Procesando carreras… ${done}/${total} · ${nrows} filas`;
-      if(bar) bar.style.width=Math.round(done/Math.max(1,total)*70)+'%';
+      if(bar) bar.style.width=Math.round(done/Math.max(1,total)*100)+'%';
     });
-    if(!rows.length){ if(st) st.textContent='⚠️ No hay datos con esos filtros.'; if(btn){btn.disabled=false;btn.style.opacity='1';btn.textContent='⬇️ Generar y descargar CSV';} return; }
-    if(st) st.textContent=`Construyendo CSV… ${rows.length} filas × ${columns.length} columnas`;
-    const blob=await _dxToCSV(rows, columns, filters.sep, (i,n)=>{ if(bar) bar.style.width=(70+Math.round(i/Math.max(1,n)*28))+'%'; });
-    if(bar) bar.style.width='100%';
-    const url=URL.createObjectURL(blob); const a=document.createElement('a');
-    const stamp=new Date().toISOString().slice(0,10);
-    const catTag=filters.cat?('_'+filters.cat):'';
-    a.href=url; a.download=`datalake_ciclismo${catTag}_${stamp}.csv`;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000);
-    if(st) st.innerHTML=`✅ Exportadas <b>${rows.length}</b> filas y <b>${columns.length}</b> columnas.`;
+    if(!rows.length){ if(st) st.textContent='⚠️ No hay datos con esos filtros.'; return; }
+    _dxLast={rows, columns, sep:filters.sep, cat:filters.cat};
+    if(st) st.innerHTML=`✅ Generadas <b>${rows.length}</b> filas × <b>${columns.length}</b> columnas. Abriendo previsualización…`;
+    _dxRenderPreview();
   }catch(e){
     if(st) st.textContent='❌ '+(e.message||e);
+  }finally{
+    if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent='👁️ Previsualizar datos'; }
+    if(bar) bar.style.width='0';
+    if(barWrap) barWrap.style.display='none';
+  }
+}
+
+// Paso 2: modal amplio con la tabla (data grid) + botón definitivo de descarga
+function _dxRenderPreview(){
+  if(!_dxLast) return;
+  const {rows, columns, cat}=_dxLast;
+  const MAX=300;                                    // filas mostradas (la descarga incluye TODAS)
+  const shown=rows.slice(0,MAX);
+  let ov=document.getElementById('_dxPreviewModal'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_dxPreviewModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.78);display:flex;flex-direction:column;padding:18px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+
+  const th = columns.map(c=>`<th style="position:sticky;top:0;background:#0b2f6b;color:#fff;padding:7px 9px;font-size:11px;font-weight:800;white-space:nowrap;text-align:left;border-right:1px solid rgba(255,255,255,.12)">${escapeHtml(c)}</th>`).join('');
+  const trs = shown.map((r,i)=>`<tr style="background:${i%2?'#f8fafc':'#fff'}">${columns.map(c=>{
+      const v=r[c]; const isCat=(c==='Categoria_Ciclista');
+      return `<td style="padding:5px 9px;font-size:11.5px;white-space:nowrap;border-right:1px solid #eef2f7;border-bottom:1px solid #eef2f7;${isCat?'font-weight:800;color:#0b2f6b;background:#eef6ff':''}">${escapeHtml(v==null?'':String(v))}</td>`;
+    }).join('')}</tr>`).join('');
+
+  ov.innerHTML=`
+  <div style="background:#fff;border-radius:14px;display:flex;flex-direction:column;flex:1;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+    <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:16px;font-weight:900">👁️ Previsualización de datos</div>
+        <div style="font-size:12px;opacity:.9;margin-top:2px">${rows.length} filas × ${columns.length} columnas · mostrando ${shown.length}${rows.length>MAX?` de ${rows.length} (la descarga incluye todas)`:''}</div>
+      </div>
+      <div style="display:flex;gap:9px">
+        <button id="_dxBtnDownload" onclick="_dxDownload()" style="background:#10b981;color:#fff;border:none;border-radius:10px;padding:11px 18px;font-weight:800;font-size:14px;cursor:pointer">⬇️ Generar y descargar CSV</button>
+        <button onclick="document.getElementById('_dxPreviewModal')?.remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:10px;padding:11px 16px;font-weight:800;font-size:14px;cursor:pointer">✕ Cerrar</button>
+      </div>
+    </div>
+    <div id="_dxDlStatus" style="padding:0 20px;font-size:12px;color:#64748b;height:0;overflow:hidden;transition:height .2s"></div>
+    <div style="flex:1;overflow:auto;margin:0">
+      <table style="border-collapse:collapse;width:max-content;min-width:100%">
+        <thead><tr>${th}</tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+
+// Paso 3: genera el CSV completo (todas las filas) y lo descarga
+async function _dxDownload(){
+  if(!_dxLast) return;
+  const {rows, columns, sep, cat}=_dxLast;
+  const stEl=document.getElementById('_dxDlStatus');
+  const btn=document.getElementById('_dxBtnDownload');
+  try{
+    if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='⏳ Generando CSV…'; }
+    if(stEl){ stEl.style.height='22px'; stEl.style.padding='6px 20px'; stEl.textContent='Construyendo CSV…'; }
+    const blob=await _dxToCSV(rows, columns, sep, (i,n)=>{ if(stEl) stEl.textContent=`Construyendo CSV… ${i}/${n} filas`; });
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    const stamp=new Date().toISOString().slice(0,10);
+    const catTag=cat?('_'+cat):'';
+    a.href=url; a.download=`datalake_ciclismo${catTag}_${stamp}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000);
+    if(stEl) stEl.innerHTML=`✅ Descargado: <b>${rows.length}</b> filas × <b>${columns.length}</b> columnas.`;
+  }catch(e){
+    if(stEl){ stEl.style.height='22px'; stEl.style.padding='6px 20px'; stEl.textContent='❌ '+(e.message||e); }
   }finally{
     if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent='⬇️ Generar y descargar CSV'; }
   }
