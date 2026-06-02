@@ -39030,22 +39030,27 @@ function _plEsCV(race){
 function _plRoster(history, team, year){
   const teamCanon=getCanonicalTeam(team).toLowerCase();
   const map={};
+  // Acumula un dorsal de un participante (clasificado o inscrito) en el mapa
+  const addPerson=(name, team2, bib, cat, ry, esCV)=>{
+    if(getCanonicalTeam(team2||'').toLowerCase()!==teamCanon) return;
+    const nk=normalizeRiderName(name||'').trim(); if(!nk) return;
+    if(!map[nk]) map[nk]={name:name||nk, bibsCV:{}, bibsAll:{}, cats:{}};
+    const b=String(bib||'').trim();
+    if(b){
+      map[nk].bibsAll[b]=(map[nk].bibsAll[b]||0)+1;
+      if(esCV) map[nk].bibsCV[b]=(map[nk].bibsCV[b]||0)+1;
+    }
+    const rc=getRiderCorrectCat(name, ry?parseInt(ry):null, cat) || cat || '';
+    if(rc) map[nk].cats[rc]=(map[nk].cats[rc]||0)+1;
+  };
   for(const race of (history||[])){
     const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
     if(year && ry!==year) continue;
     const esCV=_plEsCV(race);
-    for(const r of (race.riders||[])){
-      if(getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) continue;
-      const nk=normalizeRiderName(r.name||'').trim(); if(!nk) continue;
-      if(!map[nk]) map[nk]={name:r.name||nk, bibsCV:{}, bibsAll:{}, cats:{}};
-      const bib=String(r.bib||'').trim();
-      if(bib){
-        map[nk].bibsAll[bib]=(map[nk].bibsAll[bib]||0)+1;
-        if(esCV) map[nk].bibsCV[bib]=(map[nk].bibsCV[bib]||0)+1;
-      }
-      const rc=getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) || r.cat || '';
-      if(rc) map[nk].cats[rc]=(map[nk].cats[rc]||0)+1;
-    }
+    // Clasificados (terminaron)
+    for(const r of (race.riders||[])) addPerson(r.name, r.team, r.bib, r.cat, ry, esCV);
+    // Inscritos (tomaron la salida aunque no acabaran) — también llevan el dorsal CV
+    for(const i of (race.inscritos||[])) addPerson(i.name, i.team, i.bib, i.cat, ry, esCV);
   }
   const mode=(obj)=>{ let best='',n=-1; for(const k in obj){ if(obj[k]>n){n=obj[k]; best=k;} } return best; };
   return Object.values(map).map(r=>{
