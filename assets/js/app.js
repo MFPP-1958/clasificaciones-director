@@ -39030,33 +39030,39 @@ function _plEsCV(race){
 function _plRoster(history, team, year){
   const teamCanon=getCanonicalTeam(team).toLowerCase();
   const map={};
-  // Acumula un dorsal de un participante (clasificado o inscrito) en el mapa
-  const addPerson=(name, team2, bib, cat, ry, esCV)=>{
+  // Acumula un dorsal. weight: clasificados (finishers) pesan más que inscritos,
+  // porque la lista de inscritos no siempre respeta el dorsal oficial de la CV.
+  // Cada bib guarda {w:peso acumulado, last:fecha ISO más reciente}.
+  const addPerson=(name, team2, bib, cat, ry, iso, esCV, weight)=>{
     if(getCanonicalTeam(team2||'').toLowerCase()!==teamCanon) return;
     const nk=normalizeRiderName(name||'').trim(); if(!nk) return;
     if(!map[nk]) map[nk]={key:nk, name:name||nk, bibsCV:{}, bibsAll:{}, cats:{}};
     const b=String(bib||'').trim();
     if(b){
-      map[nk].bibsAll[b]=(map[nk].bibsAll[b]||0)+1;
-      if(esCV) map[nk].bibsCV[b]=(map[nk].bibsCV[b]||0)+1;
+      const bump=(obj)=>{ const o=obj[b]||(obj[b]={w:0,last:''}); o.w+=weight; if(iso>o.last) o.last=iso; };
+      bump(map[nk].bibsAll);
+      if(esCV) bump(map[nk].bibsCV);
     }
     const rc=getRiderCorrectCat(name, ry?parseInt(ry):null, cat) || cat || '';
     if(rc) map[nk].cats[rc]=(map[nk].cats[rc]||0)+1;
   };
   for(const race of (history||[])){
-    const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
+    const iso=(_parseSpanishDate(race.raceDate)||'');
+    const ry=iso.slice(0,4);
     if(year && ry!==year) continue;
     const esCV=_plEsCV(race);
-    // Clasificados (terminaron)
-    for(const r of (race.riders||[])) addPerson(r.name, r.team, r.bib, r.cat, ry, esCV);
-    // Inscritos (tomaron la salida aunque no acabaran) — también llevan el dorsal CV
-    for(const i of (race.inscritos||[])) addPerson(i.name, i.team, i.bib, i.cat, ry, esCV);
+    // Clasificados (terminaron) → peso 3, respetan el dorsal oficial CV
+    for(const r of (race.riders||[])) addPerson(r.name, r.team, r.bib, r.cat, ry, iso, esCV, 3);
+    // Inscritos (salieron aunque no acabaran) → peso 1, solo deciden si no hay clasificación
+    for(const i of (race.inscritos||[])) addPerson(i.name, i.team, i.bib, i.cat, ry, iso, esCV, 1);
   }
-  const mode=(obj)=>{ let best='',n=-1; for(const k in obj){ if(obj[k]>n){n=obj[k]; best=k;} } return best; };
+  const modeCount=(obj)=>{ let best='',n=-1; for(const k in obj){ if(obj[k]>n){n=obj[k]; best=k;} } return best; };
+  // Mejor bib por peso; a igualdad de peso, el de la prueba más reciente
+  const modeBib=(obj)=>{ let best='',bw=-1,bl=''; for(const k in obj){ const o=obj[k]; if(o.w>bw || (o.w===bw && o.last>bl)){ bw=o.w; bl=o.last; best=k; } } return best; };
   return Object.values(map).map(r=>{
-    const catRaw=mode(r.cats);
-    const dorsalCV=mode(r.bibsCV);
-    const dorsal = dorsalCV || mode(r.bibsAll);
+    const catRaw=modeCount(r.cats);
+    const dorsalCV=modeBib(r.bibsCV);
+    const dorsal = dorsalCV || modeBib(r.bibsAll);
     return { key:r.key, name:_evolNormName(r.name), nameRaw:r.name, dorsal, dorsalEsCV:!!dorsalCV, catNorm:_dxNormCat(catRaw), catRaw };
   }).sort((a,b)=> ((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999)) || a.name.localeCompare(b.name));
 }
@@ -39095,9 +39101,86 @@ const _PL_BOX_W=100, _PL_BOX_H=125;               // proporción del marco de la
 function _plRecId(key){ return _plState.team+'|'+_plState.year+'|'+key; }
 function _plRiderByKey(key){ return _plState.roster.find(r=>r.key===key); }
 function _plSavedByKey(key){ return _plSaved.find(s=>s.key===key); }
+/* ── Nube (Supabase): tabla team_sheets — sincroniza entre ordenador e iPad ── */
+let _plCloudOK=null;   // null=sin comprobar, true=disponible, false=falta tabla / error
+// Mapea registro de la app ↔ fila de la tabla
+function _plRecToRow(rec){
+  return { id:rec.id, team:rec.team, year:String(rec.year), rider_key:rec.key, name:rec.name,
+    dorsal:rec.dorsal||'', cat:rec.catNorm||'', photo:rec.photo||'', pos_y:rec.posY|0, zoom:rec.zoom||1 };
+}
+function _plRowToRec(row){
+  return { id:row.id, team:row.team, year:String(row.year), key:row.rider_key, name:row.name,
+    dorsal:row.dorsal||'', catNorm:row.cat||'', photo:row.photo||'', posY:row.pos_y!=null?row.pos_y:50, zoom:row.zoom||1, ts:Date.now() };
+}
+async function _plSbAll(team, year){
+  if(!_sb) throw new Error('sin supabase');
+  const {data,error}=await _sb.from('team_sheets').select('*').eq('team',team).eq('year',String(year));
+  if(error) throw error;
+  return (data||[]).map(_plRowToRec);
+}
+async function _plSbPut(rec){ if(!_sb) throw new Error('sin supabase'); const {error}=await _sb.from('team_sheets').upsert(_plRecToRow(rec)); if(error) throw error; }
+async function _plSbDel(id){ if(!_sb) throw new Error('sin supabase'); const {error}=await _sb.from('team_sheets').delete().eq('id',id); if(error) throw error; }
+
 async function _plLoadSaved(){
+  // 1) Intentar nube (fuente de verdad para tener todo en un sitio)
+  if(_sb){
+    try{
+      _plSaved = await _plSbAll(_plState.team, _plState.year);
+      _plCloudOK=true;
+      // Espejo local por si luego no hay conexión
+      try{ for(const r of _plSaved) await _plDBPut(r); }catch(_){}
+      return;
+    }catch(e){
+      _plCloudOK=false;
+      if(/team_sheets/.test(e.message||'') || e.code==='42P01' || /does not exist|relation/.test(e.message||'')) _plCloudMissing=true;
+    }
+  }
+  // 2) Respaldo local (IndexedDB)
   let all=[]; try{ all=await _plDBAll(); }catch(_){ all=[]; }
   _plSaved = all.filter(s=>s.team===_plState.team && String(s.year)===String(_plState.year));
+}
+let _plCloudMissing=false;
+// SQL de creación de la tabla (una sola vez, en el editor SQL de Supabase)
+const _PL_SQL = `-- Tabla para guardar las láminas de plantilla (sincroniza entre dispositivos)
+create table if not exists team_sheets (
+  id        text primary key,        -- equipo|temporada|ciclista
+  team      text not null,
+  year      text not null,
+  rider_key text not null,
+  name      text,
+  dorsal    text,
+  cat       text,
+  photo     text,                     -- foto en base64 (dataURL)
+  pos_y     int  default 50,          -- encuadre vertical de la foto (%)
+  zoom      real default 1,           -- zoom de la foto
+  updated_at timestamptz default now()
+);
+alter table team_sheets enable row level security;
+drop policy if exists "anon_all_team_sheets" on team_sheets;
+create policy "anon_all_team_sheets" on team_sheets for all to anon using (true) with check (true);`;
+function _plShowCloudSQL(){
+  let ov=document.getElementById('_plSqlModal'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_plSqlModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100003;background:rgba(15,23,42,.8);display:flex;align-items:center;justify-content:center;padding:20px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  ov.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:640px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;padding:16px 20px;font-size:16px;font-weight:900">☁️ Activar guardado en la nube (una sola vez)</div>
+    <div style="padding:18px 20px;font-size:13px;color:#334155;line-height:1.55">
+      <p style="margin:0 0 10px">Para que las láminas se guarden en la base de datos y las tengas en el ordenador y en el iPad, hay que crear una tabla. <b>Solo se hace una vez.</b></p>
+      <ol style="margin:0 0 12px;padding-left:18px">
+        <li>Abre tu proyecto en <b>Supabase → SQL Editor</b>.</li>
+        <li>Pega el siguiente código y pulsa <b>Run</b>.</li>
+        <li>Vuelve aquí y reabre el módulo de láminas.</li>
+      </ol>
+      <pre id="_plSqlBlock" style="background:#0b1220;color:#d6e2ff;border-radius:10px;padding:12px;font-size:11.5px;overflow:auto;max-height:240px;white-space:pre-wrap">${escapeHtml(_PL_SQL)}</pre>
+      <div id="_plSqlMsg" style="font-size:12px;color:#10b981;font-weight:700;height:16px;margin-top:6px"></div>
+    </div>
+    <div style="padding:4px 20px 18px;display:flex;gap:10px">
+      <button onclick="navigator.clipboard.writeText(document.getElementById('_plSqlBlock').textContent).then(()=>{document.getElementById('_plSqlMsg').textContent='✅ Copiado al portapapeles';})" style="flex:1;background:linear-gradient(135deg,#0b2f6b,#1565c0);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">📋 Copiar SQL</button>
+      <button onclick="document.getElementById('_plSqlModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:12px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
 }
 // Estilo de la imagen dentro del marco (mismo en preview y en impresión)
 function _plImgStyle(posY,zoom){
@@ -39325,8 +39408,12 @@ async function _plSaveLamina(print){
   const rec={ id:_plRecId(p.key), team:_plState.team, year:_plState.year, key:p.key,
     name:p.name, dorsal:p.dorsal||'', catNorm:p.catNorm||'', photo:p.photo,
     posY:p.posY, zoom:p.zoom, ts:Date.now() };
+  // Guardar en la nube (si está lista) y siempre espejo local
+  let cloudErr=null;
+  if(_sb && _plCloudOK!==false){ try{ await _plSbPut(rec); _plCloudOK=true; }catch(e){ cloudErr=e; _plCloudOK=false; } }
   try{ await _plDBPut(rec); }
-  catch(e){ alert('No se pudo guardar la lámina: '+(e.message||e)); return; }
+  catch(e){ if(cloudErr){ alert('No se pudo guardar la lámina: '+(e.message||e)); return; } }
+  if(cloudErr && _plCloudMissing){ alert('Guardado en este dispositivo. Para sincronizar con el iPad, activa la nube (botón ☁️) y reabre.'); }
   const ix=_plSaved.findIndex(s=>s.key===rec.key);
   if(ix>=0) _plSaved[ix]=rec; else _plSaved.push(rec);
   document.getElementById('_plPreview')?.remove();
@@ -39341,9 +39428,17 @@ function _plRenderGenerated(){
   const box=document.getElementById('_plGenBox'); if(!box) return;
   const list=_plSaved.slice().sort((a,b)=>((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999))||a.name.localeCompare(b.name));
   const total=_plState.roster.length, hechas=list.length, faltan=total-hechas;
+  const cloud = _plCloudOK===true
+    ? `<span style="color:#10b981;font-weight:800">☁️ Sincronizado en la nube</span>`
+    : (_plCloudMissing
+        ? `<button onclick="_plShowCloudSQL()" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:7px;padding:3px 9px;font-weight:800;font-size:11px;cursor:pointer">☁️ Activar guardado en la nube</button>`
+        : `<span style="color:#94a3b8;font-weight:700">💾 Guardado en este dispositivo</span>`);
   box.innerHTML=`
     <div style="border-top:1px solid #e2e8f0;padding:14px 22px 20px">
-      <div style="font-size:12px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Láminas hechas: ${hechas}/${total}${faltan>0?` · faltan ${faltan}`:' · ¡completo! 🎉'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px">Láminas hechas: ${hechas}/${total}${faltan>0?` · faltan ${faltan}`:' · ¡completo! 🎉'}</div>
+        <div style="font-size:11px">${cloud}</div>
+      </div>
       ${list.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto">
         ${list.map(l=>`
           <div style="display:flex;align-items:center;gap:10px;background:#f8fbff;border:1px solid #dbeafe;border-radius:9px;padding:7px 10px">
@@ -39363,6 +39458,7 @@ function _plReprint(key){ const l=_plSavedByKey(key); if(l) _plPrintLamina(l); }
 async function _plDeleteLamina(key){
   const l=_plSavedByKey(key); if(!l) return;
   if(!confirm(`¿Borrar la lámina de ${l.name}? Volverá a aparecer como pendiente.`)) return;
+  if(_sb && _plCloudOK!==false){ try{ await _plSbDel(_plRecId(key)); }catch(_){} }
   try{ await _plDBDel(_plRecId(key)); }catch(_){}
   _plSaved=_plSaved.filter(s=>s.key!==key);
   _plRenderRiders();
