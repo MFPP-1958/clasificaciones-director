@@ -37302,77 +37302,119 @@ function _infLimpiaLoc(loc){
   return String(loc||'').replace(/\s*\([^)]*\)\s*$/,'').trim();
 }
 
-// ── Construye los datos agregados del informe ──────────────────────────
-// year: '2026' etc.  catSel: 'cadete'|'juvenil'|''(ambas)  includePlanned: bool
-function _infBuildData(history, year, catSel, includePlanned){
-  const isMyTeam = _infTeamMatcher(_infTeamName());
+/* ── Paleta para comparativas ─────────────────────────────────────────── */
+const _INF_PALETTE = ['#2B91C8','#dc2626','#10b981','#f59e0b','#7c3aed','#0891b2','#db2777','#65a30d'];
+const _INF_DISCLAIMER = 'Este informe se basa únicamente en los datos registrados en la aplicación. Si faltan pruebas o participaciones de algún equipo, los resultados pueden no reflejar la totalidad de su calendario.';
+
+// ── Lista de equipos presentes en los datos (agrupados por teamKey) ──────
+// Devuelve [{key, name, count}] ordenado por nº de participaciones desc.
+// 'name' es la grafía más frecuente tal cual está en la base de datos.
+function _infCollectTeams(history, year){
+  const groups = {}; // key -> {names:{raw:count}, total}
+  for(const race of (history||[])){
+    const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+    if(year && ry!==year) continue;
+    for(const r of (race.riders||[])){
+      const raw = (r.team||'').trim();
+      if(!raw) continue;
+      const k = (typeof teamKey==='function') ? teamKey(raw) : raw.toLowerCase();
+      if(!k) continue;
+      if(!groups[k]) groups[k] = {names:{}, total:0};
+      groups[k].names[raw] = (groups[k].names[raw]||0)+1;
+      groups[k].total++;
+    }
+  }
+  return Object.entries(groups).map(([key,g])=>{
+    // grafía más frecuente
+    const name = Object.entries(g.names).sort((a,b)=>b[1]-a[1])[0][0];
+    return {key, name, count:g.total};
+  }).sort((a,b)=> b.count-a.count || a.name.localeCompare(b.name));
+}
+
+// ── Núcleo: construye los datos del informe para UN equipo (por teamKey) ──
+// opts: {teamKey, teamName, year, catSel, includePlanned, onlyPlanned, tipo, prov, dateFrom, dateTo}
+function _infBuildDataByKey(history, opts){
+  const o = opts||{};
+  const wantKey = o.teamKey || '';
+  const isTeam = (raw)=>{
+    if(!raw) return false;
+    const k = (typeof teamKey==='function') ? teamKey(raw) : String(raw).toLowerCase().trim();
+    return k === wantKey;
+  };
   const catMatch = (c)=>{
-    if(!catSel) return true;
+    if(!o.catSel) return true;
     const cc = (c||'').toLowerCase();
-    if(catSel==='cadete')  return /cadet/.test(cc);
-    if(catSel==='juvenil') return /junior|juvenil/.test(cc);
+    if(o.catSel==='cadete')  return /cadet/.test(cc);
+    if(o.catSel==='juvenil') return /junior|juvenil/.test(cc);
     return true;
   };
+  const inDate = (iso)=>{
+    if(o.dateFrom && iso && iso < o.dateFrom) return false;
+    if(o.dateTo   && iso && iso > o.dateTo)   return false;
+    return true;
+  };
+  const tipoMatch = (t)=> !o.tipo || t===o.tipo;
+  const provMatch = (p)=> !o.prov || p===o.prov;
 
   const realizadas = [];
-  for(const race of (history||[])){
-    const iso = (_parseSpanishDate(race.raceDate)||'');
-    const ry = iso.slice(0,4);
-    if(year && ry!==year) continue;
-    // Corredores de MI equipo en esta carrera (con filtro de categoría)
-    const mine = [];
-    for(const r of (race.riders||[])){
-      if(!isMyTeam(r.team||'')) continue;
-      const rcat = (typeof getRiderCorrectCat==='function'
-        ? getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) : (r.cat||''));
-      if(!catMatch(rcat)) continue;
-      mine.push({ name: r.name||'', pos: r.pos, cat: rcat });
+  if(!o.onlyPlanned){
+    for(const race of (history||[])){
+      const iso = (_parseSpanishDate(race.raceDate)||'');
+      const ry = iso.slice(0,4);
+      if(o.year && ry!==o.year) continue;
+      if(!inDate(iso)) continue;
+      const mine = [];
+      for(const r of (race.riders||[])){
+        if(!isTeam(r.team||'')) continue;
+        const rcat = (typeof getRiderCorrectCat==='function'
+          ? getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) : (r.cat||''));
+        if(!catMatch(rcat)) continue;
+        mine.push({ name:r.name||'', pos:r.pos, cat:rcat });
+      }
+      if(!mine.length) continue;
+      const {prov, ccaa} = _infProvincia(race.localidad);
+      const cats = [...new Set(mine.map(m=>m.cat).filter(Boolean))];
+      const tipo = _infTipoPrueba(race.raceName, cats.join(' '));
+      if(!tipoMatch(tipo)) continue;
+      if(!provMatch(prov)) continue;
+      realizadas.push({
+        iso,
+        fecha: race.raceDate || (iso? iso.split('-').reverse().join('/'):''),
+        name: race.raceName||'',
+        localidad: _infLimpiaLoc(race.localidad),
+        prov, ccaa, cats, tipo,
+        km: (race.km && String(race.km).trim()) ? String(race.km).trim() : '',
+        totalParticipantes: (race.riders||[]).length,
+        misCorredores: mine.length,
+        nombresMios: mine.map(m=>m.name),
+        estado:'realizada'
+      });
     }
-    if(!mine.length) continue; // solo pruebas donde participó el equipo
-    const {prov, ccaa} = _infProvincia(race.localidad);
-    const cats = [...new Set(mine.map(m=>m.cat).filter(Boolean))];
-    realizadas.push({
-      iso,
-      fecha: race.raceDate || (iso? iso.split('-').reverse().join('/'):''),
-      name: race.raceName||'',
-      localidad: _infLimpiaLoc(race.localidad),
-      prov, ccaa,
-      cats,
-      tipo: _infTipoPrueba(race.raceName, cats.join(' ')),
-      km: (race.km && String(race.km).trim()) ? String(race.km).trim() : '',
-      totalParticipantes: (race.riders||[]).length,
-      misCorredores: mine.length,
-      nombresMios: mine.map(m=>m.name),
-      estado: 'realizada'
-    });
+    realizadas.sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
   }
-  realizadas.sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
 
-  // Planificadas (de _calPlanned), si se piden
   const planificadas = [];
-  if(includePlanned && typeof _calPlanned!=='undefined' && Array.isArray(_calPlanned)){
+  if((o.includePlanned || o.onlyPlanned) && typeof _calPlanned!=='undefined' && Array.isArray(_calPlanned)){
     for(const p of _calPlanned){
       const iso = p.dateStr || (p.date instanceof Date ? p.date.toISOString().slice(0,10):'');
       const ry = (iso||'').slice(0,4);
-      if(year && ry!==year) continue;
-      if(catSel && !catMatch(p.cat)) continue;
+      if(o.year && ry!==o.year) continue;
+      if(!inDate(iso)) continue;
+      if(o.catSel && !catMatch(p.cat)) continue;
       const {prov, ccaa} = _infProvincia(p.localidad);
+      const tipo = _infTipoPrueba(p.name, p.cat);
+      if(!tipoMatch(tipo)) continue;
+      if(!provMatch(prov)) continue;
       planificadas.push({
-        iso,
-        fecha: iso? iso.split('-').reverse().join('/'):'',
-        name: p.name||'',
-        localidad: _infLimpiaLoc(p.localidad),
-        prov, ccaa,
-        cats: p.cat?[p.cat]:[],
-        tipo: _infTipoPrueba(p.name, p.cat),
-        km:'', totalParticipantes:0, misCorredores:0, nombresMios:[],
-        estado:'planificada'
+        iso, fecha: iso? iso.split('-').reverse().join('/'):'',
+        name: p.name||'', localidad:_infLimpiaLoc(p.localidad),
+        prov, ccaa, cats:p.cat?[p.cat]:[], tipo,
+        km:'', totalParticipantes:0, misCorredores:0, nombresMios:[], estado:'planificada'
       });
     }
     planificadas.sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
   }
 
-  // Resumen agregado
   const locs = [...new Set(realizadas.map(r=>r.localidad).filter(Boolean))];
   const provs = [...new Set(realizadas.map(r=>r.prov).filter(Boolean))];
   const ccaas = [...new Set(realizadas.map(r=>r.ccaa).filter(Boolean))];
@@ -37382,28 +37424,28 @@ function _infBuildData(history, year, catSel, includePlanned){
   const kmTotal = kmList.reduce((s,v)=>s+v,0);
   const vueltas = realizadas.filter(r=>/vuelta|volta|etapa|challenge/i.test(r.name) || r.tipo==='Vuelta por etapas').length;
   const nombresUnicos = [...new Set(realizadas.flatMap(r=>r.nombresMios).map(n=>(typeof _evolNormName==='function'?_evolNormName(n):n)).filter(Boolean))];
+  const con3 = realizadas.filter(r=>r.misCorredores>=3).length;
+  const menos3 = realizadas.length - con3;
 
   return {
     realizadas, planificadas,
-    resumen: {
+    resumen:{
       totalPruebas: realizadas.length,
       vueltas,
-      localidades: locs,
-      provincias: provs,
-      ccaas,
+      localidades: locs, provincias: provs, ccaas,
       participaciones: totalPart,
       mediaPorPrueba: realizadas.length ? (totalPart/realizadas.length) : 0,
       tipos,
       kmTotal: kmList.length ? kmTotal : null,
       kmConDato: kmList.length,
-      ciclistasUnicos: nombresUnicos
+      ciclistasUnicos: nombresUnicos,
+      con3, menos3
     }
   };
 }
 
-// ── Modal de opciones ──────────────────────────────────────────────────
+// ════════════════════════════ MODAL ═════════════════════════════════════
 async function _infOpenModal(){
-  // Años disponibles a partir del historial
   let history = [];
   try{ history = await _ensureHistory(); }catch(_){ history = (typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
   const years = [...new Set(history.map(r=>(_parseSpanishDate(r.raceDate)||'').slice(0,4)).filter(Boolean))].sort().reverse();
@@ -37415,99 +37457,230 @@ async function _infOpenModal(){
   ov.id='_infModal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99990;display:flex;align-items:center;justify-content:center;padding:18px';
   ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
-  ov.innerHTML = `<div style="background:#fff;border-radius:18px;max-width:560px;width:100%;max-height:94vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.35)">
-    <div style="background:linear-gradient(135deg,#2B91C8,#0e4d73);padding:22px 26px;border-radius:18px 18px 0 0;display:flex;align-items:center;gap:14px">
-      <div style="background:#fff;border-radius:12px;padding:4px;display:flex">${_infLogoSVG(54)}</div>
+  ov._history = history;
+  ov._mode = 'individual';
+  ov._catSel = '';
+
+  ov.innerHTML = `<div style="background:#fff;border-radius:18px;max-width:600px;width:100%;max-height:94vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.35)">
+    <div style="background:linear-gradient(135deg,#2B91C8,#0e4d73);padding:20px 24px;border-radius:18px 18px 0 0;display:flex;align-items:center;gap:14px">
+      <div style="background:#fff;border-radius:12px;padding:4px;display:flex">${_infLogoSVG(50)}</div>
       <div>
-        <div style="color:#fff;font-size:19px;font-weight:900">Informe de temporada</div>
-        <div style="color:#cde8f7;font-size:12.5px;font-weight:600">${escapeHtml(_infTeamName())} · Carta de presentación</div>
+        <div style="color:#fff;font-size:18px;font-weight:900">Informes de calendario y participación</div>
+        <div style="color:#cde8f7;font-size:12px;font-weight:600">Datos reales · objetivo · sin valoraciones</div>
       </div>
     </div>
-    <div style="padding:22px 26px">
-      <p style="font-size:13px;color:#475569;margin:0 0 18px;line-height:1.5">Genera un dossier profesional para enseñar a las familias el calendario real del equipo, los desplazamientos y las oportunidades de competición.</p>
+    <div style="padding:20px 24px">
 
+      <!-- MODO -->
+      <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#0e4d73;margin-bottom:5px">Tipo de informe</label>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button id="_infModeInd" onclick="_infSetMode('individual')" style="flex:1;padding:10px;border-radius:9px;border:1.5px solid #2B91C8;background:#2B91C8;color:#fff;font-weight:800;font-size:13px;cursor:pointer">👤 Individual</button>
+        <button id="_infModeCmp" onclick="_infSetMode('comparativo')" style="flex:1;padding:10px;border-radius:9px;border:1.5px solid #cbd5e1;background:#fff;color:#475569;font-weight:800;font-size:13px;cursor:pointer">⚖️ Comparativo</button>
+      </div>
+
+      <!-- TEMPORADA -->
       <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#0e4d73;margin-bottom:5px">Temporada</label>
-      <select id="_infYear" style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-bottom:16px">
+      <select id="_infYear" onchange="_infRenderTeams()" style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-bottom:16px">
         ${years.length?years.map(y=>`<option value="${y}" ${y===defYear?'selected':''}>${y}</option>`).join(''):`<option value="${curYear}">${curYear}</option>`}
       </select>
 
+      <!-- EQUIPO(S) -->
+      <label id="_infTeamLabel" style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#0e4d73;margin-bottom:5px">Equipo</label>
+      <div id="_infTeamsBox" style="margin-bottom:16px"></div>
+
+      <!-- CATEGORÍA -->
       <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#0e4d73;margin-bottom:5px">Categoría</label>
-      <div id="_infCat" style="display:flex;gap:8px;margin-bottom:16px">
+      <div id="_infCat" style="display:flex;gap:8px;margin-bottom:14px">
         ${[['','Ambas'],['cadete','Cadete'],['juvenil','Juvenil']].map((c,i)=>`<button data-v="${c[0]}" onclick="_infPickCat(this)" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid ${i===0?'#2B91C8':'#cbd5e1'};background:${i===0?'#2B91C8':'#fff'};color:${i===0?'#fff':'#475569'};font-weight:800;font-size:13px;cursor:pointer">${c[1]}</button>`).join('')}
       </div>
 
-      <label style="display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:#334155;margin-bottom:20px;cursor:pointer;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:11px 13px">
-        <input type="checkbox" id="_infPlanned" style="width:17px;height:17px;cursor:pointer">
-        Incluir también las pruebas planificadas (aún no disputadas)
-      </label>
+      <!-- ESTADO -->
+      <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#0e4d73;margin-bottom:5px">Estado de las pruebas</label>
+      <select id="_infEstado" style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:13.5px;font-weight:700;color:#0b2f6b;margin-bottom:14px">
+        <option value="realizadas">Solo realizadas</option>
+        <option value="ambas">Realizadas + planificadas</option>
+        <option value="planificadas">Solo planificadas</option>
+      </select>
 
-      <div id="_infStatus" style="font-size:12.5px;color:#0e4d73;font-weight:700;margin-bottom:14px;min-height:18px"></div>
+      <!-- FILTROS AVANZADOS -->
+      <details style="margin-bottom:14px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+        <summary style="cursor:pointer;font-weight:800;font-size:12.5px;color:#0e4d73;padding:11px 13px;background:#f8fafc;user-select:none">⚙️ Filtros avanzados (opcionales)</summary>
+        <div style="padding:13px">
+          <label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">Tipo de prueba</label>
+          <select id="_infTipo" style="width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;margin-bottom:12px"><option value="">Todos los tipos</option></select>
+          <label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">Provincia</label>
+          <select id="_infProv" style="width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;margin-bottom:12px"><option value="">Todas las provincias</option></select>
+          <div style="display:flex;gap:10px">
+            <div style="flex:1"><label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">Desde</label><input type="date" id="_infFrom" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px"></div>
+            <div style="flex:1"><label style="display:block;font-size:11px;font-weight:700;color:#475569;margin-bottom:4px">Hasta</label><input type="date" id="_infTo" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px"></div>
+          </div>
+        </div>
+      </details>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button onclick="_infGeneratePDF()" style="grid-column:1/3;background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;border:none;border-radius:11px;padding:14px;font-weight:800;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">📄 Exportar dossier PDF</button>
-        <button onclick="_infGenerateInfografia('ig')" style="background:linear-gradient(135deg,#C13584,#833AB4);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:13px;cursor:pointer">📸 Infografía Instagram</button>
-        <button onclick="_infGenerateInfografia('fb')" style="background:#1877F2;color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:13px;cursor:pointer">📘 Infografía Facebook</button>
-        <button onclick="_infCopyPost()" style="grid-column:1/3;background:#fff;color:#0e4d73;border:1.5px solid #2B91C8;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">📝 Copiar texto para la publicación</button>
+      <!-- AVISO -->
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:11.5px;color:#92400e;line-height:1.45;margin-bottom:14px">
+        ⚠️ ${_INF_DISCLAIMER}
       </div>
 
-      <button onclick="document.getElementById('_infModal')?.remove()" style="width:100%;margin-top:14px;background:transparent;color:#94a3b8;border:none;font-size:13px;font-weight:700;cursor:pointer;padding:6px">Cerrar</button>
+      <div id="_infStatus" style="font-size:12.5px;color:#0e4d73;font-weight:700;margin-bottom:12px;min-height:18px"></div>
+
+      <!-- BOTONES INDIVIDUAL -->
+      <div id="_infBtnsInd" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="_infGeneratePDF()" style="grid-column:1/3;background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">📄 Exportar dossier PDF</button>
+        <button onclick="_infGenerateInfografia('ig')" style="background:linear-gradient(135deg,#C13584,#833AB4);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">📸 Infografía Instagram</button>
+        <button onclick="_infGenerateInfografia('fb')" style="background:#1877F2;color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">📘 Infografía Facebook</button>
+        <button onclick="_infCopyPost()" style="grid-column:1/3;background:#fff;color:#0e4d73;border:1.5px solid #2B91C8;border-radius:11px;padding:11px;font-weight:800;font-size:13px;cursor:pointer">📝 Copiar texto para la publicación</button>
+      </div>
+
+      <!-- BOTONES COMPARATIVO -->
+      <div id="_infBtnsCmp" style="display:none;grid-template-columns:1fr;gap:10px">
+        <button onclick="_infGenerateComparativePDF()" style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">📊 Exportar PDF comparativo</button>
+        <button onclick="_infGenerateComparativeInfografia()" style="background:#475569;color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:13px;cursor:pointer">🖼️ Infografía comparativa (uso interno)</button>
+      </div>
+
+      <button onclick="document.getElementById('_infModal')?.remove()" style="width:100%;margin-top:13px;background:transparent;color:#94a3b8;border:none;font-size:13px;font-weight:700;cursor:pointer;padding:6px">Cerrar</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
-  ov._catSel = '';
+  _infRenderTeams();
 }
+
+// Renderiza el selector de equipos y rellena filtros dependientes del año
+function _infRenderTeams(){
+  const ov = document.getElementById('_infModal'); if(!ov) return;
+  const year = document.getElementById('_infYear')?.value || '';
+  const teams = _infCollectTeams(ov._history||[], year);
+  ov._teams = teams;
+  const box = document.getElementById('_infTeamsBox'); if(!box) return;
+  // Equipo por defecto: el que case con _infTeamName(), si existe
+  const myKey = (typeof teamKey==='function') ? teamKey(_infTeamName()) : '';
+  const defTeam = teams.find(t=>t.key===myKey) || teams.find(t=>/tbg|wixum/i.test(t.name));
+
+  if(ov._mode==='individual'){
+    const lbl = document.getElementById('_infTeamLabel'); if(lbl) lbl.textContent='Equipo';
+    box.innerHTML = `<select id="_infTeamSel" style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b">
+      ${teams.length? teams.map(t=>`<option value="${escapeAttr(t.key)}" ${defTeam&&t.key===defTeam.key?'selected':''}>${escapeHtml(t.name)} (${t.count})</option>`).join('') : `<option value="">— No hay equipos en ${escapeHtml(year)} —</option>`}
+    </select>
+    <div style="font-size:11px;color:#94a3b8;margin-top:5px">Aparecen todos los equipos con participaciones registradas esa temporada (entre paréntesis, su nº de participaciones).</div>`;
+  } else {
+    const lbl = document.getElementById('_infTeamLabel'); if(lbl) lbl.textContent='Equipos a comparar (marca 2 o más)';
+    box.innerHTML = `<div style="max-height:190px;overflow-y:auto;border:1.5px solid #cbd5e1;border-radius:10px;padding:6px">
+      ${teams.length? teams.map(t=>`<label style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:7px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='#f0f9ff'" onmouseleave="this.style.background=''">
+        <input type="checkbox" class="_infTeamChk" value="${escapeAttr(t.key)}" data-name="${escapeAttr(t.name)}" ${defTeam&&t.key===defTeam.key?'checked':''} style="width:16px;height:16px;cursor:pointer">
+        <span style="font-weight:700;color:#0b2f6b;flex:1">${escapeHtml(t.name)}</span>
+        <span style="font-size:11px;color:#64748b;background:#f1f5f9;border-radius:5px;padding:1px 7px;font-weight:700">${t.count}</span>
+      </label>`).join('') : `<div style="color:#94a3b8;padding:10px;font-size:13px">No hay equipos en ${escapeHtml(year)}.</div>`}
+    </div>
+    <div style="font-size:11px;color:#94a3b8;margin-top:5px">Selecciona dos o más equipos para la comparativa objetiva.</div>`;
+  }
+
+  // Filtros dependientes (tipo / provincia) a partir de TODAS las pruebas del año
+  const allTipos = new Set(), allProvs = new Set();
+  for(const race of (ov._history||[])){
+    const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
+    if(year && ry!==year) continue;
+    allTipos.add(_infTipoPrueba(race.raceName, ''));
+    const {prov}=_infProvincia(race.localidad); if(prov) allProvs.add(prov);
+  }
+  const tipoSel=document.getElementById('_infTipo');
+  if(tipoSel) tipoSel.innerHTML = `<option value="">Todos los tipos</option>`+[...allTipos].sort().map(t=>`<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
+  const provSel=document.getElementById('_infProv');
+  if(provSel) provSel.innerHTML = `<option value="">Todas las provincias</option>`+[...allProvs].sort().map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
+}
+
+function _infSetMode(m){
+  const ov = document.getElementById('_infModal'); if(!ov) return;
+  ov._mode = m;
+  const bi=document.getElementById('_infModeInd'), bc=document.getElementById('_infModeCmp');
+  const on='background:#2B91C8;color:#fff;border-color:#2B91C8', off='background:#fff;color:#475569;border-color:#cbd5e1';
+  if(bi) bi.style.cssText='flex:1;padding:10px;border-radius:9px;border:1.5px solid;font-weight:800;font-size:13px;cursor:pointer;'+(m==='individual'?on:off);
+  if(bc) bc.style.cssText='flex:1;padding:10px;border-radius:9px;border:1.5px solid;font-weight:800;font-size:13px;cursor:pointer;'+(m==='comparativo'?on:off);
+  document.getElementById('_infBtnsInd').style.display = m==='individual'?'grid':'none';
+  document.getElementById('_infBtnsCmp').style.display = m==='comparativo'?'grid':'none';
+  _infRenderTeams();
+}
+
 function _infPickCat(btn){
-  const wrap = document.getElementById('_infCat'); if(!wrap) return;
+  const wrap=document.getElementById('_infCat'); if(!wrap) return;
   [...wrap.children].forEach(b=>{ b.style.background='#fff'; b.style.color='#475569'; b.style.borderColor='#cbd5e1'; });
   btn.style.background='#2B91C8'; btn.style.color='#fff'; btn.style.borderColor='#2B91C8';
-  const ov = document.getElementById('_infModal'); if(ov) ov._catSel = btn.getAttribute('data-v')||'';
+  const ov=document.getElementById('_infModal'); if(ov) ov._catSel=btn.getAttribute('data-v')||'';
 }
-function _infReadOpts(){
-  const ov = document.getElementById('_infModal');
-  return {
-    year: document.getElementById('_infYear')?.value || String(new Date().getFullYear()),
-    catSel: (ov && ov._catSel) || '',
-    includePlanned: !!document.getElementById('_infPlanned')?.checked
-  };
-}
+
 function _infCatLabel(c){ return c==='cadete'?'Cadete':c==='juvenil'?'Juvenil':'Cadete y juvenil'; }
 
-// ── PDF ──────────────────────────────────────────────────────────────
-async function _infGeneratePDF(){
-  const {year, catSel, includePlanned} = _infReadOpts();
-  const st = document.getElementById('_infStatus'); if(st) st.textContent='⏳ Preparando el dossier…';
-  let history=[]; try{ history = await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
-  const D = _infBuildData(history, year, catSel, includePlanned);
-  if(!D.realizadas.length && !D.planificadas.length){
-    if(st) st.innerHTML = _infDiagNoData(history, year);
-    return;
+function _infReadOpts(){
+  const ov=document.getElementById('_infModal');
+  const estado=document.getElementById('_infEstado')?.value||'realizadas';
+  const includePlanned = estado==='ambas';
+  const onlyPlanned = estado==='planificadas';
+  // Equipo(s)
+  let teamSel=[];
+  if(ov && ov._mode==='comparativo'){
+    document.querySelectorAll('._infTeamChk:checked').forEach(ch=>teamSel.push({key:ch.value, name:ch.getAttribute('data-name')||ch.value}));
+  } else {
+    const sel=document.getElementById('_infTeamSel');
+    if(sel && sel.value){
+      const opt=sel.options[sel.selectedIndex];
+      teamSel.push({key:sel.value, name:(opt? opt.textContent.replace(/\s*\(\d+\)\s*$/,''):sel.value)});
+    }
   }
-  if(st) st.textContent='✅ Abriendo el PDF…';
-  const team = _infTeamName();
-  const R = D.resumen;
-  const hoy = new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+  return {
+    mode: ov?ov._mode:'individual',
+    year: document.getElementById('_infYear')?.value || String(new Date().getFullYear()),
+    catSel: (ov&&ov._catSel)||'',
+    estado, includePlanned, onlyPlanned,
+    tipo: document.getElementById('_infTipo')?.value||'',
+    prov: document.getElementById('_infProv')?.value||'',
+    dateFrom: document.getElementById('_infFrom')?.value||'',
+    dateTo: document.getElementById('_infTo')?.value||'',
+    teams: teamSel
+  };
+}
 
-  const stat = (v,l)=>`<div class="rs-card"><div class="rs-v">${v}</div><div class="rs-l">${l}</div></div>`;
-  const resumenCards = [
-    stat(R.totalPruebas, 'Pruebas disputadas'),
-    stat(R.localidades.length||'—', 'Localidades visitadas'),
-    stat(R.provincias.length||'—', 'Provincias'),
-    stat(R.participaciones, 'Participaciones del equipo'),
-    stat(R.mediaPorPrueba?R.mediaPorPrueba.toFixed(1):'—', 'Media de ciclistas/prueba'),
-    stat(R.ciclistasUnicos.length||'—', 'Ciclistas distintos'),
-    stat(R.vueltas||'—', 'Vueltas / por etapas'),
-    stat(R.kmTotal!=null?Math.round(R.kmTotal).toLocaleString('es-ES'):'No disp.', 'Km de competición')
+// Une opts comunes a un objeto de filtros para _infBuildDataByKey
+function _infFilters(opts, team){
+  return {
+    teamKey: team.key, teamName: team.name,
+    year: opts.year, catSel: opts.catSel,
+    includePlanned: opts.includePlanned, onlyPlanned: opts.onlyPlanned,
+    tipo: opts.tipo, prov: opts.prov, dateFrom: opts.dateFrom, dateTo: opts.dateTo
+  };
+}
+
+// ════════════════════════ INFORME INDIVIDUAL (PDF) ══════════════════════
+async function _infGeneratePDF(){
+  const opts=_infReadOpts();
+  const st=document.getElementById('_infStatus');
+  if(!opts.teams.length){ if(st) st.textContent='⚠️ Selecciona un equipo.'; return; }
+  if(st) st.textContent='⏳ Preparando el dossier…';
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
+  const team=opts.teams[0];
+  const D=_infBuildDataByKey(history, _infFilters(opts, team));
+  if(!D.realizadas.length && !D.planificadas.length){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+  if(st) st.textContent='✅ Abriendo el PDF…';
+  const teamName=team.name, R=D.resumen;
+  const hoy=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+  const esTBG = /tbg|wixum/i.test(teamName);
+  const c1 = esTBG?'#0e4d73':'#1f2937', c2 = esTBG?'#2B91C8':'#475569';
+
+  const stat=(v,l)=>`<div class="rs-card"><div class="rs-v">${v}</div><div class="rs-l">${l}</div></div>`;
+  const resumenCards=[
+    stat(R.totalPruebas,'Pruebas disputadas'),
+    stat(R.localidades.length||'—','Localidades visitadas'),
+    stat(R.provincias.length||'—','Provincias'),
+    stat(R.participaciones,'Participaciones'),
+    stat(R.mediaPorPrueba?R.mediaPorPrueba.toFixed(1):'—','Media ciclistas/prueba'),
+    stat(R.ciclistasUnicos.length||'—','Ciclistas distintos'),
+    stat(R.vueltas||'—','Vueltas / por etapas'),
+    stat(R.con3,'Pruebas con ≥3 ciclistas')
   ].join('');
 
-  const ficha = (r)=>{
-    const cats = r.cats.length?r.cats.join(', '):'No disponible';
-    const nombres = r.nombresMios.length
-      ? r.nombresMios.map(n=>escapeHtml((typeof _evolNormName==='function'?_evolNormName(n):n))).join(' · ')
-      : '';
-    const estadoBadge = r.estado==='realizada'
-      ? '<span class="bd bd-ok">🏁 Realizada</span>'
-      : '<span class="bd bd-plan">📅 Planificada</span>';
-    const rows = [
+  const ficha=(r)=>{
+    const cats=r.cats.length?r.cats.join(', '):'No disponible';
+    const nombres=r.nombresMios.length? r.nombresMios.map(n=>escapeHtml((typeof _evolNormName==='function'?_evolNormName(n):n))).join(' · '):'';
+    const badge=r.estado==='realizada'?'<span class="bd bd-ok">🏁 Realizada</span>':'<span class="bd bd-plan">📅 Planificada</span>';
+    const rows=[
       ['Localidad', r.localidad||'No disponible'],
       ['Provincia', r.prov||'No disponible'],
       r.ccaa?['Comunidad', r.ccaa]:null,
@@ -37515,321 +37688,439 @@ async function _infGeneratePDF(){
       ['Tipo de prueba', r.tipo||'No disponible'],
       r.km?['Kilómetros', r.km+' km']:null,
       r.estado==='realizada'?['Participantes totales', String(r.totalParticipantes||'No disponible')]:null,
-      r.estado==='realizada'?['Ciclistas '+escapeHtml(team), String(r.misCorredores)]:null
+      r.estado==='realizada'?['Ciclistas del equipo', String(r.misCorredores)]:null
     ].filter(Boolean).map(x=>`<tr><td class="fk">${x[0]}</td><td class="fv">${escapeHtml(String(x[1]))}</td></tr>`).join('');
-    return `<div class="ficha">
-      <div class="ficha-h">
-        <div class="ficha-fecha">${escapeHtml(r.fecha||'')}</div>
-        <div class="ficha-name">${escapeHtml(r.name||'')}</div>
-        ${estadoBadge}
-      </div>
-      <table class="ficha-t">${rows}</table>
-      ${nombres?`<div class="ficha-riders"><span class="fr-lab">Nuestros ciclistas:</span> ${nombres}</div>`:''}
-    </div>`;
+    return `<div class="ficha"><div class="ficha-h"><div class="ficha-fecha">${escapeHtml(r.fecha||'')}</div><div class="ficha-name">${escapeHtml(r.name||'')}</div>${badge}</div><table class="ficha-t">${rows}</table>${nombres?`<div class="ficha-riders"><span class="fr-lab">Ciclistas:</span> ${nombres}</div>`:''}</div>`;
   };
+  const fichasReal=D.realizadas.map(ficha).join('');
+  const fichasPlan=D.planificadas.map(ficha).join('');
 
-  const fichasReal = D.realizadas.map(ficha).join('');
-  const fichasPlan = D.planificadas.map(ficha).join('');
-
-  const w = window.open('', '_blank');
+  const w=window.open('','_blank');
   if(!w){ alert('El navegador bloqueó la ventana. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
   w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-  <title>Resumen de pruebas realizadas – ${escapeHtml(team)}</title>
+  <title>Resumen de pruebas realizadas – ${escapeHtml(teamName)}</title>
   <style>
     @page{size:A4 portrait;margin:0}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
     html,body{margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;color:#1f2937}
     .page-wrap{padding:16mm 14mm 20mm}
     .no-print{text-align:right;margin-bottom:10px}
-    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;margin-left:8px;font-size:13px}
+    .no-print button{background:${c2};color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;margin-left:8px;font-size:13px}
     .no-print button.sec{background:#f3f4f6;color:#374151;border:1px solid #d0d5dd}
-    /* PORTADA */
-    .cover{height:248mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(160deg,#0e4d73 0%,#2B91C8 100%);color:#fff;border-radius:18px;page-break-after:always;padding:30px}
+    .cover{height:248mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(160deg,${c1} 0%,${c2} 100%);color:#fff;border-radius:18px;page-break-after:always;padding:30px}
     .cover-logo{background:#fff;border-radius:24px;padding:14px;display:inline-flex;box-shadow:0 12px 40px rgba(0,0,0,.3);margin-bottom:28px}
     .cover h1{font-size:34px;font-weight:900;margin:0 0 10px;line-height:1.15;max-width:80%}
     .cover .sub{font-size:17px;font-weight:600;opacity:.92;margin-bottom:8px}
     .cover .team{font-size:22px;font-weight:900;letter-spacing:1px;margin:26px 0 6px}
     .cover .meta{font-size:13px;opacity:.85;margin-top:auto}
     .cover .accent{height:5px;width:120px;background:#f5c518;border-radius:3px;margin:18px auto}
-    /* SECCIONES */
-    h2.sec-t{color:#0e4d73;font-size:20px;font-weight:900;margin:0 0 4px;border-bottom:3px solid #2B91C8;padding-bottom:8px;display:flex;align-items:center;gap:8px}
+    h2.sec-t{color:${c1};font-size:20px;font-weight:900;margin:0 0 4px;border-bottom:3px solid ${c2};padding-bottom:8px}
     .sec-sub{color:#64748b;font-size:12px;margin:0 0 16px}
     .rs-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
     .rs-card{background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px 8px;text-align:center;break-inside:avoid}
-    .rs-v{font-size:24px;font-weight:900;color:#0e4d73;line-height:1}
-    .rs-l{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#475569;margin-top:6px}
+    .rs-v{font-size:24px;font-weight:900;color:${c1};line-height:1}
+    .rs-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#475569;margin-top:6px}
     .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-    .chip{background:#e0f2fe;color:#0e4d73;border-radius:99px;padding:4px 11px;font-size:11.5px;font-weight:700}
+    .chip{background:#e0f2fe;color:${c1};border-radius:99px;padding:4px 11px;font-size:11.5px;font-weight:700}
     .info-line{font-size:12.5px;color:#334155;margin:4px 0}
-    .info-line b{color:#0e4d73}
-    /* FICHAS */
+    .info-line b{color:${c1}}
     .ficha{border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:11px;break-inside:avoid;background:#fff}
     .ficha-h{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-    .ficha-fecha{background:#0e4d73;color:#fff;border-radius:7px;padding:4px 9px;font-weight:800;font-size:12px;font-family:monospace;flex-shrink:0}
+    .ficha-fecha{background:${c1};color:#fff;border-radius:7px;padding:4px 9px;font-weight:800;font-size:12px;font-family:monospace;flex-shrink:0}
     .ficha-name{font-weight:900;color:#0b2f6b;font-size:14px;flex:1;min-width:160px}
     .bd{font-size:10px;font-weight:800;border-radius:99px;padding:3px 9px}
-    .bd-ok{background:#dcfce7;color:#15803d}
-    .bd-plan{background:#dbeafe;color:#1d4ed8}
+    .bd-ok{background:#dcfce7;color:#15803d}.bd-plan{background:#dbeafe;color:#1d4ed8}
     .ficha-t{width:100%;border-collapse:collapse;font-size:11.5px}
     .ficha-t td{padding:3px 4px;vertical-align:top}
-    .fk{color:#64748b;font-weight:700;width:38%}
-    .fv{color:#1f2937;font-weight:600}
+    .fk{color:#64748b;font-weight:700;width:38%}.fv{color:#1f2937;font-weight:600}
     .ficha-riders{margin-top:8px;padding-top:8px;border-top:1px dashed #e2e8f0;font-size:11px;color:#334155}
-    .fr-lab{font-weight:800;color:#0e4d73}
+    .fr-lab{font-weight:800;color:${c1}}
+    .disc{background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:10.5px;color:#92400e;line-height:1.4;margin-top:14px}
     .footer{position:fixed;bottom:6mm;left:14mm;right:14mm;display:flex;justify-content:space-between;font-size:9.5px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:4px}
     .sec-block{page-break-before:always}
   </style></head><body>
-  <div class="no-print">
-    <button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
-    <button class="sec" onclick="window.close()">✕ Cerrar</button>
-  </div>
+  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
   <div class="page-wrap">
-    <!-- PORTADA -->
     <div class="cover">
-      <div class="cover-logo">${_infLogoSVG(120)}</div>
+      <div class="cover-logo">${esTBG?_infLogoSVG(120):'<div style="width:120px;height:120px;border-radius:50%;background:'+c1+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:900">'+escapeHtml(teamName.slice(0,2).toUpperCase())+'</div>'}</div>
       <h1>Resumen de pruebas realizadas</h1>
       <div class="accent"></div>
-      <div class="sub">Temporada ${escapeHtml(year)} · ${escapeHtml(_infCatLabel(catSel))}</div>
-      <div class="team">${escapeHtml(team)}</div>
+      <div class="sub">Temporada ${escapeHtml(opts.year)} · ${escapeHtml(_infCatLabel(opts.catSel))}</div>
+      <div class="team">${escapeHtml(teamName)}</div>
       <div class="meta">Documento generado el ${hoy}</div>
     </div>
-
-    <!-- RESUMEN -->
     <div class="sec-block" style="page-break-before:auto">
       <h2 class="sec-t">📊 Resumen de la temporada</h2>
       <p class="sec-sub">Datos calculados automáticamente a partir de las pruebas disputadas por el equipo.</p>
       <div class="rs-grid">${resumenCards}</div>
       ${R.tipos.length?`<div class="info-line"><b>Tipos de prueba disputadas:</b></div><div class="chips">${R.tipos.map(t=>`<span class="chip">${escapeHtml(t)}</span>`).join('')}</div>`:''}
       ${R.localidades.length?`<div class="info-line" style="margin-top:10px"><b>Localidades visitadas:</b></div><div class="chips">${R.localidades.map(l=>`<span class="chip">📍 ${escapeHtml(l)}</span>`).join('')}</div>`:''}
-      ${R.kmTotal==null?`<div class="info-line" style="margin-top:10px;color:#94a3b8">Kilómetros y desnivel: <b>No disponible</b> en los datos cargados.</div>`:(R.kmConDato<R.totalPruebas?`<div class="info-line" style="margin-top:8px;color:#94a3b8">* Km calculados sobre ${R.kmConDato} de ${R.totalPruebas} pruebas con dato disponible.</div>`:'')}
+      ${R.kmTotal==null?`<div class="info-line" style="margin-top:10px;color:#94a3b8">Kilómetros y desnivel: <b>No disponible</b> en los datos cargados.</div>`:(R.kmConDato<R.totalPruebas?`<div class="info-line" style="margin-top:8px;color:#94a3b8">* Km sobre ${R.kmConDato} de ${R.totalPruebas} pruebas con dato.</div>`:'')}
+      <div class="disc">⚠️ ${_INF_DISCLAIMER}</div>
     </div>
-
-    <!-- FICHAS REALIZADAS -->
-    ${D.realizadas.length?`<div class="sec-block">
-      <h2 class="sec-t">🏁 Pruebas disputadas <span style="font-size:13px;font-weight:700;color:#64748b">(${D.realizadas.length})</span></h2>
-      <p class="sec-sub">Una ficha por cada prueba en la que el equipo ha competido esta temporada.</p>
-      ${fichasReal}
-    </div>`:''}
-
-    <!-- FICHAS PLANIFICADAS -->
-    ${D.planificadas.length?`<div class="sec-block">
-      <h2 class="sec-t">📅 Pruebas planificadas <span style="font-size:13px;font-weight:700;color:#64748b">(${D.planificadas.length})</span></h2>
-      <p class="sec-sub">Pruebas previstas para lo que resta de temporada.</p>
-      ${fichasPlan}
-    </div>`:''}
+    ${D.realizadas.length?`<div class="sec-block"><h2 class="sec-t">🏁 Pruebas disputadas (${D.realizadas.length})</h2><p class="sec-sub">Una ficha por cada prueba en la que el equipo ha competido.</p>${fichasReal}</div>`:''}
+    ${D.planificadas.length?`<div class="sec-block"><h2 class="sec-t">📅 Pruebas planificadas (${D.planificadas.length})</h2><p class="sec-sub">Pruebas previstas para lo que resta de temporada.</p>${fichasPlan}</div>`:''}
   </div>
-  <div class="footer"><span>${escapeHtml(team)} · Sección Deportiva</span><span>Resumen de temporada ${escapeHtml(year)}</span></div>
+  <div class="footer"><span>${escapeHtml(teamName)}</span><span>Resumen de temporada ${escapeHtml(opts.year)}</span></div>
   <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
   </body></html>`);
   w.document.close();
 }
 
-// ── INFOGRAFÍAS (canvas → PNG) ──────────────────────────────────────────
+// ════════════════════════ INFOGRAFÍAS canvas ════════════════════════════
 function _infDrawSVGToCanvas(ctx, svgStr, x, y, w, h){
   return new Promise((resolve)=>{
-    const img = new Image();
-    const blob = new Blob([svgStr], {type:'image/svg+xml;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    img.onload = ()=>{ try{ ctx.drawImage(img, x, y, w, h); }catch(_){} URL.revokeObjectURL(url); resolve(); };
-    img.onerror = ()=>{ URL.revokeObjectURL(url); resolve(); };
-    img.src = url;
+    const img=new Image();
+    const blob=new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    img.onload=()=>{ try{ctx.drawImage(img,x,y,w,h);}catch(_){} URL.revokeObjectURL(url); resolve(); };
+    img.onerror=()=>{ URL.revokeObjectURL(url); resolve(); };
+    img.src=url;
   });
 }
 function _infRoundRect(ctx,x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y);
-  ctx.arcTo(x+w,y,x+w,y+h,r);
-  ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r);
-  ctx.arcTo(x,y,x+w,y,r);
-  ctx.closePath();
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
 
 async function _infGenerateInfografia(fmt){
-  const {year, catSel, includePlanned} = _infReadOpts();
-  const st = document.getElementById('_infStatus'); if(st) st.textContent='⏳ Generando infografía…';
-  let history=[]; try{ history = await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
-  const D = _infBuildData(history, year, catSel, includePlanned);
-  const R = D.resumen;
-  if(!R.totalPruebas){ if(st) st.innerHTML = _infDiagNoData(history, year); return; }
-  const team = _infTeamName();
+  const opts=_infReadOpts();
+  const st=document.getElementById('_infStatus');
+  if(!opts.teams.length){ if(st) st.textContent='⚠️ Selecciona un equipo.'; return; }
+  if(st) st.textContent='⏳ Generando infografía…';
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
+  const team=opts.teams[0];
+  const D=_infBuildDataByKey(history, _infFilters(opts, team));
+  const R=D.resumen;
+  if(!R.totalPruebas){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+  const teamName=team.name;
 
-  const sq = fmt==='ig';
-  const W = sq?1080:1200, H = sq?1080:675;
-  const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
-  const ctx = cv.getContext('2d');
-
-  // Fondo degradado
-  const g = ctx.createLinearGradient(0,0,W,H);
-  g.addColorStop(0,'#0e4d73'); g.addColorStop(1,'#2B91C8');
+  const sq=fmt==='ig'; const W=sq?1080:1200, H=sq?1080:675;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#0e4d73'); g.addColorStop(1,'#2B91C8');
   ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  // Banda diagonal sutil
   ctx.save(); ctx.globalAlpha=.07; ctx.fillStyle='#fff';
-  ctx.beginPath(); ctx.moveTo(W*0.55,0); ctx.lineTo(W,0); ctx.lineTo(W,H); ctx.lineTo(W*0.30,H); ctx.closePath(); ctx.fill();
-  ctx.restore();
+  ctx.beginPath(); ctx.moveTo(W*0.55,0); ctx.lineTo(W,0); ctx.lineTo(W,H); ctx.lineTo(W*0.30,H); ctx.closePath(); ctx.fill(); ctx.restore();
+  const cx=W/2;
+  const esTBG=/tbg|wixum/i.test(teamName);
+  const logoSize=sq?168:140;
+  ctx.save(); _infRoundRect(ctx,cx-logoSize/2-10,(sq?54:34),logoSize+20,logoSize+20,24); ctx.fillStyle='#fff'; ctx.fill(); ctx.restore();
+  if(esTBG){ await _infDrawSVGToCanvas(ctx,_infLogoSVG(300),cx-logoSize/2,(sq?64:44),logoSize,logoSize); }
+  else { ctx.fillStyle='#0e4d73'; ctx.textAlign='center'; ctx.font='900 '+(logoSize*0.42)+'px "Segoe UI",Arial'; ctx.fillText(teamName.slice(0,2).toUpperCase(),cx,(sq?64:44)+logoSize*0.65); }
 
-  const cx = W/2;
-  // Logo arriba centrado
-  const logoSize = sq?168:140;
-  ctx.save();
-  _infRoundRect(ctx, cx-logoSize/2-10, (sq?54:34), logoSize+20, logoSize+20, 24);
-  ctx.fillStyle='#fff'; ctx.fill();
-  ctx.restore();
-  await _infDrawSVGToCanvas(ctx, _infLogoSVG(300), cx-logoSize/2, (sq?64:44), logoSize, logoSize);
-
-  let y = (sq?54:34)+logoSize+ (sq?70:54);
-  // Título
+  let y=(sq?54:34)+logoSize+(sq?70:54);
   ctx.textAlign='center'; ctx.fillStyle='#fff';
   ctx.font='900 '+(sq?60:46)+'px "Segoe UI",Arial,sans-serif';
-  ctx.fillText('Una temporada', cx, y); y+=(sq?66:50);
-  ctx.fillText('de oportunidades', cx, y); y+=(sq?40:30);
-  // Acento amarillo
-  ctx.fillStyle=_INF_COL.amarillo; _infRoundRect(ctx, cx-70, y, 140, 7, 4); ctx.fill(); y+=(sq?44:34);
-  // Subtítulo
+  ctx.fillText('Una temporada',cx,y); y+=(sq?66:50);
+  ctx.fillText('de oportunidades',cx,y); y+=(sq?40:30);
+  ctx.fillStyle=_INF_COL.amarillo; _infRoundRect(ctx,cx-70,y,140,7,4); ctx.fill(); y+=(sq?44:34);
   ctx.fillStyle='#cde8f7'; ctx.font='700 '+(sq?28:23)+'px "Segoe UI",Arial,sans-serif';
-  ctx.fillText(team+'  ·  Temporada '+year, cx, y); y+=(sq?56:40);
+  ctx.fillText(teamName+'  ·  Temporada '+opts.year,cx,y); y+=(sq?56:40);
 
-  // Tarjetas de stats
-  const stats = [
-    [String(R.totalPruebas), 'PRUEBAS'],
-    [String(R.localidades.length||'—'), 'LOCALIDADES'],
-    [String(R.provincias.length|| (R.ccaas.length||'—')), R.provincias.length?'PROVINCIAS':'ZONAS'],
-    [String(R.participaciones), 'PARTICIPACIONES']
+  const stats=[
+    [String(R.totalPruebas),'PRUEBAS'],
+    [String(R.localidades.length||'—'),'LOCALIDADES'],
+    [String(R.provincias.length||(R.ccaas.length||'—')),R.provincias.length?'PROVINCIAS':'ZONAS'],
+    [String(R.participaciones),'PARTICIPACIONES']
   ];
-  const n=stats.length;
-  const gap=sq?22:20;
-  const cardW=sq?(W-2*60-(n-1)*gap)/n : (W-2*70-(n-1)*gap)/n;
-  const cardH=sq?150:120;
-  const x0=sq?60:70;
+  const n=stats.length, gap=sq?22:20;
+  const cardW=sq?(W-2*60-(n-1)*gap)/n:(W-2*70-(n-1)*gap)/n, cardH=sq?150:120, x0=sq?60:70;
   stats.forEach((s,i)=>{
     const x=x0+i*(cardW+gap);
-    ctx.save();
-    _infRoundRect(ctx,x,y,cardW,cardH,18);
-    ctx.fillStyle='rgba(255,255,255,0.14)'; ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2; ctx.stroke();
-    ctx.restore();
-    ctx.textAlign='center';
-    ctx.fillStyle=_INF_COL.amarillo;
-    ctx.font='900 '+(sq?58:46)+'px "Segoe UI",Arial,sans-serif';
-    ctx.fillText(s[0], x+cardW/2, y+(sq?78:62));
-    ctx.fillStyle='#eaf6fd';
-    ctx.font='800 '+(sq?17:14)+'px "Segoe UI",Arial,sans-serif';
-    ctx.fillText(s[1], x+cardW/2, y+(sq?115:92));
+    ctx.save(); _infRoundRect(ctx,x,y,cardW,cardH,18); ctx.fillStyle='rgba(255,255,255,0.14)'; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2; ctx.stroke(); ctx.restore();
+    ctx.textAlign='center'; ctx.fillStyle=_INF_COL.amarillo;
+    ctx.font='900 '+(sq?58:46)+'px "Segoe UI",Arial,sans-serif'; ctx.fillText(s[0],x+cardW/2,y+(sq?78:62));
+    ctx.fillStyle='#eaf6fd'; ctx.font='800 '+(sq?17:14)+'px "Segoe UI",Arial,sans-serif'; ctx.fillText(s[1],x+cardW/2,y+(sq?115:92));
   });
   y+=cardH+(sq?42:30);
 
-  // Tipos de prueba (chips)
   if(R.tipos.length){
-    ctx.textAlign='center'; ctx.fillStyle='#cde8f7';
-    ctx.font='700 '+(sq?19:16)+'px "Segoe UI",Arial,sans-serif';
-    const tiposTxt = R.tipos.slice(0,6).join('  •  ');
-    ctx.fillText(tiposTxt, cx, y); y+=(sq?40:30);
+    ctx.textAlign='center'; ctx.fillStyle='#cde8f7'; ctx.font='700 '+(sq?19:16)+'px "Segoe UI",Arial,sans-serif';
+    ctx.fillText(R.tipos.slice(0,6).join('  •  '),cx,y); y+=(sq?40:30);
   }
-
-  // Localidades (hasta donde quepa)
   if(R.localidades.length){
     ctx.fillStyle='#fff'; ctx.font='800 '+(sq?20:17)+'px "Segoe UI",Arial,sans-serif';
-    ctx.fillText('📍 '+R.localidades.length+' localidades visitadas', cx, y); y+=(sq?34:26);
+    ctx.fillText('📍 '+R.localidades.length+' localidades visitadas',cx,y); y+=(sq?34:26);
     ctx.fillStyle='#bfe3f5'; ctx.font='600 '+(sq?16:13)+'px "Segoe UI",Arial,sans-serif';
-    // Reparte las localidades en líneas que quepan
-    const maxLines = sq?4:2;
-    const locs = R.localidades.slice();
-    let line='', lines=[];
-    for(const l of locs){
-      const test = line? line+'  ·  '+l : l;
-      if(ctx.measureText(test).width > W-120 && line){ lines.push(line); line=l; if(lines.length>=maxLines) break; }
-      else line=test;
+    const maxLines=sq?4:2; let line='', lines=[];
+    for(const l of R.localidades){
+      const test=line?line+'  ·  '+l:l;
+      if(ctx.measureText(test).width>W-120 && line){ lines.push(line); line=l; if(lines.length>=maxLines) break; } else line=test;
     }
     if(line && lines.length<maxLines) lines.push(line);
-    if(locs.length>0 && lines.length>=maxLines){ lines[maxLines-1] = (lines[maxLines-1]||'')+'  …'; }
-    lines.forEach(ln=>{ ctx.fillText(ln, cx, y); y+=(sq?26:20); });
+    if(R.localidades.length>0 && lines.length>=maxLines) lines[maxLines-1]=(lines[maxLines-1]||'')+'  …';
+    lines.forEach(ln=>{ ctx.fillText(ln,cx,y); y+=(sq?26:20); });
   }
+  const fraseY=H-(sq?70:48);
+  ctx.fillStyle=_INF_COL.amarillo; _infRoundRect(ctx,sq?60:80,fraseY-(sq?44:34),W-(sq?120:160),sq?64:50,14); ctx.fill();
+  ctx.fillStyle='#0e4d73'; ctx.textAlign='center'; ctx.font='900 '+(sq?22:18)+'px "Segoe UI",Arial,sans-serif';
+  ctx.fillText('El desarrollo de un ciclista también se construye compitiendo.',cx,fraseY-(sq?6:4));
 
-  // Frase final destacada (abajo)
-  const fraseY = H-(sq?70:48);
-  ctx.fillStyle=_INF_COL.amarillo; _infRoundRect(ctx, sq?60:80, fraseY-(sq?44:34), W-(sq?120:160), sq?64:50, 14); ctx.fill();
-  ctx.fillStyle='#0e4d73'; ctx.textAlign='center';
-  ctx.font='900 '+(sq?22:18)+'px "Segoe UI",Arial,sans-serif';
-  ctx.fillText('El desarrollo de un ciclista también se construye compitiendo.', cx, fraseY-(sq?6:4));
-
-  // Descargar
   cv.toBlob((blob)=>{
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const safe = team.replace(/[^a-z0-9]+/gi,'-');
-    a.href=url; a.download=`${safe}_temporada_${year}_${sq?'instagram_1080':'facebook_1200x675'}.png`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    const safe=teamName.replace(/[^a-z0-9]+/gi,'-');
+    a.href=url; a.download=`${safe}_temporada_${opts.year}_${sq?'instagram_1080':'facebook_1200x675'}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
     if(st) st.textContent='✅ Infografía '+(sq?'Instagram':'Facebook')+' descargada.';
-  }, 'image/png');
+  },'image/png');
 }
 
-// ── Texto sugerido para la publicación ──────────────────────────────────
+// ════════════════════════ TEXTO PUBLICACIÓN ═════════════════════════════
 async function _infCopyPost(){
-  const {year, catSel, includePlanned} = _infReadOpts();
-  const st = document.getElementById('_infStatus');
-  let history=[]; try{ history = await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
-  const D = _infBuildData(history, year, catSel, includePlanned);
-  const R = D.resumen; const team=_infTeamName();
-  if(!R.totalPruebas){ if(st) st.textContent='⚠️ No hay pruebas para esa temporada/categoría.'; return; }
+  const opts=_infReadOpts();
+  const st=document.getElementById('_infStatus');
+  if(!opts.teams.length){ if(st) st.textContent='⚠️ Selecciona un equipo.'; return; }
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
+  const team=opts.teams[0];
+  const D=_infBuildDataByKey(history, _infFilters(opts, team)); const R=D.resumen;
+  if(!R.totalPruebas){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+  const teamName=team.name;
+  const tipos=R.tipos.length?R.tipos.join(', '):'';
+  const post=`🚴 UNA TEMPORADA DE OPORTUNIDADES — ${teamName} ${opts.year}
 
-  const tipos = R.tipos.length? R.tipos.join(', '):'';
-  const post = `🚴 UNA TEMPORADA DE OPORTUNIDADES — ${team} ${year}
+En ${teamName} seguimos apostando por el desarrollo de nuestros jóvenes ciclistas dándoles calendario, planificación y competición real.
 
-En ${team} seguimos apostando por el desarrollo de nuestros jóvenes ciclistas dándoles calendario, planificación y competición real.
-
-📊 Nuestra temporada ${year} en cifras:
+📊 Temporada ${opts.year} en cifras:
 🏁 ${R.totalPruebas} pruebas disputadas
 📍 ${R.localidades.length} localidades visitadas${R.provincias.length?`\n🗺️ ${R.provincias.length} provincias`:''}
-👥 ${R.participaciones} participaciones de nuestros ciclistas
+👥 ${R.participaciones} participaciones
 🚲 Media de ${R.mediaPorPrueba.toFixed(1)} corredores por prueba${tipos?`\n🏆 ${tipos}`:''}
 
 El desarrollo de un ciclista también se construye compitiendo. 💪
 
-#${team.replace(/[^a-z0-9]+/gi,'')} #ciclismo #ciclismobase #cantera #FCCV #ComunitatValenciana #ciclismocadete #ciclismojuvenil`;
-
-  try{
-    await navigator.clipboard.writeText(post);
-    if(st) st.textContent='✅ Texto copiado al portapapeles. Ya puedes pegarlo en Facebook/Instagram.';
-  }catch(_){
-    // Fallback: mostrar en un prompt para copiar manualmente
-    const old=document.getElementById('_infPostBox'); if(old) old.remove();
-    const box=document.createElement('div');
-    box.id='_infPostBox';
-    box.style.cssText='margin-top:12px';
-    box.innerHTML=`<textarea readonly style="width:100%;height:180px;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;font-size:12px;font-family:inherit" onclick="this.select()">${escapeHtml(post)}</textarea><div style="font-size:11px;color:#64748b;margin-top:4px">Selecciona el texto y cópialo manualmente (Ctrl/Cmd + C).</div>`;
-    document.querySelector('#_infModal [style*="padding:22px"]')?.appendChild(box);
+#${teamName.replace(/[^a-z0-9]+/gi,'')} #ciclismo #ciclismobase #cantera #FCCV #ComunitatValenciana`;
+  try{ await navigator.clipboard.writeText(post); if(st) st.textContent='✅ Texto copiado al portapapeles.'; }
+  catch(_){
+    const oldb=document.getElementById('_infPostBox'); if(oldb) oldb.remove();
+    const box=document.createElement('div'); box.id='_infPostBox'; box.style.cssText='margin-top:12px';
+    box.innerHTML=`<textarea readonly style="width:100%;height:170px;border:1.5px solid #cbd5e1;border-radius:10px;padding:10px;font-size:12px;font-family:inherit" onclick="this.select()">${escapeHtml(post)}</textarea>`;
+    document.getElementById('_infBtnsInd')?.parentNode?.appendChild(box);
     if(st) st.textContent='ℹ️ Copia el texto del cuadro de abajo.';
   }
 }
 
-// Diagnóstico cuando no se encuentran pruebas: muestra el equipo buscado y
-// los nombres de equipo reales presentes en los datos de ese año, para poder
-// detectar discrepancias en el nombre del equipo.
-function _infDiagNoData(history, year){
-  const teamUsed = _infTeamName();
-  // Recopila nombres de equipo de ese año
-  const counts = {};
-  for(const race of (history||[])){
-    const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
-    if(year && ry!==year) continue;
-    for(const r of (race.riders||[])){
-      const t = (r.team||'').trim();
-      if(t) counts[t] = (counts[t]||0)+1;
+// ════════════════════════ INFORME COMPARATIVO ═══════════════════════════
+function _infRaceKey(r){
+  const nm=(r.name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().slice(0,28);
+  return (r.iso||'')+'|'+nm;
+}
+function _infBuildComparative(history, opts){
+  const teamsData = opts.teams.map(t=>({ team:t, D:_infBuildDataByKey(history, _infFilters(opts, t)) }));
+  // Conjuntos de claves de prueba por equipo (realizadas)
+  teamsData.forEach(td=>{ td.keys=new Set(td.D.realizadas.map(_infRaceKey)); td.byKey={}; td.D.realizadas.forEach(r=>{ td.byKey[_infRaceKey(r)]=r; }); });
+  // Comunes a TODOS
+  let comunes=[];
+  if(teamsData.length>=2){
+    const base=teamsData[0];
+    for(const k of base.keys){
+      if(teamsData.every(td=>td.keys.has(k))) comunes.push(base.byKey[k]);
     }
+    comunes.sort((a,b)=>(a.iso||'').localeCompare(b.iso||''));
   }
-  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  // ¿Hay alguno que se parezca a TBG/WIXUM?
-  const candidatos = Object.keys(counts).filter(t=>/tbg|wixum/i.test(t));
-  let msg = `⚠️ No se han encontrado pruebas de <b>${escapeHtml(teamUsed)}</b> en ${escapeHtml(year)}.`;
-  if(candidatos.length){
-    msg += `<br><span style="color:#15803d">Pero sí hay equipos parecidos en los datos: <b>${candidatos.map(escapeHtml).join('</b>, <b>')}</b>.</span>`;
-    msg += `<br>Ve a <b>Mi Equipo</b> y selecciona exactamente ese nombre, luego vuelve a generar el informe.`;
-  } else if(!Object.keys(counts).length){
-    msg += `<br>No hay datos cargados para ${escapeHtml(year)}. Comprueba que el historial de esa temporada está cargado.`;
-  } else {
-    msg += `<br><span style="color:#64748b">Equipos con más participaciones ese año: ${top.map(([t,n])=>escapeHtml(t)+' ('+n+')').join(', ')}.</span>`;
-    msg += `<br>Si tu equipo aparece con otro nombre, selecciónalo en <b>Mi Equipo</b>.`;
+  // Exclusivas por equipo (solo ese equipo la tiene)
+  teamsData.forEach((td,i)=>{
+    td.exclusivas = td.D.realizadas.filter(r=>{
+      const k=_infRaceKey(r);
+      return teamsData.every((o,j)=> j===i || !o.keys.has(k));
+    });
+  });
+  return { teamsData, comunes };
+}
+
+async function _infGenerateComparativePDF(){
+  const opts=_infReadOpts();
+  const st=document.getElementById('_infStatus');
+  if(opts.teams.length<2){ if(st) st.textContent='⚠️ Selecciona al menos 2 equipos para comparar.'; return; }
+  if(st) st.textContent='⏳ Preparando comparativa…';
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
+  const C=_infBuildComparative(history, opts);
+  const anyData=C.teamsData.some(td=>td.D.realizadas.length);
+  if(!anyData){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+  if(st) st.textContent='✅ Abriendo la comparativa…';
+  const hoy=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Tabla comparativa
+  const cols=[
+    ['Pruebas realizadas', td=>td.D.resumen.totalPruebas],
+    ['Vueltas / etapas', td=>td.D.resumen.vueltas],
+    ['Localidades', td=>td.D.resumen.localidades.length],
+    ['Provincias', td=>td.D.resumen.provincias.length],
+    ['Participaciones', td=>td.D.resumen.participaciones],
+    ['Media ciclistas/prueba', td=>td.D.resumen.mediaPorPrueba?td.D.resumen.mediaPorPrueba.toFixed(1):'—'],
+    ['Pruebas con ≥3 ciclistas', td=>td.D.resumen.con3],
+    ['Puntuables por equipos (≥3)', td=>td.D.resumen.con3],
+    ['Sin equipo completo (<3)', td=>td.D.resumen.menos3]
+  ];
+  const headTeams=C.teamsData.map((td,i)=>`<th style="background:${_INF_PALETTE[i%_INF_PALETTE.length]};color:#fff">${escapeHtml(td.team.name)}</th>`).join('');
+  const bodyRows=cols.map(c=>`<tr><td class="metric">${c[0]}</td>${C.teamsData.map(td=>`<td>${escapeHtml(String(c[1](td)))}</td>`).join('')}</tr>`).join('');
+  // Tipos por equipo
+  const tiposRow=`<tr><td class="metric">Tipos de prueba</td>${C.teamsData.map(td=>`<td style="font-size:9.5px">${td.D.resumen.tipos.map(escapeHtml).join(', ')||'—'}</td>`).join('')}</tr>`;
+
+  // Gráfico de barras (Pruebas realizadas y Participaciones) en HTML
+  const maxPr=Math.max(1,...C.teamsData.map(td=>td.D.resumen.totalPruebas));
+  const maxPa=Math.max(1,...C.teamsData.map(td=>td.D.resumen.participaciones));
+  const barChart=(titulo, val, max)=>`<div class="chart"><div class="chart-t">${titulo}</div>${C.teamsData.map((td,i)=>{
+    const v=val(td); const pct=Math.round(v/max*100);
+    return `<div class="bar-row"><div class="bar-lab">${escapeHtml(td.team.name)}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${_INF_PALETTE[i%_INF_PALETTE.length]}">${v}</div></div></div>`;
+  }).join('')}</div>`;
+
+  // Coincidencias
+  const comunesList = C.comunes.length
+    ? `<ul class="lst">${C.comunes.map(r=>`<li><b>${escapeHtml(r.fecha)}</b> — ${escapeHtml(r.name)}${r.localidad?` <span style="color:#94a3b8">(${escapeHtml(r.localidad)})</span>`:''}</li>`).join('')}</ul>`
+    : `<p style="color:#94a3b8;font-size:12px">No hay pruebas disputadas por todos los equipos seleccionados (según los datos registrados).</p>`;
+  const exclusivasBlocks = C.teamsData.map((td,i)=>`<div style="margin-bottom:10px"><div style="font-weight:800;color:${_INF_PALETTE[i%_INF_PALETTE.length]};font-size:12.5px;margin-bottom:3px">Solo ${escapeHtml(td.team.name)} (${td.exclusivas.length})</div>${td.exclusivas.length?`<ul class="lst">${td.exclusivas.slice(0,40).map(r=>`<li><b>${escapeHtml(r.fecha)}</b> — ${escapeHtml(r.name)}</li>`).join('')}${td.exclusivas.length>40?`<li style="color:#94a3b8">… y ${td.exclusivas.length-40} más</li>`:''}</ul>`:`<p style="color:#94a3b8;font-size:11.5px;margin:2px 0">—</p>`}</div>`).join('');
+
+  // Resumen objetivo (solo datos)
+  const resumenObj = C.teamsData.map(td=>`<li><b>${escapeHtml(td.team.name)}</b>: ${td.D.resumen.totalPruebas} pruebas, ${td.D.resumen.participaciones} participaciones, ${td.D.resumen.localidades.length} localidades, media ${td.D.resumen.mediaPorPrueba?td.D.resumen.mediaPorPrueba.toFixed(1):'—'} ciclistas/prueba.</li>`).join('');
+
+  // Listas por equipo
+  const listasEquipo = C.teamsData.map((td,i)=>`<div class="sec-block"><h2 class="sec-t" style="border-color:${_INF_PALETTE[i%_INF_PALETTE.length]}">📋 ${escapeHtml(td.team.name)} — pruebas (${td.D.realizadas.length})</h2>${td.D.realizadas.length?`<table class="lt"><thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th><th>Tipo</th><th>Cicl.</th></tr></thead><tbody>${td.D.realizadas.map(r=>`<tr><td>${escapeHtml(r.fecha)}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.localidad||'—')}</td><td>${escapeHtml(r.tipo)}</td><td style="text-align:center">${r.misCorredores}</td></tr>`).join('')}</tbody></table>`:`<p style="color:#94a3b8">Sin pruebas registradas con los filtros aplicados.</p>`}</div>`).join('');
+
+  const w=window.open('','_blank');
+  if(!w){ alert('El navegador bloqueó la ventana. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+  <title>Comparativa de calendario y participación</title>
+  <style>
+    @page{size:A4 portrait;margin:0}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
+    html,body{margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;color:#1f2937}
+    .page-wrap{padding:14mm 12mm 18mm}
+    .no-print{text-align:right;margin-bottom:10px}
+    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;margin-left:8px;font-size:13px}
+    .no-print button.sec{background:#f3f4f6;color:#374151;border:1px solid #d0d5dd}
+    .hd{background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border-radius:14px;padding:22px 24px;margin-bottom:18px}
+    .hd h1{margin:0 0 4px;font-size:24px;font-weight:900}
+    .hd .sub{font-size:13px;opacity:.9}
+    h2.sec-t{color:#0e4d73;font-size:18px;font-weight:900;margin:18px 0 10px;border-bottom:3px solid #2B91C8;padding-bottom:7px}
+    table.cmp{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:8px}
+    table.cmp th,table.cmp td{border:1px solid #e2e8f0;padding:7px 8px;text-align:center}
+    table.cmp th{font-size:11px}
+    table.cmp td.metric{text-align:left;font-weight:700;color:#334155;background:#f8fafc}
+    .chart{margin:14px 0;break-inside:avoid}
+    .chart-t{font-weight:800;color:#0e4d73;font-size:13px;margin-bottom:8px}
+    .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+    .bar-lab{width:32%;font-size:11px;font-weight:700;color:#334155;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bar-track{flex:1;background:#f1f5f9;border-radius:6px;height:24px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:6px;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;min-width:28px}
+    .lst{margin:4px 0 0;padding-left:18px;font-size:11.5px;color:#334155}
+    .lst li{margin-bottom:2px}
+    table.lt{width:100%;border-collapse:collapse;font-size:10.5px}
+    table.lt th{background:#f0f4f8;padding:6px 7px;text-align:left;font-size:9.5px;text-transform:uppercase;color:#475467}
+    table.lt td{padding:5px 7px;border-bottom:1px solid #f3f4f6}
+    .disc{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:11px 13px;font-size:11px;color:#9a3412;line-height:1.45;margin:14px 0}
+    .interno{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;font-weight:800;font-size:11px;border-radius:8px;padding:7px 11px;display:inline-block;margin-bottom:12px}
+    .sec-block{page-break-before:always}
+    .footer{position:fixed;bottom:5mm;left:12mm;right:12mm;display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;border-top:1px solid #e5e7eb;padding-top:4px}
+  </style></head><body>
+  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
+  <div class="page-wrap">
+    <div class="hd"><h1>⚖️ Comparativa de calendario y participación</h1><div class="sub">Temporada ${escapeHtml(opts.year)} · ${escapeHtml(_infCatLabel(opts.catSel))} · Generado el ${hoy}</div></div>
+    <span class="interno">🔒 DOCUMENTO DE USO INTERNO</span>
+    <div class="disc">⚠️ ${_INF_DISCLAIMER}</div>
+
+    <h2 class="sec-t">📊 Tabla comparativa</h2>
+    <table class="cmp"><thead><tr><th style="text-align:left">Métrica</th>${headTeams}</tr></thead><tbody>${bodyRows}${tiposRow}</tbody></table>
+    <p style="font-size:10px;color:#94a3b8">* Se considera "puntuable por equipos" a partir de 3 ciclistas clasificados, criterio habitual en clasificación por equipos. Ajustable según el reglamento de cada prueba.</p>
+
+    ${barChart('Pruebas realizadas', td=>td.D.resumen.totalPruebas, maxPr)}
+    ${barChart('Participaciones de ciclistas', td=>td.D.resumen.participaciones, maxPa)}
+
+    <h2 class="sec-t">🔗 Coincidencias</h2>
+    <div style="font-weight:800;color:#0e4d73;font-size:12.5px;margin-bottom:4px">Pruebas disputadas por TODOS los equipos (${C.comunes.length})</div>
+    ${comunesList}
+    <div style="font-weight:800;color:#0e4d73;font-size:12.5px;margin:12px 0 4px">Pruebas exclusivas de cada equipo</div>
+    ${exclusivasBlocks}
+
+    <h2 class="sec-t">🧾 Resumen objetivo</h2>
+    <ul class="lst">${resumenObj}</ul>
+    <div class="disc">Este resumen presenta exclusivamente cifras verificables a partir de los datos registrados. No incluye valoraciones sobre la calidad o el rendimiento de ningún equipo.</div>
+
+    ${listasEquipo}
+  </div>
+  <div class="footer"><span>Comparativa de calendario · uso interno</span><span>Temporada ${escapeHtml(opts.year)}</span></div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+async function _infGenerateComparativeInfografia(){
+  const opts=_infReadOpts();
+  const st=document.getElementById('_infStatus');
+  if(opts.teams.length<2){ if(st) st.textContent='⚠️ Selecciona al menos 2 equipos para comparar.'; return; }
+  if(st) st.textContent='⏳ Generando infografía comparativa…';
+  let history=[]; try{ history=await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
+  const C=_infBuildComparative(history, opts);
+  if(!C.teamsData.some(td=>td.D.realizadas.length)){ if(st) st.innerHTML=_infDiagNoData(history, opts.year); return; }
+
+  const W=1200,H=Math.max(675, 280+C.teamsData.length*120);
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#0f172a'; ctx.fillRect(0,0,W,H);
+  // Cabecera
+  ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.font='900 34px "Segoe UI",Arial';
+  ctx.fillText('Comparativa de calendario', 50, 56);
+  ctx.fillStyle='#94a3b8'; ctx.font='700 18px "Segoe UI",Arial';
+  ctx.fillText('Temporada '+opts.year+' · '+_infCatLabel(opts.catSel), 50, 84);
+  // Banner uso interno
+  ctx.fillStyle='#dc2626'; _infRoundRect(ctx, W-310, 30, 260, 38, 8); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='800 15px "Segoe UI",Arial';
+  ctx.fillText('🔒 USO INTERNO', W-180, 55);
+
+  // Barras: pruebas realizadas
+  const maxPr=Math.max(1,...C.teamsData.map(td=>td.D.resumen.totalPruebas));
+  let y=140;
+  ctx.textAlign='left'; ctx.fillStyle='#e2e8f0'; ctx.font='800 18px "Segoe UI",Arial';
+  ctx.fillText('Pruebas realizadas', 50, y-12);
+  const trackX=320, trackW=W-trackX-90;
+  C.teamsData.forEach((td,i)=>{
+    const col=_INF_PALETTE[i%_INF_PALETTE.length];
+    ctx.fillStyle='#cbd5e1'; ctx.textAlign='right'; ctx.font='700 16px "Segoe UI",Arial';
+    ctx.fillText(td.team.name.slice(0,28), trackX-14, y+26);
+    ctx.fillStyle='#1e293b'; _infRoundRect(ctx,trackX,y,trackW,34,8); ctx.fill();
+    const pct=td.D.resumen.totalPruebas/maxPr;
+    ctx.fillStyle=col; _infRoundRect(ctx,trackX,y,Math.max(36,trackW*pct),34,8); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.font='800 16px "Segoe UI",Arial';
+    ctx.fillText(String(td.D.resumen.totalPruebas), trackX+Math.max(36,trackW*pct)+10, y+24);
+    y+=52;
+  });
+
+  // Mini-cifras: participaciones y localidades
+  y+=10;
+  ctx.fillStyle='#e2e8f0'; ctx.font='800 18px "Segoe UI",Arial'; ctx.textAlign='left';
+  ctx.fillText('Participaciones · Localidades · Media ciclistas/prueba', 50, y); y+=12;
+  C.teamsData.forEach((td,i)=>{
+    y+=34;
+    const col=_INF_PALETTE[i%_INF_PALETTE.length];
+    ctx.fillStyle=col; _infRoundRect(ctx,50,y-18,12,12,3); ctx.fill();
+    ctx.fillStyle='#cbd5e1'; ctx.font='700 15px "Segoe UI",Arial';
+    ctx.fillText(`${td.team.name.slice(0,26)}:  ${td.D.resumen.participaciones} part.  ·  ${td.D.resumen.localidades.length} local.  ·  ${td.D.resumen.mediaPorPrueba?td.D.resumen.mediaPorPrueba.toFixed(1):'—'} cicl./prueba`, 72, y-6);
+  });
+
+  // Disclaimer pie
+  ctx.fillStyle='#fb923c'; ctx.font='600 12px "Segoe UI",Arial'; ctx.textAlign='center';
+  const disc='Basado únicamente en los datos registrados en la aplicación. Pueden faltar pruebas o participaciones.';
+  ctx.fillText(disc, W/2, H-22);
+
+  cv.toBlob((blob)=>{
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download=`comparativa_${opts.year}_uso-interno.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    if(st) st.textContent='✅ Infografía comparativa descargada (uso interno).';
+  },'image/png');
+}
+
+// ── Diagnóstico cuando no se encuentran pruebas ──────────────────────────
+function _infDiagNoData(history, year){
+  const counts={};
+  for(const race of (history||[])){
+    const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
+    if(year && ry!==year) continue;
+    for(const r of (race.riders||[])){ const t=(r.team||'').trim(); if(t) counts[t]=(counts[t]||0)+1; }
   }
-  return msg;
+  const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(!Object.keys(counts).length) return `⚠️ No hay datos cargados para ${escapeHtml(year)}. Comprueba que el historial de esa temporada está cargado.`;
+  return `⚠️ No se encontraron pruebas con los filtros aplicados.<br><span style="color:#64748b">Equipos con más participaciones en ${escapeHtml(year)}: ${top.map(([t,n])=>escapeHtml(t)+' ('+n+')').join(', ')}.</span><br>Ajusta el equipo, la categoría o los filtros y vuelve a intentarlo.`;
 }
