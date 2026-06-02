@@ -37236,8 +37236,35 @@ function _infLogoSVG(size){
 
 // Nombre del equipo a usar en el informe
 function _infTeamName(){
-  if(typeof myTeam !== 'undefined' && myTeam && myTeam.trim()) return myTeam.trim();
-  return 'TBG-WIXUM';
+  let t = '';
+  try{ t = (localStorage.getItem('myTeam')||'').trim(); }catch(_){}
+  if(!t && typeof myTeam !== 'undefined' && myTeam && myTeam.trim()) t = myTeam.trim();
+  return t || 'TBG-WIXUM';
+}
+
+// Comparación flexible de equipos para el informe (mismo criterio que el
+// resto de la app: teamKey + tokens significativos compartidos). Evita que
+// "TBG-WIXUM" no case con "TBG WIXUM CC" o variantes.
+function _infTeamMatcher(teamName){
+  const myKey = (typeof teamKey==='function') ? teamKey(teamName) : (teamName||'').toLowerCase().trim();
+  const myTokens = (typeof teamSignificantTokens==='function') ? teamSignificantTokens(teamName) : [];
+  const mySet = new Set(myTokens);
+  return function(rawTeam){
+    if(!rawTeam) return false;
+    const rk = (typeof teamKey==='function') ? teamKey(rawTeam) : String(rawTeam).toLowerCase().trim();
+    if(!rk) return false;
+    if(rk === myKey) return true;
+    if(myKey && (rk.includes(myKey) || myKey.includes(rk))) return true;
+    // Token-match: comparten TODOS los tokens significativos de mi equipo
+    if(mySet.size){
+      const rTokens = (typeof teamSignificantTokens==='function') ? teamSignificantTokens(rawTeam) : rk.split(/\s+/);
+      const rSet = new Set(rTokens);
+      let allShared = true;
+      for(const t of mySet){ if(!rSet.has(t)){ allShared=false; break; } }
+      if(allShared) return true;
+    }
+    return false;
+  };
 }
 
 // Deriva el tipo de prueba a partir del nombre + categoría
@@ -37278,8 +37305,7 @@ function _infLimpiaLoc(loc){
 // ── Construye los datos agregados del informe ──────────────────────────
 // year: '2026' etc.  catSel: 'cadete'|'juvenil'|''(ambas)  includePlanned: bool
 function _infBuildData(history, year, catSel, includePlanned){
-  const teamCanon = (typeof getCanonicalTeam==='function'
-    ? getCanonicalTeam(_infTeamName()) : _infTeamName()).toLowerCase();
+  const isMyTeam = _infTeamMatcher(_infTeamName());
   const catMatch = (c)=>{
     if(!catSel) return true;
     const cc = (c||'').toLowerCase();
@@ -37296,9 +37322,7 @@ function _infBuildData(history, year, catSel, includePlanned){
     // Corredores de MI equipo en esta carrera (con filtro de categoría)
     const mine = [];
     for(const r of (race.riders||[])){
-      const tc = (typeof getCanonicalTeam==='function'
-        ? getCanonicalTeam(r.team||'') : (r.team||'')).toLowerCase();
-      if(tc !== teamCanon) continue;
+      if(!isMyTeam(r.team||'')) continue;
       const rcat = (typeof getRiderCorrectCat==='function'
         ? getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat) : (r.cat||''));
       if(!catMatch(rcat)) continue;
@@ -37455,7 +37479,7 @@ async function _infGeneratePDF(){
   let history=[]; try{ history = await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
   const D = _infBuildData(history, year, catSel, includePlanned);
   if(!D.realizadas.length && !D.planificadas.length){
-    if(st) st.textContent='⚠️ No hay pruebas de '+escapeHtml(_infTeamName())+' para esa temporada/categoría.';
+    if(st) st.innerHTML = _infDiagNoData(history, year);
     return;
   }
   if(st) st.textContent='✅ Abriendo el PDF…';
@@ -37627,7 +37651,7 @@ async function _infGenerateInfografia(fmt){
   let history=[]; try{ history = await _ensureHistory(); }catch(_){ history=(typeof _cachedHistory!=='undefined'?_cachedHistory:[])||[]; }
   const D = _infBuildData(history, year, catSel, includePlanned);
   const R = D.resumen;
-  if(!R.totalPruebas){ if(st) st.textContent='⚠️ No hay pruebas para esa temporada/categoría.'; return; }
+  if(!R.totalPruebas){ if(st) st.innerHTML = _infDiagNoData(history, year); return; }
   const team = _infTeamName();
 
   const sq = fmt==='ig';
@@ -37777,4 +37801,35 @@ El desarrollo de un ciclista también se construye compitiendo. 💪
     document.querySelector('#_infModal [style*="padding:22px"]')?.appendChild(box);
     if(st) st.textContent='ℹ️ Copia el texto del cuadro de abajo.';
   }
+}
+
+// Diagnóstico cuando no se encuentran pruebas: muestra el equipo buscado y
+// los nombres de equipo reales presentes en los datos de ese año, para poder
+// detectar discrepancias en el nombre del equipo.
+function _infDiagNoData(history, year){
+  const teamUsed = _infTeamName();
+  // Recopila nombres de equipo de ese año
+  const counts = {};
+  for(const race of (history||[])){
+    const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
+    if(year && ry!==year) continue;
+    for(const r of (race.riders||[])){
+      const t = (r.team||'').trim();
+      if(t) counts[t] = (counts[t]||0)+1;
+    }
+  }
+  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  // ¿Hay alguno que se parezca a TBG/WIXUM?
+  const candidatos = Object.keys(counts).filter(t=>/tbg|wixum/i.test(t));
+  let msg = `⚠️ No se han encontrado pruebas de <b>${escapeHtml(teamUsed)}</b> en ${escapeHtml(year)}.`;
+  if(candidatos.length){
+    msg += `<br><span style="color:#15803d">Pero sí hay equipos parecidos en los datos: <b>${candidatos.map(escapeHtml).join('</b>, <b>')}</b>.</span>`;
+    msg += `<br>Ve a <b>Mi Equipo</b> y selecciona exactamente ese nombre, luego vuelve a generar el informe.`;
+  } else if(!Object.keys(counts).length){
+    msg += `<br>No hay datos cargados para ${escapeHtml(year)}. Comprueba que el historial de esa temporada está cargado.`;
+  } else {
+    msg += `<br><span style="color:#64748b">Equipos con más participaciones ese año: ${top.map(([t,n])=>escapeHtml(t)+' ('+n+')').join(', ')}.</span>`;
+    msg += `<br>Si tu equipo aparece con otro nombre, selecciónalo en <b>Mi Equipo</b>.`;
+  }
+  return msg;
 }
