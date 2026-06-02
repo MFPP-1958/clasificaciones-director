@@ -39072,12 +39072,52 @@ function _plYears(history, team){
   return [...ys].sort((a,b)=>b.localeCompare(a));
 }
 
-// Láminas ya generadas, por equipo+temporada (en memoria durante la sesión).
-// { 'equipo|año': [ {key,name,dorsal,catNorm,year,photo} ] }
-let _plGenerated = {};
-function _plGenKey(){ return _plState.team+'|'+_plState.year; }
-function _plGenList(){ const k=_plGenKey(); return _plGenerated[k] || (_plGenerated[k]=[]); }
+
+/* ═══════════════ PERSISTENCIA LOCAL DE LÁMINAS (IndexedDB) ═══════════════
+   Guarda cada lámina (foto + ajustes + datos) para que NO se pierda al
+   recargar. Clave: equipo|temporada|ciclista. Permite retomar años después. */
+const _PL_DB='tbg_laminas', _PL_STORE='laminas';
+function _plDB(){
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open(_PL_DB,1);
+    rq.onupgradeneeded=()=>{ const db=rq.result; if(!db.objectStoreNames.contains(_PL_STORE)) db.createObjectStore(_PL_STORE,{keyPath:'id'}); };
+    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+  });
+}
+async function _plDBAll(){ const db=await _plDB(); return new Promise((res,rej)=>{ const r=db.transaction(_PL_STORE,'readonly').objectStore(_PL_STORE).getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); }); }
+async function _plDBPut(rec){ const db=await _plDB(); return new Promise((res,rej)=>{ const r=db.transaction(_PL_STORE,'readwrite').objectStore(_PL_STORE).put(rec); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+async function _plDBDel(id){ const db=await _plDB(); return new Promise((res,rej)=>{ const r=db.transaction(_PL_STORE,'readwrite').objectStore(_PL_STORE).delete(id); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+
+let _plSaved=[];                                  // registros del equipo+temporada actual
+let _plPending=null;                              // edición en curso (modal de previsualización)
+const _PL_BOX_W=100, _PL_BOX_H=125;               // proporción del marco de la foto (mm, retrato)
+
+function _plRecId(key){ return _plState.team+'|'+_plState.year+'|'+key; }
 function _plRiderByKey(key){ return _plState.roster.find(r=>r.key===key); }
+function _plSavedByKey(key){ return _plSaved.find(s=>s.key===key); }
+async function _plLoadSaved(){
+  let all=[]; try{ all=await _plDBAll(); }catch(_){ all=[]; }
+  _plSaved = all.filter(s=>s.team===_plState.team && String(s.year)===String(_plState.year));
+}
+// Estilo de la imagen dentro del marco (mismo en preview y en impresión)
+function _plImgStyle(posY,zoom){
+  return `width:100%;height:100%;object-fit:cover;object-position:50% ${posY}%;transform:scale(${zoom});transform-origin:50% ${posY}%`;
+}
+// Reduce la foto antes de guardarla (menos peso, impresión más rápida)
+function _plDownscale(dataURL, maxDim){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const sc=Math.min(1, maxDim/Math.max(img.width,img.height));
+      const cw=Math.round(img.width*sc), ch=Math.round(img.height*sc);
+      const c=document.createElement('canvas'); c.width=cw; c.height=ch;
+      c.getContext('2d').drawImage(img,0,0,cw,ch);
+      try{ res(c.toDataURL('image/jpeg',0.86)); }catch(_){ res(dataURL); }
+    };
+    img.onerror=()=>res(dataURL);
+    img.src=dataURL;
+  });
+}
 
 async function _plOpenModal(){
   const team = (typeof myTeam!=='undefined' && myTeam) ? myTeam : '';
@@ -39085,22 +39125,22 @@ async function _plOpenModal(){
   let history=[]; try{ history=await _ensureHistory(); }catch(_){}
   const years=_plYears(history, team);
   const defYear = years[0] || String(new Date().getFullYear());
-  _plState={ team, year:defYear, roster:_plRoster(history, team, defYear), photo:null, photoName:'' };
-  _plState._history=history; _plState._years=years;
+  _plState={ team, year:defYear, roster:_plRoster(history, team, defYear), _history:history, _years:years, photo:null };
+  await _plLoadSaved();
 
   let ov=document.getElementById('_plModal'); if(ov) ov.remove();
   ov=document.createElement('div'); ov.id='_plModal';
   ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.72);display:flex;align-items:flex-start;justify-content:center;padding:26px 16px;overflow:auto;font-family:-apple-system,Segoe UI,Arial,sans-serif';
   ov.innerHTML=`
-  <div style="background:#fff;border-radius:16px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+  <div style="background:#fff;border-radius:16px;max-width:580px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
     <div style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;padding:18px 22px">
       <div style="font-size:18px;font-weight:900">🪪 Generar lámina de plantilla</div>
-      <div style="font-size:12.5px;opacity:.9;margin-top:3px">${escapeHtml(team)} · datos extraídos automáticamente de la base de datos</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px">${escapeHtml(team)} · datos automáticos · las láminas hechas se guardan</div>
     </div>
-    <div style="padding:20px 22px">
+    <div style="padding:18px 22px">
       <div style="display:grid;grid-template-columns:1fr 130px;gap:12px">
         <div>
-          <label style="font-size:12px;font-weight:800;color:#475569">Ciclista</label>
+          <label style="font-size:12px;font-weight:800;color:#475569">Ciclista (faltan por hacer)</label>
           <select id="_plRider" onchange="_plPickRider()" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-top:4px"></select>
         </div>
         <div>
@@ -39110,25 +39150,22 @@ async function _plOpenModal(){
           </select>
         </div>
       </div>
-
       <div id="_plInfo" style="margin-top:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;font-size:13px;color:#0b2f6b;font-weight:700"></div>
-
       <label style="font-size:12px;font-weight:800;color:#475569;display:block;margin-top:16px">Foto del ciclista (arrastra aquí o haz clic)</label>
       <div id="_plDrop" onclick="document.getElementById('_plFile').click()"
-        style="margin-top:6px;border:2px dashed #93c5fd;border-radius:12px;min-height:170px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;background:#f8fbff;transition:.15s;overflow:hidden">
-        <div id="_plDropHint" style="color:#64748b;font-size:13px;padding:18px">📷 Arrastra una foto aquí<br><span style="font-size:11px">o haz clic para seleccionarla</span></div>
+        style="margin-top:6px;border:2px dashed #93c5fd;border-radius:12px;min-height:150px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;background:#f8fbff;overflow:hidden">
+        <div style="color:#64748b;font-size:13px;padding:18px">📷 Arrastra una foto aquí<br><span style="font-size:11px">o haz clic para seleccionarla</span></div>
       </div>
       <input type="file" id="_plFile" accept="image/*" style="display:none" onchange="_plFileInput(event)">
     </div>
-    <div style="padding:4px 22px 14px;display:flex;gap:10px">
-      <button id="_plCreateBtn" onclick="_plCreate()" style="flex:1;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">🖨️ Crear lámina (A4)</button>
+    <div style="padding:2px 22px 14px;display:flex;gap:10px">
+      <button id="_plPrevBtn" onclick="_plOpenPreview()" style="flex:1;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">👁️ Previsualizar lámina</button>
       <button onclick="document.getElementById('_plModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
     </div>
     <div id="_plGenBox"></div>
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
-  // Drag & drop
   const drop=document.getElementById('_plDrop');
   drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.style.background='#e0f2fe'; drop.style.borderColor='#2B91C8'; });
   drop.addEventListener('dragleave',e=>{ e.preventDefault(); drop.style.background='#f8fbff'; drop.style.borderColor='#93c5fd'; });
@@ -39139,12 +39176,11 @@ async function _plOpenModal(){
 
 function _plRenderRiders(){
   const sel=document.getElementById('_plRider'); if(!sel) return;
-  const generados=new Set(_plGenList().map(l=>l.key));
-  // Excluye los ciclistas que ya tienen lámina (evita duplicados)
-  const avail=_plState.roster.filter(r=>!generados.has(r.key));
+  const hechos=new Set(_plSaved.map(s=>s.key));
+  const avail=_plState.roster.filter(r=>!hechos.has(r.key));   // solo los que faltan
   sel.innerHTML = avail.length
     ? avail.map(r=>`<option value="${escapeAttr(r.key)}">${escapeHtml(r.name)}${r.dorsal?(' · #'+escapeHtml(r.dorsal)):''}</option>`).join('')
-    : `<option value="">— ${_plState.roster.length? 'Todos los ciclistas ya tienen lámina' : 'Sin ciclistas en '+escapeHtml(_plState.year)} —</option>`;
+    : `<option value="">— ${_plState.roster.length? '¡Todos hechos! 🎉' : 'Sin ciclistas en '+escapeHtml(_plState.year)} —</option>`;
   _plPickRider();
 }
 function _plChangeYear(){
@@ -39152,59 +39188,192 @@ function _plChangeYear(){
   _plState.year=y;
   _plState.roster=_plRoster(_plState._history, _plState.team, y);
   _plResetForm();
-  _plRenderRiders();
-  _plRenderGenerated();
+  _plLoadSaved().then(()=>{ _plRenderRiders(); _plRenderGenerated(); });
 }
 function _plPickRider(){
   const key=document.getElementById('_plRider')?.value;
   const info=document.getElementById('_plInfo'); if(!info) return;
   const r=_plRiderByKey(key);
-  if(!r){ info.innerHTML='Selecciona un ciclista (o ya tienen todos su lámina).'; return; }
+  if(!r){ info.innerHTML='No quedan ciclistas pendientes en esta temporada (mira el listado de abajo).'; return; }
   const dorsal = r.dorsal ? ('#'+r.dorsal) : '⚠️ sin dorsal registrado';
   const cat = r.catNorm || '⚠️ sin categoría';
-  const avisoCV = (r.dorsal && !r.dorsalEsCV) ? ` <span style="color:#b45309;font-weight:700">⚠️ no hay dorsal de prueba CV; mostrando el de otra prueba</span>` : '';
-  info.innerHTML = `🎽 Dorsal (CV) de temporada: <b>${escapeHtml(dorsal)}</b> &nbsp;·&nbsp; 🏷️ Categoría: <b>${escapeHtml(cat)}</b>${avisoCV}`;
+  const avisoCV = (r.dorsal && !r.dorsalEsCV) ? ` <span style="color:#b45309;font-weight:700">⚠️ no es de prueba CV; podrás corregirlo</span>` : '';
+  info.innerHTML = `🎽 Dorsal (CV): <b>${escapeHtml(dorsal)}</b> &nbsp;·&nbsp; 🏷️ Categoría: <b>${escapeHtml(cat)}</b> &nbsp;<span style="font-weight:600;color:#64748b">(editables al previsualizar)</span>${avisoCV}`;
 }
 function _plFileInput(e){ const f=e.target.files&&e.target.files[0]; if(f) _plReadPhoto(f); }
-function _plReadPhoto(file){
+async function _plReadPhoto(file){
   if(!/^image\//.test(file.type)){ alert('El archivo debe ser una imagen.'); return; }
   const rd=new FileReader();
-  rd.onload=()=>{
-    _plState.photo=rd.result; _plState.photoName=file.name;
+  rd.onload=async ()=>{
+    const small=await _plDownscale(rd.result, 900);
+    _plState.photo=small;
     const drop=document.getElementById('_plDrop');
-    if(drop) drop.innerHTML=`<img src="${rd.result}" style="max-width:100%;max-height:230px;object-fit:contain;border-radius:8px" alt="preview">`;
+    if(drop) drop.innerHTML=`<img src="${small}" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:8px" alt="preview">`;
   };
   rd.readAsDataURL(file);
 }
-// Limpia la foto y el recuadro de drag&drop
 function _plResetForm(){
-  _plState.photo=null; _plState.photoName='';
+  _plState.photo=null;
   const drop=document.getElementById('_plDrop');
-  if(drop) drop.innerHTML=`<div id="_plDropHint" style="color:#64748b;font-size:13px;padding:18px">📷 Arrastra una foto aquí<br><span style="font-size:11px">o haz clic para seleccionarla</span></div>`;
+  if(drop) drop.innerHTML=`<div style="color:#64748b;font-size:13px;padding:18px">📷 Arrastra una foto aquí<br><span style="font-size:11px">o haz clic para seleccionarla</span></div>`;
 }
 
-function _plCreate(){
-  const key=document.getElementById('_plRider')?.value;
+/* ─────────── MODAL DE PREVISUALIZACIÓN (ajuste de foto y datos) ─────────── */
+function _plOpenPreview(editKey){
+  const key = editKey || document.getElementById('_plRider')?.value;
   const r=_plRiderByKey(key);
   if(!r){ alert('Selecciona un ciclista.'); return; }
-  if(!_plState.photo){ alert('Añade la foto del ciclista (arrástrala o haz clic en el recuadro).'); return; }
-  // Guarda/actualiza la lámina por CLAVE estable del ciclista (no por posición)
-  const lam={ key:r.key, name:r.name, dorsal:r.dorsal||'', catNorm:r.catNorm||'', year:_plState.year, photo:_plState.photo };
-  const list=_plGenList();
-  const ix=list.findIndex(l=>l.key===r.key);
-  if(ix>=0) list[ix]=lam; else list.push(lam);
-  _plPrintLamina(lam);
+  const saved=_plSavedByKey(key);
+  const photo = editKey ? (saved&&saved.photo) : (_plState.photo || (saved&&saved.photo));
+  if(!photo){ alert('Añade primero la foto del ciclista (arrástrala o haz clic en el recuadro).'); return; }
+  _plPending={
+    key, name:r.name, photo,
+    posY: saved? saved.posY : 50,
+    zoom: saved? saved.zoom : 1,
+    dorsal: saved? saved.dorsal : (r.dorsal||''),
+    catNorm: saved? saved.catNorm : (r.catNorm||'')
+  };
+  _plRenderPreview();
+}
+function _plRenderPreview(){
+  const p=_plPending; if(!p) return;
+  let ov=document.getElementById('_plPreview'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_plPreview';
+  ov.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(15,23,42,.8);display:flex;align-items:flex-start;justify-content:center;padding:20px 14px;overflow:auto;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  const boxH=230, boxW=Math.round(boxH*_PL_BOX_W/_PL_BOX_H);
+  ov.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:760px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;padding:14px 20px;font-size:16px;font-weight:900">👁️ Previsualización — ${escapeHtml(p.name)}</div>
+    <div style="padding:18px 20px;display:grid;grid-template-columns:1fr 250px;gap:18px;align-items:start">
+      <!-- Réplica A4 -->
+      <div>
+        <div id="_plSheet" style="aspect-ratio:297/209;width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;background:#fff">
+          <div style="display:grid;grid-template-columns:46px 1fr 70px;align-items:center;gap:8px;border-bottom:3px solid #2B91C8;padding-bottom:7px">
+            <div>${(typeof _infLogoSVG==='function')?_infLogoSVG(40):''}</div>
+            <div id="_plTitle" style="text-align:center;font-size:13px;font-weight:900;line-height:1.15;color:#0b2f6b"></div>
+            <div style="text-align:right">${(document.querySelector('.brand-logo')?.src)?`<img src="${document.querySelector('.brand-logo').src}" style="max-height:34px;max-width:70px;object-fit:contain">`:''}</div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding-top:5px">
+            <div id="_plPvDorsal" style="font-family:'Arial Black',Impact,sans-serif;font-size:40px;font-weight:900;color:#b8860b;line-height:1"></div>
+            <div id="_plPvBox" style="width:${boxW}px;height:${boxH}px;border:3px solid #2B91C8;border-radius:8px;overflow:hidden;background:#eef2f7;cursor:ns-resize;position:relative;touch-action:none">
+              <img id="_plPvImg" src="${p.photo}" style="${_plImgStyle(p.posY,p.zoom)}" alt="">
+            </div>
+            <div id="_plPvFooter" style="font-size:13px;font-weight:900;color:#0b2f6b;text-align:center"></div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:6px;text-align:center">↕️ Arrastra la foto para subir/bajar · usa el zoom para ajustar el encuadre</div>
+      </div>
+      <!-- Controles -->
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label style="font-size:12px;font-weight:800;color:#475569">Dorsal</label>
+          <input id="_plFDorsal" value="${escapeAttr(p.dorsal)}" oninput="_plPreviewSync()" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:14px;font-weight:800;margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:800;color:#475569">Categoría (sigla)</label>
+          <input id="_plFCat" value="${escapeAttr(p.catNorm)}" oninput="_plPreviewSync()" placeholder="CAD-1, CAD-2, JUV-1…" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:14px;font-weight:800;margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:800;color:#475569">Zoom de la foto</label>
+          <input id="_plFZoom" type="range" min="1" max="3" step="0.02" value="${p.zoom}" oninput="_plZoom(this.value)" style="width:100%;margin-top:6px">
+        </div>
+        <button onclick="_plCenter()" style="background:#eef2f7;color:#0b2f6b;border:none;border-radius:9px;padding:9px;font-weight:800;font-size:13px;cursor:pointer">🎯 Centrar foto</button>
+        <button onclick="document.getElementById('_plChgFoto').click()" style="background:#fff;color:#0b2f6b;border:1.5px solid #2B91C8;border-radius:9px;padding:9px;font-weight:800;font-size:13px;cursor:pointer">🖼️ Cambiar foto</button>
+        <input type="file" id="_plChgFoto" accept="image/*" style="display:none" onchange="_plChangePhoto(event)">
+      </div>
+    </div>
+    <div style="padding:4px 20px 18px;display:flex;gap:10px;flex-wrap:wrap">
+      <button onclick="_plSaveLamina(true)" style="flex:1;min-width:180px;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">💾🖨️ Guardar e imprimir</button>
+      <button onclick="_plSaveLamina(false)" style="background:#10b981;color:#fff;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">💾 Solo guardar</button>
+      <button onclick="document.getElementById('_plPreview')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  _plPreviewSync();
+  // Arrastrar la foto en vertical para reencuadrar
+  const box=document.getElementById('_plPvBox');
+  let dragging=false, startY=0, startPos=p.posY;
+  const onMove=(cy)=>{ const dy=cy-startY; const np=Math.max(0,Math.min(100, startPos + (dy/box.offsetHeight)*100)); p.posY=Math.round(np); _plApplyImg(); };
+  box.addEventListener('pointerdown',e=>{ dragging=true; startY=e.clientY; startPos=p.posY; box.setPointerCapture(e.pointerId); });
+  box.addEventListener('pointermove',e=>{ if(dragging) onMove(e.clientY); });
+  box.addEventListener('pointerup',()=>{ dragging=false; });
+  box.addEventListener('pointercancel',()=>{ dragging=false; });
+}
+function _plApplyImg(){ const img=document.getElementById('_plPvImg'); if(img&&_plPending) img.setAttribute('style',_plImgStyle(_plPending.posY,_plPending.zoom)); }
+function _plZoom(v){ if(_plPending){ _plPending.zoom=parseFloat(v)||1; _plApplyImg(); } }
+function _plCenter(){ if(!_plPending) return; _plPending.posY=50; _plPending.zoom=1; const z=document.getElementById('_plFZoom'); if(z) z.value=1; _plApplyImg(); }
+function _plPreviewSync(){
+  const p=_plPending; if(!p) return;
+  const dorsal=(document.getElementById('_plFDorsal')?.value||'').trim();
+  const cat=(document.getElementById('_plFCat')?.value||'').trim().toUpperCase();
+  p.dorsal=dorsal; p.catNorm=cat;
+  const plural=_plCatPlural(cat);
+  const title=document.getElementById('_plTitle');
+  if(title) title.textContent=`Plantilla equipo ${_plState.team} · Temporada ${_plState.year}${plural?(' '+plural):''}`;
+  const dEl=document.getElementById('_plPvDorsal'); if(dEl) dEl.textContent=dorsal||'';
+  const fEl=document.getElementById('_plPvFooter'); if(fEl) fEl.textContent=`${p.name}${cat?(' · '+cat):''}`;
+}
+async function _plChangePhoto(e){
+  const f=e.target.files&&e.target.files[0]; if(!f||!_plPending) return;
+  const rd=new FileReader();
+  rd.onload=async ()=>{ _plPending.photo=await _plDownscale(rd.result,900); const img=document.getElementById('_plPvImg'); if(img) img.src=_plPending.photo; };
+  rd.readAsDataURL(f);
+}
+async function _plSaveLamina(print){
+  const p=_plPending; if(!p) return;
+  const rec={ id:_plRecId(p.key), team:_plState.team, year:_plState.year, key:p.key,
+    name:p.name, dorsal:p.dorsal||'', catNorm:p.catNorm||'', photo:p.photo,
+    posY:p.posY, zoom:p.zoom, ts:Date.now() };
+  try{ await _plDBPut(rec); }
+  catch(e){ alert('No se pudo guardar la lámina: '+(e.message||e)); return; }
+  const ix=_plSaved.findIndex(s=>s.key===rec.key);
+  if(ix>=0) _plSaved[ix]=rec; else _plSaved.push(rec);
+  document.getElementById('_plPreview')?.remove();
   _plResetForm();
-  _plRenderRiders();      // el ciclista desaparece del desplegable
-  _plRenderGenerated();   // aparece en el listado de generadas
+  _plRenderRiders();      // el ciclista sale del desplegable de pendientes
+  _plRenderGenerated();   // y aparece en el listado de hechas
+  if(print) _plPrintLamina(rec);
 }
 
-// Construye y abre la ventana de impresión de UNA lámina (A4 apaisado)
+/* ─────────── Listado de láminas hechas (reimprimir / editar / borrar) ─────────── */
+function _plRenderGenerated(){
+  const box=document.getElementById('_plGenBox'); if(!box) return;
+  const list=_plSaved.slice().sort((a,b)=>((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999))||a.name.localeCompare(b.name));
+  const total=_plState.roster.length, hechas=list.length, faltan=total-hechas;
+  box.innerHTML=`
+    <div style="border-top:1px solid #e2e8f0;padding:14px 22px 20px">
+      <div style="font-size:12px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Láminas hechas: ${hechas}/${total}${faltan>0?` · faltan ${faltan}`:' · ¡completo! 🎉'}</div>
+      ${list.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto">
+        ${list.map(l=>`
+          <div style="display:flex;align-items:center;gap:10px;background:#f8fbff;border:1px solid #dbeafe;border-radius:9px;padding:7px 10px">
+            <img src="${l.photo}" alt="" style="width:34px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #cbd5e1;object-position:50% ${l.posY}%">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:800;font-size:13px;color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(l.name)}</div>
+              <div style="font-size:11px;color:#64748b">${l.dorsal?('#'+escapeHtml(l.dorsal)):'sin dorsal'}${l.catNorm?(' · '+escapeHtml(l.catNorm)):''}</div>
+            </div>
+            <button onclick="_plReprint('${escapeAttr(l.key)}')" title="Reimprimir" style="background:#eef2f7;color:#0b2f6b;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🖨️</button>
+            <button onclick="_plOpenPreview('${escapeAttr(l.key)}')" title="Editar foto/datos" style="background:#dbeafe;color:#1d4ed8;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">✏️</button>
+            <button onclick="_plDeleteLamina('${escapeAttr(l.key)}')" title="Borrar" style="background:#fee2e2;color:#dc2626;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
+          </div>`).join('')}
+      </div>`:`<div style="font-size:12.5px;color:#94a3b8">Aún no has guardado ninguna lámina esta temporada.</div>`}
+    </div>`;
+}
+function _plReprint(key){ const l=_plSavedByKey(key); if(l) _plPrintLamina(l); }
+async function _plDeleteLamina(key){
+  const l=_plSavedByKey(key); if(!l) return;
+  if(!confirm(`¿Borrar la lámina de ${l.name}? Volverá a aparecer como pendiente.`)) return;
+  try{ await _plDBDel(_plRecId(key)); }catch(_){}
+  _plSaved=_plSaved.filter(s=>s.key!==key);
+  _plRenderRiders();
+  _plRenderGenerated();
+}
+
+/* ─────────── Impresión de la lámina (A4 apaisado, WYSIWYG) ─────────── */
 function _plPrintLamina(lam){
   const team=_plState.team;
   const catPlural=_plCatPlural(lam.catNorm);
   const titulo=`Plantilla equipo ${team} · Temporada ${lam.year}${catPlural?(' '+catPlural):''}`;
-  // Pie: SOLO siglas cortas normalizadas (CAD-1, CAD-2, JUV-1…)
   const footer=`${lam.name}${lam.catNorm?(' · '+lam.catNorm):''}`;
   const tbgSVG=(typeof _infLogoSVG==='function')? _infLogoSVG(86) : '';
   const mfppSrc=document.querySelector('.brand-logo')?.src || '';
@@ -39218,15 +39387,14 @@ function _plPrintLamina(lam){
     html,body{margin:0;padding:0;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
     .sheet{width:297mm;height:209mm;padding:12mm 14mm;display:flex;flex-direction:column}
     .hdr{display:grid;grid-template-columns:110px 1fr 150px;align-items:center;gap:14px;border-bottom:4px solid #2B91C8;padding-bottom:10px}
-    .hdr .logo-l{display:flex;align-items:center}
-    .hdr .logo-r{display:flex;justify-content:flex-end;align-items:center}
+    .hdr .logo-r{display:flex;justify-content:flex-end}
     .hdr .logo-r img{max-height:74px;max-width:150px;object-fit:contain}
     .title{text-align:center;font-size:26px;font-weight:900;line-height:1.2}
     .body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding-top:6px}
-    .dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:96px;font-weight:900;color:#b8860b;line-height:1;letter-spacing:2px}
-    .photo-box{border:4px solid #2B91C8;border-radius:10px;padding:8px;background:#fff;display:flex;align-items:center;justify-content:center;height:118mm;max-width:150mm}
-    .photo-box img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block}
-    .footer{margin-top:6px;font-size:26px;font-weight:900;color:#0b2f6b;text-align:center}
+    .dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:92px;font-weight:900;color:#b8860b;line-height:1;letter-spacing:2px}
+    .photo-box{border:4px solid #2B91C8;border-radius:10px;overflow:hidden;background:#eef2f7;width:${_PL_BOX_W}mm;height:${_PL_BOX_H}mm}
+    .photo-box img{${_plImgStyle(lam.posY,lam.zoom)}}
+    .footer{margin-top:8px;font-size:28px;font-weight:900;color:#0b2f6b;text-align:center}
     .no-print{position:fixed;top:8px;right:8px;display:flex;gap:8px}
     .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px}
     .no-print button.sec{background:#eef2f7;color:#374151}
@@ -39248,48 +39416,4 @@ function _plPrintLamina(lam){
   <script>window.onload=function(){setTimeout(function(){window.print();},450);};<\/script>
   </body></html>`);
   w.document.close();
-}
-
-// Listado de láminas generadas con acciones (reimprimir / editar / borrar)
-function _plRenderGenerated(){
-  const box=document.getElementById('_plGenBox'); if(!box) return;
-  const list=_plGenList();
-  if(!list.length){ box.innerHTML=''; return; }
-  box.innerHTML=`
-    <div style="border-top:1px solid #e2e8f0;padding:14px 22px 20px">
-      <div style="font-size:12px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Láminas generadas (${list.length})</div>
-      <div style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow:auto">
-        ${list.map(l=>`
-          <div style="display:flex;align-items:center;gap:10px;background:#f8fbff;border:1px solid #dbeafe;border-radius:9px;padding:7px 10px">
-            <img src="${l.photo}" alt="" style="width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #cbd5e1">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:800;font-size:13px;color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(l.name)}</div>
-              <div style="font-size:11px;color:#64748b">${l.dorsal?('#'+escapeHtml(l.dorsal)):'sin dorsal'}${l.catNorm?(' · '+escapeHtml(l.catNorm)):''}</div>
-            </div>
-            <button onclick="_plReprint('${escapeAttr(l.key)}')" title="Reimprimir" style="background:#eef2f7;color:#0b2f6b;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🖨️</button>
-            <button onclick="_plEditLamina('${escapeAttr(l.key)}')" title="Editar (cambiar foto o datos)" style="background:#dbeafe;color:#1d4ed8;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">✏️</button>
-            <button onclick="_plDeleteLamina('${escapeAttr(l.key)}')" title="Borrar lámina" style="background:#fee2e2;color:#dc2626;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
-          </div>`).join('')}
-      </div>
-    </div>`;
-}
-function _plReprint(key){ const l=_plGenList().find(x=>x.key===key); if(l) _plPrintLamina(l); }
-function _plDeleteLamina(key){
-  const list=_plGenList();
-  const ix=list.findIndex(l=>l.key===key);
-  if(ix>=0) list.splice(ix,1);
-  _plRenderRiders();     // el ciclista vuelve a estar disponible
-  _plRenderGenerated();
-}
-function _plEditLamina(key){
-  const list=_plGenList();
-  const l=list.find(x=>x.key===key); if(!l) return;
-  // Sacamos la lámina del listado para que el ciclista vuelva al desplegable…
-  _plDeleteLamina(key);
-  // …lo seleccionamos y recuperamos su foto para corregir lo que haga falta
-  const sel=document.getElementById('_plRider'); if(sel) sel.value=key;
-  _plState.photo=l.photo; _plState.photoName='';
-  const drop=document.getElementById('_plDrop');
-  if(drop && l.photo) drop.innerHTML=`<img src="${l.photo}" style="max-width:100%;max-height:230px;object-fit:contain;border-radius:8px" alt="preview">`;
-  _plPickRider();
 }
