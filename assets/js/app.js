@@ -37344,8 +37344,8 @@ function _infBuildDataByKey(history, opts){
   const catMatch = (c)=>{
     if(!o.catSel) return true;
     const cc = (c||'').toLowerCase();
-    if(o.catSel==='cadete')  return /cadet|\bcad\b/.test(cc);
-    if(o.catSel==='juvenil') return /juvenil|junior|j[uú]nior|\bjun\b/.test(cc);
+    if(o.catSel==='cadete')  return /cadet|\bcad\b|\bcad-?\d/.test(cc);
+    if(o.catSel==='juvenil') return /juv|junior|j[uú]nior|\bjun\b/.test(cc);
     return true;
   };
   // Resuelve la categoría de un corredor en una carrera con varios respaldos:
