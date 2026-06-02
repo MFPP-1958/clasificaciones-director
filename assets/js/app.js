@@ -37722,7 +37722,7 @@ async function _infGeneratePDF(){
     @page{size:A4 portrait;margin:0}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
     html,body{margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;color:#1f2937}
-    .page-wrap{padding:16mm 14mm 20mm}
+    .page-wrap{padding:16mm 14mm 18mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}
     .no-print{text-align:right;margin-bottom:10px}
     .no-print button{background:${c2};color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;margin-left:8px;font-size:13px}
     .no-print button.sec{background:#f3f4f6;color:#374151;border:1px solid #d0d5dd}
@@ -38006,7 +38006,7 @@ async function _infGenerateComparativePDF(){
     @page{size:A4 portrait;margin:0}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
     html,body{margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;color:#1f2937}
-    .page-wrap{padding:14mm 12mm 18mm}
+    .page-wrap{padding:15mm 12mm 16mm;-webkit-box-decoration-break:clone;box-decoration-break:clone}
     .no-print{text-align:right;margin-bottom:10px}
     .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer;margin-left:8px;font-size:13px}
     .no-print button.sec{background:#f3f4f6;color:#374151;border:1px solid #d0d5dd}
