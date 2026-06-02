@@ -2936,6 +2936,9 @@ function _fccvShowRawHtml(){
 }
 
 async function _fccvSync(){
+  // Marcador de versión para verificar que el JS nuevo se ha cargado.
+  // Si aparece en la consola, la corrección del bug _fccvParseDate está activa.
+  console.log('[FCCV] sync v2 — _fccvParseDate=' + (typeof _fccvParseDate === 'function' ? _fccvParseDate.toString().slice(9,40) : 'NO EXISTE'));
   _fccvInitYears();
   const year = document.getElementById('fccvYear')?.value || new Date().getFullYear();
   const cat  = document.getElementById('fccvCat')?.value || '';
@@ -34547,7 +34550,7 @@ function _fccvMapHeaderToFields(headerRow){
 }
 
 // Convierte un valor Excel de fecha (puede ser Date, número serial o string) a ISO yyyy-mm-dd
-function _fccvParseDate(v){
+function _fccvParseExcelDate(v){
   if(!v && v !== 0) return '';
   if(v instanceof Date && !isNaN(v.getTime())){
     return v.toISOString().slice(0,10);
@@ -34626,7 +34629,7 @@ async function _fccvImportExcel(ev, importedAs){
         nombre,
         apellidos,
         uciId:        map.uciId       != null ? String(row[map.uciId]||'').trim()      : '',
-        fechaNac:     map.fechaNac    != null ? _fccvParseDate(row[map.fechaNac])      : '',
+        fechaNac:     map.fechaNac    != null ? _fccvParseExcelDate(row[map.fechaNac])      : '',
         telefono:     map.telefono    != null ? String(row[map.telefono]||'').trim()   : '',
         email:        map.email       != null ? String(row[map.email]||'').trim()      : '',
         provincia:    map.provincia   != null ? String(row[map.provincia]||'').trim()  : '',
