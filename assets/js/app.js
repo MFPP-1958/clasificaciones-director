@@ -39410,10 +39410,11 @@ function _plRenderPreview(){
         <input type="file" id="_plChgFoto" accept="image/*" style="display:none" onchange="_plChangePhoto(event)">
       </div>
     </div>
-    <div style="padding:4px 20px 18px;display:flex;gap:10px;flex-wrap:wrap">
-      <button onclick="_plSaveLamina(true)" style="flex:1;min-width:180px;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">💾🖨️ Guardar e imprimir</button>
-      <button onclick="_plSaveLamina(false)" style="background:#10b981;color:#fff;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">💾 Solo guardar</button>
-      <button onclick="document.getElementById('_plPreview')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cancelar</button>
+    <div style="padding:4px 20px 18px;display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="_plSaveLamina(true)" style="flex:1;min-width:150px;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:13.5px;cursor:pointer">💾🖨️ Guardar + PDF</button>
+      <button onclick="_plSaveLamina('png')" style="flex:1;min-width:130px;background:#7c3aed;color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:13.5px;cursor:pointer">💾🖼️ Guardar + PNG</button>
+      <button onclick="_plSaveLamina(false)" style="background:#10b981;color:#fff;border:none;border-radius:11px;padding:13px 16px;font-weight:800;font-size:13.5px;cursor:pointer">💾 Guardar</button>
+      <button onclick="document.getElementById('_plPreview')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 16px;font-weight:800;font-size:13.5px;cursor:pointer">Cancelar</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
@@ -39483,7 +39484,8 @@ async function _plSaveLamina(print){
   _plResetForm();
   _plRenderRiders();      // el ciclista sale del desplegable de pendientes
   _plRenderGenerated();   // y aparece en el listado de hechas
-  if(print) _plPrintLamina(rec);
+  if(print==='png') _plPngLamina(rec);
+  else if(print) _plPrintLamina(rec);
 }
 
 /* ─────────── Listado de láminas hechas (reimprimir / editar / borrar) ─────────── */
@@ -39510,7 +39512,8 @@ function _plRenderGenerated(){
               <div style="font-weight:800;font-size:13px;color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(l.name)}</div>
               <div style="font-size:11px;color:#64748b">${l.dorsal?('#'+escapeHtml(l.dorsal)):'sin dorsal'}${l.catNorm?(' · '+escapeHtml(l.catNorm)):''}</div>
             </div>
-            <button onclick="_plReprint('${escapeAttr(l.key)}')" title="Reimprimir" style="background:#eef2f7;color:#0b2f6b;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🖨️</button>
+            <button onclick="_plReprint('${escapeAttr(l.key)}')" title="Imprimir / PDF" style="background:#eef2f7;color:#0b2f6b;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🖨️</button>
+            <button onclick="_plPngReprint('${escapeAttr(l.key)}')" title="Descargar PNG" style="background:#ede9fe;color:#6d28d9;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🖼️</button>
             <button onclick="_plOpenPreview('${escapeAttr(l.key)}')" title="Editar foto/datos" style="background:#dbeafe;color:#1d4ed8;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">✏️</button>
             <button onclick="_plDeleteLamina('${escapeAttr(l.key)}')" title="Borrar" style="background:#fee2e2;color:#dc2626;border:none;border-radius:7px;padding:6px 9px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
           </div>`).join('')}
@@ -39518,6 +39521,7 @@ function _plRenderGenerated(){
     </div>`;
 }
 function _plReprint(key){ const l=_plSavedByKey(key); if(l) _plPrintLamina(l); }
+function _plPngReprint(key){ const l=_plSavedByKey(key); if(l) _plPngLamina(l); }
 async function _plDeleteLamina(key){
   const l=_plSavedByKey(key); if(!l) return;
   if(!confirm(`¿Borrar la lámina de ${l.name}? Volverá a aparecer como pendiente.`)) return;
@@ -39528,125 +39532,135 @@ async function _plDeleteLamina(key){
   _plRenderGenerated();
 }
 
-/* ─────────── Impresión de la lámina (A4 apaisado, WYSIWYG) ─────────── */
-function _plPrintLamina(lam){
-  const team=_plState.team;
-  const catPlural=_plCatPlural(lam.catNorm);
-  const titulo=`Plantilla equipo ${team} · Temporada ${lam.year}${catPlural?(' '+catPlural):''}`;
-  const footer=`${lam.name}${lam.catNorm?(' · '+lam.catNorm):''}`;
-  const tbgSVG=(typeof _infLogoSVG==='function')? _infLogoSVG(86) : '';
+/* ════════ SALIDA DE LÁMINAS COMO SVG (idéntico en PDF y en PNG) ════════
+   Toda la lámina se construye como SVG; ese mismo SVG se usa para imprimir
+   (PDF) y para rasterizar a PNG (redes). Así PDF y PNG son idénticos.        */
+function _plLoadImg(src){ return new Promise(res=>{ if(!src){res(null);return;} const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; }); }
+
+// Fragmento SVG del marco de foto: recorte cover + pan(posX/posY) + zoom, o silueta.
+function _plPhotoFrag(photo, iw, ih, bx, by, bw, bh, posX, posY, zoom, id){
+  posX=posX==null?50:posX; posY=posY==null?50:posY; zoom=zoom||1;
+  let inner;
+  if(photo && iw && ih){
+    const s0=Math.max(bw/iw, bh/ih), cw=iw*s0, ch=ih*s0;
+    const left0=-(cw-bw)*posX/100, top0=-(ch-bh)*posY/100;
+    const oX=bw*posX/100, oY=bh*posY/100;
+    const left=oX+(left0-oX)*zoom, top=oY+(top0-oY)*zoom;
+    inner=`<image href="${photo}" xlink:href="${photo}" x="${(bx+left).toFixed(2)}" y="${(by+top).toFixed(2)}" width="${(cw*zoom).toFixed(2)}" height="${(ch*zoom).toFixed(2)}" preserveAspectRatio="none"/>`;
+  } else {
+    inner=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="#e9eef5"/>`
+      +`<circle cx="${(bx+bw/2).toFixed(1)}" cy="${(by+bh*0.37).toFixed(1)}" r="${(bw*0.2).toFixed(1)}" fill="#c2ccd9"/>`
+      +`<path d="M ${(bx+bw*0.16).toFixed(1)} ${(by+bh).toFixed(1)} C ${(bx+bw*0.16).toFixed(1)} ${(by+bh*0.72).toFixed(1)}, ${(bx+bw*0.37).toFixed(1)} ${(by+bh*0.61).toFixed(1)}, ${(bx+bw*0.5).toFixed(1)} ${(by+bh*0.61).toFixed(1)} C ${(bx+bw*0.63).toFixed(1)} ${(by+bh*0.61).toFixed(1)}, ${(bx+bw*0.84).toFixed(1)} ${(by+bh*0.72).toFixed(1)}, ${(bx+bw*0.84).toFixed(1)} ${(by+bh).toFixed(1)} Z" fill="#c2ccd9"/>`;
+  }
+  return `<clipPath id="${id}"><rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="2.5"/></clipPath>`
+    +`<g clip-path="url(#${id})">${inner}</g>`
+    +`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="2.5" fill="none" stroke="#2B91C8" stroke-width="1.2"/>`;
+}
+// Cabecera común (logos TBG izq + título centrado + MFPP der + línea)
+function _plHeaderFrag(titulo, mfppSrc){
+  const W=297, mx=14, topY=10, sz=20;
+  let s=`<svg x="${mx}" y="${topY-3}" width="${sz}" height="${sz}" viewBox="0 0 310 310">${_infLogoInner()}</svg>`;
+  if(mfppSrc) s+=`<image href="${mfppSrc}" xlink:href="${mfppSrc}" x="${W-mx-36}" y="${topY-1}" width="36" height="18" preserveAspectRatio="xMaxYMid meet"/>`;
+  s+=`<text x="${W/2}" y="${topY+9}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="7" font-weight="900" fill="#0b2f6b">${_infEsc(titulo)}</text>`;
+  s+=`<line x1="${mx}" y1="${topY+16}" x2="${W-mx}" y2="${topY+16}" stroke="#2B91C8" stroke-width="1.4"/>`;
+  return s;
+}
+function _plSvgWrap(inner){ return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 297 210" width="297" height="210"><defs></defs>${inner}</svg>`; }
+
+// SVG de UNA lámina individual
+async function _plLaminaSVG(lam){
+  const W=297;
+  const photoImg=await _plLoadImg(lam.photo);
   const mfppSrc=document.querySelector('.brand-logo')?.src || '';
+  const titulo=`Plantilla equipo ${_plState.team} · Temporada ${lam.year}${_plCatPlural(lam.catNorm)?(' '+_plCatPlural(lam.catNorm)):''}`;
+  const footer=`${lam.name}${lam.catNorm?(' · '+lam.catNorm):''}`;
+  const bw=80, bh=bw*_PL_BOX_H/_PL_BOX_W, bx=(W-bw)/2, by=64;
+  let s=`<rect width="297" height="210" fill="#fff"/>`;
+  s+=_plHeaderFrag(titulo, mfppSrc);
+  if(lam.dorsal) s+=`<text x="${W/2}" y="56" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="22" font-weight="900" fill="#b8860b">${_infEsc(lam.dorsal)}</text>`;
+  s+=_plPhotoFrag(lam.photo, photoImg?photoImg.naturalWidth:0, photoImg?photoImg.naturalHeight:0, bx,by,bw,bh, lam.posX,lam.posY,lam.zoom, 'pcL');
+  s+=`<text x="${W/2}" y="${(by+bh+13).toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="9" font-weight="900" fill="#0b2f6b">${_infEsc(footer)}</text>`;
+  return _plSvgWrap(s);
+}
+
+// SVG del CONJUNTO (rejilla autoajustable a una sola hoja)
+async function _plConjuntoSVG(list){
+  const W=297,H=210, mx=14, my=12;
+  const mfppSrc=document.querySelector('.brand-logo')?.src || '';
+  const imgs=await Promise.all(list.map(l=>_plLoadImg(l.photo)));
+  const groups=new Set(list.map(l=>{ const g=_calCatGroup(l.catNorm); return g?g.key:''; }));
+  const catPlural=(groups.size===1 && [...groups][0])?_plCatPlural(list[0].catNorm):'';
+  const titulo=`Plantilla equipo ${_plState.team} · Temporada ${_plState.year}${catPlural?(' '+catPlural):''}`;
+  const gridTop=my+22, availW=W-2*mx, availH=H-gridTop-my, gap=5, cardAspect=2.12;
+  const N=list.length; let best={cw:0,cols:1};
+  for(let C=1;C<=N;C++){ const rows=Math.ceil(N/C); const cwW=(availW-(C-1)*gap)/C; const cwH=((availH-(rows-1)*gap)/rows)/cardAspect; const cw=Math.min(cwW,cwH); if(cw>best.cw+0.01) best={cw,cols:C}; }
+  const cols=best.cols, cw=Math.min(best.cw,52), ch=cw*cardAspect, photoH=cw*_PL_BOX_H/_PL_BOX_W;
+  const gridW=cols*cw+(cols-1)*gap, startX=(W-gridW)/2;
+  const fD=cw*0.34, fN=cw*0.145, fC=cw*0.12;
+  let s=`<rect width="297" height="210" fill="#fff"/>`;
+  s+=_plHeaderFrag(titulo, mfppSrc);
+  list.forEach((l,i)=>{
+    const r=Math.floor(i/cols), c=i%cols;
+    const x=startX + c*(cw+gap), y=gridTop + r*(ch+gap);
+    if(l.dorsal) s+=`<text x="${(x+cw/2).toFixed(1)}" y="${(y+fD).toFixed(1)}" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="${fD.toFixed(1)}" font-weight="900" fill="#b8860b">${_infEsc(l.dorsal)}</text>`;
+    const py=y+fD+1.2;
+    s+=_plPhotoFrag(l.photo, imgs[i]?imgs[i].naturalWidth:0, imgs[i]?imgs[i].naturalHeight:0, x,py,cw,photoH, l.posX,l.posY,l.zoom, 'pc'+i);
+    const words=(l.name||'').split(/\s+/).filter(Boolean);
+    let l1=l.name||'', l2='';
+    if(words.length>=2){ l1=words[0]; l2=words.slice(1).join(' '); }
+    let ny=py+photoH+fN+1.2;
+    s+=`<text x="${(x+cw/2).toFixed(1)}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fN.toFixed(1)}" font-weight="800" fill="#0b2f6b">${_infEsc(l1)}</text>`;
+    if(l2){ ny+=fN+0.5; s+=`<text x="${(x+cw/2).toFixed(1)}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fN.toFixed(1)}" font-weight="800" fill="#0b2f6b">${_infEsc(l2)}</text>`; }
+    if(l.catNorm){ ny+=fC+1; s+=`<text x="${(x+cw/2).toFixed(1)}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fC.toFixed(1)}" font-weight="700" fill="#475569">${_infEsc(l.catNorm)}</text>`; }
+  });
+  return _plSvgWrap(s);
+}
+
+// Ventana con el SVG: botones Imprimir (PDF) y Descargar PNG (rasteriza en el padre)
+let _plLastSVG='', _plLastName='lamina', _plLastW=2970, _plLastH=2100;
+function _plOpenSVGWindow(svg, filename){
+  _plLastSVG=svg; _plLastName=filename;
   const w=window.open('','_blank');
   if(!w){ alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
-  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-  <title>Lámina ${escapeHtml(lam.name)} · ${escapeHtml(lam.year)}</title>
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${_infEsc(filename)}</title>
   <style>
     @page{size:A4 landscape;margin:0}
-    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
-    html,body{margin:0;padding:0;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
-    /* Márgenes perimetrales profesionales (padding interior del A4) */
-    .sheet{width:297mm;height:210mm;padding:16mm 20mm;display:flex;flex-direction:column;overflow:hidden}
-    .hdr{display:grid;grid-template-columns:100px 1fr 140px;align-items:center;gap:14px;border-bottom:4px solid #2B91C8;padding-bottom:10px}
-    .hdr .logo-r{display:flex;justify-content:flex-end}
-    .hdr .logo-r img{max-height:66px;max-width:140px;object-fit:contain}
-    .title{text-align:center;font-size:24px;font-weight:900;line-height:1.2}
-    .body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding-top:4px}
-    .dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:70px;font-weight:900;color:#b8860b;line-height:1;letter-spacing:2px}
-    /* Foto dimensionada para que TODO quepa en una hoja con márgenes */
-    .photo-box{border:4px solid #2B91C8;border-radius:10px;overflow:hidden;background:#eef2f7;height:98mm;aspect-ratio:${_PL_BOX_W}/${_PL_BOX_H}}
-    .footer{margin-top:6px;font-size:26px;font-weight:900;color:#0b2f6b;text-align:center}
-    .no-print{position:fixed;top:8px;right:8px;display:flex;gap:8px}
-    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px}
-    .no-print button.sec{background:#eef2f7;color:#374151}
-    @media print{.no-print{display:none}}
+    html,body{margin:0;padding:0;background:#e9eef5;font-family:Arial,sans-serif}
+    .bar{position:fixed;top:8px;right:8px;display:flex;gap:8px;z-index:9}
+    .bar button{color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px;background:#2B91C8}
+    .bar button.g{background:#10b981}.bar button.sec{background:#fff;color:#374151;border:1px solid #d0d5dd}
+    .wrap{width:100%;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:6px}
+    .wrap svg{width:100%;height:auto;max-height:99vh;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+    @media print{.bar{display:none}html,body{background:#fff}.wrap{padding:0;min-height:0}.wrap svg{box-shadow:none}}
   </style></head><body>
-  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
-  <div class="sheet">
-    <div class="hdr">
-      <div class="logo-l">${tbgSVG}</div>
-      <div class="title">${escapeHtml(titulo)}</div>
-      <div class="logo-r">${mfppSrc?`<img src="${mfppSrc}" alt="MFPP">`:''}</div>
-    </div>
-    <div class="body">
-      ${lam.dorsal?`<div class="dorsal">${escapeHtml(lam.dorsal)}</div>`:''}
-      <div class="photo-box">${_plPhotoInner(lam.photo,lam.posX,lam.posY,lam.zoom)}</div>
-      <div class="footer">${escapeHtml(footer)}</div>
-    </div>
+  <div class="bar">
+    <button onclick="window.print()">🖨️ Imprimir / PDF</button>
+    <button class="g" onclick="try{window.opener._plDownloadLastPNG();}catch(e){alert('Abre el PNG desde la app.');}">🖼️ Descargar PNG</button>
+    <button class="sec" onclick="window.close()">✕ Cerrar</button>
   </div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},450);};<\/script>
+  <div class="wrap">${svg}</div>
   </body></html>`);
   w.document.close();
 }
+// Rasteriza el último SVG a PNG de alta resolución y lo descarga
+async function _plDownloadLastPNG(){
+  if(!_plLastSVG) return;
+  const cv=document.createElement('canvas'); cv.width=_plLastW; cv.height=_plLastH;
+  const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  await _infDrawSVGToCanvas(ctx, _plLastSVG, 0,0, cv.width, cv.height);
+  cv.toBlob(b=>{ if(!b){alert('No se pudo generar el PNG.');return;} const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=_plLastName+'.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); },'image/png');
+}
+function _plSafe(s){ return String(s||'').replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,''); }
 
-/* ─────────── Previsualización CONJUNTA (póster de toda la plantilla) ─────────── */
-function _plPreviewAll(){
+// Salidas individuales
+async function _plPrintLamina(lam){ _plLastW=2970; _plLastH=2100; const svg=await _plLaminaSVG(lam); _plOpenSVGWindow(svg, `lamina_${_plSafe(lam.name)}_${lam.year}`); }
+async function _plPngLamina(lam){ _plLastW=2970; _plLastH=2100; _plLastSVG=await _plLaminaSVG(lam); _plLastName=`lamina_${_plSafe(lam.name)}_${lam.year}`; await _plDownloadLastPNG(); }
+
+// Conjunto: previsualización (con botones PDF + PNG)
+async function _plPreviewAll(){
   const list=_plSaved.slice().sort((a,b)=>((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999))||a.name.localeCompare(b.name));
   if(!list.length){ alert('Aún no has guardado ninguna lámina esta temporada. Guarda al menos una para ver el conjunto.'); return; }
-  const team=_plState.team, year=_plState.year;
-  // Categoría general del conjunto: si todos son del mismo grupo, su plural
-  const groups=new Set(list.map(l=>{ const g=_calCatGroup(l.catNorm); return g?g.key:''; }));
-  const catPlural = (groups.size===1 && [...groups][0]) ? _plCatPlural(list[0].catNorm) : '';
-  const titulo=`Plantilla equipo ${team} · Temporada ${year}${catPlural?(' '+catPlural):''}`;
-  const tbgSVG=(typeof _infLogoSVG==='function')? _infLogoSVG(70) : '';
-  const mfppSrc=document.querySelector('.brand-logo')?.src || '';
-  // ── Rejilla AUTOAJUSTABLE: busca el nº de columnas que maximiza el tamaño de
-  //    tarjeta cabiendo TODAS en una sola hoja A4 apaisada (281×194mm útiles). ──
-  const N=list.length;
-  // Área útil DENTRO del marco con márgenes (padding 12×14mm + cabecera ~32mm)
-  const availW=268, availH=150, cardAspect=2.05, gap=6; // mm (cardAspect ≈ alto/ancho de tarjeta)
-  let best={cw:0, cols:1};
-  for(let C=1;C<=N;C++){
-    const rows=Math.ceil(N/C);
-    const cwW=(availW-(C-1)*gap)/C;
-    const cwH=((availH-(rows-1)*gap)/rows)/cardAspect;
-    const cw=Math.min(cwW,cwH);
-    if(cw>best.cw+0.01) best={cw, cols:C};
-  }
-  const cols=best.cols;
-  const cardW=Math.min(best.cw, 58);                       // tope para pocas fotos
-  const photoH=(cardW*_PL_BOX_H/_PL_BOX_W).toFixed(1);
-  const fD=(cardW*0.34).toFixed(1), fN=(cardW*0.17).toFixed(1), fC=(cardW*0.135).toFixed(1);
-  const cards=list.map(l=>`
-    <div class="card">
-      <div class="cd-dorsal">${l.dorsal?escapeHtml(l.dorsal):''}</div>
-      <div class="cd-photo">${_plPhotoInner(l.photo,l.posX,l.posY,l.zoom)}</div>
-      <div class="cd-name">${escapeHtml(l.name)}</div>
-      <div class="cd-cat">${l.catNorm?escapeHtml(l.catNorm):''}</div>
-    </div>`).join('');
-  const w=window.open('','_blank');
-  if(!w){ alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
-  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
-  <title>Plantilla ${escapeHtml(team)} · ${escapeHtml(year)}</title>
-  <style>
-    @page{size:A4 landscape;margin:0}
-    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
-    html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
-    /* Marco con márgenes perimetrales reales (visibles en pantalla y al imprimir) */
-    .page{width:297mm;height:210mm;padding:12mm 14mm;display:flex;flex-direction:column;margin:0 auto}
-    .hdr{display:grid;grid-template-columns:90px 1fr 130px;align-items:center;gap:12px;border-bottom:4px solid #2B91C8;padding:0 4px 10px;margin-bottom:12px}
-    .hdr .title{text-align:center;font-size:22px;font-weight:900;line-height:1.15}
-    .hdr .logo-r{display:flex;justify-content:flex-end}
-    .hdr .logo-r img{max-height:62px;max-width:130px;object-fit:contain}
-    .grid{display:grid;grid-template-columns:repeat(${cols},${cardW}mm);justify-content:center;gap:${gap}mm;padding:0}
-    .card{display:flex;flex-direction:column;align-items:center;gap:1mm;break-inside:avoid;width:${cardW}mm}
-    .cd-dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:${fD}mm;font-weight:900;color:#b8860b;line-height:1;min-height:${fD}mm}
-    .cd-photo{width:${cardW}mm;height:${photoH}mm;border:2.5px solid #2B91C8;border-radius:7px;overflow:hidden;background:#eef2f7}
-    .cd-name{font-size:${fN}mm;font-weight:800;text-align:center;line-height:1.05}
-    .cd-cat{font-size:${fC}mm;font-weight:700;color:#475569}
-    .no-print{position:fixed;top:8px;right:8px;display:flex;gap:8px}
-    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px}
-    .no-print button.sec{background:#eef2f7;color:#374151}
-    @media print{.no-print{display:none}}
-  </style></head><body>
-  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
-  <div class="page">
-    <div class="hdr">
-      <div class="logo-l">${tbgSVG}</div>
-      <div class="title">${escapeHtml(titulo)}</div>
-      <div class="logo-r">${mfppSrc?`<img src="${mfppSrc}" alt="MFPP">`:''}</div>
-    </div>
-    <div class="grid">${cards}</div>
-  </div>
-  </body></html>`);
-  w.document.close();
+  _plLastW=2970; _plLastH=2100;
+  const svg=await _plConjuntoSVG(list);
+  _plOpenSVGWindow(svg, `plantilla_${_plSafe(_plState.team)}_${_plState.year}`);
 }
