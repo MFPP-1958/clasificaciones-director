@@ -39115,11 +39115,11 @@ let _plCloudOK=null;   // null=sin comprobar, true=disponible, false=falta tabla
 // Mapea registro de la app ↔ fila de la tabla
 function _plRecToRow(rec){
   return { id:rec.id, team:rec.team, year:String(rec.year), rider_key:rec.key, name:rec.name,
-    dorsal:rec.dorsal||'', cat:rec.catNorm||'', photo:rec.photo||'', pos_y:rec.posY|0, zoom:rec.zoom||1 };
+    dorsal:rec.dorsal||'', cat:rec.catNorm||'', photo:rec.photo||'', pos_x:rec.posX!=null?(rec.posX|0):50, pos_y:rec.posY!=null?(rec.posY|0):50, zoom:rec.zoom||1 };
 }
 function _plRowToRec(row){
   return { id:row.id, team:row.team, year:String(row.year), key:row.rider_key, name:row.name,
-    dorsal:row.dorsal||'', catNorm:row.cat||'', photo:row.photo||'', posY:row.pos_y!=null?row.pos_y:50, zoom:row.zoom||1, ts:Date.now() };
+    dorsal:row.dorsal||'', catNorm:row.cat||'', photo:row.photo||'', posX:row.pos_x!=null?row.pos_x:50, posY:row.pos_y!=null?row.pos_y:50, zoom:row.zoom||1, ts:Date.now() };
 }
 async function _plSbAll(team, year){
   if(!_sb) throw new Error('sin supabase');
@@ -39160,10 +39160,13 @@ create table if not exists team_sheets (
   dorsal    text,
   cat       text,
   photo     text,                     -- foto en base64 (dataURL)
+  pos_x     int  default 50,          -- encuadre horizontal de la foto (%)
   pos_y     int  default 50,          -- encuadre vertical de la foto (%)
   zoom      real default 1,           -- zoom de la foto
   updated_at timestamptz default now()
 );
+-- Si la tabla ya existía sin pos_x, esta línea la añade sin borrar nada:
+alter table team_sheets add column if not exists pos_x int default 50;
 alter table team_sheets enable row level security;
 drop policy if exists "anon_all_team_sheets" on team_sheets;
 create policy "anon_all_team_sheets" on team_sheets for all to anon using (true) with check (true);`;
@@ -39192,15 +39195,15 @@ function _plShowCloudSQL(){
   ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
 }
 // Estilo de la imagen dentro del marco (mismo en preview y en impresión)
-function _plImgStyle(posY,zoom){
-  return `width:100%;height:100%;object-fit:cover;object-position:50% ${posY}%;transform:scale(${zoom});transform-origin:50% ${posY}%`;
+function _plImgStyle(posX,posY,zoom){
+  return `width:100%;height:100%;object-fit:cover;object-position:${posX}% ${posY}%;transform:scale(${zoom});transform-origin:${posX}% ${posY}%`;
 }
 // Silueta gris por defecto cuando aún no hay foto
 const _PL_SILH = `<svg viewBox="0 0 100 125" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;display:block;background:#e9eef5"><rect width="100" height="125" fill="#e9eef5"/><circle cx="50" cy="46" r="21" fill="#c2ccd9"/><path d="M16 122 C16 92 36 79 50 79 C64 79 84 92 84 122 Z" fill="#c2ccd9"/></svg>`;
 // Contenido del marco de la foto: imagen real o silueta (foto opcional)
-function _plPhotoInner(photo, posY, zoom){
+function _plPhotoInner(photo, posX, posY, zoom){
   return photo
-    ? `<img id="_plPvImg" src="${photo}" style="${_plImgStyle(posY,zoom)}" alt="">`
+    ? `<img id="_plPvImg" src="${photo}" style="${_plImgStyle(posX,posY,zoom)}" alt="">`
     : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${_PL_SILH}</div>`;
 }
 // Reduce la foto antes de guardarla (menos peso, impresión más rápida)
@@ -39329,7 +39332,8 @@ function _plOpenPreview(editKey){
   const photo = (editKey ? (saved&&saved.photo) : (_plState.photo || (saved&&saved.photo))) || '';
   _plPending={
     key, name:r.name, photo,
-    posY: saved? saved.posY : 50,
+    posX: saved&&saved.posX!=null? saved.posX : 50,
+    posY: saved&&saved.posY!=null? saved.posY : 50,
     zoom: saved? saved.zoom : 1,
     dorsal: saved? saved.dorsal : (r.dorsal||''),
     catNorm: saved? saved.catNorm : (r.catNorm||'')
@@ -39356,7 +39360,7 @@ function _plRenderPreview(){
           </div>
           <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding-top:5px">
             <div id="_plPvDorsal" style="font-family:'Arial Black',Impact,sans-serif;font-size:40px;font-weight:900;color:#b8860b;line-height:1"></div>
-            <div id="_plPvBox" style="width:${boxW}px;height:${boxH}px;border:3px solid #2B91C8;border-radius:8px;overflow:hidden;background:#eef2f7;cursor:${p.photo?'ns-resize':'default'};position:relative;touch-action:none">${_plPhotoInner(p.photo,p.posY,p.zoom)}</div>
+            <div id="_plPvBox" style="width:${boxW}px;height:${boxH}px;border:3px solid #2B91C8;border-radius:8px;overflow:hidden;background:#eef2f7;cursor:${p.photo?'move':'default'};position:relative;touch-action:none">${_plPhotoInner(p.photo,p.posX,p.posY,p.zoom)}</div>
             <div id="_plPvFooter" style="font-size:13px;font-weight:900;color:#0b2f6b;text-align:center"></div>
           </div>
         </div>
@@ -39376,7 +39380,20 @@ function _plRenderPreview(){
           <label style="font-size:12px;font-weight:800;color:#475569">Zoom de la foto</label>
           <input id="_plFZoom" type="range" min="1" max="3" step="0.02" value="${p.zoom}" oninput="_plZoom(this.value)" style="width:100%;margin-top:6px">
         </div>
-        <button onclick="_plCenter()" style="background:#eef2f7;color:#0b2f6b;border:none;border-radius:9px;padding:9px;font-weight:800;font-size:13px;cursor:pointer">🎯 Centrar foto</button>
+        <div>
+          <label style="font-size:12px;font-weight:800;color:#475569">Mover foto</label>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px">
+            <span></span>
+            <button onclick="_plPan(0,-1)" title="Subir" style="background:#eef2f7;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">↑</button>
+            <span></span>
+            <button onclick="_plPan(-1,0)" title="Izquierda" style="background:#eef2f7;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">←</button>
+            <button onclick="_plCenter()" title="Centrar" style="background:#dbeafe;color:#1d4ed8;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">🎯</button>
+            <button onclick="_plPan(1,0)" title="Derecha" style="background:#eef2f7;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">→</button>
+            <span></span>
+            <button onclick="_plPan(0,1)" title="Bajar" style="background:#eef2f7;border:none;border-radius:8px;padding:9px;font-weight:800;cursor:pointer">↓</button>
+            <span></span>
+          </div>
+        </div>
         <button onclick="document.getElementById('_plChgFoto').click()" style="background:#fff;color:#0b2f6b;border:1.5px solid #2B91C8;border-radius:9px;padding:9px;font-weight:800;font-size:13px;cursor:pointer">🖼️ Cambiar foto</button>
         <input type="file" id="_plChgFoto" accept="image/*" style="display:none" onchange="_plChangePhoto(event)">
       </div>
@@ -39390,18 +39407,25 @@ function _plRenderPreview(){
   document.body.appendChild(ov);
   ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
   _plPreviewSync();
-  // Arrastrar la foto en vertical para reencuadrar
+  // Arrastrar la foto en CUALQUIER dirección para reencuadrar (pan X e Y)
   const box=document.getElementById('_plPvBox');
-  let dragging=false, startY=0, startPos=p.posY;
-  const onMove=(cy)=>{ const dy=cy-startY; const np=Math.max(0,Math.min(100, startPos + (dy/box.offsetHeight)*100)); p.posY=Math.round(np); _plApplyImg(); };
-  box.addEventListener('pointerdown',e=>{ dragging=true; startY=e.clientY; startPos=p.posY; box.setPointerCapture(e.pointerId); });
-  box.addEventListener('pointermove',e=>{ if(dragging) onMove(e.clientY); });
+  let dragging=false, sx=0, sy=0, spX=p.posX, spY=p.posY;
+  const onMove=(cx,cy)=>{
+    const dx=cx-sx, dy=cy-sy;
+    // mover la foto a la derecha = mostrar parte izquierda = object-position X baja
+    p.posX=Math.max(0,Math.min(100, Math.round(spX - (dx/box.offsetWidth)*100)));
+    p.posY=Math.max(0,Math.min(100, Math.round(spY - (dy/box.offsetHeight)*100)));
+    _plApplyImg();
+  };
+  box.addEventListener('pointerdown',e=>{ if(!_plPending.photo) return; dragging=true; sx=e.clientX; sy=e.clientY; spX=p.posX; spY=p.posY; box.setPointerCapture(e.pointerId); });
+  box.addEventListener('pointermove',e=>{ if(dragging) onMove(e.clientX,e.clientY); });
   box.addEventListener('pointerup',()=>{ dragging=false; });
   box.addEventListener('pointercancel',()=>{ dragging=false; });
 }
-function _plApplyImg(){ const img=document.getElementById('_plPvImg'); if(img&&_plPending) img.setAttribute('style',_plImgStyle(_plPending.posY,_plPending.zoom)); }
+function _plApplyImg(){ const img=document.getElementById('_plPvImg'); if(img&&_plPending) img.setAttribute('style',_plImgStyle(_plPending.posX,_plPending.posY,_plPending.zoom)); }
 function _plZoom(v){ if(_plPending){ _plPending.zoom=parseFloat(v)||1; _plApplyImg(); } }
-function _plCenter(){ if(!_plPending) return; _plPending.posY=50; _plPending.zoom=1; const z=document.getElementById('_plFZoom'); if(z) z.value=1; _plApplyImg(); }
+function _plPan(dx,dy){ if(!_plPending) return; const STEP=4; _plPending.posX=Math.max(0,Math.min(100,(_plPending.posX||50)+dx*STEP)); _plPending.posY=Math.max(0,Math.min(100,(_plPending.posY||50)+dy*STEP)); _plApplyImg(); }
+function _plCenter(){ if(!_plPending) return; _plPending.posX=50; _plPending.posY=50; _plPending.zoom=1; const z=document.getElementById('_plFZoom'); if(z) z.value=1; _plApplyImg(); }
 function _plPreviewSync(){
   const p=_plPending; if(!p) return;
   const dorsal=(document.getElementById('_plFDorsal')?.value||'').trim();
@@ -39419,7 +39443,7 @@ async function _plChangePhoto(e){
   rd.onload=async ()=>{
     _plPending.photo=await _plDownscale(rd.result,900);
     const box=document.getElementById('_plPvBox');
-    if(box){ box.innerHTML=_plPhotoInner(_plPending.photo,_plPending.posY,_plPending.zoom); box.style.cursor='ns-resize'; }
+    if(box){ box.innerHTML=_plPhotoInner(_plPending.photo,_plPending.posX,_plPending.posY,_plPending.zoom); box.style.cursor='move'; }
   };
   rd.readAsDataURL(f);
 }
@@ -39427,7 +39451,7 @@ async function _plSaveLamina(print){
   const p=_plPending; if(!p) return;
   const rec={ id:_plRecId(p.key), team:_plState.team, year:_plState.year, key:p.key,
     name:p.name, dorsal:p.dorsal||'', catNorm:p.catNorm||'', photo:p.photo,
-    posY:p.posY, zoom:p.zoom, ts:Date.now() };
+    posX:p.posX, posY:p.posY, zoom:p.zoom, ts:Date.now() };
   // Guardar en la nube (si está lista) y siempre espejo local
   let cloudErr=null;
   if(_sb && _plCloudOK!==false){ try{ await _plSbPut(rec); _plCloudOK=true; }catch(e){ cloudErr=e; _plCloudOK=false; } }
@@ -39462,7 +39486,7 @@ function _plRenderGenerated(){
       ${list.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto">
         ${list.map(l=>`
           <div style="display:flex;align-items:center;gap:10px;background:#f8fbff;border:1px solid #dbeafe;border-radius:9px;padding:7px 10px">
-            <img src="${l.photo}" alt="" style="width:34px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #cbd5e1;object-position:50% ${l.posY}%">
+            <img src="${l.photo}" alt="" style="width:34px;height:42px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid #cbd5e1;object-position:${l.posX!=null?l.posX:50}% ${l.posY!=null?l.posY:50}%">
             <div style="flex:1;min-width:0">
               <div style="font-weight:800;font-size:13px;color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(l.name)}</div>
               <div style="font-size:11px;color:#64748b">${l.dorsal?('#'+escapeHtml(l.dorsal)):'sin dorsal'}${l.catNorm?(' · '+escapeHtml(l.catNorm)):''}</div>
@@ -39501,16 +39525,17 @@ function _plPrintLamina(lam){
     @page{size:A4 landscape;margin:0}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
     html,body{margin:0;padding:0;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
-    .sheet{width:297mm;height:209mm;padding:12mm 14mm;display:flex;flex-direction:column}
-    .hdr{display:grid;grid-template-columns:110px 1fr 150px;align-items:center;gap:14px;border-bottom:4px solid #2B91C8;padding-bottom:10px}
+    /* Márgenes perimetrales profesionales (padding interior del A4) */
+    .sheet{width:297mm;height:210mm;padding:16mm 20mm;display:flex;flex-direction:column;overflow:hidden}
+    .hdr{display:grid;grid-template-columns:100px 1fr 140px;align-items:center;gap:14px;border-bottom:4px solid #2B91C8;padding-bottom:10px}
     .hdr .logo-r{display:flex;justify-content:flex-end}
-    .hdr .logo-r img{max-height:74px;max-width:150px;object-fit:contain}
-    .title{text-align:center;font-size:26px;font-weight:900;line-height:1.2}
-    .body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding-top:6px}
-    .dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:92px;font-weight:900;color:#b8860b;line-height:1;letter-spacing:2px}
-    .photo-box{border:4px solid #2B91C8;border-radius:10px;overflow:hidden;background:#eef2f7;width:${_PL_BOX_W}mm;height:${_PL_BOX_H}mm}
-    .photo-box img{${_plImgStyle(lam.posY,lam.zoom)}}
-    .footer{margin-top:8px;font-size:28px;font-weight:900;color:#0b2f6b;text-align:center}
+    .hdr .logo-r img{max-height:66px;max-width:140px;object-fit:contain}
+    .title{text-align:center;font-size:24px;font-weight:900;line-height:1.2}
+    .body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding-top:4px}
+    .dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:70px;font-weight:900;color:#b8860b;line-height:1;letter-spacing:2px}
+    /* Foto dimensionada para que TODO quepa en una hoja con márgenes */
+    .photo-box{border:4px solid #2B91C8;border-radius:10px;overflow:hidden;background:#eef2f7;height:98mm;aspect-ratio:${_PL_BOX_W}/${_PL_BOX_H}}
+    .footer{margin-top:6px;font-size:26px;font-weight:900;color:#0b2f6b;text-align:center}
     .no-print{position:fixed;top:8px;right:8px;display:flex;gap:8px}
     .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px}
     .no-print button.sec{background:#eef2f7;color:#374151}
@@ -39525,7 +39550,7 @@ function _plPrintLamina(lam){
     </div>
     <div class="body">
       ${lam.dorsal?`<div class="dorsal">${escapeHtml(lam.dorsal)}</div>`:''}
-      <div class="photo-box">${_plPhotoInner(lam.photo,lam.posY,lam.zoom)}</div>
+      <div class="photo-box">${_plPhotoInner(lam.photo,lam.posX,lam.posY,lam.zoom)}</div>
       <div class="footer">${escapeHtml(footer)}</div>
     </div>
   </div>
@@ -39545,11 +39570,26 @@ function _plPreviewAll(){
   const titulo=`Plantilla equipo ${team} · Temporada ${year}${catPlural?(' '+catPlural):''}`;
   const tbgSVG=(typeof _infLogoSVG==='function')? _infLogoSVG(70) : '';
   const mfppSrc=document.querySelector('.brand-logo')?.src || '';
-  const cols = list.length<=12 ? Math.max(4,Math.ceil(list.length/2)) : 7;  // hasta 2 filas si caben
+  // ── Rejilla AUTOAJUSTABLE: busca el nº de columnas que maximiza el tamaño de
+  //    tarjeta cabiendo TODAS en una sola hoja A4 apaisada (281×194mm útiles). ──
+  const N=list.length;
+  const availW=281, availH=162, cardAspect=2.05, gap=6; // mm (cardAspect ≈ alto/ancho de tarjeta)
+  let best={cw:0, cols:1};
+  for(let C=1;C<=N;C++){
+    const rows=Math.ceil(N/C);
+    const cwW=(availW-(C-1)*gap)/C;
+    const cwH=((availH-(rows-1)*gap)/rows)/cardAspect;
+    const cw=Math.min(cwW,cwH);
+    if(cw>best.cw+0.01) best={cw, cols:C};
+  }
+  const cols=best.cols;
+  const cardW=Math.min(best.cw, 58);                       // tope para pocas fotos
+  const photoH=(cardW*_PL_BOX_H/_PL_BOX_W).toFixed(1);
+  const fD=(cardW*0.34).toFixed(1), fN=(cardW*0.17).toFixed(1), fC=(cardW*0.135).toFixed(1);
   const cards=list.map(l=>`
     <div class="card">
       <div class="cd-dorsal">${l.dorsal?escapeHtml(l.dorsal):''}</div>
-      <div class="cd-photo">${_plPhotoInner(l.photo,l.posY,l.zoom)}</div>
+      <div class="cd-photo">${_plPhotoInner(l.photo,l.posX,l.posY,l.zoom)}</div>
       <div class="cd-name">${escapeHtml(l.name)}</div>
       <div class="cd-cat">${l.catNorm?escapeHtml(l.catNorm):''}</div>
     </div>`).join('');
@@ -39565,12 +39605,12 @@ function _plPreviewAll(){
     .hdr .title{text-align:center;font-size:22px;font-weight:900;line-height:1.15}
     .hdr .logo-r{display:flex;justify-content:flex-end}
     .hdr .logo-r img{max-height:62px;max-width:130px;object-fit:contain}
-    .grid{display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px 12px;padding:0 4px}
-    .card{display:flex;flex-direction:column;align-items:center;gap:3px;break-inside:avoid}
-    .cd-dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:26px;font-weight:900;color:#b8860b;line-height:1;min-height:26px}
-    .cd-photo{width:100%;aspect-ratio:${_PL_BOX_W}/${_PL_BOX_H};border:2.5px solid #2B91C8;border-radius:7px;overflow:hidden;background:#eef2f7}
-    .cd-name{font-size:11.5px;font-weight:800;text-align:center;line-height:1.1;margin-top:2px}
-    .cd-cat{font-size:10px;font-weight:700;color:#475569}
+    .grid{display:grid;grid-template-columns:repeat(${cols},${cardW}mm);justify-content:center;gap:${gap}mm;padding:0}
+    .card{display:flex;flex-direction:column;align-items:center;gap:1mm;break-inside:avoid;width:${cardW}mm}
+    .cd-dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:${fD}mm;font-weight:900;color:#b8860b;line-height:1;min-height:${fD}mm}
+    .cd-photo{width:${cardW}mm;height:${photoH}mm;border:2.5px solid #2B91C8;border-radius:7px;overflow:hidden;background:#eef2f7}
+    .cd-name{font-size:${fN}mm;font-weight:800;text-align:center;line-height:1.05}
+    .cd-cat{font-size:${fC}mm;font-weight:700;color:#475569}
     .no-print{position:fixed;top:8px;right:8px;display:flex;gap:8px}
     .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px}
     .no-print button.sec{background:#eef2f7;color:#374151}
