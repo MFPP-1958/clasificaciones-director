@@ -39119,7 +39119,8 @@ function _plRecToRow(rec){
 }
 function _plRowToRec(row){
   return { id:row.id, team:row.team, year:String(row.year), key:row.rider_key, name:row.name,
-    dorsal:row.dorsal||'', catNorm:row.cat||'', photo:row.photo||'', posX:row.pos_x!=null?row.pos_x:50, posY:row.pos_y!=null?row.pos_y:50, zoom:row.zoom||1, ts:Date.now() };
+    dorsal:row.dorsal||'', catNorm:row.cat||'', photo:row.photo||'', posX:row.pos_x!=null?row.pos_x:50, posY:row.pos_y!=null?row.pos_y:50, zoom:row.zoom||1,
+    ts:0, _ts:(row.updated_at? Date.parse(row.updated_at)||0 : 0) };  // _ts = marca de la nube
 }
 async function _plSbAll(team, year){
   if(!_sb) throw new Error('sin supabase');
@@ -39131,22 +39132,33 @@ async function _plSbPut(rec){ if(!_sb) throw new Error('sin supabase'); const {e
 async function _plSbDel(id){ if(!_sb) throw new Error('sin supabase'); const {error}=await _sb.from('team_sheets').delete().eq('id',id); if(error) throw error; }
 
 async function _plLoadSaved(){
-  // 1) Intentar nube (fuente de verdad para tener todo en un sitio)
+  // Cargamos NUBE y LOCAL y los FUSIONAMOS quedándonos con lo más reciente por
+  // ciclista. Así nunca se pierde un cambio local (pan, foto, dorsal) aunque la
+  // nube esté incompleta (p.ej. tabla sin la columna pos_x todavía).
+  _plCloudOK=null; _plCloudMissing=false;
+  let cloud=[], local=[];
   if(_sb){
-    try{
-      _plSaved = await _plSbAll(_plState.team, _plState.year);
-      _plCloudOK=true;
-      // Espejo local por si luego no hay conexión
-      try{ for(const r of _plSaved) await _plDBPut(r); }catch(_){}
-      return;
-    }catch(e){
+    try{ cloud = await _plSbAll(_plState.team, _plState.year); _plCloudOK=true; }
+    catch(e){
       _plCloudOK=false;
-      if(/team_sheets/.test(e.message||'') || e.code==='42P01' || /does not exist|relation/.test(e.message||'')) _plCloudMissing=true;
+      const m=(e&&(e.message||e.code||''))+'';
+      if(/team_sheets/.test(m) || e?.code==='42P01' || /does not exist|relation/i.test(m)) _plCloudMissing=true;
     }
   }
-  // 2) Respaldo local (IndexedDB)
-  let all=[]; try{ all=await _plDBAll(); }catch(_){ all=[]; }
-  _plSaved = all.filter(s=>s.team===_plState.team && String(s.year)===String(_plState.year));
+  try{ const all=await _plDBAll(); local=all.filter(s=>s.team===_plState.team && String(s.year)===String(_plState.year)); }catch(_){}
+
+  const byKey=new Map();
+  for(const r of cloud) byKey.set(r.key, r);
+  for(const r of local){
+    const c=byKey.get(r.key);
+    const cloudTs=c?(c._ts||0):-1;
+    const localTs=r.ts||0;
+    // local gana cuando es igual o más nuevo (siempre conserva posX/posY locales)
+    if(!c || localTs>=cloudTs) byKey.set(r.key, r);
+  }
+  _plSaved=[...byKey.values()];
+  // Dejar el resultado fusionado también en local (completo y al día)
+  try{ for(const r of _plSaved) await _plDBPut(r); }catch(_){}
 }
 let _plCloudMissing=false;
 // SQL de creación de la tabla (una sola vez, en el editor SQL de Supabase)
@@ -39452,12 +39464,19 @@ async function _plSaveLamina(print){
   const rec={ id:_plRecId(p.key), team:_plState.team, year:_plState.year, key:p.key,
     name:p.name, dorsal:p.dorsal||'', catNorm:p.catNorm||'', photo:p.photo,
     posX:p.posX, posY:p.posY, zoom:p.zoom, ts:Date.now() };
-  // Guardar en la nube (si está lista) y siempre espejo local
+  // SIEMPRE se guarda en local (IndexedDB) primero: es la garantía de que no
+  // se pierde nada. La nube es un extra para sincronizar entre dispositivos.
+  let localOK=false;
+  try{ await _plDBPut(rec); localOK=true; }catch(e){ alert('No se pudo guardar en este dispositivo: '+(e.message||e)); return; }
   let cloudErr=null;
-  if(_sb && _plCloudOK!==false){ try{ await _plSbPut(rec); _plCloudOK=true; }catch(e){ cloudErr=e; _plCloudOK=false; } }
-  try{ await _plDBPut(rec); }
-  catch(e){ if(cloudErr){ alert('No se pudo guardar la lámina: '+(e.message||e)); return; } }
-  if(cloudErr && _plCloudMissing){ alert('Guardado en este dispositivo. Para sincronizar con el iPad, activa la nube (botón ☁️) y reabre.'); }
+  if(_sb){ try{ await _plSbPut(rec); _plCloudOK=true; }catch(e){ cloudErr=e; if(_plCloudOK!==true) _plCloudOK=false; } }
+  // Si la nube existe pero le falta la columna pos_x, avisamos para re-ejecutar el SQL
+  if(cloudErr){
+    const m=(cloudErr.message||cloudErr.code||'')+'';
+    if(/pos_x|column/i.test(m)){
+      if(confirm('Guardado en este dispositivo ✅\n\nLa tabla de la nube está desactualizada (le falta una columna), por eso el ajuste de la foto no se sincronizaría con el iPad.\n\n¿Abrir el SQL para actualizarla? (se ejecuta una vez en Supabase)')) _plShowCloudSQL();
+    }
+  }
   const ix=_plSaved.findIndex(s=>s.key===rec.key);
   if(ix>=0) _plSaved[ix]=rec; else _plSaved.push(rec);
   document.getElementById('_plPreview')?.remove();
