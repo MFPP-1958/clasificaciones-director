@@ -39573,7 +39573,8 @@ function _plPreviewAll(){
   // ── Rejilla AUTOAJUSTABLE: busca el nº de columnas que maximiza el tamaño de
   //    tarjeta cabiendo TODAS en una sola hoja A4 apaisada (281×194mm útiles). ──
   const N=list.length;
-  const availW=281, availH=162, cardAspect=2.05, gap=6; // mm (cardAspect ≈ alto/ancho de tarjeta)
+  // Área útil DENTRO del marco con márgenes (padding 12×14mm + cabecera ~32mm)
+  const availW=268, availH=150, cardAspect=2.05, gap=6; // mm (cardAspect ≈ alto/ancho de tarjeta)
   let best={cw:0, cols:1};
   for(let C=1;C<=N;C++){
     const rows=Math.ceil(N/C);
@@ -39598,10 +39599,12 @@ function _plPreviewAll(){
   w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
   <title>Plantilla ${escapeHtml(team)} · ${escapeHtml(year)}</title>
   <style>
-    @page{size:A4 landscape;margin:8mm}
+    @page{size:A4 landscape;margin:0}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
-    html,body{margin:0;padding:0;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
-    .hdr{display:grid;grid-template-columns:90px 1fr 130px;align-items:center;gap:12px;border-bottom:4px solid #2B91C8;padding:6px 6px 10px;margin-bottom:12px}
+    html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
+    /* Marco con márgenes perimetrales reales (visibles en pantalla y al imprimir) */
+    .page{width:297mm;height:210mm;padding:12mm 14mm;display:flex;flex-direction:column;margin:0 auto}
+    .hdr{display:grid;grid-template-columns:90px 1fr 130px;align-items:center;gap:12px;border-bottom:4px solid #2B91C8;padding:0 4px 10px;margin-bottom:12px}
     .hdr .title{text-align:center;font-size:22px;font-weight:900;line-height:1.15}
     .hdr .logo-r{display:flex;justify-content:flex-end}
     .hdr .logo-r img{max-height:62px;max-width:130px;object-fit:contain}
@@ -39617,12 +39620,14 @@ function _plPreviewAll(){
     @media print{.no-print{display:none}}
   </style></head><body>
   <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
-  <div class="hdr">
-    <div class="logo-l">${tbgSVG}</div>
-    <div class="title">${escapeHtml(titulo)}</div>
-    <div class="logo-r">${mfppSrc?`<img src="${mfppSrc}" alt="MFPP">`:''}</div>
+  <div class="page">
+    <div class="hdr">
+      <div class="logo-l">${tbgSVG}</div>
+      <div class="title">${escapeHtml(titulo)}</div>
+      <div class="logo-r">${mfppSrc?`<img src="${mfppSrc}" alt="MFPP">`:''}</div>
+    </div>
+    <div class="grid">${cards}</div>
   </div>
-  <div class="grid">${cards}</div>
   </body></html>`);
   w.document.close();
 }
