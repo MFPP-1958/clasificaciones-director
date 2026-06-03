@@ -39591,7 +39591,7 @@ async function _plConjuntoSVG(list){
   const groups=new Set(list.map(l=>{ const g=_calCatGroup(l.catNorm); return g?g.key:''; }));
   const catPlural=(groups.size===1 && [...groups][0])?_plCatPlural(list[0].catNorm):'';
   const titulo=`Plantilla equipo ${_plState.team} · Temporada ${_plState.year}${catPlural?(' '+catPlural):''}`;
-  const gridTop=my+22, availW=W-2*mx, availH=H-gridTop-my, gap=5, cardAspect=2.12;
+  const gridTop=my+22, availW=W-2*mx, availH=H-gridTop-my, gap=5, cardAspect=1.95;
   const N=list.length; let best={cw:0,cols:1};
   for(let C=1;C<=N;C++){ const rows=Math.ceil(N/C); const cwW=(availW-(C-1)*gap)/C; const cwH=((availH-(rows-1)*gap)/rows)/cardAspect; const cw=Math.min(cwW,cwH); if(cw>best.cw+0.01) best={cw,cols:C}; }
   const cols=best.cols, cw=Math.min(best.cw,52), ch=cw*cardAspect, photoH=cw*_PL_BOX_H/_PL_BOX_W;
@@ -39605,13 +39605,17 @@ async function _plConjuntoSVG(list){
     if(l.dorsal) s+=`<text x="${(x+cw/2).toFixed(1)}" y="${(y+fD).toFixed(1)}" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="${fD.toFixed(1)}" font-weight="900" fill="#b8860b">${_infEsc(l.dorsal)}</text>`;
     const py=y+fD+1.2;
     s+=_plPhotoFrag(l.photo, imgs[i]?imgs[i].naturalWidth:0, imgs[i]?imgs[i].naturalHeight:0, x,py,cw,photoH, l.posX,l.posY,l.zoom, 'pc'+i);
-    const words=(l.name||'').split(/\s+/).filter(Boolean);
-    let l1=l.name||'', l2='';
-    if(words.length>=2){ l1=words[0]; l2=words.slice(1).join(' '); }
-    let ny=py+photoH+fN+1.2;
-    s+=`<text x="${(x+cw/2).toFixed(1)}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fN.toFixed(1)}" font-weight="800" fill="#0b2f6b">${_infEsc(l1)}</text>`;
-    if(l2){ ny+=fN+0.5; s+=`<text x="${(x+cw/2).toFixed(1)}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fN.toFixed(1)}" font-weight="800" fill="#0b2f6b">${_infEsc(l2)}</text>`; }
-    if(l.catNorm){ ny+=fC+1; s+=`<text x="${(x+cw/2).toFixed(1)}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fC.toFixed(1)}" font-weight="700" fill="#475569">${_infEsc(l.catNorm)}</text>`; }
+    // Nombre en UNA sola línea; si es largo, se reduce la letra para que quepa
+    const nm=(l.name||'').trim();
+    const maxW=cw-1, cx=(x+cw/2).toFixed(1);
+    let fNm=fN;
+    const estW=nm.length*fNm*0.52;                 // ancho aproximado del texto (mm)
+    if(estW>maxW) fNm=Math.max(fN*0.6, maxW/(nm.length*0.52));
+    const tooLong=(nm.length*fNm*0.52)>maxW;       // aún no cabe → comprimir con textLength
+    const tl=tooLong?` textLength="${maxW.toFixed(1)}" lengthAdjust="spacingAndGlyphs"`:'';
+    let ny=py+photoH+fNm+1.2;
+    s+=`<text x="${cx}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fNm.toFixed(1)}" font-weight="800" fill="#0b2f6b"${tl}>${_infEsc(nm)}</text>`;
+    if(l.catNorm){ ny+=fC+1.4; s+=`<text x="${cx}" y="${ny.toFixed(1)}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fC.toFixed(1)}" font-weight="700" fill="#475569">${_infEsc(l.catNorm)}</text>`; }
   });
   return _plSvgWrap(s);
 }
