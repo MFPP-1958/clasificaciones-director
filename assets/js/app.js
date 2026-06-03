@@ -20292,7 +20292,7 @@ function parseInscritosCSVLike(text){
 // de Carga y Resumen (raceLocalidad, raceName, riders en memoria), para
 // que el enriquecimiento al PEGAR inscritos sepa qué fuente de dorsal usar.
 // ═══════════════════════════════════════════════════════════════════════════
-const _CV_LOCS = ['cocentaina','nules','castell','valencia','val.','valéncia','alicante','alacant','denia','dénia','jávea','javea','xàbia','xabia','elche','elx','altea','calpe','calp','benidorm','torrevieja','sagunto','sagunt','villarreal','vila-real','vila real','onda','peníscola','peniscola','vinaròs','vinaros','gandia','xàtiva','xativa','san vicente','sant vicent','raspeig','almoradi','benicarló','benicarlo','la nucia','la nucía','silla','paterna','torrent','algemesí','algemesi','dianense','elda','petrer','santa pola','crevillent','crevillente','el campello','campello','villena','aspe','novelda','ibi','alcoi','alcoy','muro','bocairent','requena','cheste','llíria','liria','bétera','betera','pobla de farnals','el puig','catarroja','sueca','cullera','tavernes','xeraco','oliva','pego','benisa','teulada','poble nou','novelé','novele','ondara','beniarbeig','vinalopó','almazora','almassora','borriana','burriana','moncofa','xilxes','chilches'];
+const _CV_LOCS = ['cocentaina','nules','castell','valencia','val.','valéncia','alicante','alacant','denia','dénia','jávea','javea','xàbia','xabia','elche','elx','altea','calpe','calp','benidorm','torrevieja','sagunto','sagunt','villarreal','vila-real','vila real','onda','peníscola','peniscola','vinaròs','vinaros','gandia','xàtiva','xativa','san vicente','sant vicent','raspeig','almoradi','benicarló','benicarlo','la nucia','la nucía','silla','paterna','torrent','algemesí','algemesi','dianense','elda','petrer','santa pola','crevillent','crevillente','el campello','campello','villena','aspe','novelda','ibi','alcoi','alcoy','muro','bocairent','requena','cheste','llíria','liria','bétera','betera','pobla de farnals','el puig','catarroja','sueca','cullera','tavernes','xeraco','oliva','pego','benisa','teulada','poble nou','novelé','novele','ondara','beniarbeig','vinalopó','almazora','almassora','borriana','burriana','moncofa','xilxes','chilches','beneixama','benejama','biar','banyeres','bañeres','canals','ontinyent','onteniente','albaida','agullent','muro de alcoy','cocentaina','planes','benilloba'];
 
 function _isCVRace(race){
   if(!race) return null;
@@ -39029,41 +39029,50 @@ function _plEsCV(race){
 // cualquier prueba (marcado como no-CV para avisar).
 function _plRoster(history, team, year){
   const teamCanon=getCanonicalTeam(team).toLowerCase();
-  const map={};
-  // Acumula un dorsal. weight: clasificados (finishers) pesan más que inscritos,
-  // porque la lista de inscritos no siempre respeta el dorsal oficial de la CV.
-  // Cada bib guarda {w:peso acumulado, last:fecha ISO más reciente}.
-  const addPerson=(name, team2, bib, cat, ry, iso, esCV, weight)=>{
+  const map={};   // nk -> {key,name,found:[{bib,date,cv,source}],cats:{}}
+  const add=(name, team2, bib, cat, iso, cvFlag, source)=>{
     if(getCanonicalTeam(team2||'').toLowerCase()!==teamCanon) return;
     const nk=normalizeRiderName(name||'').trim(); if(!nk) return;
-    if(!map[nk]) map[nk]={key:nk, name:name||nk, bibsCV:{}, bibsAll:{}, cats:{}};
+    if(!map[nk]) map[nk]={key:nk, name:name||nk, found:[], cats:{}};
     const b=String(bib||'').trim();
-    if(b){
-      const bump=(obj)=>{ const o=obj[b]||(obj[b]={w:0,last:''}); o.w+=weight; if(iso>o.last) o.last=iso; };
-      bump(map[nk].bibsAll);
-      if(esCV) bump(map[nk].bibsCV);
-    }
+    if(b) map[nk].found.push({bib:b, date:iso, cv:cvFlag, source});
+    const ry=iso.slice(0,4);
     const rc=getRiderCorrectCat(name, ry?parseInt(ry):null, cat) || cat || '';
     if(rc) map[nk].cats[rc]=(map[nk].cats[rc]||0)+1;
   };
   for(const race of (history||[])){
     const iso=(_parseSpanishDate(race.raceDate)||'');
-    const ry=iso.slice(0,4);
-    if(year && ry!==year) continue;
-    const esCV=_plEsCV(race);
-    // Clasificados (terminaron) → peso 3, respetan el dorsal oficial CV
-    for(const r of (race.riders||[])) addPerson(r.name, r.team, r.bib, r.cat, ry, iso, esCV, 3);
-    // Inscritos (salieron aunque no acabaran) → peso 1, solo deciden si no hay clasificación
-    for(const i of (race.inscritos||[])) addPerson(i.name, i.team, i.bib, i.cat, ry, iso, esCV, 1);
+    if(year && iso.slice(0,4)!==year) continue;
+    // Detector CV OFICIAL (true / false / null=incierto), igual que en los documentos FCCV
+    const cvFlag=(typeof _isCVRace==='function')? _isCVRace(race) : (_plEsCV(race)?true:false);
+    for(const r of (race.riders||[]))    add(r.name, r.team, r.bib, r.cat, iso, cvFlag, 'riders');
+    for(const i of (race.inscritos||[])) add(i.name, i.team, i.bib, i.cat, iso, cvFlag, 'inscritos');
   }
   const modeCount=(obj)=>{ let best='',n=-1; for(const k in obj){ if(obj[k]>n){n=obj[k]; best=k;} } return best; };
-  // Mejor bib por peso; a igualdad de peso, el de la prueba más reciente
-  const modeBib=(obj)=>{ let best='',bw=-1,bl=''; for(const k in obj){ const o=obj[k]; if(o.w>bw || (o.w===bw && o.last>bl)){ bw=o.w; bl=o.last; best=k; } } return best; };
+  // bib más frecuente (desempate por fecha más reciente)
+  const modeBib=(arr)=>{
+    const c=new Map(), d=new Map();
+    arr.forEach(f=>{ c.set(f.bib,(c.get(f.bib)||0)+1); if((f.date||'')>(d.get(f.bib)||'')) d.set(f.bib,f.date||''); });
+    const s=[...c.entries()].sort((a,b)=> b[1]-a[1] || (d.get(b[0])||'').localeCompare(d.get(a[0])||''));
+    return s.length? s[0][0] : '';
+  };
+  const recentBib=(arr)=>{ const s=arr.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')); return s.length? s[0].bib : ''; };
   return Object.values(map).map(r=>{
     const catRaw=modeCount(r.cats);
-    const dorsalCV=modeBib(r.bibsCV);
-    const dorsal = dorsalCV || modeBib(r.bibsAll);
-    return { key:r.key, name:_evolNormName(r.name), nameRaw:r.name, dorsal, dorsalEsCV:!!dorsalCV, catNorm:_dxNormCat(catRaw), catRaw };
+    const F=r.found;
+    // PRIORIDAD ESTRICTA (nunca usamos cv===false = dorsales de fuera de la CV):
+    //  1) CV confirmada · clasificados   2) CV confirmada · inscritos
+    //  3) incierta · clasificados        4) incierta · inscritos        5) vacío
+    const cvR=F.filter(f=>f.cv===true && f.source==='riders');
+    const cvI=F.filter(f=>f.cv===true && f.source==='inscritos');
+    const unR=F.filter(f=>f.cv===null && f.source==='riders');
+    const unI=F.filter(f=>f.cv===null && f.source==='inscritos');
+    let dorsal='', esCV=false;
+    if(cvR.length){ dorsal=modeBib(cvR); esCV=true; }
+    else if(cvI.length){ dorsal=modeBib(cvI); esCV=true; }
+    else if(unR.length){ dorsal=recentBib(unR); }
+    else if(unI.length){ dorsal=recentBib(unI); }
+    return { key:r.key, name:_evolNormName(r.name), nameRaw:r.name, dorsal, dorsalEsCV:esCV, catNorm:_dxNormCat(catRaw), catRaw };
   }).sort((a,b)=> ((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999)) || a.name.localeCompare(b.name));
 }
 
@@ -39186,6 +39195,14 @@ function _plShowCloudSQL(){
 function _plImgStyle(posY,zoom){
   return `width:100%;height:100%;object-fit:cover;object-position:50% ${posY}%;transform:scale(${zoom});transform-origin:50% ${posY}%`;
 }
+// Silueta gris por defecto cuando aún no hay foto
+const _PL_SILH = `<svg viewBox="0 0 100 125" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;display:block;background:#e9eef5"><rect width="100" height="125" fill="#e9eef5"/><circle cx="50" cy="46" r="21" fill="#c2ccd9"/><path d="M16 122 C16 92 36 79 50 79 C64 79 84 92 84 122 Z" fill="#c2ccd9"/></svg>`;
+// Contenido del marco de la foto: imagen real o silueta (foto opcional)
+function _plPhotoInner(photo, posY, zoom){
+  return photo
+    ? `<img id="_plPvImg" src="${photo}" style="${_plImgStyle(posY,zoom)}" alt="">`
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${_PL_SILH}</div>`;
+}
 // Reduce la foto antes de guardarla (menos peso, impresión más rápida)
 function _plDownscale(dataURL, maxDim){
   return new Promise(res=>{
@@ -39241,9 +39258,10 @@ async function _plOpenModal(){
       </div>
       <input type="file" id="_plFile" accept="image/*" style="display:none" onchange="_plFileInput(event)">
     </div>
-    <div style="padding:2px 22px 14px;display:flex;gap:10px">
-      <button id="_plPrevBtn" onclick="_plOpenPreview()" style="flex:1;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer">👁️ Previsualizar lámina</button>
-      <button onclick="document.getElementById('_plModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
+    <div style="padding:2px 22px 14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button id="_plPrevBtn" onclick="_plOpenPreview()" style="flex:1;min-width:160px;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:13.5px;cursor:pointer">👁️ Previsualizar individual</button>
+      <button onclick="_plPreviewAll()" style="flex:1;min-width:160px;background:#0e4d73;color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:13.5px;cursor:pointer">🗂️ Previsualizar conjunto</button>
+      <button onclick="document.getElementById('_plModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 16px;font-weight:800;font-size:13.5px;cursor:pointer">Cerrar</button>
     </div>
     <div id="_plGenBox"></div>
   </div>`;
@@ -39307,8 +39325,8 @@ function _plOpenPreview(editKey){
   const r=_plRiderByKey(key);
   if(!r){ alert('Selecciona un ciclista.'); return; }
   const saved=_plSavedByKey(key);
-  const photo = editKey ? (saved&&saved.photo) : (_plState.photo || (saved&&saved.photo));
-  if(!photo){ alert('Añade primero la foto del ciclista (arrástrala o haz clic en el recuadro).'); return; }
+  // La foto es OPCIONAL: si no hay, se previsualiza con silueta gris
+  const photo = (editKey ? (saved&&saved.photo) : (_plState.photo || (saved&&saved.photo))) || '';
   _plPending={
     key, name:r.name, photo,
     posY: saved? saved.posY : 50,
@@ -39338,9 +39356,7 @@ function _plRenderPreview(){
           </div>
           <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding-top:5px">
             <div id="_plPvDorsal" style="font-family:'Arial Black',Impact,sans-serif;font-size:40px;font-weight:900;color:#b8860b;line-height:1"></div>
-            <div id="_plPvBox" style="width:${boxW}px;height:${boxH}px;border:3px solid #2B91C8;border-radius:8px;overflow:hidden;background:#eef2f7;cursor:ns-resize;position:relative;touch-action:none">
-              <img id="_plPvImg" src="${p.photo}" style="${_plImgStyle(p.posY,p.zoom)}" alt="">
-            </div>
+            <div id="_plPvBox" style="width:${boxW}px;height:${boxH}px;border:3px solid #2B91C8;border-radius:8px;overflow:hidden;background:#eef2f7;cursor:${p.photo?'ns-resize':'default'};position:relative;touch-action:none">${_plPhotoInner(p.photo,p.posY,p.zoom)}</div>
             <div id="_plPvFooter" style="font-size:13px;font-weight:900;color:#0b2f6b;text-align:center"></div>
           </div>
         </div>
@@ -39400,7 +39416,11 @@ function _plPreviewSync(){
 async function _plChangePhoto(e){
   const f=e.target.files&&e.target.files[0]; if(!f||!_plPending) return;
   const rd=new FileReader();
-  rd.onload=async ()=>{ _plPending.photo=await _plDownscale(rd.result,900); const img=document.getElementById('_plPvImg'); if(img) img.src=_plPending.photo; };
+  rd.onload=async ()=>{
+    _plPending.photo=await _plDownscale(rd.result,900);
+    const box=document.getElementById('_plPvBox');
+    if(box){ box.innerHTML=_plPhotoInner(_plPending.photo,_plPending.posY,_plPending.zoom); box.style.cursor='ns-resize'; }
+  };
   rd.readAsDataURL(f);
 }
 async function _plSaveLamina(print){
@@ -39505,11 +39525,64 @@ function _plPrintLamina(lam){
     </div>
     <div class="body">
       ${lam.dorsal?`<div class="dorsal">${escapeHtml(lam.dorsal)}</div>`:''}
-      <div class="photo-box"><img src="${lam.photo}" alt="${escapeHtml(lam.name)}"></div>
+      <div class="photo-box">${_plPhotoInner(lam.photo,lam.posY,lam.zoom)}</div>
       <div class="footer">${escapeHtml(footer)}</div>
     </div>
   </div>
   <script>window.onload=function(){setTimeout(function(){window.print();},450);};<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+/* ─────────── Previsualización CONJUNTA (póster de toda la plantilla) ─────────── */
+function _plPreviewAll(){
+  const list=_plSaved.slice().sort((a,b)=>((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999))||a.name.localeCompare(b.name));
+  if(!list.length){ alert('Aún no has guardado ninguna lámina esta temporada. Guarda al menos una para ver el conjunto.'); return; }
+  const team=_plState.team, year=_plState.year;
+  // Categoría general del conjunto: si todos son del mismo grupo, su plural
+  const groups=new Set(list.map(l=>{ const g=_calCatGroup(l.catNorm); return g?g.key:''; }));
+  const catPlural = (groups.size===1 && [...groups][0]) ? _plCatPlural(list[0].catNorm) : '';
+  const titulo=`Plantilla equipo ${team} · Temporada ${year}${catPlural?(' '+catPlural):''}`;
+  const tbgSVG=(typeof _infLogoSVG==='function')? _infLogoSVG(70) : '';
+  const mfppSrc=document.querySelector('.brand-logo')?.src || '';
+  const cols = list.length<=12 ? Math.max(4,Math.ceil(list.length/2)) : 7;  // hasta 2 filas si caben
+  const cards=list.map(l=>`
+    <div class="card">
+      <div class="cd-dorsal">${l.dorsal?escapeHtml(l.dorsal):''}</div>
+      <div class="cd-photo">${_plPhotoInner(l.photo,l.posY,l.zoom)}</div>
+      <div class="cd-name">${escapeHtml(l.name)}</div>
+      <div class="cd-cat">${l.catNorm?escapeHtml(l.catNorm):''}</div>
+    </div>`).join('');
+  const w=window.open('','_blank');
+  if(!w){ alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+  <title>Plantilla ${escapeHtml(team)} · ${escapeHtml(year)}</title>
+  <style>
+    @page{size:A4 landscape;margin:8mm}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box}
+    html,body{margin:0;padding:0;font-family:-apple-system,'Segoe UI',Arial,sans-serif;color:#0b2f6b}
+    .hdr{display:grid;grid-template-columns:90px 1fr 130px;align-items:center;gap:12px;border-bottom:4px solid #2B91C8;padding:6px 6px 10px;margin-bottom:12px}
+    .hdr .title{text-align:center;font-size:22px;font-weight:900;line-height:1.15}
+    .hdr .logo-r{display:flex;justify-content:flex-end}
+    .hdr .logo-r img{max-height:62px;max-width:130px;object-fit:contain}
+    .grid{display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px 12px;padding:0 4px}
+    .card{display:flex;flex-direction:column;align-items:center;gap:3px;break-inside:avoid}
+    .cd-dorsal{font-family:'Arial Black',Impact,sans-serif;font-size:26px;font-weight:900;color:#b8860b;line-height:1;min-height:26px}
+    .cd-photo{width:100%;aspect-ratio:${_PL_BOX_W}/${_PL_BOX_H};border:2.5px solid #2B91C8;border-radius:7px;overflow:hidden;background:#eef2f7}
+    .cd-name{font-size:11.5px;font-weight:800;text-align:center;line-height:1.1;margin-top:2px}
+    .cd-cat{font-size:10px;font-weight:700;color:#475569}
+    .no-print{position:fixed;top:8px;right:8px;display:flex;gap:8px}
+    .no-print button{background:#2B91C8;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px}
+    .no-print button.sec{background:#eef2f7;color:#374151}
+    @media print{.no-print{display:none}}
+  </style></head><body>
+  <div class="no-print"><button onclick="window.print()">🖨️ Imprimir / PDF</button><button class="sec" onclick="window.close()">✕ Cerrar</button></div>
+  <div class="hdr">
+    <div class="logo-l">${tbgSVG}</div>
+    <div class="title">${escapeHtml(titulo)}</div>
+    <div class="logo-r">${mfppSrc?`<img src="${mfppSrc}" alt="MFPP">`:''}</div>
+  </div>
+  <div class="grid">${cards}</div>
   </body></html>`);
   w.document.close();
 }
