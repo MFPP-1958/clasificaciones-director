@@ -40049,8 +40049,10 @@ function _csLogosSet(a){ try{ localStorage.setItem('cs_logos', JSON.stringify(a)
 function _csRenderLogos(){
   const box=document.getElementById('_csLogos'); if(!box) return;
   const logos=_csLogosGet();
-  box.innerHTML = logos.length? logos.map((src,i)=>`<span style="position:relative;display:inline-block"><img src="${src}" style="height:34px;max-width:80px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:2px"><button onclick="_csDelLogo(${i})" title="Quitar" style="position:absolute;top:-7px;right:-7px;background:#dc2626;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;cursor:pointer;line-height:1">×</button></span>`).join('') : '<span style="font-size:12px;color:#94a3b8">Sin patrocinadores añadidos.</span>';
+  box.innerHTML = (logos.length? logos.map((src,i)=>`<span style="position:relative;display:inline-block"><img src="${src}" style="height:34px;max-width:80px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:2px"><button onclick="_csDelLogo(${i})" title="Quitar" style="position:absolute;top:-7px;right:-7px;background:#dc2626;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;cursor:pointer;line-height:1">×</button></span>`).join('') : '<span style="font-size:12px;color:#94a3b8">Sin patrocinadores añadidos.</span>')
+    + (logos.length?`<button onclick="_csClearLogos()" title="Borra todos (útil si los subiste antes y salían con fondo negro)" style="background:#fee2e2;color:#dc2626;border:none;border-radius:7px;padding:5px 9px;font-weight:800;font-size:11px;cursor:pointer;align-self:center">🗑️ Vaciar y volver a subir</button>`:'');
 }
+function _csClearLogos(){ if(confirm('¿Borrar todos los logos guardados? Tendrás que volver a subirlos (ahora se guardan en PNG, sin fondo negro).')){ _csLogosSet([]); _csRenderLogos(); } }
 async function _csAddLogo(e){
   const f=e.target.files&&e.target.files[0]; if(!f) return;
   const rd=new FileReader();
@@ -40080,29 +40082,41 @@ async function _csGenerate(){
   s+=`<svg x="${mx-2}" y="3" width="18" height="18" viewBox="0 0 310 310">${_infLogoInner()}</svg>`;
   if(mfppSrc) s+=`<image href="${mfppSrc}" xlink:href="${mfppSrc}" x="${W-mx-30}" y="6" width="30" height="13" preserveAspectRatio="xMaxYMid meet"/>`;
   s+=`<text x="${W/2}" y="${bandH/2+3}" text-anchor="middle" font-family="Arial,sans-serif" font-size="9" font-weight="900" fill="#ffffff">ORDEN DE SALIDA</text>`;
-  // Nombre de la prueba, separado por debajo de la banda/logos
-  s+=`<text x="${W/2}" y="${bandH+10}" text-anchor="middle" font-family="Arial,sans-serif" font-size="7.5" font-weight="900" fill="#0b2f6b">${_infEsc((meta.name||'').toUpperCase())}</text>`;
+  // Nombre de la prueba, separado por debajo de la banda/logos. Fuente AUTOAJUSTADA
+  // para que quepa siempre dentro del ancho (no se corta por los lados).
+  const title=(meta.name||'').toUpperCase();
+  const maxTW=W-2*mx;
+  let tf=8; if(title.length*tf*0.56>maxTW) tf=Math.max(4.4, maxTW/(title.length*0.56));
+  const tLong=(title.length*tf*0.56)>maxTW;
+  s+=`<text x="${W/2}" y="${bandH+10}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${tf.toFixed(1)}" font-weight="900" fill="#0b2f6b"${tLong?` textLength="${maxTW}" lengthAdjust="spacingAndGlyphs"`:''}>${_infEsc(title)}</text>`;
   // Subcabecera (fecha · lugar · categoría · equipo)
   const sub=[formatDateDisplay(meta.date)||meta.date||'', meta.localidad||'', (cat||'Todas las categorías'), teamLabel].filter(Boolean).join('  ·  ');
   s+=`<text x="${W/2}" y="${bandH+17}" text-anchor="middle" font-family="Arial,sans-serif" font-size="5.6" font-weight="700" fill="#475569">${_infEsc(sub)}</text>`;
-  // ── Tabla ── (columnas bien separadas para que no se mezclen las cabeceras)
+  // ── Tabla ── Columnas con HORA a la izquierda y DORSAL/CICLISTA CENTRADOS en
+  //    su columna, bien separados (el nombre no toca al dorsal).
   const showTeam = team==='__all__';
   const top=bandH+27, rowH=Math.min(9, Math.max(5.2, (H-top-26)/rows.length));
   const fs=Math.min(6, rowH*0.62);
-  const cHora=mx+1, cBib=mx+24, cName=mx+46, cTeam=W-mx-46;
+  const xHora=mx+1;
+  const dcx=mx+26;                                   // centro columna DORSAL
+  const nameL = mx+42;                               // inicio zona CICLISTA
+  const nameR = showTeam ? (W-mx-46) : (W-mx);       // fin zona CICLISTA
+  const ncx = (nameL+nameR)/2;                       // centro columna CICLISTA
+  const tcx = showTeam ? ((W-mx-44)+(W-mx))/2 : 0;   // centro columna EQUIPO
   s+=`<rect x="${mx}" y="${top-7}" width="${W-2*mx}" height="${rowH+1}" fill="#0e4d73"/>`;
-  s+=`<text x="${cHora}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">HORA</text>`;
-  s+=`<text x="${cBib}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">DORSAL</text>`;
-  s+=`<text x="${cName}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">CICLISTA</text>`;
-  if(showTeam) s+=`<text x="${cTeam}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">EQUIPO</text>`;
+  const hf=(fs*0.95).toFixed(1);
+  s+=`<text x="${xHora}" y="${top-1}" font-family="Arial" font-size="${hf}" font-weight="800" fill="#fff">HORA</text>`;
+  s+=`<text x="${dcx}" y="${top-1}" text-anchor="middle" font-family="Arial" font-size="${hf}" font-weight="800" fill="#fff">DORSAL</text>`;
+  s+=`<text x="${ncx}" y="${top-1}" text-anchor="middle" font-family="Arial" font-size="${hf}" font-weight="800" fill="#fff">CICLISTA</text>`;
+  if(showTeam) s+=`<text x="${tcx}" y="${top-1}" text-anchor="middle" font-family="Arial" font-size="${hf}" font-weight="800" fill="#fff">EQUIPO</text>`;
   rows.forEach((r,i)=>{
     const y=top+rowH+i*rowH;
     if(i%2) s+=`<rect x="${mx}" y="${(y-rowH+1.2).toFixed(1)}" width="${W-2*mx}" height="${rowH.toFixed(1)}" fill="#f1f6fb"/>`;
-    s+=`<text x="${cHora}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#b8860b">${_infEsc(r.time)}</text>`;
-    s+=`<text x="${cBib}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" fill="#334155">${_infEsc(r.bib)}</text>`;
-    let nm=r.name||''; const maxc=showTeam?28:48; if(nm.length>maxc) nm=nm.slice(0,maxc-1)+'…';
-    s+=`<text x="${cName}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="700" fill="#0b2f6b">${_infEsc(nm)}</text>`;
-    if(showTeam){ let tm=r.team||''; if(tm.length>22) tm=tm.slice(0,21)+'…'; s+=`<text x="${cTeam}" y="${y.toFixed(1)}" font-family="Arial" font-size="${(fs*0.92).toFixed(1)}" fill="#475569">${_infEsc(tm)}</text>`; }
+    s+=`<text x="${xHora}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#b8860b">${_infEsc(r.time)}</text>`;
+    s+=`<text x="${dcx}" y="${y.toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="${fs}" fill="#334155">${_infEsc(r.bib)}</text>`;
+    let nm=r.name||''; const maxc=showTeam?26:42; if(nm.length>maxc) nm=nm.slice(0,maxc-1)+'…';
+    s+=`<text x="${ncx}" y="${y.toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="${fs}" font-weight="700" fill="#0b2f6b">${_infEsc(nm)}</text>`;
+    if(showTeam){ let tm=r.team||''; if(tm.length>22) tm=tm.slice(0,21)+'…'; s+=`<text x="${tcx}" y="${y.toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="${(fs*0.9).toFixed(1)}" fill="#475569">${_infEsc(tm)}</text>`; }
   });
   // Pie con logos
   const fy=H-16;
