@@ -23041,6 +23041,12 @@ function exportFinishStatsPDF(){
 
 let _simSelectedRaceId = null;
 let _simCurrentData = null; // {race, inscritos[], grid[], kpis}
+let _simTypeOverride = '';  // '' = auto · 'tt' = contrarreloj · 'hillclimb' = cronoescalada · 'road' = ruta/circuito
+let _simCompatInfo = null;  // {typeLabel, total, tt, targetTT, forced} para mostrar al director
+function _simSetType(v){
+  _simTypeOverride = v||'';
+  if(_simSelectedRaceId){ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }
+}
 
 // Pruebas planificadas (calendario) que tienen lista de inscritos, en forma de
 // "historia" para que el simulador pueda usarlas igual que una pre-inscripción.
@@ -23631,6 +23637,7 @@ function _simIsStageRace(h){
 // — Detecta si una carrera es CRI / Cronoescalada / Contrarreloj —
 function _simIsTimeTrial(h){
   if(!h) return false;
+  if(h._forceType){ return h._forceType==='tt' || h._forceType==='hillclimb'; }   // override manual
   const name = (h.raceName||'').toLowerCase();
   const ct   = (h.circuitType||'').toLowerCase();
   const modal = (h.modalidad||'').toLowerCase();
@@ -23644,6 +23651,7 @@ function _simIsTimeTrial(h){
 // — Detecta si una carrera es Cronoescalada (subida cronometrada) —
 function _simIsHillClimb(h){
   if(!h) return false;
+  if(h._forceType){ return h._forceType==='hillclimb'; }   // override manual
   const name = (h.raceName||'').toLowerCase();
   const ct   = (h.circuitType||'').toLowerCase();
   if(/cronoesc|cronoescalada|subida\s+a|hill\s*climb/i.test(name)) return true;
@@ -23731,6 +23739,9 @@ function _simBuildData(raceId){
   // NUEVO ENFOQUE: en vez de excluir todas las etapas/CRIs, ponderamos por similitud
   // con la carrera objetivo. Solo descartamos formatos REALMENTE incompatibles
   // (p.ej. una CRI no sirve para predecir una carrera masiva en línea).
+  // Prueba objetivo para la compatibilidad, aplicando el TIPO forzado manualmente
+  // (si el director lo ha fijado). Clon para no contaminar el histórico.
+  const targetForCompat = Object.assign({}, race, { _forceType: (_simTypeOverride||undefined) });
   const _compatByRaceId = new Map();
   const historicalRaces = hist.filter(h => {
     if(h.id === raceId) return false;
@@ -23739,7 +23750,7 @@ function _simBuildData(raceId){
     // try/catch defensivo: si _simRaceCompatWeight fallara por cualquier motivo,
     // mantenemos la carrera en el histórico con peso neutro 1.0 (sin romper la app)
     try {
-      const compat = _simRaceCompatWeight(race, h);
+      const compat = _simRaceCompatWeight(targetForCompat, h);
       if(!compat.compatible) return false;
       _compatByRaceId.set(h.id, compat.weight);
       return true;
@@ -23749,6 +23760,15 @@ function _simBuildData(raceId){
       return true; // mantener carrera con peso neutro
     }
   });
+  // Info de compatibilidad para mostrar al director (transparencia)
+  const _targetTT = _simIsTimeTrial(targetForCompat), _targetHC = _simIsHillClimb(targetForCompat);
+  const _ttUsed = historicalRaces.filter(h=>_simIsTimeTrial(h)).length;
+  _simCompatInfo = {
+    targetTT:_targetTT, targetHC:_targetHC,
+    total: historicalRaces.length, tt: _ttUsed,
+    typeLabel: _targetHC ? 'Cronoescalada' : (_targetTT ? 'Contrarreloj (CRI)' : 'Carrera en línea / circuito'),
+    forced: !!_simTypeOverride
+  };
   // Index: nameKey → array de {pos, total, raceDate, cat, team}
   const byRider = new Map();
   // Index: teamKey → array de posiciones de cualquier corredor
@@ -24168,11 +24188,25 @@ function _simRenderCurrent(){
     const tag = t.source === 'route' ? 'detectado del GPX/FIT' : t.source === 'guess' ? 'aproximado por tipo de circuito' : 'sin datos';
     terrainChip = `<span class="ib-chip" style="background:#dbeafe;border-color:#93c5fd;color:#1e3a8a" title="${escapeAttr(tag)}">🗺️ ${lbl}${dif}${km}${ds}</span>`;
   }
+  // Tipo de prueba (detectado o forzado) + transparencia de qué histórico usa
+  const ci = _simCompatInfo || {};
+  const typeColor = ci.targetTT ? '#7c3aed' : '#0e7490';
+  const typeSel = `<select onchange="_simSetType(this.value)" title="Tipo de prueba. En 'Auto' se detecta por el nombre/datos; fíjalo a mano si quieres forzarlo." style="border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;font-size:12px;font-weight:700;color:${typeColor}">
+      <option value=""${_simTypeOverride===''?' selected':''}>Auto: ${escapeHtml(ci.typeLabel||'—')}</option>
+      <option value="tt"${_simTypeOverride==='tt'?' selected':''}>Contrarreloj (CRI)</option>
+      <option value="hillclimb"${_simTypeOverride==='hillclimb'?' selected':''}>Cronoescalada</option>
+      <option value="road"${_simTypeOverride==='road'?' selected':''}>Carrera en línea / circuito</option>
+    </select>`;
+  const compatChip = ci.total!=null
+    ? `<span class="ib-chip" style="background:#ecfeff;border-color:#a5f3fc;color:#155e75" title="Pruebas del histórico que el simulador considera compatibles con este formato y usa para predecir.">📊 Usa ${ci.total} prueba(s)${ci.targetTT?` · ${ci.tt} cronos`:''}</span>`
+    : '';
   document.getElementById('simRaceMeta').innerHTML = `
     <b>🏁 ${escapeHtml(race.raceName||'')}</b>
     ${race.raceDate?`<span>📅 ${escapeHtml(race.raceDate)}</span>`:''}
     ${race.localidad?`<span>📍 ${escapeHtml(race.localidad)}</span>`:''}
     ${race.circuitType?`<span>🛣️ ${escapeHtml(race.circuitType)}</span>`:''}
+    <span style="display:inline-flex;align-items:center;gap:5px">🚴 Tipo: ${typeSel}</span>
+    ${compatChip}
     ${terrainChip}
     <span>📋 ${inscritos.length} inscritos</span>
     ${stateChip}
