@@ -20524,6 +20524,32 @@ function _dedupeInscritos(arr){
   return out;
 }
 
+// ── Filtro de inscritos por la categoría ACTIVA del filtro principal ──────────
+// Los archivos de la federación traen TODAS las categorías mezcladas. Al procesar
+// solo conservamos las filas cuya categoría coincide con la(s) seleccionada(s) en
+// el filtro principal (selectedCatChips). Si no hay ninguna seleccionada ("Todas"),
+// no se filtra. La lista cruda se guarda para poder re-aplicar el filtro al vuelo.
+let _inscritosRawAll = [];
+function _inscritosActiveCatGroups(){
+  const chips=(typeof selectedCatChips!=='undefined' && selectedCatChips)?[...selectedCatChips]:[];
+  const groups=new Set();
+  chips.forEach(c=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(c):null; if(g) groups.add(g.key); });
+  return groups; // vacío = "Todas"
+}
+function _inscritosApplyActiveCat(arr){
+  _inscritosRawAll = (arr||[]).slice();   // recordamos TODO lo leído del archivo
+  const groups=_inscritosActiveCatGroups();
+  if(!groups.size) return arr;            // sin filtro activo → no se descarta nada
+  return arr.filter(i=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(i.cat):null; return g && groups.has(g.key); });
+}
+// Re-aplica el filtro actual sobre lo último leído (al cambiar de categoría sin re-subir)
+function reapplyInscritosCatFilter(){
+  if(!_inscritosRawAll.length) return;
+  inscritos = _inscritosApplyActiveCat(_inscritosRawAll);
+  if(typeof _updateInscritosUI==='function') _updateInscritosUI();
+  _showInscritosEnrichmentReport(inscritos, 'filtro re-aplicado');
+}
+
 function processPastedInscritos(){
   const text = document.getElementById('pastedInscritos')?.value || '';
   if(!text.trim()){ alert('Pega primero la lista de inscritos.'); return; }
@@ -20532,19 +20558,35 @@ function processPastedInscritos(){
     alert('No se ha podido reconocer ningún inscrito en el texto pegado.\n\nFormato aceptado (flexible):\n  • Nombre Apellido    Equipo    Categoría\n  • [dorsal opcional] Nombre…  Equipo  Cat\n  • CSV/TSV con cabecera "Nombre", "Equipo", "Categoría"…');
     return;
   }
-  inscritos = arr;
+  inscritos = _inscritosApplyActiveCat(arr);
+  if(inscritos.length < 1){
+    alert('Se han leído '+arr.length+' inscritos, pero NINGUNO es de la categoría seleccionada en el filtro principal.\n\nCambia el filtro de categoría (o ponlo en "Todas") y vuelve a procesar.');
+    return;
+  }
   _updateInscritosUI();
-  _showInscritosEnrichmentReport(arr, 'texto pegado');
+  _showInscritosEnrichmentReport(inscritos, 'texto pegado');
 }
 
 function _showInscritosEnrichmentReport(arr, source){
   const enriched = arr.filter(i=>i._enriched).length;
   const newRiders = arr.filter(i=>i._newRider).length;
   const withBib = arr.filter(i=>i.bib).length;
+  // Línea de filtro por categoría
+  const groups=_inscritosActiveCatGroups();
+  let filterLine='';
+  if(groups.size){
+    const total=(_inscritosRawAll&&_inscritosRawAll.length)?_inscritosRawAll.length:arr.length;
+    const discarded=Math.max(0, total-arr.length);
+    const labels=[...groups].map(k=>(typeof _calCatLabel==='function'?_calCatLabel(k):k)).join(', ');
+    filterLine = `\n\n🔎 Filtro de categoría activo: ${labels}\n   Importados: ${arr.length} · Descartados de otras categorías: ${discarded}`;
+  } else {
+    filterLine = `\n\n⚠️ Sin filtro de categoría: se han importado TODAS las categorías. Si solo quieres una (p.ej. Cadetes), selecciónala en el filtro principal y vuelve a procesar.`;
+  }
   const msg = `✅ ${arr.length} inscritos cargados desde ${source}.\n\n`+
               `🔍 Enriquecidos desde el histórico del año: ${enriched}\n`+
               `🆕 Sin coincidencia (probablemente nuevos corredores): ${newRiders}\n`+
-              `🏷️ Con dorsal asignado: ${withBib} / ${arr.length}`;
+              `🏷️ Con dorsal asignado: ${withBib} / ${arr.length}`+
+              filterLine;
   alert(msg);
 }
 
@@ -20561,9 +20603,13 @@ async function handleFileInscritos(file){
     else text = await readExcel(file);
     const arr = parseInscritos(text);
     if(arr.length < 1){ alert('No se ha podido reconocer ningún inscrito en el archivo.'); return; }
-    inscritos = arr;
+    inscritos = _inscritosApplyActiveCat(arr);
+    if(inscritos.length < 1){
+      alert('Se han leído '+arr.length+' inscritos del archivo, pero NINGUNO es de la categoría seleccionada en el filtro principal.\n\nCambia el filtro de categoría (o ponlo en "Todas") y vuelve a procesar.');
+      return;
+    }
     _updateInscritosUI();
-    _showInscritosEnrichmentReport(arr, `"${file.name}"`);
+    _showInscritosEnrichmentReport(inscritos, `"${file.name}"`);
   }catch(err){
     alert('No he podido leer el archivo de inscritos. Error: ' + err.message);
   }finally{
