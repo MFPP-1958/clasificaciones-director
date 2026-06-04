@@ -39294,7 +39294,7 @@ function _plPhotoInner(photo, posX, posY, zoom){
     : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${_PL_SILH}</div>`;
 }
 // Reduce la foto antes de guardarla (menos peso, impresión más rápida)
-function _plDownscale(dataURL, maxDim){
+function _plDownscale(dataURL, maxDim, mime){
   return new Promise(res=>{
     const img=new Image();
     img.onload=()=>{
@@ -39302,7 +39302,9 @@ function _plDownscale(dataURL, maxDim){
       const cw=Math.round(img.width*sc), ch=Math.round(img.height*sc);
       const c=document.createElement('canvas'); c.width=cw; c.height=ch;
       c.getContext('2d').drawImage(img,0,0,cw,ch);
-      try{ res(c.toDataURL('image/jpeg',0.86)); }catch(_){ res(dataURL); }
+      // PNG conserva la transparencia (logos sin fondo); JPEG la aplanaría a negro
+      const fmt = mime || 'image/jpeg';
+      try{ res(c.toDataURL(fmt, fmt==='image/jpeg'?0.86:undefined)); }catch(_){ res(dataURL); }
     };
     img.onerror=()=>res(dataURL);
     img.src=dataURL;
@@ -39833,7 +39835,7 @@ async function _csGetDb(year){
     const unR=F.filter(f=>f.cv===null&&f.source==='riders'), unI=F.filter(f=>f.cv===null&&f.source==='inscritos');
     let dorsal=''; if(cvR.length)dorsal=modeBib(cvR); else if(cvI.length)dorsal=modeBib(cvI); else if(unR.length)dorsal=recent(unR); else if(unI.length)dorsal=recent(unI);
     const catRaw=Object.entries(v.cats).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
-    return { name:_evolNormName(v.nk), dorsal, catNorm:_dxNormCat(catRaw),
+    return { name:v.nk, dorsal, catNorm:_dxNormCat(catRaw),   // v.nk ya es "Apellido, Nombre"
       key:normalizeForMatching(v.nk), tokens:_csTokens(v.nk) };
   });
   // Prioridad: dorsal/categoría ya CORREGIDOS y guardados en las láminas de plantilla
@@ -39870,7 +39872,7 @@ async function _csEnrich(rows, year){
     const m=_csMatch(r.name, db);
     return {
       time:r.time, team:r.team, catPdf:r.cat, pdfBib:r.bib,
-      name: m ? m.name : _titleCaseName(r.name),
+      name: m ? m.name : _csApNom(r.name),           // "Apellido, Nombre" también para no emparejados
       bib:  m ? (m.dorsal||'') : '',                 // nuestro dorsal CV o BLANCO si no se sabe
       cat:  (m && m.catNorm) ? m.catNorm : r.cat,     // nuestra cat o, si no se sabe, la del PDF
       matched: !!m
@@ -39878,6 +39880,12 @@ async function _csEnrich(rows, year){
   });
 }
 function _titleCaseName(s){ return String(s||'').toLowerCase().replace(/\b([a-záéíóúñ])/g,(m,c)=>c.toUpperCase()); }
+// Best-effort "Apellido, Nombre" desde "NOMBRE AP1 AP2" del PDF (riders no fichados)
+function _csApNom(pdf){
+  const t=String(pdf||'').trim().split(/\s+/).filter(Boolean);
+  if(t.length<2) return _titleCaseName(pdf);
+  return _titleCaseName(t[1])+', '+_titleCaseName(t[0]);
+}
 
 // Pruebas para el selector (histórico + planificadas)
 async function _csCollectRaces(){
@@ -40046,7 +40054,7 @@ function _csRenderLogos(){
 async function _csAddLogo(e){
   const f=e.target.files&&e.target.files[0]; if(!f) return;
   const rd=new FileReader();
-  rd.onload=async ()=>{ const small=await _plDownscale(rd.result,360); const a=_csLogosGet(); a.push(small); _csLogosSet(a); _csRenderLogos(); };
+  rd.onload=async ()=>{ const small=await _plDownscale(rd.result,360,'image/png'); const a=_csLogosGet(); a.push(small); _csLogosSet(a); _csRenderLogos(); };
   rd.readAsDataURL(f);
 }
 function _csDelLogo(i){ const a=_csLogosGet(); a.splice(i,1); _csLogosSet(a); _csRenderLogos(); }
@@ -40065,31 +40073,34 @@ async function _csGenerate(){
   const logos=_csLogosGet();
   const logoImgs=await Promise.all(logos.map(s=>_plLoadImg(s)).concat(mfppSrc?[_plLoadImg(mfppSrc)]:[]));
   let s=`<rect width="${W}" height="${H}" fill="#ffffff"/>`;
-  // Cabecera
-  s+=`<rect x="0" y="0" width="${W}" height="34" fill="#0e4d73"/><rect x="0" y="34" width="${W}" height="2.4" fill="#f5c518"/>`;
-  s+=`<svg x="${mx-3}" y="5" width="24" height="24" viewBox="0 0 310 310">${_infLogoInner()}</svg>`;
-  if(mfppSrc) s+=`<image href="${mfppSrc}" xlink:href="${mfppSrc}" x="${W-mx-34}" y="9" width="34" height="16" preserveAspectRatio="xMaxYMid meet"/>`;
-  s+=`<text x="${W/2}" y="16" text-anchor="middle" font-family="Arial,sans-serif" font-size="8.5" font-weight="900" fill="#ffffff">ORDEN DE SALIDA</text>`;
-  s+=`<text x="${W/2}" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="6.5" font-weight="700" fill="#cde8f7">${_infEsc((meta.name||'').toUpperCase())}</text>`;
-  // Subcabecera
+  // ── Cabecera: banda azul con logos + "ORDEN DE SALIDA". El nombre de la prueba
+  //    va DEBAJO de los logos, con espacio, para que no se solape. ──
+  const bandH=24;
+  s+=`<rect x="0" y="0" width="${W}" height="${bandH}" fill="#0e4d73"/><rect x="0" y="${bandH}" width="${W}" height="2.4" fill="#f5c518"/>`;
+  s+=`<svg x="${mx-2}" y="3" width="18" height="18" viewBox="0 0 310 310">${_infLogoInner()}</svg>`;
+  if(mfppSrc) s+=`<image href="${mfppSrc}" xlink:href="${mfppSrc}" x="${W-mx-30}" y="6" width="30" height="13" preserveAspectRatio="xMaxYMid meet"/>`;
+  s+=`<text x="${W/2}" y="${bandH/2+3}" text-anchor="middle" font-family="Arial,sans-serif" font-size="9" font-weight="900" fill="#ffffff">ORDEN DE SALIDA</text>`;
+  // Nombre de la prueba, separado por debajo de la banda/logos
+  s+=`<text x="${W/2}" y="${bandH+10}" text-anchor="middle" font-family="Arial,sans-serif" font-size="7.5" font-weight="900" fill="#0b2f6b">${_infEsc((meta.name||'').toUpperCase())}</text>`;
+  // Subcabecera (fecha · lugar · categoría · equipo)
   const sub=[formatDateDisplay(meta.date)||meta.date||'', meta.localidad||'', (cat||'Todas las categorías'), teamLabel].filter(Boolean).join('  ·  ');
-  s+=`<text x="${mx}" y="46" font-family="Arial,sans-serif" font-size="6" font-weight="700" fill="#0b2f6b">${_infEsc(sub)}</text>`;
-  // Tabla
+  s+=`<text x="${W/2}" y="${bandH+17}" text-anchor="middle" font-family="Arial,sans-serif" font-size="5.6" font-weight="700" fill="#475569">${_infEsc(sub)}</text>`;
+  // ── Tabla ── (columnas bien separadas para que no se mezclen las cabeceras)
   const showTeam = team==='__all__';
-  const top=54, rowH=Math.min(9, Math.max(5.2, (H-top-26)/rows.length));
+  const top=bandH+27, rowH=Math.min(9, Math.max(5.2, (H-top-26)/rows.length));
   const fs=Math.min(6, rowH*0.62);
-  const cHora=mx, cBib=mx+26, cName=mx+42, cTeam=W-mx-44;
+  const cHora=mx+1, cBib=mx+24, cName=mx+46, cTeam=W-mx-46;
   s+=`<rect x="${mx}" y="${top-7}" width="${W-2*mx}" height="${rowH+1}" fill="#0e4d73"/>`;
-  s+=`<text x="${cHora}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">HORA</text>`;
-  s+=`<text x="${cBib}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">DORSAL</text>`;
-  s+=`<text x="${cName}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">CICLISTA</text>`;
-  if(showTeam) s+=`<text x="${cTeam}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">EQUIPO</text>`;
+  s+=`<text x="${cHora}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">HORA</text>`;
+  s+=`<text x="${cBib}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">DORSAL</text>`;
+  s+=`<text x="${cName}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">CICLISTA</text>`;
+  if(showTeam) s+=`<text x="${cTeam}" y="${top-1}" font-family="Arial" font-size="${(fs*0.95).toFixed(1)}" font-weight="800" fill="#fff">EQUIPO</text>`;
   rows.forEach((r,i)=>{
     const y=top+rowH+i*rowH;
     if(i%2) s+=`<rect x="${mx}" y="${(y-rowH+1.2).toFixed(1)}" width="${W-2*mx}" height="${rowH.toFixed(1)}" fill="#f1f6fb"/>`;
     s+=`<text x="${cHora}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#b8860b">${_infEsc(r.time)}</text>`;
     s+=`<text x="${cBib}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" fill="#334155">${_infEsc(r.bib)}</text>`;
-    let nm=r.name||''; const maxc=showTeam?34:50; if(nm.length>maxc) nm=nm.slice(0,maxc-1)+'…';
+    let nm=r.name||''; const maxc=showTeam?28:48; if(nm.length>maxc) nm=nm.slice(0,maxc-1)+'…';
     s+=`<text x="${cName}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="700" fill="#0b2f6b">${_infEsc(nm)}</text>`;
     if(showTeam){ let tm=r.team||''; if(tm.length>22) tm=tm.slice(0,21)+'…'; s+=`<text x="${cTeam}" y="${y.toFixed(1)}" font-family="Arial" font-size="${(fs*0.92).toFixed(1)}" fill="#475569">${_infEsc(tm)}</text>`; }
   });
