@@ -39774,34 +39774,29 @@ async function _csReadLines(file){
   }
   return lines.filter(Boolean);
 }
-const _CS_TIME=/\b([0-2]?\d:[0-5]\d(?::[0-5]\d)?)\b/;
-const _CS_CAT=/(CAD[-\s]?1|CAD[-\s]?2|CADETE|JUV[-\s]?1|JUV[-\s]?2|JUVENIL|J[UÚ]NIOR|SUB[-\s]?23|[EÉ]LITE|M[AÁ]STER|F[EÉ]MIN)/i;
-// Equipos conocidos (de nuestra BD) para identificar a quién pertenece cada fila
-function _csKnownTeams(hist){
-  const m=new Map();
-  (hist||[]).forEach(r=>[...(r.riders||[]),...(r.inscritos||[])].forEach(p=>{
-    if(p&&p.team){ const k=teamKey(p.team); if(k&&!m.has(k)) m.set(k,p.team); }
-  }));
-  return [...m.values()];
-}
-function _csDetectTeam(text, known){
-  const t=teamKey(text);
-  for(const name of known){ const toks=teamSignificantTokens(name); if(toks.length && toks.every(tok=>t.includes(tok))) return name; }
-  return '';
-}
-// Parsea las líneas con hora a filas {bib,name,team,cat,time,raw}
-function _csParse(lines, known){
-  let cur=''; const rows=[];
+// Formato FCCV: "TiempoRel  HORARIO  Dorsal  Nombre Apellidos  CATEGORIA  [Licencia]  Club/Equipo"
+//   p.ej. "0:29:00 11:14:00 119 MANUEL ALCON ELENA CADETE TBG-WIXUM"
+// - Hora de salida REAL = la 2ª hora (Horario).  - Categoría = token central.  - Equipo = lo que sigue.
+const _CS_ROW=/^\s*(\d{1,2}:\d{2}(?::\d{2})?)\s+(\d{1,2}:\d{2}(?::\d{2})?)\s+(\d{1,4})\s+(.+)$/;
+const _CS_CATTOK=/\b(JUNIOR|J[UÚ]NIOR|SUB[-\s]?23|[EÉ]LITE|CADETE|MASTER\s*\d{2}|M[THC]\d|WC\d|MB)\b/;
+function _csFmtTime(t){ return String(t||'').replace(/:\d{2}$/,''); }   // 11:14:00 → 11:14
+function _csParse(lines){
+  const rows=[];
   for(const ln of lines){
-    const tm=ln.match(_CS_TIME);
-    if(!tm){ const cm=ln.match(_CS_CAT); if(cm && ln.length<46) cur=_dxNormCat(cm[0]); continue; }
-    const time=tm[1];
-    const bibM=ln.match(/^\s*(\d{1,4})\b/); const bib=bibM?bibM[1]:'';
-    let mid=ln.replace(_CS_TIME,'').trim();
-    if(bib) mid=mid.replace(/^\s*\d{1,4}\b/,'').trim();
-    const inl=ln.match(_CS_CAT); const cat=inl?_dxNormCat(inl[0]):cur;
-    const team=_csDetectTeam(ln, known);
-    rows.push({bib, name:mid.replace(/\s{2,}/g,' ').trim(), team, cat, time, raw:ln});
+    const m=ln.match(_CS_ROW);
+    if(!m) continue;                 // cabeceras, pies de página, etc.
+    const time=_csFmtTime(m[2]);     // 2ª hora = horario real de salida
+    const bib=m[3];
+    let rest=(m[4]||'').replace(/\s{2,}/g,' ').trim();   // "NOMBRE APELLIDOS CAT [LIC] CLUB"
+    let name=rest, cat='', team='';
+    const cm=rest.match(_CS_CATTOK);
+    if(cm){
+      const idx=rest.indexOf(cm[0]);
+      name=rest.slice(0,idx).trim();
+      cat=cm[1].replace(/\s+/g,' ').toUpperCase().replace('JÚNIOR','JUNIOR');
+      team=rest.slice(idx+cm[0].length).trim();
+    }
+    rows.push({bib, name, team, cat, time, raw:ln});
   }
   return rows;
 }
@@ -39885,10 +39880,8 @@ async function _csReadFile(file){
   if(st) st.textContent='⏳ Leyendo PDF…';
   _csState.file=file;
   try{
-    const [lines, hist] = await Promise.all([_csReadLines(file), _ensureHistory().catch(()=>[])]);
-    _csState.hist=hist||[];
-    const known=_csKnownTeams(_csState.hist);
-    const rows=_csParse(lines, known);
+    const lines = await _csReadLines(file);
+    const rows = _csParse(lines);
     _csState.rows=rows;
     // Categorías y equipos detectados
     const cats=[...new Set(rows.map(r=>r.cat).filter(Boolean))];
