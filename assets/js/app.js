@@ -39744,3 +39744,313 @@ async function _plPreviewAll(){
   const svg=await _plConjuntoSVG(list);
   _plOpenSVGWindow(svg, `plantilla_${_plSafe(_plState.team)}_${_plState.year}`);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MÓDULO: ORDEN DE SALIDA CRI / CRE  (lectura de PDF federativo + lámina)
+   - Arrastra el PDF oficial de horarios, filtra por prueba/categoría/equipo,
+     previsualiza la lista limpia y genera lámina PDF/PNG para redes.
+   - Usa pdf.js (ya cargado). Salida vía el pipeline SVG (_plDownloadLastPNG).
+   ═══════════════════════════════════════════════════════════════════════════ */
+let _csState = { file:null, rows:[], cats:[], teams:[], meta:{}, hist:[] };
+
+// Lee el PDF y devuelve líneas (agrupadas por coordenada Y, izq→der)
+async function _csReadLines(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const lines=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const tc=await page.getTextContent();
+    const map=new Map();
+    for(const it of tc.items){
+      const s=String(it.str||''); if(!s.trim()) continue;
+      const y=Math.round(it.transform[5]);
+      if(!map.has(y)) map.set(y,[]);
+      map.get(y).push({x:it.transform[4], s});
+    }
+    [...map.keys()].sort((a,b)=>b-a).forEach(y=>{
+      lines.push(map.get(y).sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ').replace(/\s+/g,' ').trim());
+    });
+  }
+  return lines.filter(Boolean);
+}
+const _CS_TIME=/\b([0-2]?\d:[0-5]\d(?::[0-5]\d)?)\b/;
+const _CS_CAT=/(CAD[-\s]?1|CAD[-\s]?2|CADETE|JUV[-\s]?1|JUV[-\s]?2|JUVENIL|J[UÚ]NIOR|SUB[-\s]?23|[EÉ]LITE|M[AÁ]STER|F[EÉ]MIN)/i;
+// Equipos conocidos (de nuestra BD) para identificar a quién pertenece cada fila
+function _csKnownTeams(hist){
+  const m=new Map();
+  (hist||[]).forEach(r=>[...(r.riders||[]),...(r.inscritos||[])].forEach(p=>{
+    if(p&&p.team){ const k=teamKey(p.team); if(k&&!m.has(k)) m.set(k,p.team); }
+  }));
+  return [...m.values()];
+}
+function _csDetectTeam(text, known){
+  const t=teamKey(text);
+  for(const name of known){ const toks=teamSignificantTokens(name); if(toks.length && toks.every(tok=>t.includes(tok))) return name; }
+  return '';
+}
+// Parsea las líneas con hora a filas {bib,name,team,cat,time,raw}
+function _csParse(lines, known){
+  let cur=''; const rows=[];
+  for(const ln of lines){
+    const tm=ln.match(_CS_TIME);
+    if(!tm){ const cm=ln.match(_CS_CAT); if(cm && ln.length<46) cur=_dxNormCat(cm[0]); continue; }
+    const time=tm[1];
+    const bibM=ln.match(/^\s*(\d{1,4})\b/); const bib=bibM?bibM[1]:'';
+    let mid=ln.replace(_CS_TIME,'').trim();
+    if(bib) mid=mid.replace(/^\s*\d{1,4}\b/,'').trim();
+    const inl=ln.match(_CS_CAT); const cat=inl?_dxNormCat(inl[0]):cur;
+    const team=_csDetectTeam(ln, known);
+    rows.push({bib, name:mid.replace(/\s{2,}/g,' ').trim(), team, cat, time, raw:ln});
+  }
+  return rows;
+}
+// Pruebas para el selector (histórico + planificadas)
+async function _csCollectRaces(){
+  const out=[], seen=new Set();
+  try{ const h=await _ensureHistory(); h.forEach(r=>{ if(seen.has(r.id))return; seen.add(r.id); out.push({id:r.id,name:r.raceName,date:_parseSpanishDate(r.raceDate)||'',localidad:r.localidad||''}); }); }catch(_){}
+  if(_sb){ try{ const {data}=await _sb.from('races').select('id,name,date,notes').eq('race_type','planificada').order('date'); (data||[]).forEach(r=>{ if(seen.has(r.id))return; seen.add(r.id); let e={};try{e=JSON.parse(r.notes||'{}')}catch(_){}; out.push({id:r.id,name:r.name,date:r.date,localidad:e.localidad||'',planned:true}); }); }catch(_){} }
+  return out.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+}
+
+async function _csOpenModal(){
+  let ov=document.getElementById('_csModal'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_csModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.72);display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  const myT=(typeof myTeam!=='undefined'&&myTeam)?myTeam:'';
+  ov.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:640px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;padding:18px 22px">
+      <div style="font-size:18px;font-weight:900">🕐 Orden de salida CRI / CRE</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px">Arrastra el PDF oficial de horarios, filtra y genera una lámina limpia para el staff y para redes.</div>
+    </div>
+    <div style="padding:18px 22px">
+      <div id="_csDrop" onclick="document.getElementById('_csFile').click()"
+        style="border:2px dashed #93c5fd;border-radius:12px;min-height:96px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;background:#f8fbff;padding:14px">
+        <div style="color:#64748b;font-size:13px">📄 Arrastra aquí el PDF de orden de salida<br><span style="font-size:11px">o haz clic para seleccionarlo</span></div>
+      </div>
+      <input type="file" id="_csFile" accept="application/pdf,.pdf" style="display:none" onchange="_csFileInput(event)">
+      <div id="_csStatus" style="font-size:12.5px;color:#64748b;min-height:18px;margin-top:8px"></div>
+
+      <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px">
+        <div>
+          <label style="font-size:12px;font-weight:800;color:#475569">Prueba (de tu calendario)</label>
+          <select id="_csRace" onchange="_csOnRace()" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;font-weight:700;margin-top:4px"><option value="">— Cargando pruebas… —</option></select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:12px;font-weight:800;color:#475569">Categoría</label>
+            <select id="_csCat" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;font-weight:700;margin-top:4px"><option value="">Todas</option></select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:800;color:#475569">Equipo</label>
+            <select id="_csTeam" style="width:100%;padding:9px 10px;border:1.5px solid #cbd5e1;border-radius:9px;font-size:13px;font-weight:700;margin-top:4px"><option value="__all__">Todos</option></select>
+          </div>
+        </div>
+      </div>
+
+      <details style="margin-top:14px">
+        <summary style="font-size:12px;font-weight:800;color:#0b2f6b;cursor:pointer">🏷️ Logos / patrocinadores para la lámina</summary>
+        <div style="margin-top:8px">
+          <div id="_csLogos" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
+          <button onclick="document.getElementById('_csLogoFile').click()" style="margin-top:8px;background:#eef2f7;color:#0b2f6b;border:none;border-radius:8px;padding:7px 12px;font-weight:800;font-size:12px;cursor:pointer">➕ Añadir logo</button>
+          <input type="file" id="_csLogoFile" accept="image/*" style="display:none" onchange="_csAddLogo(event)">
+          <div style="font-size:11px;color:#94a3b8;margin-top:4px">El logo TBG y el de MFPP se incluyen siempre. Aquí añades patrocinadores.</div>
+        </div>
+      </details>
+    </div>
+    <div style="padding:2px 22px 18px;display:flex;gap:10px">
+      <button id="_csPrevBtn" onclick="_csPreview()" disabled style="flex:1;background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:14px;cursor:pointer;opacity:.55">👁️ Previsualizar lista</button>
+      <button onclick="document.getElementById('_csModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:13px 18px;font-weight:800;font-size:14px;cursor:pointer">Cerrar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  const drop=document.getElementById('_csDrop');
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.background='#e0f2fe';});
+  drop.addEventListener('dragleave',e=>{e.preventDefault();drop.style.background='#f8fbff';});
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.style.background='#f8fbff';const f=e.dataTransfer.files&&e.dataTransfer.files[0];if(f)_csReadFile(f);});
+  _csState={ file:null, rows:[], cats:[], teams:[], meta:{}, hist:[] };
+  // Rellenar pruebas + preseleccionar mi equipo
+  _csCollectRaces().then(races=>{
+    const sel=document.getElementById('_csRace'); if(!sel) return;
+    sel.innerHTML='<option value="">— Selecciona una prueba —</option>'+races.map(r=>`<option value="${escapeAttr(r.id)}" data-name="${escapeAttr(r.name)}" data-date="${escapeAttr(r.date)}" data-loc="${escapeAttr(r.localidad)}">${escapeHtml(formatDateDisplay(r.date)||r.date||'')} · ${escapeHtml(r.name||'')}${r.planned?' · 📅':''}</option>`).join('');
+  });
+  _csRenderLogos();
+}
+function _csFileInput(e){ const f=e.target.files&&e.target.files[0]; if(f) _csReadFile(f); }
+async function _csReadFile(file){
+  if(!/pdf$/i.test(file.name) && file.type!=='application/pdf'){ alert('Debe ser un PDF.'); return; }
+  const st=document.getElementById('_csStatus');
+  if(st) st.textContent='⏳ Leyendo PDF…';
+  _csState.file=file;
+  try{
+    const [lines, hist] = await Promise.all([_csReadLines(file), _ensureHistory().catch(()=>[])]);
+    _csState.hist=hist||[];
+    const known=_csKnownTeams(_csState.hist);
+    const rows=_csParse(lines, known);
+    _csState.rows=rows;
+    // Categorías y equipos detectados
+    const cats=[...new Set(rows.map(r=>r.cat).filter(Boolean))];
+    const teams=[...new Set(rows.map(r=>r.team).filter(Boolean))].sort();
+    _csState.cats=cats; _csState.teams=teams;
+    const catSel=document.getElementById('_csCat');
+    if(catSel) catSel.innerHTML='<option value="">Todas</option>'+cats.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+    const teamSel=document.getElementById('_csTeam');
+    if(teamSel){
+      const myKey=(typeof myTeam!=='undefined'&&myTeam)?teamKey(myTeam):'';
+      const myInPdf=teams.find(t=>teamKey(t)===myKey);
+      teamSel.innerHTML='<option value="__all__">Todos</option>'+teams.map(t=>`<option value="${escapeAttr(t)}" ${(myInPdf&&t===myInPdf)?'selected':''}>${escapeHtml(t)}</option>`).join('');
+      if(!myInPdf && myTeam) { const o=document.createElement('option'); o.value=myTeam; o.textContent=myTeam+' (no detectado en PDF)'; o.selected=true; teamSel.appendChild(o); }
+    }
+    const drop=document.getElementById('_csDrop');
+    if(drop) drop.innerHTML=`<div style="color:#0b2f6b;font-size:13px;font-weight:700">✅ ${escapeHtml(file.name)}<br><span style="font-size:11px;color:#64748b">${rows.length} líneas con hora · ${cats.length} categoría(s) · ${teams.length} equipo(s) reconocidos</span></div>`;
+    if(st) st.textContent = rows.length? '✅ PDF leído. Ajusta los filtros y pulsa Previsualizar.' : '⚠️ No se detectaron filas con hora. ¿Es el PDF de orden de salida?';
+    const btn=document.getElementById('_csPrevBtn'); if(btn && rows.length){ btn.disabled=false; btn.style.opacity='1'; }
+  }catch(e){
+    if(st) st.textContent='❌ No se pudo leer el PDF: '+(e.message||e);
+  }
+}
+function _csOnRace(){
+  const sel=document.getElementById('_csRace'); const o=sel&&sel.selectedOptions[0]; if(!o) return;
+  _csState.meta={ id:o.value, name:o.getAttribute('data-name')||'', date:o.getAttribute('data-date')||'', localidad:o.getAttribute('data-loc')||'' };
+}
+function _csFilteredRows(){
+  const cat=document.getElementById('_csCat')?.value||'';
+  const team=document.getElementById('_csTeam')?.value||'__all__';
+  const tToks = (team!=='__all__') ? teamSignificantTokens(team) : [];
+  return _csState.rows.filter(r=>{
+    if(cat && r.cat!==cat) return false;
+    if(team!=='__all__'){
+      if(teamKey(r.team)===teamKey(team)) return true;
+      // por si la detección de equipo falló: buscar tokens en la línea cruda
+      const t=teamKey(r.raw); return tToks.length && tToks.every(tok=>t.includes(tok));
+    }
+    return true;
+  }).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+}
+
+function _csPreview(){
+  const rows=_csFilteredRows();
+  const cat=document.getElementById('_csCat')?.value||'Todas';
+  const team=document.getElementById('_csTeam')?.value||'__all__';
+  const meta=_csState.meta||{};
+  let ov=document.getElementById('_csPrev'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_csPrev';
+  ov.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(15,23,42,.8);display:flex;align-items:flex-start;justify-content:center;padding:20px 14px;overflow:auto;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  const showTeam = team==='__all__';
+  const head=`<tr style="background:#0b2f6b;color:#fff"><th style="padding:7px 10px;text-align:left;font-size:12px">Hora</th><th style="padding:7px 10px;text-align:left;font-size:12px">Dorsal</th><th style="padding:7px 10px;text-align:left;font-size:12px">Ciclista</th>${showTeam?'<th style="padding:7px 10px;text-align:left;font-size:12px">Equipo</th>':''}<th style="padding:7px 10px;text-align:left;font-size:12px">Cat.</th></tr>`;
+  const body=rows.map((r,i)=>`<tr style="background:${i%2?'#f8fafc':'#fff'}"><td style="padding:5px 10px;font-weight:800;color:#0b2f6b">${escapeHtml(r.time)}</td><td style="padding:5px 10px">${escapeHtml(r.bib)}</td><td style="padding:5px 10px;font-weight:600">${escapeHtml(r.name)}</td>${showTeam?`<td style="padding:5px 10px;color:#475569">${escapeHtml(r.team||'—')}</td>`:''}<td style="padding:5px 10px;color:#64748b">${escapeHtml(r.cat||'')}</td></tr>`).join('');
+  ov.innerHTML=`
+  <div style="background:#fff;border-radius:14px;max-width:740px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden;display:flex;flex-direction:column;max-height:92vh">
+    <div style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:16px;font-weight:900">👁️ ${escapeHtml(meta.name||'Orden de salida')}</div>
+        <div style="font-size:12px;opacity:.9;margin-top:2px">${escapeHtml(formatDateDisplay(meta.date)||meta.date||'')}${meta.localidad?(' · '+escapeHtml(meta.localidad)):''} · ${escapeHtml(cat||'Todas')} · ${rows.length} ciclista(s)</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="_csGenerate()" style="background:#10b981;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:800;font-size:13px;cursor:pointer">🖼️ Generar lámina (PDF/PNG)</button>
+        <button onclick="document.getElementById('_csPrev')?.remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:800;font-size:13px;cursor:pointer">✕</button>
+      </div>
+    </div>
+    <div style="overflow:auto;padding:0">
+      ${rows.length?`<table style="border-collapse:collapse;width:100%"><thead>${head}</thead><tbody>${body}</tbody></table>`
+        :`<div style="padding:30px;text-align:center;color:#94a3b8;font-size:13px">No hay filas con los filtros aplicados. Revisa la categoría/equipo o comprueba que el PDF es el correcto.</div>`}
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+}
+
+/* ── Logos (patrocinadores) en localStorage ── */
+function _csLogosGet(){ try{ return JSON.parse(localStorage.getItem('cs_logos')||'[]'); }catch(_){ return []; } }
+function _csLogosSet(a){ try{ localStorage.setItem('cs_logos', JSON.stringify(a)); }catch(_){} }
+function _csRenderLogos(){
+  const box=document.getElementById('_csLogos'); if(!box) return;
+  const logos=_csLogosGet();
+  box.innerHTML = logos.length? logos.map((src,i)=>`<span style="position:relative;display:inline-block"><img src="${src}" style="height:34px;max-width:80px;object-fit:contain;border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:2px"><button onclick="_csDelLogo(${i})" title="Quitar" style="position:absolute;top:-7px;right:-7px;background:#dc2626;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;cursor:pointer;line-height:1">×</button></span>`).join('') : '<span style="font-size:12px;color:#94a3b8">Sin patrocinadores añadidos.</span>';
+}
+async function _csAddLogo(e){
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=async ()=>{ const small=await _plDownscale(rd.result,360); const a=_csLogosGet(); a.push(small); _csLogosSet(a); _csRenderLogos(); };
+  rd.readAsDataURL(f);
+}
+function _csDelLogo(i){ const a=_csLogosGet(); a.splice(i,1); _csLogosSet(a); _csRenderLogos(); }
+
+// Genera la lámina (SVG A4 vertical) y la abre con botones PDF + PNG
+async function _csGenerate(){
+  const rows=_csFilteredRows();
+  if(!rows.length){ alert('No hay ciclistas con los filtros aplicados.'); return; }
+  const meta=_csState.meta||{};
+  const team=document.getElementById('_csTeam')?.value||'__all__';
+  const cat=document.getElementById('_csCat')?.value||'';
+  const teamLabel = team==='__all__' ? 'Todos los equipos' : team;
+  const W=210,H=297, mx=14;
+  const mfppSrc=document.querySelector('.brand-logo')?.src||'';
+  const logos=_csLogosGet();
+  const logoImgs=await Promise.all(logos.map(s=>_plLoadImg(s)).concat(mfppSrc?[_plLoadImg(mfppSrc)]:[]));
+  let s=`<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+  // Cabecera
+  s+=`<rect x="0" y="0" width="${W}" height="34" fill="#0e4d73"/><rect x="0" y="34" width="${W}" height="2.4" fill="#f5c518"/>`;
+  s+=`<svg x="${mx-3}" y="5" width="24" height="24" viewBox="0 0 310 310">${_infLogoInner()}</svg>`;
+  if(mfppSrc) s+=`<image href="${mfppSrc}" xlink:href="${mfppSrc}" x="${W-mx-34}" y="9" width="34" height="16" preserveAspectRatio="xMaxYMid meet"/>`;
+  s+=`<text x="${W/2}" y="16" text-anchor="middle" font-family="Arial,sans-serif" font-size="8.5" font-weight="900" fill="#ffffff">ORDEN DE SALIDA</text>`;
+  s+=`<text x="${W/2}" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="6.5" font-weight="700" fill="#cde8f7">${_infEsc((meta.name||'').toUpperCase())}</text>`;
+  // Subcabecera
+  const sub=[formatDateDisplay(meta.date)||meta.date||'', meta.localidad||'', (cat||'Todas las categorías'), teamLabel].filter(Boolean).join('  ·  ');
+  s+=`<text x="${mx}" y="46" font-family="Arial,sans-serif" font-size="6" font-weight="700" fill="#0b2f6b">${_infEsc(sub)}</text>`;
+  // Tabla
+  const showTeam = team==='__all__';
+  const top=54, rowH=Math.min(9, Math.max(5.2, (H-top-26)/rows.length));
+  const fs=Math.min(6, rowH*0.62);
+  const cHora=mx, cBib=mx+26, cName=mx+42, cTeam=W-mx-44;
+  s+=`<rect x="${mx}" y="${top-7}" width="${W-2*mx}" height="${rowH+1}" fill="#0e4d73"/>`;
+  s+=`<text x="${cHora}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">HORA</text>`;
+  s+=`<text x="${cBib}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">DORSAL</text>`;
+  s+=`<text x="${cName}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">CICLISTA</text>`;
+  if(showTeam) s+=`<text x="${cTeam}" y="${top-1}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#fff">EQUIPO</text>`;
+  rows.forEach((r,i)=>{
+    const y=top+rowH+i*rowH;
+    if(i%2) s+=`<rect x="${mx}" y="${(y-rowH+1.2).toFixed(1)}" width="${W-2*mx}" height="${rowH.toFixed(1)}" fill="#f1f6fb"/>`;
+    s+=`<text x="${cHora}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#b8860b">${_infEsc(r.time)}</text>`;
+    s+=`<text x="${cBib}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" fill="#334155">${_infEsc(r.bib)}</text>`;
+    let nm=r.name||''; const maxc=showTeam?34:50; if(nm.length>maxc) nm=nm.slice(0,maxc-1)+'…';
+    s+=`<text x="${cName}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="700" fill="#0b2f6b">${_infEsc(nm)}</text>`;
+    if(showTeam){ let tm=r.team||''; if(tm.length>22) tm=tm.slice(0,21)+'…'; s+=`<text x="${cTeam}" y="${y.toFixed(1)}" font-family="Arial" font-size="${(fs*0.92).toFixed(1)}" fill="#475569">${_infEsc(tm)}</text>`; }
+  });
+  // Pie con logos
+  const fy=H-16;
+  s+=`<line x1="${mx}" y1="${fy-4}" x2="${W-mx}" y2="${fy-4}" stroke="#e2e8f0" stroke-width="0.6"/>`;
+  let lx=mx;
+  logos.forEach(src=>{ s+=`<image href="${src}" xlink:href="${src}" x="${lx}" y="${fy-1}" width="22" height="12" preserveAspectRatio="xMinYMid meet"/>`; lx+=26; });
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${s}</svg>`;
+  // Salida A4 VERTICAL (reutiliza el descargador PNG del módulo de láminas)
+  _plLastW=Math.round(W*10); _plLastH=Math.round(H*10);
+  _csOpenSVGWindow(svg, `orden_salida_${_plSafe(meta.name||'cri')}`);
+}
+// Ventana de salida en A4 VERTICAL con botones PDF + PNG
+function _csOpenSVGWindow(svg, filename){
+  _plLastSVG=svg; _plLastName=filename;
+  const w=window.open('','_blank');
+  if(!w){ alert('El navegador bloqueó la ventana emergente. Permite ventanas emergentes e inténtalo de nuevo.'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${_infEsc(filename)}</title>
+  <style>
+    @page{size:A4 portrait;margin:0}
+    html,body{margin:0;padding:0;background:#e9eef5;font-family:Arial,sans-serif}
+    .bar{position:fixed;top:8px;right:8px;display:flex;gap:8px;z-index:9}
+    .bar button{color:#fff;border:none;border-radius:8px;padding:9px 15px;font-weight:800;cursor:pointer;font-size:13px;background:#2B91C8}
+    .bar button.g{background:#10b981}.bar button.sec{background:#fff;color:#374151;border:1px solid #d0d5dd}
+    .wrap{display:flex;justify-content:center;padding:6px}
+    .wrap svg{width:100%;max-width:760px;height:auto;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+    @media print{.bar{display:none}html,body{background:#fff}.wrap{padding:0}.wrap svg{box-shadow:none}}
+  </style></head><body>
+  <div class="bar">
+    <button onclick="window.print()">🖨️ Imprimir / PDF</button>
+    <button class="g" onclick="try{window.opener._plDownloadLastPNG();}catch(e){alert('Abre el PNG desde la app.');}">🖼️ Descargar PNG</button>
+    <button class="sec" onclick="window.close()">✕ Cerrar</button>
+  </div>
+  <div class="wrap">${svg}</div>
+  </body></html>`);
+  w.document.close();
+}
