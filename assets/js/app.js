@@ -23047,6 +23047,34 @@ function _simSetType(v){
   _simTypeOverride = v||'';
   if(_simSelectedRaceId){ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }
 }
+// Muestra EXACTAMENTE qué pruebas del histórico se están usando para la predicción
+function _simShowCompatRaces(){
+  const ci=_simCompatInfo; if(!ci||!ci.races){ return; }
+  let ov=document.getElementById('_simCompatModal'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_simCompatModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(15,23,42,.7);display:flex;align-items:center;justify-content:center;padding:20px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  const rows=ci.races.map(r=>`<tr style="border-bottom:1px solid #eef2f7">
+      <td style="padding:6px 10px;font-weight:700;color:#0b2f6b">${escapeHtml(r.name)}</td>
+      <td style="padding:6px 10px;color:#475569;white-space:nowrap">${escapeHtml(r.date||'—')}</td>
+      <td style="padding:6px 10px;text-align:center">${r.tt?'⏱️ Crono':'🛣️ Línea'}</td>
+      <td style="padding:6px 10px;text-align:center;color:#64748b">${r.n}</td>
+      <td style="padding:6px 10px;text-align:center;color:#64748b" title="Peso de similitud aplicado">×${(r.w||1).toFixed(2)}</td>
+    </tr>`).join('');
+  ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:620px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#0e4d73,#2B91C8);color:#fff;padding:14px 20px">
+      <div style="font-size:16px;font-weight:900">📊 Pruebas usadas en esta predicción</div>
+      <div style="font-size:12px;opacity:.9;margin-top:2px">Tipo objetivo: <b>${escapeHtml(ci.typeLabel||'')}</b> · ${ci.total} prueba(s) compatibles${ci.targetTT?` · ${ci.tt} cronos`:''}</div>
+    </div>
+    <div style="padding:6px 0;max-height:60vh;overflow:auto">
+      ${ci.races.length?`<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:#f1f5f9"><th style="padding:6px 10px;text-align:left">Prueba</th><th style="padding:6px 10px;text-align:left">Fecha</th><th style="padding:6px 10px">Formato</th><th style="padding:6px 10px" title="Clasificados">👥</th><th style="padding:6px 10px">Peso</th></tr></thead><tbody>${rows}</tbody></table>`
+        :`<div style="padding:24px;text-align:center;color:#94a3b8">No hay pruebas compatibles en el histórico para este formato. La predicción se basa en datos muy limitados.</div>`}
+    </div>
+    <div style="padding:10px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11.5px;color:#64748b">Solo estas pruebas alimentan los cálculos. Las de otro formato (p.ej. carreras en línea para una crono) se excluyen automáticamente.</div>
+    <div style="padding:12px 20px;text-align:right"><button onclick="document.getElementById('_simCompatModal')?.remove()" style="background:#0b2f6b;color:#fff;border:none;border-radius:9px;padding:9px 18px;font-weight:800;cursor:pointer">Cerrar</button></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+}
 
 // Pruebas planificadas (calendario) que tienen lista de inscritos, en forma de
 // "historia" para que el simulador pueda usarlas igual que una pre-inscripción.
@@ -23767,7 +23795,10 @@ function _simBuildData(raceId){
     targetTT:_targetTT, targetHC:_targetHC,
     total: historicalRaces.length, tt: _ttUsed,
     typeLabel: _targetHC ? 'Cronoescalada' : (_targetTT ? 'Contrarreloj (CRI)' : 'Carrera en línea / circuito'),
-    forced: !!_simTypeOverride
+    forced: !!_simTypeOverride,
+    // Lista exacta de pruebas usadas (para que el director compruebe cuáles son)
+    races: historicalRaces.map(h=>({ name:h.raceName||'(sin nombre)', date:h.raceDate||'', n:(h.riders||[]).length, tt:_simIsTimeTrial(h), w:(_compatByRaceId.get(h.id)||1) }))
+                          .sort((a,b)=>(_parseSpanishDate(b.date)||'').localeCompare(_parseSpanishDate(a.date)||''))
   };
   // Index: nameKey → array de {pos, total, raceDate, cat, team}
   const byRider = new Map();
@@ -24198,7 +24229,7 @@ function _simRenderCurrent(){
       <option value="road"${_simTypeOverride==='road'?' selected':''}>Carrera en línea / circuito</option>
     </select>`;
   const compatChip = ci.total!=null
-    ? `<span class="ib-chip" style="background:#ecfeff;border-color:#a5f3fc;color:#155e75" title="Pruebas del histórico que el simulador considera compatibles con este formato y usa para predecir.">📊 Usa ${ci.total} prueba(s)${ci.targetTT?` · ${ci.tt} cronos`:''}</span>`
+    ? `<span class="ib-chip" onclick="_simShowCompatRaces()" style="background:#ecfeff;border-color:#a5f3fc;color:#155e75;cursor:pointer;text-decoration:underline" title="Pulsa para ver EXACTAMENTE qué pruebas del histórico se están usando para esta predicción.">📊 Usa ${ci.total} prueba(s)${ci.targetTT?` · ${ci.tt} cronos`:''} 🔍</span>`
     : '';
   document.getElementById('simRaceMeta').innerHTML = `
     <b>🏁 ${escapeHtml(race.raceName||'')}</b>
