@@ -22965,46 +22965,93 @@ function exportFinishStatsPDF(){
 let _simSelectedRaceId = null;
 let _simCurrentData = null; // {race, inscritos[], grid[], kpis}
 
-function renderSimulador(){
-  const sel = document.getElementById('simRaceSelect');
-  if(!sel) return;
-  // Cargar las pruebas del histórico que tienen inscritos (incluye pre-inscripciones)
-  const hist = _cachedHistory || [];
-  const racesWithIns = hist.filter(h => Array.isArray(h.inscritos) && h.inscritos.length>0);
-  if(!racesWithIns.length){
+// Pruebas planificadas (calendario) que tienen lista de inscritos, en forma de
+// "historia" para que el simulador pueda usarlas igual que una pre-inscripción.
+let _simExtraRaces = [];
+let _simPlannedNoIns = [];   // planificadas SIN inscritos (para avisar)
+async function _simLoadPlanned(){
+  _simExtraRaces = []; _simPlannedNoIns = [];
+  if(!_sb) return;
+  try{
+    const {data} = await _sb.from('races').select('id,name,date,notes').eq('race_type','planificada').order('date');
+    (data||[]).forEach(r=>{
+      let extra={}; try{ extra=JSON.parse(r.notes||'{}'); }catch(_){}
+      const ins = Array.isArray(extra.inscritos)? extra.inscritos : [];
+      if(ins.length){
+        _simExtraRaces.push({
+          id:r.id, raceName:r.name, raceDate:r.date,
+          localidad:extra.localidad||'', ccaa:extra.ccaa||'', km:extra.km||'',
+          circuitType:extra.circuitType||'', challengeCV:!!extra.challengeCV,
+          route:extra.route||null, cat:extra.cat||'',
+          riders:[], inscritos:ins, _planned:true
+        });
+      } else {
+        _simPlannedNoIns.push({id:r.id, name:r.name, date:r.date});
+      }
+    });
+  }catch(e){ console.warn('[sim] planned load', e); }
+}
+
+// Rellena el selector con la lista combinada (histórico + planificadas)
+function _simFillSelect(sel, list){
+  const today = (new Date()).toISOString().slice(0,10);
+  if(!list.length){
     sel.innerHTML = '<option value="">— No hay pruebas con startlist guardada —</option>';
     sel.disabled = true;
-    _simShowEmpty('No hay ninguna prueba con lista de inscritos guardada en el histórico. Sube una startlist desde Carga y Resumen o Historial para empezar a simular.');
+    const extra = _simPlannedNoIns.length
+      ? ` Tienes ${_simPlannedNoIns.length} prueba(s) planificada(s) en el calendario, pero aún SIN lista de inscritos: añádeles la startlist (Historial → 📋, o Carga y Resumen) para poder simularlas.`
+      : '';
+    _simShowEmpty('No hay ninguna prueba con lista de inscritos guardada.'+extra+' Sube una startlist para empezar a simular.');
     return;
   }
   sel.disabled = false;
-  // Ordenar: pruebas futuras (pre-inscripciones) primero, luego más recientes
-  const today = (new Date()).toISOString().slice(0,10);
-  racesWithIns.sort((a,b)=>{
+  const sorted = list.slice().sort((a,b)=>{
     const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
     const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
-    const aFuture = da >= today;
-    const bFuture = db >= today;
+    const aFuture = da >= today, bFuture = db >= today;
     if(aFuture && !bFuture) return -1;
     if(bFuture && !aFuture) return 1;
     return db.localeCompare(da);
   });
-  const opts = racesWithIns.map(h=>{
+  const opts = sorted.map(h=>{
     const iso = _parseSpanishDate(h.raceDate)||'';
     const dt = formatDateDisplay(iso) || h.raceDate || '';
     const future = iso && iso >= today;
     const ridersN = (h.riders||[]).length;
-    const tag = future ? '🔮' : (ridersN>=3 ? '🏁' : '📋');
-    return `<option value="${escapeAttr(h.id)}">${tag} ${escapeHtml(dt)} · ${escapeHtml(h.raceName||'')} · ${h.inscritos.length} inscritos${ridersN>=3?` · ${ridersN} clasif.`:' (sin clasificar)'}</option>`;
+    const tag = h._planned ? '📅' : (future ? '🔮' : (ridersN>=3 ? '🏁' : '📋'));
+    const ex = h._planned ? ' · planificada' : (ridersN>=3?` · ${ridersN} clasif.`:' (sin clasificar)');
+    return `<option value="${escapeAttr(h.id)}">${tag} ${escapeHtml(dt)} · ${escapeHtml(h.raceName||'')} · ${h.inscritos.length} inscritos${ex}</option>`;
   }).join('');
   sel.innerHTML = '<option value="">— Selecciona una prueba —</option>' + opts;
-  // Si tenemos uno seleccionado, mantenerlo
+  // Aviso de planificadas sin inscritos
+  let hint='';
+  if(_simPlannedNoIns.length){
+    const fut=_simPlannedNoIns.filter(p=>(p.date||'')>=today);
+    if(fut.length) hint=`<div style="font-size:11.5px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:7px 10px;margin-top:8px">⚠️ ${fut.length} prueba(s) planificada(s) del calendario aún sin lista de inscritos (no se pueden simular). Para simular «${escapeHtml(fut[0].name||'')}» añádele su startlist desde Historial (📋) o Carga y Resumen.</div>`;
+  }
+  let hintEl=document.getElementById('simPlannedHint');
+  if(!hintEl){ hintEl=document.createElement('div'); hintEl.id='simPlannedHint'; sel.parentNode && sel.parentNode.appendChild(hintEl); }
+  hintEl.innerHTML = hint;
   if(_simSelectedRaceId && [...sel.options].some(o=>o.value===_simSelectedRaceId)){
     sel.value = _simSelectedRaceId;
     _simOnRaceChange();
   } else {
     _simShowEmpty();
   }
+}
+
+async function renderSimulador(){
+  const sel = document.getElementById('simRaceSelect');
+  if(!sel) return;
+  const hist = _cachedHistory || [];
+  const histIns = hist.filter(h => Array.isArray(h.inscritos) && h.inscritos.length>0);
+  // 1ª pasada SÍNCRONA: histórico (instantáneo, no rompe flujos que seleccionan al abrir)
+  _simFillSelect(sel, histIns);
+  // 2ª pasada: añadir las planificadas del calendario que tengan inscritos
+  try{
+    await _simLoadPlanned();
+    if(_simExtraRaces.length || _simPlannedNoIns.length) _simFillSelect(sel, [...histIns, ..._simExtraRaces]);
+  }catch(e){ console.warn('[sim] planned', e); }
 }
 
 function _simShowEmpty(customMsg){
@@ -23599,7 +23646,8 @@ function _simRaceCompatWeight(target, hist){
 // Construye el grid analizado: para cada inscrito, calcula sus métricas históricas
 function _simBuildData(raceId){
   const hist = _cachedHistory || [];
-  const race = hist.find(h => h.id === raceId);
+  // La prueba puede estar en el histórico O ser una planificada con inscritos
+  const race = hist.find(h => h.id === raceId) || (_simExtraRaces||[]).find(h => h.id === raceId);
   if(!race){ _simCurrentData = null; return; }
   const inscritos = race.inscritos || [];
   // Índices del histórico (excluyendo la propia prueba si no se ha disputado, para no contaminar)
