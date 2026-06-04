@@ -39800,6 +39800,85 @@ function _csParse(lines){
   }
   return rows;
 }
+// ── Reconciliación con NUESTRA base de datos ──────────────────────────────
+// Para cada ciclista del PDF buscamos su ficha en nuestro histórico y usamos:
+//  nombre canónico (Apellido, Nombre), dorsal CV propio y categoría propia.
+let _csDbByYear={};
+async function _csGetDb(year){
+  if(_csDbByYear[year]) return _csDbByYear[year];
+  let hist=[]; try{ hist=await _ensureHistory(); }catch(_){}
+  const map={};
+  const add=(p, iso, cv, source)=>{
+    if(!p||!p.name) return;
+    const nk=normalizeRiderName(p.name).trim(); if(!nk) return;
+    const ry=iso.slice(0,4);
+    if(!map[nk]) map[nk]={nk, found:[], cats:{}};
+    const b=String(p.bib||'').trim();
+    if(b) map[nk].found.push({bib:b, date:iso, cv, source});
+    const rc=getRiderCorrectCat(p.name, ry?parseInt(ry):null, p.cat) || p.cat || '';
+    if(rc) map[nk].cats[rc]=(map[nk].cats[rc]||0)+1;
+  };
+  for(const race of hist){
+    const iso=_parseSpanishDate(race.raceDate)||'';
+    if(year && iso.slice(0,4)!==String(year)) continue;
+    const cv=(typeof _isCVRace==='function')?_isCVRace(race):null;
+    (race.riders||[]).forEach(p=>add(p,iso,cv,'riders'));
+    (race.inscritos||[]).forEach(p=>add(p,iso,cv,'inscritos'));
+  }
+  const modeBib=arr=>{ const c=new Map(),d=new Map(); arr.forEach(f=>{c.set(f.bib,(c.get(f.bib)||0)+1); if((f.date||'')>(d.get(f.bib)||'')) d.set(f.bib,f.date||'');}); const s=[...c.entries()].sort((a,b)=>b[1]-a[1]||(d.get(b[0])||'').localeCompare(d.get(a[0])||'')); return s.length?s[0][0]:''; };
+  const recent=arr=>{ const s=arr.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')); return s.length?s[0].bib:''; };
+  const list=Object.values(map).map(v=>{
+    const F=v.found;
+    const cvR=F.filter(f=>f.cv===true&&f.source==='riders'), cvI=F.filter(f=>f.cv===true&&f.source==='inscritos');
+    const unR=F.filter(f=>f.cv===null&&f.source==='riders'), unI=F.filter(f=>f.cv===null&&f.source==='inscritos');
+    let dorsal=''; if(cvR.length)dorsal=modeBib(cvR); else if(cvI.length)dorsal=modeBib(cvI); else if(unR.length)dorsal=recent(unR); else if(unI.length)dorsal=recent(unI);
+    const catRaw=Object.entries(v.cats).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+    return { name:_evolNormName(v.nk), dorsal, catNorm:_dxNormCat(catRaw),
+      key:normalizeForMatching(v.nk), tokens:_csTokens(v.nk) };
+  });
+  // Prioridad: dorsal/categoría ya CORREGIDOS y guardados en las láminas de plantilla
+  try{
+    const ov=await _csSavedSheets(year);
+    list.forEach(d=>{ const s=ov.get(d.key); if(s){ if(s.dorsal) d.dorsal=String(s.dorsal); if(s.cat) d.catNorm=s.cat; } });
+  }catch(_){}
+  _csDbByYear[year]=list; return list;
+}
+// Dorsales/categorías corregidos a mano en el módulo de láminas (team_sheets + local)
+async function _csSavedSheets(year){
+  const map=new Map();
+  const apply=recs=>recs.forEach(r=>{ if(r&&r.name && String(r.year)===String(year)){ const k=normalizeForMatching(r.name); if(k) map.set(k,{dorsal:r.dorsal||'', cat:r.catNorm||r.cat||''}); } });
+  try{ const all=await _plDBAll(); apply(all); }catch(_){}
+  if(_sb){ try{ const {data}=await _sb.from('team_sheets').select('name,dorsal,cat,year').eq('year',String(year)); apply((data||[]).map(x=>({name:x.name,dorsal:x.dorsal,catNorm:x.cat,year:x.year}))); }catch(_){} }
+  return map;
+}
+function _csTokens(s){ return new Set(String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(t=>t.length>=3)); }
+// Empareja un nombre del PDF ("NOMBRE AP1 AP2") con un ciclista de la BD
+function _csMatch(pdfName, db){
+  // 1) clave canónica (normalizeForMatching reordena ambos a "apellido, nombre")
+  const key=normalizeForMatching(pdfName);
+  let m=db.find(d=>d.key && d.key===key); if(m) return m;
+  // 2) respaldo: los tokens de la BD (apellido+nombre) están todos en el PDF
+  const pt=_csTokens(pdfName); if(!pt.size) return null;
+  let best=null,bestN=0;
+  for(const d of db){ if(d.tokens.size && [...d.tokens].every(t=>pt.has(t)) && d.tokens.size>bestN){ best=d; bestN=d.tokens.size; } }
+  return best;
+}
+// Enriquece las filas del PDF con nuestros datos (nombre/dorsal/categoría)
+async function _csEnrich(rows, year){
+  const db=await _csGetDb(year);
+  return rows.map(r=>{
+    const m=_csMatch(r.name, db);
+    return {
+      time:r.time, team:r.team, catPdf:r.cat, pdfBib:r.bib,
+      name: m ? m.name : _titleCaseName(r.name),
+      bib:  m ? (m.dorsal||'') : '',                 // nuestro dorsal CV o BLANCO si no se sabe
+      cat:  (m && m.catNorm) ? m.catNorm : r.cat,     // nuestra cat o, si no se sabe, la del PDF
+      matched: !!m
+    };
+  });
+}
+function _titleCaseName(s){ return String(s||'').toLowerCase().replace(/\b([a-záéíóúñ])/g,(m,c)=>c.toUpperCase()); }
+
 // Pruebas para el selector (histórico + planificadas)
 async function _csCollectRaces(){
   const out=[], seen=new Set();
@@ -39923,11 +40002,12 @@ function _csFilteredRows(){
   }).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
 }
 
-function _csPreview(){
-  const rows=_csFilteredRows();
+async function _csPreview(){
+  const meta=_csState.meta||{};
+  const year=(meta.date||'').slice(0,4) || String(new Date().getFullYear());
+  const rows=await _csEnrich(_csFilteredRows(), year);
   const cat=document.getElementById('_csCat')?.value||'Todas';
   const team=document.getElementById('_csTeam')?.value||'__all__';
-  const meta=_csState.meta||{};
   let ov=document.getElementById('_csPrev'); if(ov) ov.remove();
   ov=document.createElement('div'); ov.id='_csPrev';
   ov.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(15,23,42,.8);display:flex;align-items:flex-start;justify-content:center;padding:20px 14px;overflow:auto;font-family:-apple-system,Segoe UI,Arial,sans-serif';
@@ -39973,9 +40053,10 @@ function _csDelLogo(i){ const a=_csLogosGet(); a.splice(i,1); _csLogosSet(a); _c
 
 // Genera la lámina (SVG A4 vertical) y la abre con botones PDF + PNG
 async function _csGenerate(){
-  const rows=_csFilteredRows();
-  if(!rows.length){ alert('No hay ciclistas con los filtros aplicados.'); return; }
   const meta=_csState.meta||{};
+  const year=(meta.date||'').slice(0,4) || String(new Date().getFullYear());
+  const rows=await _csEnrich(_csFilteredRows(), year);
+  if(!rows.length){ alert('No hay ciclistas con los filtros aplicados.'); return; }
   const team=document.getElementById('_csTeam')?.value||'__all__';
   const cat=document.getElementById('_csCat')?.value||'';
   const teamLabel = team==='__all__' ? 'Todos los equipos' : team;
