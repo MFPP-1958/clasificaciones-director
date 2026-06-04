@@ -39859,10 +39859,12 @@ function _csMatch(pdfName, db){
   // 1) clave canónica (normalizeForMatching reordena ambos a "apellido, nombre")
   const key=normalizeForMatching(pdfName);
   let m=db.find(d=>d.key && d.key===key); if(m) return m;
-  // 2) respaldo: los tokens de la BD (apellido+nombre) están todos en el PDF
-  const pt=_csTokens(pdfName); if(!pt.size) return null;
+  // 2) respaldo: exige AL MENOS 2 tokens (apellido Y nombre) presentes en el PDF.
+  //    (Evita falsos positivos como casar cualquier "Fran" por compartir un solo
+  //     token cuando el apellido de BD es muy corto, p.ej. "De, Fran".)
+  const pt=_csTokens(pdfName); if(pt.size<2) return null;
   let best=null,bestN=0;
-  for(const d of db){ if(d.tokens.size && [...d.tokens].every(t=>pt.has(t)) && d.tokens.size>bestN){ best=d; bestN=d.tokens.size; } }
+  for(const d of db){ if(d.tokens.size>=2 && [...d.tokens].every(t=>pt.has(t)) && d.tokens.size>bestN){ best=d; bestN=d.tokens.size; } }
   return best;
 }
 // Enriquece las filas del PDF con nuestros datos (nombre/dorsal/categoría)
