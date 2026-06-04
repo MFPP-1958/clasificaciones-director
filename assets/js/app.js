@@ -40097,12 +40097,12 @@ async function _csGenerate(){
   const showTeam = team==='__all__';
   const top=bandH+27, rowH=Math.min(9, Math.max(5.2, (H-top-26)/rows.length));
   const fs=Math.min(6, rowH*0.62);
-  const xHora=mx+1;
-  const dcx=mx+26;                                   // centro columna DORSAL
-  const nameL = mx+42;                               // inicio zona CICLISTA
-  const nameR = showTeam ? (W-mx-46) : (W-mx);       // fin zona CICLISTA
-  const ncx = (nameL+nameR)/2;                       // centro columna CICLISTA
-  const tcx = showTeam ? ((W-mx-44)+(W-mx))/2 : 0;   // centro columna EQUIPO
+  const xHora=mx;                                    // HORA: izquierda
+  const dcx = showTeam ? (mx+34) : (mx+42);          // DORSAL: centrado, desplazado a la derecha
+  const nameL = showTeam ? (mx+52) : (mx+62);        // CICLISTA: nombres a la IZQUIERDA desde aquí
+  const nameR = showTeam ? (W-mx-46) : (W-mx);
+  const ncx = (nameL+nameR)/2;                       // centro SOLO para el título de la columna
+  const teamL = W-mx-44, tcx=(teamL+(W-mx))/2;
   s+=`<rect x="${mx}" y="${top-7}" width="${W-2*mx}" height="${rowH+1}" fill="#0e4d73"/>`;
   const hf=(fs*0.95).toFixed(1);
   s+=`<text x="${xHora}" y="${top-1}" font-family="Arial" font-size="${hf}" font-weight="800" fill="#fff">HORA</text>`;
@@ -40115,8 +40115,8 @@ async function _csGenerate(){
     s+=`<text x="${xHora}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="800" fill="#b8860b">${_infEsc(r.time)}</text>`;
     s+=`<text x="${dcx}" y="${y.toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="${fs}" fill="#334155">${_infEsc(r.bib)}</text>`;
     let nm=r.name||''; const maxc=showTeam?26:42; if(nm.length>maxc) nm=nm.slice(0,maxc-1)+'…';
-    s+=`<text x="${ncx}" y="${y.toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="${fs}" font-weight="700" fill="#0b2f6b">${_infEsc(nm)}</text>`;
-    if(showTeam){ let tm=r.team||''; if(tm.length>22) tm=tm.slice(0,21)+'…'; s+=`<text x="${tcx}" y="${y.toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="${(fs*0.9).toFixed(1)}" fill="#475569">${_infEsc(tm)}</text>`; }
+    s+=`<text x="${nameL}" y="${y.toFixed(1)}" font-family="Arial" font-size="${fs}" font-weight="700" fill="#0b2f6b">${_infEsc(nm)}</text>`;
+    if(showTeam){ let tm=r.team||''; if(tm.length>22) tm=tm.slice(0,21)+'…'; s+=`<text x="${teamL}" y="${y.toFixed(1)}" font-family="Arial" font-size="${(fs*0.9).toFixed(1)}" fill="#475569">${_infEsc(tm)}</text>`; }
   });
   // Pie con logos
   const fy=H-16;
