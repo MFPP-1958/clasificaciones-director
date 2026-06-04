@@ -39159,6 +39159,33 @@ async function _plLoadSaved(){
   _plSaved=[...byKey.values()];
   // Dejar el resultado fusionado también en local (completo y al día)
   try{ for(const r of _plSaved) await _plDBPut(r); }catch(_){}
+
+  // SINCRONIZACIÓN HACIA ARRIBA: si la nube está disponible, subir las láminas
+  // que están en local pero faltan/están más viejas en la nube. Esto rescata los
+  // casos en que se guardaron antes de existir la tabla (solo quedaron en local).
+  if(_sb && _plCloudOK){
+    const cloudTs=new Map(cloud.map(c=>[c.key, c._ts||0]));
+    let subidas=0;
+    for(const r of _plSaved){
+      const ct = cloudTs.has(r.key) ? cloudTs.get(r.key) : -1;
+      if((r.ts||0) > ct){ try{ await _plSbPut(r); subidas++; }catch(_){} }
+    }
+    _plLastUploaded=subidas;
+  }
+}
+let _plLastUploaded=0;
+// Fuerza la sincronización (sube lo local que falte en la nube y recarga)
+async function _plForceSync(){
+  if(!_sb){ alert('No hay conexión con la base de datos.'); return; }
+  await _plLoadSaved();
+  _plRenderRiders();
+  _plRenderGenerated();
+  if(_plCloudMissing){ alert('La tabla de la nube no existe todavía. Pulsa "Activar guardado en la nube" y ejecuta el SQL.'); return; }
+  if(_plCloudOK){
+    alert(`Sincronizado ✅\n\n• Láminas en este equipo/temporada: ${_plSaved.length}\n• Subidas a la nube en esta sincronización: ${_plLastUploaded}\n\nYa deberían verse igual en el iPad (recárgalo).`);
+  } else {
+    alert('No se pudo conectar con la nube ahora mismo. Tus láminas siguen guardadas en este dispositivo.');
+  }
 }
 let _plCloudMissing=false;
 // SQL de creación de la tabla (una sola vez, en el editor SQL de Supabase)
@@ -39493,11 +39520,12 @@ function _plRenderGenerated(){
   const box=document.getElementById('_plGenBox'); if(!box) return;
   const list=_plSaved.slice().sort((a,b)=>((parseInt(a.dorsal)||9999)-(parseInt(b.dorsal)||9999))||a.name.localeCompare(b.name));
   const total=_plState.roster.length, hechas=list.length, faltan=total-hechas;
+  const syncBtn=`<button onclick="_plForceSync()" title="Subir lo de este dispositivo a la nube y traer lo de los demás" style="background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;border-radius:7px;padding:3px 9px;font-weight:800;font-size:11px;cursor:pointer;margin-left:6px">🔄 Sincronizar</button>`;
   const cloud = _plCloudOK===true
-    ? `<span style="color:#10b981;font-weight:800">☁️ Sincronizado en la nube</span>`
+    ? `<span style="color:#10b981;font-weight:800">☁️ Nube activa</span>${syncBtn}`
     : (_plCloudMissing
         ? `<button onclick="_plShowCloudSQL()" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:7px;padding:3px 9px;font-weight:800;font-size:11px;cursor:pointer">☁️ Activar guardado en la nube</button>`
-        : `<span style="color:#94a3b8;font-weight:700">💾 Guardado en este dispositivo</span>`);
+        : `<span style="color:#94a3b8;font-weight:700">💾 Solo en este dispositivo</span>${_sb?syncBtn:''}`);
   box.innerHTML=`
     <div style="border-top:1px solid #e2e8f0;padding:14px 22px 20px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
