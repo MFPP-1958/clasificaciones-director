@@ -526,6 +526,19 @@
       <div class="paste-box" style="margin-top:10px">
         <h4 style="margin:0 0 6px;font-size:13px">O pegar lista de inscritos como texto</h4>
         <textarea id="pastedInscritos" placeholder="Pega aquí la lista de inscritos (dorsal, nombre, equipo, categoría)..." style="min-height:90px"></textarea>
+        <div style="margin:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:8px 10px">
+          <label for="inscritosCatFilter" style="font-size:12px;font-weight:800;color:#0b2f6b">🎽 Importar SOLO la categoría:</label>
+          <select id="inscritosCatFilter" onchange="localStorage.setItem('inscritosCatFilter',this.value)" style="padding:6px 10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;font-weight:700;color:#0b2f6b">
+            <option value="all">Todas las categorías</option>
+            <option value="cadete">Cadetes (CAD)</option>
+            <option value="juvenil">Juveniles / Júnior</option>
+            <option value="sub23">Sub-23</option>
+            <option value="elite">Élite</option>
+            <option value="master">Máster</option>
+            <option value="fem">Féminas</option>
+          </select>
+          <span style="font-size:11px;color:#64748b">Las demás categorías del archivo se descartan.</span>
+        </div>
         <div class="paste-actions" style="margin-top:6px">
           <button class="btn light" onclick="processPastedInscritos()">Procesar inscritos pegados</button>
           <button class="btn secondary" onclick="document.getElementById('pastedInscritos').value=''">Limpiar texto</button>
@@ -3343,6 +3356,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=inscritos-cat-filter-1"></script>
+<script src="assets/js/app.js?v=inscritos-cat-filter-2"></script>
 </body>
 </html>

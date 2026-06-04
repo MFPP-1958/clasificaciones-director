@@ -20256,11 +20256,15 @@ function parseInscritosCSVLike(text){
     let fullName = surnamePart ? `${namePart} ${surnamePart}` : namePart;
     if(!fullName || fullName.length<3) return;
     if(/^(dorsal|nombre|apellido|ciclista|equipo|categor|total)/i.test(fullName)) return; // cabecera repetida
+    // Categoría: usa la columna mapeada; si no hay, detecta en cualquier celda
+    // que "parezca" categoría (CADETE, JUNIOR, SUB-23, ELITE, MASTER…)
+    let catVal = map.cat!=null ? (parts[map.cat]||'').trim() : '';
+    if(!catVal){ const f=parts.find(c=>_looksLikeCat(c)); if(f) catVal=f.trim(); }
     out.push({
       bib: bibFinal,
       name: surnamePart ? normalizeRiderName(null,namePart,surnamePart,null) : normalizeRiderName(fullName),
       team: (parts[map.team]||'').trim(),
-      cat: map.cat!=null ? (parts[map.cat]||'').replace(/\s+/g,'') : ''
+      cat: catVal.replace(/\s+/g,'')
     });
   });
   return out;
@@ -20530,11 +20534,22 @@ function _dedupeInscritos(arr){
 // el filtro principal (selectedCatChips). Si no hay ninguna seleccionada ("Todas"),
 // no se filtra. La lista cruda se guarda para poder re-aplicar el filtro al vuelo.
 let _inscritosRawAll = [];
+// Categoría seleccionada en el desplegable propio del área de inscritos.
+// Devuelve un Set de claves de grupo; vacío = "Todas" (no se filtra).
 function _inscritosActiveCatGroups(){
-  const chips=(typeof selectedCatChips!=='undefined' && selectedCatChips)?[...selectedCatChips]:[];
-  const groups=new Set();
-  chips.forEach(c=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(c):null; if(g) groups.add(g.key); });
-  return groups; // vacío = "Todas"
+  const sel=document.getElementById('inscritosCatFilter');
+  let v = sel ? sel.value : (localStorage.getItem('inscritosCatFilter')||'all');
+  if(!v || v==='all') return new Set();
+  return new Set([v]);   // v ya es una clave de grupo (cadete, juvenil, sub23…)
+}
+// Restaura la última categoría elegida en el desplegable
+function _inscritosRestoreCatFilter(){
+  const sel=document.getElementById('inscritosCatFilter'); if(!sel) return;
+  const v=localStorage.getItem('inscritosCatFilter'); if(v) sel.value=v;
+}
+if(typeof document!=='undefined'){
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _inscritosRestoreCatFilter);
+  else _inscritosRestoreCatFilter();
 }
 function _inscritosApplyActiveCat(arr){
   _inscritosRawAll = (arr||[]).slice();   // recordamos TODO lo leído del archivo
