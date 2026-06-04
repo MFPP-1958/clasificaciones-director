@@ -20375,26 +20375,33 @@ function _postProcessInscritos(arr){
       return {...ins, _enriched:false, _newRider: true};
     }
     // Categoría más específica (con dígito) prevalece sobre la genérica de la startlist
-    let bestCat = '';
     const catsSorted = [...hit.cats.entries()].sort((a,b)=>b[1]-a[1]);
     const specific = catsSorted.find(([c])=>/\d/.test(c));
-    bestCat = (specific ? specific[0] : (catsSorted[0]?.[0]||'')) || (ins.cat||'');
-    // ── Dorsal: respetamos la CCAA de la carrera actual ───────────────────
-    //   CV  → usamos el dorsal CV más frecuente (o lo que traiga la pega).
-    //   no-CV → NO mezclamos con el CV; solo lo que venga en la pega.
-    //   incierto → comportamiento clásico (último no-vacío).
+    let bestCat = (specific ? specific[0] : (catsSorted[0]?.[0]||'')) || (ins.cat||'');
+    // ⚠️ ANTI-COLISIÓN DE NOMBRE: si la categoría del ARCHIVO y la del histórico
+    // son de GRUPOS distintos (p.ej. archivo=MASTER 30 vs histórico=CADETE), es
+    // otra persona con el mismo nombre → NO enriquecemos (mantenemos el archivo).
+    const fileG = (typeof _calCatGroup==='function') ? _calCatGroup(ins.cat) : null;
+    const histG = (typeof _calCatGroup==='function') ? _calCatGroup(bestCat) : null;
+    if(fileG && histG && fileG.key!==histG.key){
+      return {...ins, _enriched:false, _newRider:true};   // conserva su categoría del archivo
+    }
+    // ── Dorsal ──────────────────────────────────────────────────────────────
+    //   1º) dorsal CV CORREGIDO a mano en las láminas (fuente de verdad).
+    //   2º) si la carrera es explícitamente fuera-CV → el del archivo.
+    //   3º) dorsal CV más frecuente del histórico; si no, el del archivo.
     let bestBib;
-    if(currentIsCV === true){
-      // Moda dentro de los dorsales CV registrados. Si no hay ninguno,
-      // caemos en ins.bib o lo que tuviéramos.
-      const cvBibs = hit.cvBibs && [...hit.cvBibs.entries()].sort((a,b)=>b[1]-a[1]);
-      bestBib = (cvBibs && cvBibs.length ? cvBibs[0][0] : '') || ins.bib || '';
-    } else if(currentIsCV === false){
-      // Fuera de CV: respetamos lo que venga en la pega y NO usamos histórico.
-      bestBib = ins.bib || '';
+    const ovKey = (typeof normalizeForMatching==='function') ? normalizeForMatching(ins.name||'') : '';
+    const ov = ovKey && _inscritosBibOverrides.get ? _inscritosBibOverrides.get(ovKey) : null;
+    if(currentIsCV === false){
+      bestBib = ins.bib || '';                              // fuera de CV: el del archivo (organizador)
+    } else if(ov && ov.dorsal){
+      bestBib = String(ov.dorsal);                          // dorsal CV de las láminas (p.ej. 87)
     } else {
-      // Sin contexto claro: mantenemos lo que ya hacíamos (último no-vacío).
-      bestBib = hit.lastBib || ins.bib || '';
+      // Corredor NUESTRO (está en el histórico) y contexto CV: usamos su dorsal CV;
+      // si no lo conocemos, EN BLANCO (nunca el número del archivo, que no es el CV).
+      const cvBibs = hit.cvBibs && [...hit.cvBibs.entries()].sort((a,b)=>b[1]-a[1]);
+      bestBib = (cvBibs && cvBibs.length ? cvBibs[0][0] : '');
     }
     // Equipo: el guardado en histórico tiene prioridad si el de la startlist está vacío
     const bestTeam = ins.team || hit.lastTeam || '';
@@ -20534,6 +20541,13 @@ function _dedupeInscritos(arr){
 // el filtro principal (selectedCatChips). Si no hay ninguna seleccionada ("Todas"),
 // no se filtra. La lista cruda se guarda para poder re-aplicar el filtro al vuelo.
 let _inscritosRawAll = [];
+// Overrides de dorsal CV corregidos a mano en las láminas (clave nombre → {dorsal,cat})
+let _inscritosBibOverrides = new Map();
+async function _inscritosLoadBibOverrides(){
+  const year = (typeof _getRaceYear==='function') ? _getRaceYear() : new Date().getFullYear();
+  try{ _inscritosBibOverrides = (typeof _csSavedSheets==='function') ? await _csSavedSheets(year) : new Map(); }
+  catch(_){ _inscritosBibOverrides = new Map(); }
+}
 // Categoría seleccionada en el desplegable propio del área de inscritos.
 // Devuelve un Set de claves de grupo; vacío = "Todas" (no se filtra).
 function _inscritosActiveCatGroups(){
@@ -20565,9 +20579,10 @@ function reapplyInscritosCatFilter(){
   _showInscritosEnrichmentReport(inscritos, 'filtro re-aplicado');
 }
 
-function processPastedInscritos(){
+async function processPastedInscritos(){
   const text = document.getElementById('pastedInscritos')?.value || '';
   if(!text.trim()){ alert('Pega primero la lista de inscritos.'); return; }
+  await _inscritosLoadBibOverrides();          // dorsales CV corregidos en láminas
   const arr = parseInscritos(text);
   if(arr.length < 1){
     alert('No se ha podido reconocer ningún inscrito en el texto pegado.\n\nFormato aceptado (flexible):\n  • Nombre Apellido    Equipo    Categoría\n  • [dorsal opcional] Nombre…  Equipo  Cat\n  • CSV/TSV con cabecera "Nombre", "Equipo", "Categoría"…');
@@ -20616,6 +20631,7 @@ async function handleFileInscritos(file){
     if(ext === 'pdf') text = await readPDF(file);
     else if(ext === 'csv') text = await file.text();
     else text = await readExcel(file);
+    await _inscritosLoadBibOverrides();          // dorsales CV corregidos en láminas
     const arr = parseInscritos(text);
     if(arr.length < 1){ alert('No se ha podido reconocer ningún inscrito en el archivo.'); return; }
     inscritos = _inscritosApplyActiveCat(arr);
