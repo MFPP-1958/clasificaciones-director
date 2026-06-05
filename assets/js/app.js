@@ -174,6 +174,13 @@ function _gfMatchesGlobalCat(blob){
   }
   return true;                                    // nada claro → permisivo
 }
+// Categoría por defecto al IMPORTAR (cuando el archivo no trae categoría):
+// usamos la del FILTRO GLOBAL activo, para no asignar 'CADETE' a todo el mundo.
+const _CAT_IMPORT_LABEL = { cadete:'CADETE', junior:'JUNIOR', sub23:'SUB-23', elite:'ELITE', master:'MASTER', femenino:'FEMENINO' };
+function _defaultImportCat(){
+  const c=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
+  return _CAT_IMPORT_LABEL[c] || '';   // '' si el filtro global es "Todas"
+}
 function _gfMatchesGlobalMod(blob){
   const gfMod = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.modality) || '';
   if(!gfMod) return true;
@@ -6055,7 +6062,7 @@ function parseCSVLike(text){
       pos:+posVal,
       bib:parts[map.bib]||'',
       name:surnamePart?normalizeRiderName(null,namePart,surnamePart,null):normalizeRiderName(fullName),
-      cat:map.cat!=null ? ((parts[map.cat]||'CADETE').replace(/\s+/g,'')) : 'CADETE',
+      cat:map.cat!=null ? ((parts[map.cat]||_defaultImportCat()).replace(/\s+/g,'')) : _defaultImportCat(),
       region:cleanSpaces(region),
       team:cleanSpaces(team),
       time:cleanSpaces(time)
