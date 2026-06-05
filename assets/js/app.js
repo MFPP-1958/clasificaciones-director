@@ -1692,7 +1692,7 @@ async function _calOpenRaceDetails(raceId){
   const subParts = [];
   if(race.raceDate)  subParts.push(`📅 ${race.raceDate}`);
   if(race.localidad) subParts.push(`📍 ${race.localidad}`);
-  if(race.km)        subParts.push(`📏 ${race.km}`);
+  if(race.km)        subParts.push(`📏 ${_fmtKm(race.km)}`);
   if(race.avg)       subParts.push(`💨 ${race.avg}`);
   if(sub) sub.innerHTML = subParts.join(' · ');
 
@@ -1894,7 +1894,7 @@ async function _calRaceModalExport(){
   <div class="hdr">
     <div style="flex:1">
       <div class="hdr-title">${titlePrefix} ${escapeHtml(race.raceName||'Carrera')}</div>
-      <div class="hdr-sub">${race.raceDate||''}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''}${race.km?' · 📏 '+escapeHtml(race.km):''} · Generado el ${dateStr}</div>
+      <div class="hdr-sub">${race.raceDate||''}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''}${race.km?' · 📏 '+escapeHtml(_fmtKm(race.km)):''} · Generado el ${dateStr}</div>
       ${subtitle?`<div style="font-size:11px;opacity:.85;margin-top:4px;font-style:italic">${subtitle}</div>`:''}
       <div class="kpis">${kpisHtml}</div>
     </div>
@@ -4033,8 +4033,8 @@ async function renderResumen(){
             return `<tr style="border-bottom:1px solid #f3f4f6;background:${i%2===0?'#fff':'#fafafa'}">
               <td style="padding:10px 14px;font-weight:600">${escapeHtml(race.raceName||'—')}</td>
               <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(race.raceDate||'—')}</td>
-              <td style="padding:10px 14px;text-align:center">${race.km||'—'}</td>
-              <td style="padding:10px 14px;text-align:center">${race.avg?race.avg+' km/h':'—'}</td>
+              <td style="padding:10px 14px;text-align:center">${_fmtKm(race.km)}</td>
+              <td style="padding:10px 14px;text-align:center">${_fmtAvg(race.avg)}</td>
               <td style="padding:10px 14px;text-align:center">${(race.riders||[]).length}</td>
               ${hasTeam?`<td style="padding:10px 14px;text-align:center">${myBest?`<span style="font-weight:800;color:${myBest.pos<=3?'#b45309':myBest.pos<=10?'#1d4ed8':'#374151'}">${myBest.pos}º ${escapeHtml(myBest.name)}</span>`:'<span style="color:#9ca3af">—</span>'}</td>`:''}
             </tr>`;
@@ -4363,7 +4363,7 @@ function _resRenderRiderProfile(body, history, riderName){
           <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(r.raceDate||'—')}</td>
           <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(r.localidad)}</td>
           <td style="padding:10px 14px;text-align:center">${r.km}</td>
-          <td style="padding:10px 14px;text-align:center">${r.avg!=='—'?r.avg+' km/h':r.avg}</td>
+          <td style="padding:10px 14px;text-align:center">${_fmtAvg(r.avg)}</td>
           <td style="padding:10px 14px;text-align:center;color:#6b7280">${r.totalRiders}</td>
           <td style="padding:10px 14px;text-align:center;font-family:monospace">${r.time}</td>
         </tr>`).join('')}
@@ -5340,8 +5340,16 @@ function updateMyTeamSuggestions(){
     _meAllTeams = [...new Set([..._meAllTeams, ...fromCurrent])].sort();
   }
 }
+// ── Saneado de unidades (km / km/h) para mostrar SIEMPRE una sola vez ──────
+// Quita cualquier unidad ya presente (km, km/h…) y deja solo el número.
+function _stripUnit(v){ return String(v==null?'':v).replace(/km\/?\s*h?/gi,'').replace(/[^0-9.,]/g,'').trim(); }
+function _fmtKm(v){ const n=_stripUnit(v); return n? (n+' km') : '—'; }
+function _fmtAvg(v){ const n=_stripUnit(v); return n? (n+' km/h') : '—'; }
+
 function formatKmValue(v){
   // COMENTARIO: formato robusto de kilómetros; limpia texto y conserva un único separador decimal.
+  // IMPORTANTE: NO añade la unidad — se devuelve solo el número; la unidad la pone
+  // cada sitio al mostrar (con _fmtKm), así nunca sale duplicada.
   let s=cleanSpaces(String(v||'')).toLowerCase().replace('km','').replace(/[^0-9,.]/g,'');
   if(!s)return '';
   const firstSep=s.search(/[,.]/);
@@ -5352,7 +5360,7 @@ function formatKmValue(v){
   }else{
     s=s.replace(/[,.]/g,'');
   }
-  return s?`${s} km`:'';
+  return s || '';
 }
 
 function _calcAvgSpeed(){
@@ -5370,7 +5378,7 @@ function _calcAvgSpeed(){
   const alreadyManual=avgField.dataset.manual==='1';
   if(alreadyManual) return;
   const speed=(km/(secs/3600)).toFixed(2).replace('.',',');
-  avgField.value=speed+' km/h';
+  avgField.value=speed;   // solo el número; la unidad (km/h) se añade al mostrar
   if(badge) badge.style.display='';
 }
 
@@ -5866,7 +5874,7 @@ function extractWinnerTime(text){
   const m2=oneLine.match(new RegExp('\\b1\\s+\\d{1,3}\\s+.+?\\s+(?:'+catRe+')\\s+.+?\\s+(\\d{1,2}:\\d{2}:\\d{2})\\b','i'));
   return m2?m2[1]:'';
 }
-function extractMeta(text){const oneLine=(text||'').replace(/\s+/g,' ');const title=(oneLine.match(/((?:XXIX|XXX|XVI|XVII|[A-ZÁÉÍÓÚÑ0-9]).{10,90}?)(?:\s+Km:|\s+CLASIFICACIÓN|\s+Vmedia)/i)||[])[1];if(title)$('raceName').value=cleanSpaces(title);const km=(oneLine.match(/Km:\s*([0-9,.]+)/i)||[])[1];if(km)$('raceKm').value=formatKmValue(km);const avg=(oneLine.match(/Vmedia\s*:?\s*([0-9,.]+)\s*Km/i)||[])[1];if(avg)$('raceAvg').value=avg+' km/h';const date=(oneLine.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/)||[])[1];if(date){const _iso=_parseSpanishDate(date);$('raceDate').value=_iso?formatDateDisplay(_iso):date;}try{if(typeof _wxRenderLoadedRaceChip==='function')_wxRenderLoadedRaceChip();}catch{}}
+function extractMeta(text){const oneLine=(text||'').replace(/\s+/g,' ');const title=(oneLine.match(/((?:XXIX|XXX|XVI|XVII|[A-ZÁÉÍÓÚÑ0-9]).{10,90}?)(?:\s+Km:|\s+CLASIFICACIÓN|\s+Vmedia)/i)||[])[1];if(title)$('raceName').value=cleanSpaces(title);const km=(oneLine.match(/Km:\s*([0-9,.]+)/i)||[])[1];if(km)$('raceKm').value=formatKmValue(km);const avg=(oneLine.match(/Vmedia\s*:?\s*([0-9,.]+)\s*Km/i)||[])[1];if(avg)$('raceAvg').value=_stripUnit(avg);const date=(oneLine.match(/(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/)||[])[1];if(date){const _iso=_parseSpanishDate(date);$('raceDate').value=_iso?formatDateDisplay(_iso):date;}try{if(typeof _wxRenderLoadedRaceChip==='function')_wxRenderLoadedRaceChip();}catch{}}
 
 function stripTeamNoise(t){
   return cleanSpaces(String(t||'')
@@ -8458,8 +8466,8 @@ async function _captureTop10Canvas(){
   const _metaParts=[];
   if(_raceDate) _metaParts.push('📅 '+_raceDate);
   if(_loc)      _metaParts.push('📍 '+_loc);
-  if(_km)       _metaParts.push('📏 '+_km+' km');
-  if(_avg)      _metaParts.push('💨 '+_avg+' km/h');
+  if(_km)       _metaParts.push('📏 '+_fmtKm(_km));
+  if(_avg)      _metaParts.push('💨 '+_fmtAvg(_avg));
   if(_type)     _metaParts.push('🔄 '+_type);
   const _metaHtml=_metaParts.join('<span style="color:rgba(255,255,255,.35);margin:0 4px">·</span>');
 
@@ -10886,7 +10894,7 @@ async function openHistoryModal(){
     return `<div class="hist-entry" onclick="loadHistoryEntry('${h.id}')">
       <div>
         <div class="hist-entry-name">📋 ${escapeHtml(h.raceName||'Carrera sin nombre')}${preBadge}</div>
-        <div class="hist-entry-meta">${escapeHtml(h.raceDate||'Fecha no indicada')} · ${escapeHtml(h.km||'')} · ${h.riders?h.riders.length:0} clasificados · Ganador: ${escapeHtml(w)}</div>
+        <div class="hist-entry-meta">${escapeHtml(h.raceDate||'Fecha no indicada')} · ${escapeHtml(h.km?_fmtKm(h.km):'')} · ${h.riders?h.riders.length:0} clasificados · Ganador: ${escapeHtml(w)}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="hist-entry-load" onclick="event.stopPropagation();loadHistoryEntry('${h.id}')">▶ Cargar</button>
@@ -11351,8 +11359,8 @@ async function saveHistory(){
 
   const raceName=$('raceName').value||'Carrera sin nombre';
   const raceDateStr=$('raceDate').value||'';
-  const km=$('raceKm').value||'';
-  const avg=$('raceAvg').value||'';
+  const km=_stripUnit($('raceKm').value||'');     // guardar SOLO el número (sin unidad)
+  const avg=_stripUnit($('raceAvg').value||'');   // la unidad se añade al mostrar
   const localidad=($('raceLocalidad')?.value||'').trim();
   const circuitType=($('raceCircuitType')?.value||'').trim();
   const challengeCV = !!($('raceChallengeCV')?.checked);
@@ -13135,7 +13143,7 @@ async function renderHistory(){
           <div style="font-size:12px;color:#667085;margin-top:3px">
             📅 ${escapeHtml(h.raceDate||'Sin fecha')}
             ${h.localidad?` · 📍 ${escapeHtml(h.localidad)}`:''}
-            ${h.km?` · 📏 ${h.km} km`:''}
+            ${h.km?` · 📏 ${_fmtKm(h.km)}`:''}
             ${h.avg?` · ⚡ ${h.avg}`:''}
             · 👥 ${riders.length} corredores
           </div>
@@ -13231,7 +13239,7 @@ async function renderHistory(){
         const stateBadge = isFuture
           ? '<span style="display:inline-block;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">📅 No realizada</span>'
           : '<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">⏳ Pasada · sin inscritos</span>';
-        const meta = [p.raceDate||'', p.localidad||'', p.circuitType||'', p.km?p.km+' km':''].filter(Boolean).join(' · ');
+        const meta = [p.raceDate||'', p.localidad||'', p.circuitType||'', p.km?_fmtKm(p.km):''].filter(Boolean).join(' · ');
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1px solid #c7d2fe;border-left:4px solid #1f6feb;border-radius:10px;margin-bottom:6px;flex-wrap:wrap">
           <div style="min-width:0;flex:1">
             <div style="font-weight:800;color:#0b2f6b;font-size:14px">📅 ${escapeHtml(p.raceName||'Prueba planificada')}${stateBadge}</div>
@@ -31925,7 +31933,7 @@ function _cargaShowHistoryPreview(raceId, btnEl){
         <div style="padding:2px 0">📋 <b>${totalRiders}</b> clasificados${inscritosN ? ' (de ' + inscritosN + ' inscritos)' : ''}</div>
         ${race.localidad ? `<div style="padding:2px 0">📍 ${escapeHtml(race.localidad)}</div>` : ''}
         ${race.circuitType ? `<div style="padding:2px 0">🛣️ ${escapeHtml(race.circuitType)}</div>` : ''}
-        ${race.km ? `<div style="padding:2px 0">📏 ${escapeHtml(race.km)} km</div>` : ''}
+        ${race.km ? `<div style="padding:2px 0">📏 ${escapeHtml(_fmtKm(race.km))}</div>` : ''}
         ${myTeamKey ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0">
           <div style="font-weight:800;color:#1d4ed8;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">🔵 Mi equipo</div>
           ${myRiders.length
@@ -38201,7 +38209,7 @@ async function _infGeneratePDF(){
       r.ccaa?['Comunidad', r.ccaa]:null,
       ['Categorías', cats],
       ['Tipo de prueba', r.tipo||'No disponible'],
-      r.km?['Kilómetros', r.km+' km']:null,
+      r.km?['Kilómetros', _fmtKm(r.km)]:null,
       r.estado==='realizada'?['Inscritos totales', r.totalInscritos!=null?String(r.totalInscritos):'No disponible']:null,
       r.estado==='realizada'?['Clasificados totales', String(r.totalParticipantes||'No disponible')]:null,
       r.estado==='realizada'?['Inscritos del equipo', r.misInscritos!=null?String(r.misInscritos):'No disponible']:null,
