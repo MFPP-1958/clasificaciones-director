@@ -9205,6 +9205,19 @@ function _ipRenderPreview(){
   }
   const year = document.getElementById('ipYearSelect')?.value || '';
   const data = _buildTeamRosterData(_ipHistory, _ipSelectedTeam, year);
+  // ── Respetar el FILTRO GLOBAL de categoría: si hay una categoría activa
+  // (p.ej. Cadete), no mostramos ciclistas de otro grupo (p.ej. Juvenil).
+  const _gGroup = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  if(_gGroup){
+    data.riders = (data.riders||[]).filter(r=>{
+      const g = (typeof _calCatGroup==='function') ? _calCatGroup(r.cat) : null;
+      return g && g.key===_gGroup;
+    });
+    // Recalcular los agregados de cabecera para que sean coherentes con el filtro
+    data.teamWins    = data.riders.reduce((s,r)=>s+(r.wins||0),0);
+    data.teamPodiums = data.riders.reduce((s,r)=>s+(r.podiums||0),0);
+    data.teamTop10   = data.riders.reduce((s,r)=>s+(r.top10||0),0);
+  }
   if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor='pointer'; }
   if(!data.riders.length){
     box.innerHTML = `<div style="padding:50px 20px;text-align:center;color:#9ca3af">
@@ -9532,7 +9545,18 @@ async function _ipExportPDF(){
   const year = document.getElementById('ipYearSelect')?.value || '';
   const history = _ipHistory && _ipHistory.length ? _ipHistory : await _ensureHistory();
   const data = _buildTeamRosterData(history, _ipSelectedTeam, year);
-  if(!data.riders.length){ alert('Sin datos para generar el PDF.'); return; }
+  // Respetar el filtro global de categoría (igual que la tabla en pantalla)
+  const _gGroup = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  if(_gGroup){
+    data.riders = (data.riders||[]).filter(r=>{
+      const g = (typeof _calCatGroup==='function') ? _calCatGroup(r.cat) : null;
+      return g && g.key===_gGroup;
+    });
+    data.teamWins    = data.riders.reduce((s,r)=>s+(r.wins||0),0);
+    data.teamPodiums = data.riders.reduce((s,r)=>s+(r.podiums||0),0);
+    data.teamTop10   = data.riders.reduce((s,r)=>s+(r.top10||0),0);
+  }
+  if(!data.riders.length){ alert('Sin datos para generar el PDF'+(_gGroup?' en la categoría seleccionada':'')+'.'); return; }
   _openTeamRosterPDFWindow(_ipSelectedTeam, year, data);
 }
 
