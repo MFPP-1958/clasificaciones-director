@@ -11496,17 +11496,37 @@ async function saveHistory(){
   // Por eso exigimos también que el NOMBRE coincida (misma prueba).
   const {data:existingAll,error:dupErr}=await _sb
     .from('races')
-    .select('id, name, notes, race_results(count)')
+    .select('id, name, notes, race_results(cat)')
     .eq('date', isoDate)
     .eq('race_type','clasificacion');
   if(dupErr){alert('Error al comprobar duplicados: '+dupErr.message);return;}
-  const existing = (existingAll||[]).filter(e => _sameRaceName(e.name, raceName));
+  // ── Grupo(s) de categoría: dos pruebas del MISMO día pero de CATEGORÍA
+  // distinta (p.ej. Etapa Cadete y Trofeo Juvenil) NO son duplicados. Por eso,
+  // además de fecha + nombre, exigimos que el grupo de categoría se solape.
+  const _catGrpKeys = arr => { const s=new Set(); (arr||[]).forEach(c=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(c):null; if(g) s.add(g.key); }); return s; };
+  const newCatGroups = _catGrpKeys((riders||[]).map(r=>r&&r.cat));
+  const _rowCatGroups = e => {
+    let s=new Set();
+    try{ const ex=JSON.parse(e.notes||'{}'); if(ex.raceCat){ const g=_calCatGroup(ex.raceCat); if(g) s.add(g.key); } }catch(_){}
+    if(!s.size) s=_catGrpKeys((e.race_results||[]).map(rr=>rr&&rr.cat));
+    return s;
+  };
+  const existing = (existingAll||[]).filter(e => {
+    if(!_sameRaceName(e.name, raceName)) return false;
+    const exG=_rowCatGroups(e);
+    // Solo descartamos si AMBAS categorías son conocidas y NO se solapan.
+    if(newCatGroups.size && exG.size){
+      let overlap=false; exG.forEach(k=>{ if(newCatGroups.has(k)) overlap=true; });
+      if(!overlap) return false;
+    }
+    return true;
+  });
 
   let accion='nueva'; // 'nueva' | 'actualizar' | 'cancelar'
 
   if(existing&&existing.length>0){
     const dup=existing[0];
-    const nCorredores=dup.race_results?.[0]?.count??'?';
+    const nCorredores=dup.race_results?.length??'?';
     accion=await _mostrarDialogoDuplicado(raceDateStr||isoDate, dup.name, nCorredores);
     if(accion==='cancelar') return;
     if(accion==='actualizar'){
@@ -21513,7 +21533,7 @@ async function saveInscritosOnly(){
   // ── Comprobar si ya hay una carrera con esa fecha (cualquier tipo)
   const {data:existing, error:dupErr} = await _sb
     .from('races')
-    .select('id, name, notes, race_type, race_results(count)')
+    .select('id, name, notes, race_type, race_results(cat)')
     .eq('date', parsedDate);
   if(dupErr){
     console.error('[saveInscritosOnly] dupErr:', dupErr);
@@ -21523,13 +21543,33 @@ async function saveInscritosOnly(){
   console.log('[saveInscritosOnly] existing en esa fecha:', existing);
 
   // Priorizar clasificación; si solo hay planificada, ofrecer convertirla.
-  // EXIGIMOS que el NOMBRE coincida (misma prueba): si en esa fecha hay otra
-  // carrera DISTINTA, no la tocamos (evita renombrar/pisar otra prueba del día).
-  const dupClasif = (existing||[]).find(r=>r.race_type==='clasificacion' && _sameRaceName(r.name, raceName));
-  const dupPlanif = (existing||[]).find(r=>r.race_type==='planificada' && _sameRaceName(r.name, raceName));
+  // EXIGIMOS que coincidan NOMBRE y GRUPO DE CATEGORÍA (misma prueba): si en esa
+  // fecha hay otra carrera DISTINTA (otro nombre u otra categoría, p.ej. una
+  // etapa Cadete frente a un trofeo Juvenil), NO la tocamos: evita renombrar o
+  // pisar una prueba de otra categoría celebrada el mismo día.
+  const _catGrpKeys = arr => { const s=new Set(); (arr||[]).forEach(c=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(c):null; if(g) s.add(g.key); }); return s; };
+  const newCatGroups = _catGrpKeys((inscritos||[]).map(p=>p&&p.cat));
+  const _rowCatGroups = e => {
+    let s=new Set();
+    try{ const ex=JSON.parse(e.notes||'{}'); if(ex.raceCat){ const g=_calCatGroup(ex.raceCat); if(g) s.add(g.key); }
+         if(!s.size && Array.isArray(ex.inscritos)) s=_catGrpKeys(ex.inscritos.map(p=>p&&p.cat)); }catch(_){}
+    if(!s.size) s=_catGrpKeys((e.race_results||[]).map(rr=>rr&&rr.cat));
+    return s;
+  };
+  const _sameRace = e => {
+    if(!_sameRaceName(e.name, raceName)) return false;
+    const exG=_rowCatGroups(e);
+    if(newCatGroups.size && exG.size){
+      let overlap=false; exG.forEach(k=>{ if(newCatGroups.has(k)) overlap=true; });
+      if(!overlap) return false;
+    }
+    return true;
+  };
+  const dupClasif = (existing||[]).find(r=>r.race_type==='clasificacion' && _sameRace(r));
+  const dupPlanif = (existing||[]).find(r=>r.race_type==='planificada' && _sameRace(r));
 
   if(dupClasif){
-    const nClasif = dupClasif.race_results?.[0]?.count ?? 0;
+    const nClasif = dupClasif.race_results?.length ?? 0;
     const cont = confirm(
       `Ya existe una carrera CLASIFICACIÓN en esa fecha:\n\n📅 ${raceDateStr}\n🏁 ${dupClasif.name}\n👥 ${nClasif} corredores clasificados\n\n¿Actualizar SOLO la lista de inscritos? (no se toca la clasificación)`
     );
