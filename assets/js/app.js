@@ -23274,7 +23274,9 @@ function _simRaceMatchesGlobalCat(h){
   (h.inscritos||[]).forEach(i=>{ if(i&&i.cat) cats.add(i.cat); });
   if(h.cat) cats.add(h.cat);
   if(cats.size) return [...cats].some(c=>_gfMatchesCatGender(c, h.raceName||''));
-  return _gfMatchesCatGender('', h.raceName||'');   // sin categoría → por nombre
+  // ESTRICTO: sin categoría conocida en sus corredores/inscritos → NO se muestra
+  // bajo una categoría concreta (evita que pruebas sin cat se cuelen en Junior).
+  return false;
 }
 const _SIM_CAT_LABEL = { cadete:'Cadetes', junior:'Juveniles / Júnior', sub23:'Sub-23', elite:'Élite', master:'Máster', femenino:'Féminas' };
 
@@ -23316,8 +23318,10 @@ function _simFillSelect(sel, list){
     const future = iso && iso >= today;
     const ridersN = (h.riders||[]).length;
     const tag = h._planned ? '📅' : (future ? '🔮' : (ridersN>=3 ? '🏁' : '📋'));
-    const ex = h._planned ? ' · planificada' : (ridersN>=3?` · ${ridersN} clasif.`:' (sin clasificar)');
-    return `<option value="${escapeAttr(h.id)}">${tag} ${escapeHtml(dt)} · ${escapeHtml(h.raceName||'')} · ${h.inscritos.length} inscritos${ex}</option>`;
+    const insN = (h.inscritos||[]).length;
+    const cuenta = insN ? `${insN} inscritos` : `${ridersN} clasificados`;
+    const ex = h._planned ? ' · planificada' : (insN && ridersN>=3?` · ${ridersN} clasif.`:'');
+    return `<option value="${escapeAttr(h.id)}">${tag} ${escapeHtml(dt)} · ${escapeHtml(h.raceName||'')} · ${cuenta}${ex}</option>`;
   }).join('');
   sel.innerHTML = '<option value="">— Selecciona una prueba —</option>' + opts;
   // Aviso de planificadas sin inscritos
@@ -23341,7 +23345,12 @@ async function renderSimulador(){
   const sel = document.getElementById('simRaceSelect');
   if(!sel) return;
   const hist = _cachedHistory || [];
-  const histIns = hist.filter(h => Array.isArray(h.inscritos) && h.inscritos.length>0);
+  // Simulables: con lista de inscritos guardada O con clasificación (≥3 clasificados,
+  // usaremos los clasificados como "lista" si no hay startlist — p.ej. Trofeo San Pascual).
+  const histIns = hist.filter(h =>
+    (Array.isArray(h.inscritos) && h.inscritos.length>0) ||
+    (h.riders||[]).filter(r=>r.pos>0).length>=3
+  );
   // 1ª pasada SÍNCRONA: histórico (instantáneo, no rompe flujos que seleccionan al abrir)
   _simFillSelect(sel, histIns);
   // 2ª pasada: añadir las planificadas del calendario que tengan inscritos
@@ -23948,7 +23957,12 @@ function _simBuildData(raceId){
   // La prueba puede estar en el histórico O ser una planificada con inscritos
   const race = hist.find(h => h.id === raceId) || (_simExtraRaces||[]).find(h => h.id === raceId);
   if(!race){ _simCurrentData = null; return; }
-  const inscritos = race.inscritos || [];
+  // Si la prueba NO tiene lista de inscritos pero SÍ clasificación, usamos a los
+  // clasificados como "lista de salida" (así se puede simular/validar igualmente).
+  let inscritos = race.inscritos || [];
+  if((!inscritos || inscritos.length===0) && (race.riders||[]).length>=3){
+    inscritos = (race.riders||[]).filter(r=>r.pos>0).map(r=>({ name:r.name, bib:r.bib||'', team:r.team||'', cat:r.cat||'' }));
+  }
   // Índices del histórico (excluyendo la propia prueba si no se ha disputado, para no contaminar)
   // NUEVO ENFOQUE: en vez de excluir todas las etapas/CRIs, ponderamos por similitud
   // con la carrera objetivo. Solo descartamos formatos REALMENTE incompatibles
