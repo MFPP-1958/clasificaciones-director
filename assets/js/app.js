@@ -11995,6 +11995,11 @@ async function renderInicio(){
         }catch(_){}
       }
     }
+    // Asegurar histórico cargado: las pre-inscripciones (clasificaciones futuras)
+    // viven en _cachedHistory y también son "próximas pruebas".
+    if(!Array.isArray(_cachedHistory) && typeof _ensureHistory==='function'){
+      try{ await _ensureHistory(); }catch(_){}
+    }
     const planned = (typeof _calPlanned !== 'undefined' && Array.isArray(_calPlanned)) ? _calPlanned : [];
     const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
     const gfMod = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.modality) || '';
@@ -12002,12 +12007,22 @@ async function renderInicio(){
     // El "blob" combina categoría guardada + modalidad + NOMBRE de la prueba,
     // así detectamos "CHALLENGE CADETES" aunque el campo cat esté vacío.
     const todayIso = new Date().toISOString().slice(0,10);
-    const allUpcoming = planned
-      .map(p => ({
-        ...p,
-        iso: p.dateStr || (p.date instanceof Date ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}-${String(p.date.getDate()).padStart(2,'0')}` : '')
-      }))
+    const _mkIso = (p)=> p.dateStr || (p.date instanceof Date ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}-${String(p.date.getDate()).padStart(2,'0')}` : '');
+    // 1) Planificadas (calendario)
+    const plannedUp = planned.map(p => ({ ...p, iso:_mkIso(p) }));
+    // 2) PRE-INSCRIPCIONES: clasificaciones con fecha FUTURA (al subir inscritos a una
+    //    prueba futura pasa a race_type='clasificacion' y deja _calPlanned; aun así
+    //    sigue siendo una prueba PRÓXIMA). Su categoría la tomamos de los inscritos.
+    const histUp = (Array.isArray(_cachedHistory)?_cachedHistory:[]).map(h=>{
+      const iso = _parseSpanishDate(h.raceDate)||'';
+      const insCats = [...new Set((h.inscritos||[]).map(i=>i.cat).filter(Boolean))].join(' ');
+      return { name:h.raceName, iso, dateStr:iso, localidad:h.localidad||'', cat:insCats, modality:'', fccvId:'', _histId:h.id, _hist:true };
+    }).filter(h=> h.iso && h.iso>=todayIso);
+    // Combinar y deduplicar por fecha+nombre (no repetir si estuviera en ambos)
+    const _seenUp=new Set();
+    const allUpcoming = [...plannedUp, ...histUp]
       .filter(p => p.iso && p.iso >= todayIso)
+      .filter(p => { const k=p.iso+'|'+String(p.name||'').toLowerCase().trim(); if(_seenUp.has(k)) return false; _seenUp.add(k); return true; })
       .sort((a,b) => a.iso.localeCompare(b.iso));
     const upcoming = allUpcoming
       .filter(p => {
