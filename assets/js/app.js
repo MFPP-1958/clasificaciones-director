@@ -1163,23 +1163,23 @@ function _calRender(){
   const catSuffix = catLabel ? ' · '+catLabel : '';
   const h2=document.getElementById('calHeading');
   if(h2) h2.textContent = '📅 Calendario de carreras' + (catLabel? ' — '+catLabel : '');
-  // ESTADO VACÍO: si hay categoría activa y NINGUNA prueba de esa categoría en
-  // los datos cargados, limpiamos por completo y avisamos (aislamiento total).
+  // ESTADO VACÍO: si hay categoría activa y NINGUNA prueba de esa categoría,
+  // mostramos un AVISO encima del calendario, pero SIN ocultar la rejilla
+  // (para poder seguir clicando días y empezar a meter pruebas de esa categoría).
+  let emptyBanner = '';
   if(g && !([..._calPast, ..._calPlanned].some(_calRaceMatchesCat))){
-    if(title) title.textContent = (_calView==='annual'? 'Año '+_calYear : _CAL_MONTHS_ES[_calMonth]+' '+_calYear)+catSuffix;
-    body.innerHTML = `<div style="text-align:center;padding:50px 20px;color:#94a3b8">
-      <div style="font-size:44px">🗓️</div>
-      <p style="margin-top:12px;font-size:15px;font-weight:800;color:#475569">No hay pruebas ni datos registrados para <span style="color:#0b2f6b">${escapeHtml(catLabel)}</span> en esta temporada.</p>
-      <p style="font-size:13px;color:#94a3b8">Cambia la categoría en el filtro superior, o añade pruebas de ${escapeHtml(catLabel)} desde Carga / Calendario.</p>
+    emptyBanner = `<div style="text-align:center;padding:18px 16px;margin-bottom:12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;color:#94a3b8">
+      <span style="font-size:22px">🗓️</span>
+      <span style="font-size:14px;font-weight:800;color:#475569;margin-left:6px">Aún no hay pruebas de <span style="color:#0b2f6b">${escapeHtml(catLabel)}</span> esta temporada.</span>
+      <div style="font-size:12.5px;margin-top:4px">Haz clic en un día para registrar una prueba de ${escapeHtml(catLabel)} (pasada o futura), o súbela desde Carga y Resumen.</div>
     </div>`;
-    return;
   }
   if(_calView==='annual'){
     if(title) title.textContent = 'Año '+_calYear+catSuffix;
-    body.innerHTML = _calBuildAnnual();
+    body.innerHTML = emptyBanner + _calBuildAnnual();
   } else {
     if(title) title.textContent = _CAL_MONTHS_ES[_calMonth]+' '+_calYear+catSuffix;
-    body.innerHTML = _calBuildMonth(_calYear, _calMonth);
+    body.innerHTML = emptyBanner + _calBuildMonth(_calYear, _calMonth);
   }
   _calBindTooltips();
 }
@@ -1286,7 +1286,7 @@ function _calBuildMonth(y, m){
     const bgColor = isToday ? '#fef2f2' : races.length>0 ? (hasPast&&!hasPlan?'#eff6ff':hasPlan&&!hasPast?'#f0fdf4':'#fefce8') : isPast?'#f9fafb':'#fff';
     const border  = isToday ? '2px solid #ef4444' : races.length>0 ? '1.5px solid #e0e7ff' : '1px solid #f3f4f6';
     const dayColor= isToday ? '#ef4444' : isPast&&races.length===0 ? '#9ca3af' : '#111827';
-    const cursor  = !isPast || races.length>0 ? 'pointer' : 'default';
+    const cursor  = 'pointer';   // cualquier día es clicable para registrar una prueba
     // data-* marca los días con carrera para el tooltip ligero (hover / táctil)
     const tipAttrs = races.length>0 ? ` data-cal-day="1" data-cy="${y}" data-cm="${m}" data-cd="${day}"` : '';
 
@@ -1630,15 +1630,13 @@ function _calPrint(){
 }
 
 function _calDayClick(y,m,d){
-  const now = new Date(); now.setHours(0,0,0,0);
-  const clicked = new Date(y,m,d);
-  const races = _calGetRacesForDay(y,m,d);
-  // Si tiene carreras ya y es pasado → mostrar detalle (ya está en la lista de abajo)
-  // Si es futuro o no tiene carreras → abrir modal
-  if(clicked >= now){
-    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    _calOpenModal(dateStr);
-  }
+  const races = _calGetRacesForDay(y,m,d).filter(_calRaceMatchesCat);
+  // Si el día YA tiene pruebas de la categoría activa, no abrimos el modal de
+  // añadir (se ven en la lista de abajo / al pasar el ratón). Si no tiene
+  // ninguna, abrimos el modal para registrar una nueva — sea pasada o futura.
+  if(races.length) return;
+  const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  _calOpenModal(dateStr);
 }
 
 // ID de la carrera que se está editando (null = modo añadir)
@@ -1651,13 +1649,20 @@ function _calOpenModal(dateStr){
   const msg = document.getElementById('calModalMsg');
   const title = document.getElementById('calModalTitle');
   if(!modal) return;
-  if(title) title.textContent = '➕ Añadir carrera planificada';
+  // Fecha pasada o futura: el título lo refleja (la prueba se puede registrar igual)
+  const _hoy = new Date().toISOString().slice(0,10);
+  const esPasada = dateStr && dateStr < _hoy;
+  if(title) title.textContent = esPasada ? '➕ Registrar prueba (fecha pasada)' : '➕ Añadir carrera planificada';
   if(dateInp) dateInp.value = dateStr || '';
   document.getElementById('calPlanName').value='';
-  document.getElementById('calPlanCat').value='';
+  // Categoría: por defecto la del FILTRO GLOBAL activo (evita meterla en la equivocada)
+  const _gLbl = (typeof _calGlobalCatGroup==='function') ? _calCatLabel(_calGlobalCatGroup()) : '';
+  document.getElementById('calPlanCat').value = _gLbl || '';
   document.getElementById('calPlanLoc').value='';
   document.getElementById('calPlanNotes').value='';
-  if(msg) msg.textContent='';
+  if(msg) msg.innerHTML = esPasada
+    ? '<span style="color:#92400e">📅 Fecha pasada: se registrará la prueba. Para añadir la clasificación, luego ábrela en <b>Carga y Resumen</b>.</span>'
+    : '';
   modal.style.display='flex';
   document.body.style.overflow='hidden';
   setTimeout(()=>{ const n=document.getElementById('calPlanName'); if(n) n.focus(); },100);
