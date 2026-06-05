@@ -23262,11 +23262,39 @@ async function _simLoadPlanned(){
 }
 
 // Rellena el selector con la lista combinada (histórico + planificadas)
+// ¿La prueba encaja con la categoría/género del FILTRO GLOBAL? (override raceCat
+// manda; si no, se mira la categoría de sus corredores/inscritos).
+function _simRaceMatchesGlobalCat(h){
+  const gfCat=(typeof _globalFilters!=='undefined'&&_globalFilters&&_globalFilters.cat)||'';
+  const gfGen=(typeof _globalFilters!=='undefined'&&_globalFilters&&_globalFilters.gender)||'';
+  if((!gfCat && !gfGen) || typeof _gfMatchesCatGender!=='function') return true;
+  if(h.raceCat) return _gfMatchesCatGender(h.raceCat, h.raceName||'');
+  const cats=new Set();
+  (h.riders||[]).forEach(r=>{ if(r&&r.cat) cats.add(r.cat); });
+  (h.inscritos||[]).forEach(i=>{ if(i&&i.cat) cats.add(i.cat); });
+  if(h.cat) cats.add(h.cat);
+  if(cats.size) return [...cats].some(c=>_gfMatchesCatGender(c, h.raceName||''));
+  return _gfMatchesCatGender('', h.raceName||'');   // sin categoría → por nombre
+}
+const _SIM_CAT_LABEL = { cadete:'Cadetes', junior:'Juveniles / Júnior', sub23:'Sub-23', elite:'Élite', master:'Máster', femenino:'Féminas' };
+
 function _simFillSelect(sel, list){
   const today = (new Date()).toISOString().slice(0,10);
+  const _hadAny = list.length;
+  // FILTRADO ESTRICTO por la categoría del filtro global superior
+  list = list.filter(_simRaceMatchesGlobalCat);
   if(!list.length){
-    sel.innerHTML = '<option value="">— No hay pruebas con startlist guardada —</option>';
     sel.disabled = true;
+    const gfCat=(typeof _globalFilters!=='undefined'&&_globalFilters&&_globalFilters.cat)||'';
+    if(gfCat && _hadAny){
+      // Había pruebas, pero ninguna de la categoría activa
+      const lbl=_SIM_CAT_LABEL[gfCat]||gfCat;
+      sel.innerHTML = `<option value="">— Sin pruebas de ${lbl} —</option>`;
+      const hintEl0=document.getElementById('simPlannedHint'); if(hintEl0) hintEl0.innerHTML='';
+      _simShowEmpty(`No hay pruebas disponibles para simular en la categoría ${lbl}. Cambia la categoría en el filtro superior, o prepara una prueba de ${lbl} con su lista de inscritos.`);
+      return;
+    }
+    sel.innerHTML = '<option value="">— No hay pruebas con startlist guardada —</option>';
     const extra = _simPlannedNoIns.length
       ? ` Tienes ${_simPlannedNoIns.length} prueba(s) planificada(s) en el calendario, pero aún SIN lista de inscritos: añádeles la startlist (Historial → 📋, o Carga y Resumen) para poder simularlas.`
       : '';
