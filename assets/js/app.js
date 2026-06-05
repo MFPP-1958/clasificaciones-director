@@ -29797,6 +29797,7 @@ function _tablaSaveFilters(){
 
 function _tablaRestoreFilters(){
   try{
+    if(typeof _tablaClearing!=='undefined' && _tablaClearing) return false;  // no restaurar mientras se limpia
     const raw = localStorage.getItem(_TABLA_FILTERS_KEY);
     if(!raw) return false;
     const state = JSON.parse(raw);
@@ -29855,14 +29856,22 @@ if(_tablaPrevApply_persistencia){
     _tablaScheduleSave();
   };
 }
-// Wrap clearAllFilters para que también borre el storage
+// Wrap clearAllFilters para que también borre el storage.
+// IMPORTANTE: borramos el almacenamiento ANTES de limpiar. Si no, clearAllFilters
+// llama internamente a populateFilters() (que está envuelto para RE-RESTAURAR el
+// preset guardado), y eso volvería a activar onlyMyTeam/categoría justo después
+// de limpiarlos (bug: "Limpiar filtros no reacciona", solo se ve mi equipo).
 const _tablaPrevClear_persistencia = (typeof window.clearAllFilters === 'function') ? window.clearAllFilters : null;
 if(_tablaPrevClear_persistencia){
   window.clearAllFilters = function(){
-    _tablaPrevClear_persistencia();
-    _tablaResetFilters();
+    _tablaClearing = true;                                   // evita re-restaurar durante el clear
+    try{ _tablaResetFilters(); }catch(_){}                   // borra _TABLA_FILTERS_KEY
+    try{ localStorage.removeItem(_TABLA_LS_KEY); }catch(_){} // borra _TABLA_LS_KEY (otro sistema)
+    try{ _tablaPrevClear_persistencia(); }
+    finally{ _tablaClearing = false; }
   };
 }
+let _tablaClearing = false;
 
 // Restaurar filtros al ENTRAR a view-tabla (hook en showView)
 const _tablaPrevShowView_persistencia = (typeof window.showView === 'function') ? window.showView : null;
