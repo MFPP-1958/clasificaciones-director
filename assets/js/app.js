@@ -1225,6 +1225,15 @@ function _calGetRacesForDay(y, m, d){
   });
 }
 
+// ¿La prueba del calendario está REALIZADA? Solo por fecha (hoy >= fecha).
+// Una clasificación con fecha futura (pre-inscripción adelantada) NO está realizada.
+function _calDone(r){
+  if(!r || r.type!=='past' || !(r.date instanceof Date)) return false;
+  const t=new Date(); t.setHours(0,0,0,0);
+  const d=new Date(r.date.getTime()); d.setHours(0,0,0,0);
+  return d <= t;
+}
+
 function _calBuildMonth(y, m){
   const today = new Date();
   const firstDay = new Date(y, m, 1);
@@ -1243,8 +1252,10 @@ function _calBuildMonth(y, m){
     const isToday = today.getFullYear()===y && today.getMonth()===m && today.getDate()===day;
     const isPast  = new Date(y,m,day) < new Date(today.getFullYear(),today.getMonth(),today.getDate());
     const races   = _calGetRacesForDay(y,m,day).filter(_calRaceMatchesCat);
-    const hasPast = races.some(r=>r.type==='past');
-    const hasPlan = races.some(r=>r.type==='planned');
+    // "Realizada" SOLO por fecha (hoy >= fecha). Una clasificación futura (p.ej.
+    // pre-inscripción cargada con antelación) sigue siendo PENDIENTE.
+    const hasPast = races.some(_calDone);
+    const hasPlan = races.some(r=>!_calDone(r));
 
     const bgColor = isToday ? '#fef2f2' : races.length>0 ? (hasPast&&!hasPlan?'#eff6ff':hasPlan&&!hasPast?'#f0fdf4':'#fefce8') : isPast?'#f9fafb':'#fff';
     const border  = isToday ? '2px solid #ef4444' : races.length>0 ? '1.5px solid #e0e7ff' : '1px solid #f3f4f6';
@@ -1258,12 +1269,13 @@ function _calBuildMonth(y, m){
       onmouseenter="this.style.boxShadow='0 2px 8px rgba(0,0,0,.1)'" onmouseleave="this.style.boxShadow=''">
       <div style="font-size:13px;font-weight:${isToday?'900':'700'};color:${dayColor};margin-bottom:4px">${day}</div>
       ${races.map(r=>{
-        const isPastClickable = r.type==='past' && r.id;
+        const done = _calDone(r);
+        const isPastClickable = done && r.id;
         const onClickAttr = isPastClickable
           ? `onclick="event.stopPropagation();_calOpenRaceDetails('${escapeAttr(String(r.id))}')"`
           : '';
-        return `<div ${onClickAttr} style="font-size:10px;font-weight:700;background:${r.type==='past'?'#3b82f6':'#10b981'};color:#fff;border-radius:4px;padding:2px 5px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;cursor:${isPastClickable?'pointer':'default'};${isPastClickable?'box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)':''}" title="${escapeHtml(r.name)}${isPastClickable?' — Click para ver participantes':''}">
-          ${r.type==='planned'?'📋 ':''}${escapeHtml(r.name)}
+        return `<div ${onClickAttr} style="font-size:10px;font-weight:700;background:${done?'#3b82f6':'#10b981'};color:#fff;border-radius:4px;padding:2px 5px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;cursor:${isPastClickable?'pointer':'default'};${isPastClickable?'box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)':''}" title="${escapeHtml(r.name)}${isPastClickable?' — Click para ver participantes':''}">
+          ${!done?'📋 ':''}${escapeHtml(r.name)}
         </div>`;
       }).join('')}
     </div>`;
@@ -1279,7 +1291,7 @@ function _calBuildMonth(y, m){
     html += `<div style="margin-top:20px;font-weight:800;font-size:14px;color:#0b2f6b;margin-bottom:10px">📋 Carreras de ${_CAL_MONTHS_ES[m]}</div>
     <div style="display:flex;flex-direction:column;gap:8px">`;
     monthRaces.forEach(r=>{
-      const isPlan = r.type==='planned';
+      const isPlan = !_calDone(r);   // pendiente/próxima si aún no ha llegado su fecha
       const canClickPast = !isPlan && r.id;
       const rowClick = canClickPast ? `onclick="_calOpenRaceDetails('${escapeAttr(String(r.id))}')"` : '';
       const rowHover = canClickPast ? 'transition:background .15s' : '';
@@ -1331,7 +1343,7 @@ function _calBuildAnnual(){
         ${races.length===0?'<span style="color:#9ca3af">Sin carreras</span>':
           races.sort((a,b)=>a.date-b.date).map(r=>`
           <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f9fafb">
-            <span style="width:8px;height:8px;border-radius:50%;background:${r.type==='past'?'#3b82f6':'#10b981'};flex-shrink:0;display:inline-block"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:${_calDone(r)?'#3b82f6':'#10b981'};flex-shrink:0;display:inline-block"></span>
             <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
             <span style="color:#9ca3af;flex-shrink:0">${r.date.getDate()}</span>
           </div>`).join('')}
@@ -4758,6 +4770,18 @@ function _gCopySQL(){
 /* ── Fin RBAC ─────────────────────────────────────────────── */
 
 let _cachedHistory = null;
+
+// ── ESTADO DE UNA PRUEBA: SOLO POR FECHA ──────────────────────────────────
+// Una prueba está "realizada" si HOY >= su fecha, INDEPENDIENTEMENTE de que se
+// hayan subido inscritos o la clasificación. Antes de su fecha está "pendiente"
+// (próxima), aunque ya tenga startlist u horarios cargados con antelación.
+function _raceIsRealizadaISO(iso){
+  if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  return iso <= new Date().toISOString().slice(0,10);   // hoy o pasado
+}
+function _raceIsRealizada(dateStr){
+  return _raceIsRealizadaISO(_parseSpanishDate(dateStr));
+}
 
 function _parseSpanishDate(str){
   if(!str) return null;
@@ -24201,12 +24225,15 @@ function _simRenderCurrent(){
       _pvrBtn.style.display = _hasResults ? 'inline-block' : 'none';
     }
   }catch(e){}
-  // Meta de la carrera
+  // Meta de la carrera — estado SOLO por fecha (no por tener o no clasificación)
   const ridersN = (race.riders||[]).length;
-  const isPre = ridersN < 3;
-  const stateChip = isPre
-    ? '<span class="ib-chip" style="background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a">🔮 Pre-carrera</span>'
-    : `<span class="ib-chip ok">🏁 Disputada · ${ridersN} clasificados</span>`;
+  const realizada = _raceIsRealizada(race.raceDate);
+  const isPre = !realizada;   // antes de su fecha → pendiente, aunque tenga inscritos
+  const stateChip = !realizada
+    ? '<span class="ib-chip" style="background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a">🔮 Pendiente (aún no disputada)</span>'
+    : (ridersN>=3
+        ? `<span class="ib-chip ok">🏁 Realizada · ${ridersN} clasificados</span>`
+        : '<span class="ib-chip" style="background:#fef9c3;border-color:#fde047;color:#854d0e">🏁 Realizada · sin clasificación todavía</span>');
   // Chip de terreno detectado (Fase 5)
   const terrainLabels = { llana:'🟢 Llana', rompepiernas:'🟡 Rompepiernas', media_montana:'🟠 Media montaña', montanosa:'🔴 Montañosa', desconocido:'⚪ Sin recorrido cargado' };
   const t = _simCurrentData && _simCurrentData.terrain;
@@ -37827,7 +37854,9 @@ function _infBuildDataByKey(history, opts){
         misCorredores: mine.length,                 // clasificados (finishers)
         misInscritos: hasIns ? mineIns.length : null, // inscritos del equipo
         nombresMios: (mine.length? mine.map(m=>m.name) : mineIns.map(m=>m.name)),
-        estado:'realizada'
+        // Estado SOLO por fecha: si la prueba aún no ha llegado (clasificación con
+        // fecha futura = pre-inscripción adelantada), es "pendiente", no "realizada".
+        estado: _raceIsRealizadaISO(iso) ? 'realizada' : 'pendiente'
       });
     }
     realizadas.sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
