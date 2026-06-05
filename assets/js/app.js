@@ -11431,6 +11431,24 @@ ${podiumRef?`<div class="block" style="border-color:#fde68a;background:#fffbeb">
   w.document.close();
   setTimeout(()=>w.print(),800);
 }
+// ¿Dos nombres de prueba son la MISMA prueba? (para no tratar como duplicado a
+// dos carreras distintas del mismo día). Normaliza y compara por solape de tokens.
+function _sameRaceName(a,b){
+  const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  const na=norm(a), nb=norm(b);
+  if(!na||!nb) return false;
+  if(na===nb) return true;
+  // Distinta ETAPA del mismo día = prueba distinta (no duplicado)
+  const etA=(na.match(/etapa\s*(\d+)/)||[])[1];
+  const etB=(nb.match(/etapa\s*(\d+)/)||[])[1];
+  if(etA && etB && etA!==etB) return false;
+  const A=new Set(na.split(' ').filter(t=>t.length>=3));
+  const B=new Set(nb.split(' ').filter(t=>t.length>=3));
+  if(!A.size||!B.size) return false;
+  let shared=0; A.forEach(t=>{ if(B.has(t)) shared++; });
+  return (shared/Math.min(A.size,B.size)) >= 0.7;   // 70%+ de tokens compartidos = misma prueba
+}
+
 async function saveHistory(){
   // Si solo hay pre-inscripción cargada (sin clasificación final), delegamos
   // en saveInscritosOnly para que el director no tenga que distinguir entre
@@ -11471,13 +11489,18 @@ async function saveHistory(){
   // un duplicado (route, weather, etc. que el formulario no controla).
   const notesObj = {raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,ccaa};
 
-  // ── Buscar duplicados por fecha ──────────────────────────────────────────
-  const {data:existing,error:dupErr}=await _sb
+  // ── Buscar duplicados por fecha Y NOMBRE ─────────────────────────────────
+  // IMPORTANTE: NO basta con la fecha. Dos pruebas distintas el mismo día
+  // (p.ej. una etapa de una vuelta y otro trofeo) NO son duplicados. Si solo
+  // miramos la fecha, al guardar la 2ª se ofrece "actualizar" y se BORRA la 1ª.
+  // Por eso exigimos también que el NOMBRE coincida (misma prueba).
+  const {data:existingAll,error:dupErr}=await _sb
     .from('races')
     .select('id, name, notes, race_results(count)')
     .eq('date', isoDate)
     .eq('race_type','clasificacion');
   if(dupErr){alert('Error al comprobar duplicados: '+dupErr.message);return;}
+  const existing = (existingAll||[]).filter(e => _sameRaceName(e.name, raceName));
 
   let accion='nueva'; // 'nueva' | 'actualizar' | 'cancelar'
 
@@ -21499,9 +21522,11 @@ async function saveInscritosOnly(){
   }
   console.log('[saveInscritosOnly] existing en esa fecha:', existing);
 
-  // Priorizar clasificación; si solo hay planificada, ofrecer convertirla
-  const dupClasif = (existing||[]).find(r=>r.race_type==='clasificacion');
-  const dupPlanif = (existing||[]).find(r=>r.race_type==='planificada');
+  // Priorizar clasificación; si solo hay planificada, ofrecer convertirla.
+  // EXIGIMOS que el NOMBRE coincida (misma prueba): si en esa fecha hay otra
+  // carrera DISTINTA, no la tocamos (evita renombrar/pisar otra prueba del día).
+  const dupClasif = (existing||[]).find(r=>r.race_type==='clasificacion' && _sameRaceName(r.name, raceName));
+  const dupPlanif = (existing||[]).find(r=>r.race_type==='planificada' && _sameRaceName(r.name, raceName));
 
   if(dupClasif){
     const nClasif = dupClasif.race_results?.[0]?.count ?? 0;
