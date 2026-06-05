@@ -28186,15 +28186,22 @@ function _simRunBacktest(){
       // Filtro mínimo: solo descartamos las que NO se pueden simular
       // (sin resultados o sin fecha). La compatibilidad por formato se aplica
       // DENTRO del bucle según el tipo de la carrera objetivo (target).
-      const past = hist.filter(h =>
+      let past = hist.filter(h =>
         (h.riders||[]).length >= 3 &&
         _parseSpanishDate(h.raceDate)
       );
 
+      // Filtro de TIPO de prueba a EVALUAR (los objetivos). La predicción de cada
+      // una sigue usando SOLO pruebas similares; esto solo elige qué carreras medir.
+      const _btType = document.getElementById('simBacktestType')?.value || '';
+      if(_btType==='tt')        past = past.filter(h => _simIsTimeTrial(h));
+      else if(_btType==='road') past = past.filter(h => !_simIsTimeTrial(h));
+
       if(past.length < 5){
-        if(typeof showToast==='function') showToast('Necesitas al menos 5 carreras con resultados para el backtest','warn',4500);
-        if(btn){ btn.disabled = false; btn.textContent = '🧪 Lanzar backtest histórico'; }
-        return;
+        const tipoTxt = _btType==='tt' ? ' de contrarreloj' : _btType==='road' ? ' en línea/circuito' : '';
+        if(typeof showToast==='function') showToast(`Solo hay ${past.length} carrera(s)${tipoTxt} con resultados. Para un backtest fiable conviene tener bastantes más; con tan pocas, el error es poco representativo.`,'warn',6000);
+        if(btn){ btn.disabled = false; btn.textContent = '🔄 Lanzar de nuevo'; }
+        if(past.length < 3) return;   // imposible con menos de 3
       }
 
       // Ordenar por fecha ascendente
@@ -28326,7 +28333,19 @@ function _simRunBacktest(){
       }
 
       const ms = Math.round(performance.now()-t0);
-      _simBacktestResults = { raceResults, ms, totalPast: past.length };
+      // Si el filtro de tipo deja pocas/ninguna carrera evaluable, lo explicamos
+      if(!raceResults.length && _btType){
+        const tipoTxt = _btType==='tt' ? 'contrarreloj (CRI)' : 'en línea / circuito';
+        const body=document.getElementById('simBacktestBody');
+        if(body) body.innerHTML = `<div style="padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;color:#92400e;font-size:13px;line-height:1.55">
+          ⚠️ <b>No hay suficientes pruebas de ${tipoTxt} en el histórico para un backtest fiable.</b><br>
+          Para validar la predicción de una ${tipoTxt}, el sistema necesita varias pruebas previas del MISMO formato (cada predicción solo usa pruebas similares). Con muy pocas, el resultado no sería representativo.<br><br>
+          👉 Usa <b>"Todas las pruebas"</b> para la visión global del modelo, y a medida que cargues más cronos en el histórico, el backtest específico de CRI será fiable.</div>`;
+        if(typeof showToast==='function') showToast(`Sin pruebas suficientes de ${tipoTxt} para el backtest`, 'warn', 5000);
+        if(btn){ btn.disabled=false; btn.textContent='🔄 Lanzar de nuevo'; }
+        return;
+      }
+      _simBacktestResults = { raceResults, ms, totalPast: past.length, type:_btType };
       _simRenderBacktest();
       if(typeof showToast==='function') showToast(`🧪 Backtest completado · ${raceResults.length} carreras simuladas · ${ms} ms`, 'ok', 3500);
 

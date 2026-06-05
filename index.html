@@ -2470,7 +2470,15 @@
       <section class="panel" id="simBacktestPanel" style="border-left:4px solid #0369a1;background:linear-gradient(135deg,#f0f9ff,#fff)">
         <div class="section-title">
           <h2 style="margin:0;color:#075985">🧪 Backtest histórico · Precisión del modelo</h2>
-          <button class="btn" id="simBacktestRunBtn" onclick="_simRunBacktest()" style="background:#0369a1;border-color:#0369a1;color:#fff;font-weight:800;padding:9px 16px">🧪 Lanzar backtest histórico</button>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <label for="simBacktestType" style="font-size:12px;font-weight:800;color:#075985">Evaluar:</label>
+            <select id="simBacktestType" style="padding:7px 10px;border:1.5px solid #bae6fd;border-radius:8px;font-size:12.5px;font-weight:700;color:#0b2f6b" title="Qué pruebas se evalúan en el test. Cada predicción usa SIEMPRE solo pruebas similares; esto elige qué carreras objetivo medir.">
+              <option value="">Todas las pruebas (visión global)</option>
+              <option value="tt">Solo contrarreloj (CRI)</option>
+              <option value="road">Solo carreras en línea / circuito</option>
+            </select>
+            <button class="btn" id="simBacktestRunBtn" onclick="_simRunBacktest()" style="background:#0369a1;border-color:#0369a1;color:#fff;font-weight:800;padding:9px 16px">🧪 Lanzar backtest histórico</button>
+          </div>
         </div>
 
         <details class="sim-help">
@@ -3356,6 +3364,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=estado-por-fecha-2"></script>
+<script src="assets/js/app.js?v=backtest-tipo-1"></script>
 </body>
 </html>
