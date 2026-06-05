@@ -1026,9 +1026,14 @@ async function _calLoadData(){
     // Grupos de categoría presentes en la prueba (derivados de corredores + inscritos)
     const catGroups = new Set();
     const catRaw = new Set();
-    [...riders, ...inscritos].forEach(p=>{
-      const c=(p&&p.cat)||''; if(c){ catRaw.add(c); const g=_calCatGroup(c); if(g) catGroups.add(g.key); }
-    });
+    // Categoría FORZADA (override) manda sobre la derivación de corredores
+    if(r.raceCat){
+      const g=_calCatGroup(r.raceCat); if(g) catGroups.add(g.key); catRaw.add(r.raceCat);
+    } else {
+      [...riders, ...inscritos].forEach(p=>{
+        const c=(p&&p.cat)||''; if(c){ catRaw.add(c); const g=_calCatGroup(c); if(g) catGroups.add(g.key); }
+      });
+    }
     // Mejor resultado de nuestro equipo en esta prueba
     let bestMine=null, mineCount=0;
     if(myKey){
@@ -4888,6 +4893,7 @@ async function _sbLoadHistory(){
       localidad: extra.localidad || '',
       circuitType: extra.circuitType || '',
       challengeCV: !!extra.challengeCV,
+      raceCat: extra.raceCat || '',   // categoría FORZADA de la prueba (override manual)
       ccaa: extra.ccaa || '',
       route: extra.route || null,
       // Meteo (Open-Meteo) — opcionales, leídos desde notes
@@ -11002,6 +11008,57 @@ async function deleteHistoryEntry(id){
 
 // Borrado SEGURO de UNA prueba: modal con el nombre completo de la prueba
 // para que el usuario confirme sin riesgo de equivocarse de fila.
+// ── Editar la CATEGORÍA de una prueba (override manual) ───────────────────
+function _histEditRace(id){
+  const h=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory.find(x=>x.id===id):null;
+  if(!h){ alert('Prueba no encontrada. Recarga el Historial.'); return; }
+  const derived=[...new Set([...(h.riders||[]),...(h.inscritos||[])].map(p=>p&&p.cat).filter(Boolean))].join(', ') || '(sin categoría en los corredores)';
+  const cur=h.raceCat||'';
+  const opts=[['','Automática (según los corredores)'],['CAD-1','CAD-1 (Cadete 1º)'],['CAD-2','CAD-2 (Cadete 2º)'],['CADETE','Cadete (genérico)'],['JUV-1','JUV-1 (Juvenil 1º)'],['JUV-2','JUV-2 (Juvenil 2º)'],['JUVENIL','Juvenil / Júnior (genérico)'],['SUB-23','Sub-23'],['ELITE','Élite'],['MASTER','Máster'],['FEMENINO','Féminas']];
+  let ov=document.getElementById('_hecModal'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='_hecModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.7);display:flex;align-items:center;justify-content:center;padding:20px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="background:linear-gradient(135deg,#7c3aed,#0e4d73);color:#fff;padding:16px 20px">
+      <div style="font-size:16px;font-weight:900">✏️ Editar categoría de la prueba</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px">${escapeHtml(h.raceName||'')}</div>
+    </div>
+    <div style="padding:18px 20px">
+      <div style="font-size:12.5px;color:#475569;margin-bottom:10px">Categoría detectada por los corredores: <b style="color:#0b2f6b">${escapeHtml(derived)}</b></div>
+      <label style="font-size:12px;font-weight:800;color:#475569">Categoría de la prueba (manda sobre la detección)</label>
+      <select id="_hecCatSel" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-top:5px">
+        ${opts.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${escapeHtml(l)}</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:#94a3b8;margin-top:6px">Al guardar, la prueba se moverá automáticamente al calendario/historial de la categoría elegida y desaparecerá del actual.</div>
+    </div>
+    <div style="padding:4px 20px 18px;display:flex;gap:10px">
+      <button onclick="_histSaveRaceCat('${escapeAttr(id)}')" style="flex:1;background:linear-gradient(135deg,#7c3aed,#0e4d73);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">💾 Guardar categoría</button>
+      <button onclick="document.getElementById('_hecModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:12px 18px;font-weight:800;font-size:14px;cursor:pointer">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+}
+async function _histSaveRaceCat(id){
+  const sel=document.getElementById('_hecCatSel'); if(!sel) return;
+  const val=sel.value;
+  if(!_sb){ alert('Base de datos no disponible.'); return; }
+  try{
+    const {data,error}=await _sb.from('races').select('notes').eq('id',id).single();
+    if(error||!data) throw new Error(error?.message||'no encontrada');
+    let extra={}; try{ extra=JSON.parse(data.notes||'{}'); }catch(_){}
+    if(val) extra.raceCat=val; else delete extra.raceCat;
+    const {error:upErr}=await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',id);
+    if(upErr) throw upErr;
+    document.getElementById('_hecModal')?.remove();
+    _cachedHistory=null;   // invalidar caché → re-render reactivo
+    if(typeof _calLoadData==='function'){ try{ await _calLoadData(); }catch(_){} }
+    if(typeof renderHistory==='function') await renderHistory();
+    if(typeof _calRender==='function') _calRender();
+    if(typeof showToast==='function') showToast(val?`✅ Categoría fijada a ${val}`:'✅ Categoría automática restaurada','ok',3500);
+  }catch(e){ alert('No se pudo guardar la categoría: '+(e.message||e)); }
+}
+
 function _histConfirmDelete(id, raceName){
   const old = document.getElementById('_histDelDialog');
   if(old) old.remove();
@@ -12910,7 +12967,10 @@ async function renderHistory(){
     if(gfCat || gfGen){
       const riders = h.riders||[];
       const insArr = Array.isArray(h.inscritos) ? h.inscritos : [];
-      if(typeof _gfMatchesCatGender==='function'){
+      // Si la prueba tiene categoría FORZADA (override), manda sobre la derivación
+      if(h.raceCat && typeof _gfMatchesCatGender==='function'){
+        if(!_gfMatchesCatGender(h.raceCat, h.raceName||'')) return false;
+      } else if(typeof _gfMatchesCatGender==='function'){
         if(isPreInsc){
           // Si la pre-inscripción no tiene cat en ningún inscrito, dejamos pasar
           // (mejor mostrar de más que ocultar la pre-inscripción que el usuario busca)
@@ -13173,6 +13233,7 @@ async function renderHistory(){
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${favBtn}
+          <button onclick="event.stopPropagation();_histEditRace('${h.id}')" title="Editar la categoría de esta prueba (corrige si se creó en la categoría equivocada)" style="background:#fff;color:#7c3aed;border:1.5px solid #ddd6fe;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">✏️ Editar prueba${h.raceCat?' 🏷️':''}</button>
           ${fccvBtn}
           ${insBtn}
           <button onclick="event.stopPropagation();_routeOpenModal('${h.id}')" title="Subir/ver recorrido (GPX/FIT) y métricas de altimetría" style="background:#fff;color:#15803d;border:1.5px solid #86efac;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗺️ Recorrido${h.route&&h.route.distance_m?' ✓':''}</button>
