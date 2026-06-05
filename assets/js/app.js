@@ -1114,12 +1114,21 @@ function _calRaceCatGroups(r){
   if(r.type==='planned'){ const g=_calCatGroup(r.cat); return g?[g.key]:[]; }
   return r.cats||[];
 }
-// ¿La prueba corresponde a la categoría activa? (sin filtro → todas; sin datos de cat → no se oculta)
+// El Calendario lo controla el FILTRO GLOBAL superior (no un selector propio).
+// Mapeo: cat global → grupo de categoría del calendario.
+const _GF_TO_CALGROUP = { cadete:'cadete', junior:'juvenil', sub23:'sub23', elite:'elite', master:'master', femenino:'fem' };
+function _calGlobalCatGroup(){
+  const c=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat)||'';
+  return _GF_TO_CALGROUP[c] || '';
+}
+// ¿La prueba corresponde a la categoría global activa?
+// ESTRICTO: con una categoría activa, solo se muestra si la prueba TIENE esa
+// categoría (en sus corredores/inscritos/planificada). Sin filtro → todas.
 function _calRaceMatchesCat(r){
-  if(!_calCat) return true;
+  const g=_calGlobalCatGroup();
+  if(!g) return true;                  // "Todas"
   const gs=_calRaceCatGroups(r);
-  if(!gs.length) return true;          // prueba sin metadato de categoría: no la ocultamos
-  return gs.includes(_calCat);
+  return gs.includes(g);               // jamás se hereda otra categoría
 }
 // Grupos de categoría realmente presentes en los datos cargados
 function _calAvailableCats(){
@@ -1143,11 +1152,23 @@ function _calRender(){
   const body  = document.getElementById('calBody');
   const title = document.getElementById('calTitle');
   if(!body) return;
-  _calPopulateCatSelect();
-  const catSuffix = _calCat ? ' · '+_calCatLabel(_calCat) : '';
-  // Encabezado de la sección refleja la categoría activa: "Calendario — Cadetes"
+  // Categoría activa = la del FILTRO GLOBAL superior
+  const g = _calGlobalCatGroup();
+  const catLabel = g ? _calCatLabel(g) : '';
+  const catSuffix = catLabel ? ' · '+catLabel : '';
   const h2=document.getElementById('calHeading');
-  if(h2) h2.textContent = '📅 Calendario de carreras' + (_calCat? ' — '+_calCatLabel(_calCat) : '');
+  if(h2) h2.textContent = '📅 Calendario de carreras' + (catLabel? ' — '+catLabel : '');
+  // ESTADO VACÍO: si hay categoría activa y NINGUNA prueba de esa categoría en
+  // los datos cargados, limpiamos por completo y avisamos (aislamiento total).
+  if(g && !([..._calPast, ..._calPlanned].some(_calRaceMatchesCat))){
+    if(title) title.textContent = (_calView==='annual'? 'Año '+_calYear : _CAL_MONTHS_ES[_calMonth]+' '+_calYear)+catSuffix;
+    body.innerHTML = `<div style="text-align:center;padding:50px 20px;color:#94a3b8">
+      <div style="font-size:44px">🗓️</div>
+      <p style="margin-top:12px;font-size:15px;font-weight:800;color:#475569">No hay pruebas ni datos registrados para <span style="color:#0b2f6b">${escapeHtml(catLabel)}</span> en esta temporada.</p>
+      <p style="font-size:13px;color:#94a3b8">Cambia la categoría en el filtro superior, o añade pruebas de ${escapeHtml(catLabel)} desde Carga / Calendario.</p>
+    </div>`;
+    return;
+  }
   if(_calView==='annual'){
     if(title) title.textContent = 'Año '+_calYear+catSuffix;
     body.innerHTML = _calBuildAnnual();
@@ -12839,7 +12860,8 @@ async function renderHistory(){
             rawIso: _parseSpanishDate(extra.raceDate||r.date||'')||r.date||'',
             localidad: extra.localidad || '',
             circuitType: extra.circuitType || '',
-            km: extra.km || ''
+            km: extra.km || '',
+            cat: extra.cat || ''
           };
         });
       }
@@ -13230,6 +13252,10 @@ async function renderHistory(){
     const todayIso = new Date().toISOString().slice(0,10);
     // Año global aplicado también a planificadas para no saturar
     const _plannedFiltered = _histPlanned.filter(p=>{
+      // Categoría/género globales (aislamiento estricto también en planificadas)
+      if((gfCat || gfGen) && typeof _gfMatchesCatGender==='function'){
+        if(!_gfMatchesCatGender(p.cat||'', p.raceName||'')) return false;
+      }
       if(!gfYear) return true;
       return (p.rawIso||'').slice(0,4) === gfYear;
     });
@@ -13273,6 +13299,18 @@ async function renderHistory(){
         </div>
       </div>`;
     }
+  }
+
+  // ESTADO VACÍO ESTRICTO: categoría activa y sin clasificaciones NI planificadas
+  // de esa categoría → limpiar por completo y avisar (jamás heredar otra categoría).
+  if((gfCat || gfGen) && sorted.length===0 && !plannedBlock){
+    const _catLbl = ({cadete:'Cadetes', junior:'Juveniles / Júnior', sub23:'Sub-23', elite:'Élite', master:'Máster', femenino:'Féminas'})[gfCat] || (gfCat||'la categoría seleccionada');
+    box.innerHTML = `<div style="text-align:center;padding:56px 20px;color:#94a3b8">
+      <div style="font-size:46px">📭</div>
+      <p style="margin-top:14px;font-size:15px;font-weight:800;color:#475569">No hay pruebas ni datos registrados para <span style="color:#0b2f6b">${escapeHtml(_catLbl)}</span> en esta temporada.</p>
+      <p style="font-size:13px;color:#94a3b8">Cambia la categoría en el filtro superior, o carga pruebas de ${escapeHtml(_catLbl)}.</p>
+    </div>`;
+    return;
   }
 
   box.innerHTML=`
