@@ -11609,8 +11609,12 @@ async function saveHistory(){
   if(raceErr){alert('Error al guardar carrera: '+raceErr.message);return;}
   const raceId=raceRow.id;
 
+  // El dorsal (columna integer) NO admite cadena vacía: si un corredor no tiene
+  // dorsal (p.ej. juniors sin dorsal CV resuelto), lo guardamos como null.
+  const _bibInt = v => { const s=String(v==null?'':v).trim(); if(!s) return null; const n=parseInt(s,10); return Number.isFinite(n)?n:null; };
+  const _posInt = v => { const n=parseInt(v,10); return Number.isFinite(n)?n:null; };
   const results=riders.map(r=>({
-    race_id:raceId, pos:r.pos, bib:r.bib, name:r.name,
+    race_id:raceId, pos:_posInt(r.pos), bib:_bibInt(r.bib), name:r.name,
     team:r.team||'', cat:r.cat||'', time:r.time||'',
     gap_seconds:r.gapSeconds??null, total_seconds:r.totalSeconds??null
   }));
