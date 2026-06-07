@@ -23530,8 +23530,9 @@ function _simShowEmpty(customMsg){
   document.getElementById('simRaceMeta').style.display = 'none';
   document.getElementById('simCatPickerWrap').style.display = 'none';
   document.getElementById('simExportBtn').style.display = 'none';
-  const _pvrBtn2 = document.getElementById('simPredVsRealBtn');
-  if(_pvrBtn2) _pvrBtn2.style.display = 'none';
+  ['simPredVsRealBtn','simPredVsRealBtn2'].forEach(id=>{
+    const b=document.getElementById(id); if(b) b.style.display='none';
+  });
   if(customMsg){
     const empty = document.getElementById('simEmptyPanel');
     empty.querySelector('p').textContent = customMsg;
@@ -24557,11 +24558,11 @@ function _simRenderCurrent(){
   document.getElementById('simExportBtn').style.display = 'inline-block';
   // Mostrar botón "Predicho vs Real" solo si la carrera ya se ha disputado (riders cargados)
   try{
-    const _pvrBtn = document.getElementById('simPredVsRealBtn');
-    if(_pvrBtn){
-      const _hasResults = (race.riders||[]).length >= 3;
-      _pvrBtn.style.display = _hasResults ? 'inline-block' : 'none';
-    }
+    const _hasResults = (race.riders||[]).length >= 3;
+    ['simPredVsRealBtn','simPredVsRealBtn2'].forEach(id=>{
+      const b=document.getElementById(id);
+      if(b) b.style.display = _hasResults ? 'inline-block' : 'none';
+    });
   }catch(e){}
   // Meta de la carrera — estado SOLO por fecha (no por tener o no clasificación)
   const ridersN = (race.riders||[]).length;
