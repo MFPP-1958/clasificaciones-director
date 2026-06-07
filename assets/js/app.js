@@ -26836,10 +26836,58 @@ function _simRenderTeamsPanel(){
   const body = document.getElementById('simTeamsBody');
   if(!panel || !body) return;
   if(!_simCurrentData){ panel.style.display='none'; return; }
-  const {grid} = _simCurrentData;
+  const {grid, race} = _simCurrentData;
+  const _title    = document.getElementById('simTeamsTitle');
+  const _predBtn  = document.getElementById('simTeamsPredVsRealBtn');
+  const _reportBtn= document.getElementById('simTeamsReportBtn');
   const teams = _simComputeTeamPredictions(grid);
-  if(teams.length<2){ panel.style.display='none'; return; }
+  // Clasificación REAL por equipos (suma de los 3 mejores TIEMPOS), si ya hay
+  // resultados. Sirve de respaldo cuando NO hay predicción fiable por equipos.
+  const realRiders = (race && Array.isArray(race.riders)) ? race.riders.filter(r=>r && r.pos>0) : [];
+  const realTeams  = (typeof _simComputeRealTeamRanking==='function') ? _simComputeRealTeamRanking(realRiders) : [];
+  const hasPred = teams.length >= 2;
+  const hasReal = realTeams.length >= 2;
+  if(!hasPred && !hasReal){ panel.style.display='none'; return; }
   panel.style.display = '';
+
+  // ── CASO B: sin predicción fiable pero CON resultados → mostramos la
+  // clasificación REAL por equipos, avisando de que la predicción no está
+  // disponible (p.ej. una CRI sin otras CRI previas de la categoría).
+  if(!hasPred){
+    if(_title) _title.textContent = '🏁 Clasificación real por equipos';
+    if(_predBtn)   _predBtn.style.display   = 'none';
+    if(_reportBtn) _reportBtn.style.display = 'none';
+    const note = `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e;line-height:1.5">
+      ⚠️ <b>Predicción por equipos no disponible:</b> no hay histórico suficiente/compatible para predecir (p.ej. una <b>CRI</b> sin otras CRI previas de la categoría, o categoría sin pruebas anteriores). Mostramos la <b>clasificación REAL por equipos</b> = suma de los <b>3 mejores tiempos</b> de cada equipo.
+    </div>`;
+    const rt = realTeams.slice(0,10);
+    body.innerHTML = note + `<div class="sim-teams-grid">${rt.map((t,i)=>{
+      const rank=i+1;
+      let cls = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
+      if(t.isMyTeam) cls='mine';
+      const sumStr = (t.sumByTime && typeof formatSeconds==='function') ? formatSeconds(t.sumSecs) : String(t.sumTop3);
+      const ridersHtml = (t.top3||[]).map(g=>{
+        const ts = (g.secs!=null && typeof formatSeconds==='function') ? formatSeconds(g.secs) : '';
+        return `<div><b>${escapeHtml(g.name)}</b> <span style="color:#15803d;font-weight:700">${g.pos}º</span>${ts?` · <span style="color:#6b7280">${ts}</span>`:''}</div>`;
+      }).join('');
+      return `<div class="sim-team-card ${cls}">
+        <div class="sim-team-card-hdr">
+          <span class="sim-team-rank">${rank}º</span>
+          <span class="sim-team-name">${t.isMyTeam?'🔵 ':''}${escapeHtml(t.team)}</span>
+          <span class="sim-team-sum">Σ ${sumStr}</span>
+        </div>
+        <div class="sim-team-riders">${ridersHtml}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:6px">${t.sumByTime?'Suma de los 3 mejores tiempos':'Suma de puestos (sin tiempos cargados)'}</div>
+      </div>`;
+    }).join('')}</div>`;
+    _simApplyTeamsPanelCollapsedState();
+    return;
+  }
+
+  // ── CASO A: hay predicción por equipos (comportamiento normal) ──
+  if(_title) _title.textContent = '🏅 Predicción por equipos · Top 3 esperado';
+  if(_predBtn)   _predBtn.style.display   = hasReal ? '' : 'none';
+  if(_reportBtn) _reportBtn.style.display = '';
   // Top 10 equipos
   const top = teams.slice(0,10);
   body.innerHTML = `<div class="sim-teams-grid">${top.map((t,i)=>{
