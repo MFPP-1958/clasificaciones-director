@@ -24219,7 +24219,7 @@ function _simBuildData(raceId){
   // (si el director lo ha fijado). Clon para no contaminar el histórico.
   const targetForCompat = Object.assign({}, race, { _forceType: (_simTypeOverride||undefined) });
   const _compatByRaceId = new Map();
-  const historicalRaces = hist.filter(h => {
+  let historicalRaces = hist.filter(h => {
     if(h.id === raceId) return false;
     if((h.riders||[]).length < 3) return false;
     // Compatibilidad de formato: descartar solo si fundamentalmente incompatible
@@ -24236,6 +24236,18 @@ function _simBuildData(raceId){
       return true; // mantener carrera con peso neutro
     }
   });
+  // ── RESPALDO: si NO hay ninguna prueba del mismo tipo (p.ej. una CRI sin otras
+  // CRI previas), en vez de dejar a todo el pelotón en "fallback equipo" (que
+  // hacía aparecer solo al ganador + mi equipo), usamos TODAS las pruebas
+  // disponibles con peso reducido. Así se estima un Top 10 ORIENTATIVO de todos
+  // los corredores con histórico, aunque la precisión sea menor. Misma filosofía
+  // que el panel por equipos.
+  let _simCompatRelaxed = false;
+  if(historicalRaces.length === 0){
+    _simCompatRelaxed = true;
+    historicalRaces = hist.filter(h => h.id !== raceId && (h.riders||[]).length >= 3);
+    historicalRaces.forEach(h => _compatByRaceId.set(h.id, 0.5)); // peso bajo = orientativo
+  }
   // Info de compatibilidad para mostrar al director (transparencia)
   const _targetTT = _simIsTimeTrial(targetForCompat), _targetHC = _simIsHillClimb(targetForCompat);
   const _ttUsed = historicalRaces.filter(h=>_simIsTimeTrial(h)).length;
@@ -24244,6 +24256,7 @@ function _simBuildData(raceId){
     total: historicalRaces.length, tt: _ttUsed,
     typeLabel: _targetHC ? 'Cronoescalada' : (_targetTT ? 'Contrarreloj (CRI)' : 'Carrera en línea / circuito'),
     forced: !!_simTypeOverride,
+    relaxed: _simCompatRelaxed,   // true = no había pruebas del mismo tipo; se usan otras (orientativo)
     // Lista exacta de pruebas usadas (para que el director compruebe cuáles son)
     races: historicalRaces.map(h=>({ name:h.raceName||'(sin nombre)', date:h.raceDate||'', n:(h.riders||[]).length, tt:_simIsTimeTrial(h), w:(_compatByRaceId.get(h.id)||1) }))
                           .sort((a,b)=>(_parseSpanishDate(b.date)||'').localeCompare(_parseSpanishDate(a.date)||''))
@@ -24802,11 +24815,16 @@ function _simRenderTop10(grid, catFilter){
   // la predicción es orientativa. Lo avisamos para no inducir a error.
   const _fb = top.filter(g => g.status==='team-fb' || !g.hasHistory).length;
   const _withHist = top.length - _fb;
+  const tt = (_simCompatInfo && _simCompatInfo.typeLabel) ? _simCompatInfo.typeLabel : 'este tipo de prueba';
   let _warnHtml = '';
-  if(_fb >= Math.ceil(top.length*0.6)){
-    const tt = (_simCompatInfo && _simCompatInfo.typeLabel) ? _simCompatInfo.typeLabel : 'este tipo de prueba';
+  if(_simCompatInfo && _simCompatInfo.relaxed){
+    // No había ninguna prueba del mismo tipo → se han usado OTRAS (otro formato)
     _warnHtml = `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e;line-height:1.5">
-      ⚠️ <b>Predicción poco fiable.</b> Solo ${_withHist} de ${top.length} corredores tienen histórico compatible con <b>${escapeHtml(tt)}</b>; el resto son <b>estimación por equipo</b> (📊 fallback). Suele pasar cuando no hay pruebas previas del mismo tipo/categoría (p.ej. una <b>CRI</b> sin otras CRI de esa categoría en el historial). El Top 10 es <b>orientativo</b>; mejorará cuando cargues más pruebas similares.
+      ⚠️ <b>Predicción orientativa.</b> No hay ninguna prueba previa del mismo tipo (<b>${escapeHtml(tt)}</b>) en el historial, así que se ha estimado a partir de las <b>demás pruebas disponibles</b> (otro formato, peso reducido). Sirve para hacerse una idea del orden, pero la precisión es baja; mejorará cuando cargues más pruebas del mismo tipo.
+    </div>`;
+  } else if(_fb >= Math.ceil(top.length*0.6)){
+    _warnHtml = `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e;line-height:1.5">
+      ⚠️ <b>Predicción poco fiable.</b> Solo ${_withHist} de ${top.length} corredores tienen histórico compatible con <b>${escapeHtml(tt)}</b>; el resto son <b>estimación por equipo</b> (📊 fallback). Suele pasar cuando no hay pruebas previas del mismo tipo/categoría. El Top 10 es <b>orientativo</b>; mejorará cuando cargues más pruebas similares.
     </div>`;
   }
   body.innerHTML = _warnHtml + `<div class="sim-top-list">${top.map((g,i)=>{
