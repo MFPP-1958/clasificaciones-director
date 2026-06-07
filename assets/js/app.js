@@ -6011,7 +6011,10 @@ function parseCSVLike(text){
 
   let headerIdx=rows.findIndex(r=>{
     const h=r.map(normalizeHeader).join(' ');
-    return /(pos|puesto|clasif|\bpl[\. ])/.test(h) && /(dorsal|dor)/.test(h) && /(nombre|ciclista|corredor)/.test(h);
+    // El DORSAL es OPCIONAL: muchas organizaciones no lo incluyen (lo
+    // resolvemos luego con la BD para los corredores CV). Basta con localizar
+    // una columna de posición/clasificación y otra de nombre/apellidos.
+    return /(pos|puesto|clasif|\bpl[\. ])/.test(h) && /(nombre|apellido|ciclista|corredor)/.test(h);
   });
 
   let map={pos:0,bib:1,name:2,surname:null,cat:null,team:4,region:null,time:5};
@@ -6026,7 +6029,10 @@ function parseCSVLike(text){
     const find=(regs,def=null)=>{const i=h.findIndex(c=>regs.some(re=>re.test(c)));return i>=0?i:def};
 
     map.pos=find([/^pos/,/puesto/,/clas/],0);
-    map.bib=find([/dorsal/,/^dor/,/num/],1);
+    // Dorsal OPCIONAL: si la cabecera no tiene columna de dorsal, dejamos bib=null
+    // (no usamos la col.1 por defecto, que suele ser el Nombre) y se resolverá
+    // con la BD (dorsal CV) o quedará en blanco. Evita meter el nombre en dorsal.
+    map.bib=find([/dorsal/,/^dor/,/^num/,/^n[ºo°]\.?$/,/^#$/],null);
     map.name=find([/^nombre$/,/nombre(?!.*equipo)/,/ciclista/,/corredor/,/name/],2);
     map.surname=find([/apellido/,/surname/,/last name/],null);
     map.team=find([/club.*equipo/,/equipo/,/club/,/^team$/],4);
@@ -6060,7 +6066,7 @@ function parseCSVLike(text){
 
     out.push({
       pos:+posVal,
-      bib:parts[map.bib]||'',
+      bib:map.bib!=null ? (parts[map.bib]||'') : '',
       name:surnamePart?normalizeRiderName(null,namePart,surnamePart,null):normalizeRiderName(fullName),
       cat:map.cat!=null ? ((parts[map.cat]||_defaultImportCat()).replace(/\s+/g,'')) : _defaultImportCat(),
       region:cleanSpaces(region),
