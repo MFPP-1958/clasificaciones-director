@@ -14684,6 +14684,53 @@ async function exportHistoryCSV(){
   downloadBlob(csv,'historico_clasificaciones.csv','text/csv;charset=utf-8');
 }
 function downloadBlob(content,name,type){let blob=new Blob([content],{type});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COPIA DE SEGURIDAD DE LA BASE DE DATOS (Supabase → archivo JSON)
+// Las copias de código (git/zip) NO contienen los datos de Supabase. Esto
+// descarga TODAS las tablas relevantes (carreras, clasificaciones, láminas…)
+// en un único JSON, para poder recuperarlas si se borran o corrompen.
+// ════════════════════════════════════════════════════════════════════════════
+const _DB_BACKUP_TABLES = ['races','race_results','team_rankings','team_sheets','rider_efforts_fccv'];
+
+async function _dbExportBackup(){
+  if(typeof _sb==='undefined' || !_sb){ alert('Supabase no disponible. Conéctate antes de exportar.'); return; }
+  const btn = document.getElementById('dbExportBtn');
+  const orig = btn ? btn.textContent : '';
+  if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='⏳ Exportando…'; }
+  try{
+    const out = { _meta:{ app:'clasificaciones-director', formato:'backup-supabase-v1',
+                          exportadoEl:new Date().toISOString(), tablas:{} } };
+    const PAGE = 1000;
+    for(const t of _DB_BACKUP_TABLES){
+      let all = [], from = 0, ok = true;
+      while(true){
+        const { data, error } = await _sb.from(t).select('*').range(from, from+PAGE-1);
+        if(error){
+          // Tabla inexistente → la marcamos como no disponible y seguimos
+          if(/does not exist|relation|42P01/i.test(error.message||'')){ ok=false; break; }
+          throw new Error(`Tabla "${t}": ${error.message}`);
+        }
+        all = all.concat(data||[]);
+        if(!data || data.length < PAGE) break;
+        from += PAGE;
+      }
+      out[t] = ok ? all : null;
+      out._meta.tablas[t] = ok ? all.length : 'no disponible';
+      if(btn) btn.textContent = `⏳ ${t}… (${ok?all.length:'—'})`;
+    }
+    const ts = new Date();
+    const stamp = `${ts.getFullYear()}-${String(ts.getMonth()+1).padStart(2,'0')}-${String(ts.getDate()).padStart(2,'0')}_${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}`;
+    downloadBlob(JSON.stringify(out,null,2), `copia-base-datos_${stamp}.json`, 'application/json');
+    const resumen = _DB_BACKUP_TABLES.map(t=>`• ${t}: ${out._meta.tablas[t]}`).join('\n');
+    alert(`✅ Copia de la base de datos descargada:\n\ncopia-base-datos_${stamp}.json\n\n${resumen}\n\nGuárdala en lugar seguro. Con ella se pueden restaurar los datos si se borran de Supabase.`);
+  }catch(e){
+    console.error('[dbExport]', e);
+    alert('❌ No se pudo completar la copia de la base de datos:\n\n'+(e.message||e)+'\n\nNo se ha descargado nada. Revisa la conexión e inténtalo de nuevo.');
+  }finally{
+    if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent=orig||'💾 Copia de la base de datos'; }
+  }
+}
 // ===== BLOQUE COMPARATIVO DE CICLISTAS =====
 // Array fijo de 6 posiciones (null = slot vacío)
 let comparativoRiders=Array(6).fill(null);let compGapChart=null;let compRadarChart=null;

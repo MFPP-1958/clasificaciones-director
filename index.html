@@ -242,7 +242,11 @@
       <section class="panel">
         <div class="section-title" style="margin-bottom:14px">
           <h2 style="margin:0">📊 Resumen general</h2>
-          <span class="small" id="inicioSummaryHint">Datos cargados</span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="small" id="inicioSummaryHint">Datos cargados</span>
+            <button id="dbExportBtn" onclick="_dbExportBackup()" title="Descargar una copia de seguridad de TODA tu base de datos (carreras, clasificaciones, láminas…) en un archivo JSON"
+              style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer">💾 Copia de la base de datos</button>
+          </div>
         </div>
         <div id="inicioKpis" class="evol-kpis"></div>
       </section>
@@ -3368,6 +3372,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=inicio-filtro-cat-global-1"></script>
+<script src="assets/js/app.js?v=boton-copia-base-datos-1"></script>
 </body>
 </html>
