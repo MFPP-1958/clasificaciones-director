@@ -26318,21 +26318,56 @@ function _simApplyTeamsPanelCollapsedState(){
 // de la carrera (los que tienen pos > 0). Igual fórmula que la predicción:
 // suma de los 3 mejores puestos de cada equipo, ascendente.
 function _simComputeRealTeamRanking(riders){
+  // CLASIFICACIÓN REAL POR EQUIPOS = suma de los 3 MEJORES TIEMPOS de cada equipo
+  // (regla oficial). NO por puestos: dos equipos pueden cambiar de orden según el
+  // tiempo aunque sus puestos sumen parecido. Si la prueba no tiene tiempos
+  // cargados, caemos a la suma de puestos como respaldo.
+  const list0 = (riders||[]).filter(r => r && r.pos && r.pos > 0);
+  // Tiempo absoluto del ganador (referencia para reconstruir tiempos desde gaps)
+  const winner = list0.find(r => (parseInt(r.pos)||0) === 1);
+  let winnerSecs = null;
+  if(winner){
+    winnerSecs = winner.totalSeconds != null ? winner.totalSeconds
+               : (typeof timeToSeconds === 'function' ? timeToSeconds(winner.time) : null);
+  }
+  const riderSecs = (r) => {
+    if(r.totalSeconds != null) return r.totalSeconds;
+    if(winnerSecs != null && r.gapSeconds != null) return winnerSecs + r.gapSeconds;
+    if(r.gapSeconds != null) return r.gapSeconds;               // base relativa (mismo ganador para todos)
+    if(typeof timeToSeconds === 'function'){ const s = timeToSeconds(r.time); if(s != null) return s; }
+    return null;
+  };
   const byTeam = new Map();
-  (riders||[]).forEach(r => {
-    if(!r || !r.pos || r.pos <= 0) return;
+  list0.forEach(r => {
     const t = (r.team||'').trim() || '(Sin equipo)';
     if(!byTeam.has(t)) byTeam.set(t, []);
-    byTeam.get(t).push({ name: r.name, pos: parseInt(r.pos)||0, cat: r.cat||'' });
+    byTeam.get(t).push({ name: r.name, pos: parseInt(r.pos)||0, cat: r.cat||'', secs: riderSecs(r) });
   });
+  // ¿Disponemos de tiempos para ordenar por TIEMPO? Si no, respaldo por puestos.
+  const haveTimes = [...byTeam.values()].some(arr => arr.filter(r=>r.secs!=null).length >= 3);
   const out = [];
   const mk = (myTeam||'').toLowerCase();
-  byTeam.forEach((list, team) => {
-    if(list.length < 3) return;
-    list.sort((a,b) => a.pos - b.pos);
-    const top3 = list.slice(0, 3);
-    const sumTop3 = top3.reduce((s,r) => s + r.pos, 0);
-    out.push({ team, top3, sumTop3, count: list.length, isMyTeam: mk && team.toLowerCase() === mk });
+  byTeam.forEach((arr, team) => {
+    if(arr.length < 3) return;
+    let top3, sumSecs = null;
+    if(haveTimes){
+      const withSecs = arr.filter(r => r.secs != null).sort((a,b) => a.secs - b.secs);
+      const base = withSecs.length >= 3 ? withSecs : arr.slice().sort((a,b)=>a.pos-b.pos);
+      top3 = base.slice(0, 3);
+      if(top3.every(r => r.secs != null)) sumSecs = top3.reduce((s,r) => s + r.secs, 0);
+    } else {
+      top3 = arr.slice().sort((a,b) => a.pos - b.pos).slice(0, 3);
+    }
+    const sumPos = top3.reduce((s,r) => s + r.pos, 0);
+    const byTime = sumSecs != null;
+    out.push({
+      team, top3, count: arr.length,
+      sumByTime: byTime,
+      sumSecs,                                  // suma de los 3 mejores tiempos (seg)
+      sumTop3: byTime ? sumSecs : sumPos,       // clave de ordenación
+      sumPos,                                   // por si se quiere mostrar también
+      isMyTeam: mk && team.toLowerCase() === mk
+    });
   });
   out.sort((a,b) => a.sumTop3 - b.sumTop3);
   return out;
@@ -26396,7 +26431,7 @@ function _simOpenTeamsPredVsReal(){
                   : '#fef3c7';
       return `<tr style="background:${rowBg}">
         <td style="padding:6px 8px;text-align:center;font-weight:800;color:#0b2f6b">${predRank}</td>
-        <td style="padding:6px 8px"><b>${p.isMyTeam?'⭐ ':''}${escapeHtml(p.team)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">Σ ${p.sumTop3.toFixed(1)} · ${p.top3.map(g=>escapeHtml(g.name.split(',')[0]||g.name)).join(' · ')}</div></td>
+        <td style="padding:6px 8px"><b>${p.isMyTeam?'⭐ ':''}${escapeHtml(p.team)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">Σ ${p.sumTop3.toFixed(1)} (puestos previstos) · ${p.top3.map(g=>escapeHtml(g.name.split(',')[0]||g.name)).join(' · ')}</div></td>
         <td style="padding:6px 8px;text-align:right">${badge}</td>
       </tr>`;
     }).join('');
@@ -26416,9 +26451,12 @@ function _simOpenTeamsPredVsReal(){
       const rowBg = predInfo && predInfo.rank===realRank ? '#dcfce7'
                   : !predInfo ? '#dbeafe'
                   : '#fef3c7';
+      const sumStr = (t.sumByTime && typeof formatSeconds==='function')
+        ? `Σ ${formatSeconds(t.sumSecs)} (3 mejores tiempos)`
+        : `Σ ${t.sumTop3} (puestos)`;
       return `<tr style="background:${rowBg}">
         <td style="padding:6px 8px;text-align:center;font-weight:800;color:#15803d">${realRank}</td>
-        <td style="padding:6px 8px"><b>${t.isMyTeam?'⭐ ':''}${escapeHtml(t.team)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">Σ ${t.sumTop3} · ${t.top3.map(r=>escapeHtml(r.name.split(',')[0]||r.name)).join(' · ')}</div></td>
+        <td style="padding:6px 8px"><b>${t.isMyTeam?'⭐ ':''}${escapeHtml(t.team)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">${sumStr} · ${t.top3.map(r=>escapeHtml(r.name.split(',')[0]||r.name)).join(' · ')}</div></td>
         <td style="padding:6px 8px;text-align:right">${badge}</td>
       </tr>`;
     }).join('');
