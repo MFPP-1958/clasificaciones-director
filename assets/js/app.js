@@ -34109,7 +34109,9 @@ function _simInjectPVRStyles(){
       .pvr-footer { padding: 10px 0 0 !important; margin-top: 12px !important; }
       #pvrModalBox, #pvrModalBox * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
     }
-    @page { margin: 0; size: A4; }
+    /* HORIZONTAL por defecto: los modales "Predicho vs Real" muestran dos
+       columnas (predicho | real) lado a lado; en vertical se cortaban. */
+    @page { margin: 0; size: A4 landscape; }
   `;
   document.head.appendChild(st);
 }
