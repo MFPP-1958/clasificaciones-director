@@ -24786,7 +24786,19 @@ function _simRenderTop10(grid, catFilter){
     body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin datos históricos suficientes para predecir el podio.</p>';
     return;
   }
-  body.innerHTML = `<div class="sim-top-list">${top.map((g,i)=>{
+  // ── Aviso de FIABILIDAD: si la mayoría del Top 10 son "fallback" (sin
+  // histórico compatible —p.ej. una CRI sin otras CRI previas de la categoría—)
+  // la predicción es orientativa. Lo avisamos para no inducir a error.
+  const _fb = top.filter(g => g.status==='team-fb' || !g.hasHistory).length;
+  const _withHist = top.length - _fb;
+  let _warnHtml = '';
+  if(_fb >= Math.ceil(top.length*0.6)){
+    const tt = (_simCompatInfo && _simCompatInfo.typeLabel) ? _simCompatInfo.typeLabel : 'este tipo de prueba';
+    _warnHtml = `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e;line-height:1.5">
+      ⚠️ <b>Predicción poco fiable.</b> Solo ${_withHist} de ${top.length} corredores tienen histórico compatible con <b>${escapeHtml(tt)}</b>; el resto son <b>estimación por equipo</b> (📊 fallback). Suele pasar cuando no hay pruebas previas del mismo tipo/categoría (p.ej. una <b>CRI</b> sin otras CRI de esa categoría en el historial). El Top 10 es <b>orientativo</b>; mejorará cuando cargues más pruebas similares.
+    </div>`;
+  }
+  body.innerHTML = _warnHtml + `<div class="sim-top-list">${top.map((g,i)=>{
     const rank = i+1;
     const rankCls = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'def';
     const confDot = `<span class="sim-conf ${g.confidence}" title="Confianza ${g.confidence}"></span>`;
