@@ -5347,6 +5347,12 @@ function parseText(text){
   setTimeout(_calcAvgSpeed, 50);
   // Preguntar si hay columnas sin mapear que podrían ser CCAA
   setTimeout(_checkUnmappedRegionCol, 120);
+  // Auto-completar desde la BD (silencioso): categoría exacta (CAD-1/CAD-2…),
+  // dorsal CV y CCAA de los corredores que ya tienen historial en la Comunitat.
+  // No pisa valores ya presentes; los de fuera de la CV no reciben dorsal CV.
+  if(typeof enrichFromHistory==='function' && _sb){
+    setTimeout(()=>{ try{ enrichFromHistory(true); }catch(_){} }, 200);
+  }
 }
 function showSuccessBanner(){
   const banner = document.getElementById('successBanner');
@@ -11616,13 +11622,13 @@ async function saveHistory(){
   }
 }
 
-async function enrichFromHistory(){
-  if(!hasValidData||!riders.length){alert('Primero carga una clasificación válida.');return;}
-  if(!_sb){alert('Supabase no disponible.');return;}
+async function enrichFromHistory(silent=false){
+  if(!hasValidData||!riders.length){ if(!silent) alert('Primero carga una clasificación válida.'); return;}
+  if(!_sb){ if(!silent) alert('Supabase no disponible.'); return;}
 
   const btns=document.querySelectorAll('button[onclick="enrichFromHistory()"]');
   const origTexts=[...btns].map(b=>b.textContent);
-  btns.forEach(b=>{b.disabled=true;b.textContent='⏳ Buscando...';});
+  if(!silent) btns.forEach(b=>{b.disabled=true;b.textContent='⏳ Buscando...';});
 
   // ── Normalización de nombres: delega en normalizeForMatching (global)
   const _normKey=normalizeForMatching;
@@ -11674,21 +11680,50 @@ async function enrichFromHistory(){
     const hist=await _sbLoadHistory();
 
     // ── Construir diccionario de conocimiento ───────────────────────────
-    const knowledge=new Map(); // normKey → {cat, region}
+    const knowledge=new Map(); // normKey → {cat, region, bibs:[{bib,cv,source,date}]}
     for(const race of hist){
-      for(const r of (race.riders||[])){
+      const iso=(_parseSpanishDate(race.raceDate)||'');
+      // ¿La prueba cuenta para el dorsal CV? true / false / null(incierto)
+      const cvFlag=(typeof _isCVRace==='function') ? _isCVRace(race)
+                  : ((typeof _plEsCV==='function' && _plEsCV(race))?true:null);
+      const _absorb=(r,source)=>{
         const key=_normKey(r.name);
-        if(!key) continue;
+        if(!key) return;
         const normCat=(r.cat||'').trim();
         const normReg=_canonRegion(r.region);
-        const prev=knowledge.get(key)||{cat:'',region:''};
+        const prev=knowledge.get(key)||{cat:'',region:'',bibs:[]};
         // guardar cat solo si la nueva es más específica (tiene número de año)
         if(!_esCatGenerica(normCat) && _esCatGenerica(prev.cat)) prev.cat=normCat;
         // guardar region si no había
         if(!prev.region && normReg) prev.region=normReg;
+        // acumular dorsales con su contexto CV (la resolución se hace luego)
+        const b=String(r.bib||'').trim();
+        if(b) prev.bibs.push({bib:b, cv:cvFlag, source, date:iso});
         knowledge.set(key,prev);
-      }
+      };
+      for(const r of (race.riders||[]))    _absorb(r,'riders');
+      for(const i of (race.inscritos||[])) _absorb(i,'inscritos');
     }
+    // Resolver el dorsal CV de un corredor: prioridad ESTRICTA, nunca usamos
+    // dorsales de pruebas claramente de FUERA de la CV (cv===false).
+    const _modeBib=(arr)=>{
+      const c=new Map(), d=new Map();
+      arr.forEach(f=>{ c.set(f.bib,(c.get(f.bib)||0)+1); if((f.date||'')>(d.get(f.bib)||'')) d.set(f.bib,f.date||''); });
+      const s=[...c.entries()].sort((a,b)=> b[1]-a[1] || (d.get(b[0])||'').localeCompare(d.get(a[0])||''));
+      return s.length? s[0][0] : '';
+    };
+    const _resolveCVBib=(bibs)=>{
+      if(!bibs||!bibs.length) return '';
+      const cvR=bibs.filter(f=>f.cv===true && f.source==='riders');
+      const cvI=bibs.filter(f=>f.cv===true && f.source==='inscritos');
+      const unR=bibs.filter(f=>f.cv===null && f.source==='riders');
+      const unI=bibs.filter(f=>f.cv===null && f.source==='inscritos');
+      if(cvR.length) return _modeBib(cvR);
+      if(cvI.length) return _modeBib(cvI);
+      if(unR.length) return _modeBib(unR);
+      if(unI.length) return _modeBib(unI);
+      return ''; // solo había dorsales de fuera de la CV → en blanco
+    };
 
     // ── Aplicar al array actual ─────────────────────────────────────────
     const changes=[];
@@ -11717,35 +11752,53 @@ async function enrichFromHistory(){
         changed=true;
       }
 
+      // dorsal CV: solo si está vacío (no pisamos un dorsal ya presente).
+      // Se resuelve a partir de pruebas CV/inciertas; nunca de fuera de la CV.
+      if(!String(r.bib||'').trim() && known.bibs && known.bibs.length){
+        const cvBib=_resolveCVBib(known.bibs);
+        if(cvBib){
+          delta.bibDespues=cvBib;
+          updated.bib=cvBib;
+          changed=true;
+        }
+      }
+
       if(changed) changes.push(delta);
       return updated;
     });
 
     // ── Resumen ─────────────────────────────────────────────────────────
     if(changes.length===0){
-      const allHaveCat=riders.every(r=>!_esCatGenerica(r.cat));
-      const allHaveRegion=riders.every(r=>r.region);
-      let motivo='';
-      if(allHaveCat && allHaveRegion) motivo='Los corredores ya tienen todos los datos completos.';
-      else if(!hist.length) motivo='No hay carreras guardadas en el historial.';
-      else motivo='Los corredores de esta carrera no aparecen en ninguna carrera guardada, o las carreras del historial tampoco tienen esos datos.';
-      alert('ℹ️ No se encontraron datos para completar.\n\n'+motivo);
+      if(!silent){
+        const allHaveCat=riders.every(r=>!_esCatGenerica(r.cat));
+        const allHaveRegion=riders.every(r=>r.region);
+        let motivo='';
+        if(allHaveCat && allHaveRegion) motivo='Los corredores ya tienen todos los datos completos.';
+        else if(!hist.length) motivo='No hay carreras guardadas en el historial.';
+        else motivo='Los corredores de esta carrera no aparecen en ninguna carrera guardada, o las carreras del historial tampoco tienen esos datos.';
+        alert('ℹ️ No se encontraron datos para completar.\n\n'+motivo);
+      }
     } else {
       renderAll();
-      const lines=changes.map(d=>{
-        const parts=[];
-        if(d.catDespues) parts.push(`cat: ${d.catAntes} → ${d.catDespues}`);
-        if(d.regionDespues) parts.push(`CCAA: ${d.regionDespues}`);
-        return `• ${d.name}: ${parts.join(' · ')}`;
-      });
-      const catCount=changes.filter(d=>d.catDespues).length;
-      const regCount=changes.filter(d=>d.regionDespues).length;
-      alert(`✅ ${changes.length} corredor(es) completados:\n  ${catCount} categoría · ${regCount} comunidad autónoma\n\n${lines.join('\n')}\n\nRevisa y guarda cuando estés listo.`);
+      if(!silent){
+        const lines=changes.map(d=>{
+          const parts=[];
+          if(d.catDespues) parts.push(`cat: ${d.catAntes} → ${d.catDespues}`);
+          if(d.bibDespues) parts.push(`dorsal CV: ${d.bibDespues}`);
+          if(d.regionDespues) parts.push(`CCAA: ${d.regionDespues}`);
+          return `• ${d.name}: ${parts.join(' · ')}`;
+        });
+        const catCount=changes.filter(d=>d.catDespues).length;
+        const bibCount=changes.filter(d=>d.bibDespues).length;
+        const regCount=changes.filter(d=>d.regionDespues).length;
+        alert(`✅ ${changes.length} corredor(es) completados:\n  ${catCount} categoría · ${bibCount} dorsal CV · ${regCount} comunidad autónoma\n\n${lines.join('\n')}\n\nRevisa y guarda cuando estés listo.`);
+      }
     }
   } catch(e){
-    alert('Error al acceder al historial: '+e.message);
+    if(!silent) alert('Error al acceder al historial: '+e.message);
+    else console.warn('[enrichFromHistory silent] error:', e);
   } finally{
-    btns.forEach((b,i)=>{b.disabled=false;b.textContent=origTexts[i]||'🔍 Completar datos con historial';});
+    if(!silent) btns.forEach((b,i)=>{b.disabled=false;b.textContent=origTexts[i]||'🔍 Completar datos con historial';});
   }
 }
 
