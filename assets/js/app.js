@@ -11725,37 +11725,51 @@ async function enrichFromHistory(silent=false){
       return ''; // solo había dorsales de fuera de la CV → en blanco
     };
 
+    // ── Láminas (team_sheets): dorsal/categoría CORREGIDOS A MANO. Es la
+    // fuente MÁS autoritativa para el dorsal CV de nuestros corredores. ──
+    const _sheetYear = (typeof _getRaceYear==='function') ? String(_getRaceYear()) : String(new Date().getFullYear());
+    let _sheets = new Map();
+    try{ if(typeof _csSavedSheets==='function') _sheets = await _csSavedSheets(_sheetYear) || new Map(); }catch(_){}
+
     // ── Aplicar al array actual ─────────────────────────────────────────
     const changes=[];
 
     riders=riders.map(r=>{
       const key=_normKey(r.name);
       const known=knowledge.get(key);
-      if(!known) return r;
+      const sheet=_sheets.get(key);
+      if(!known && !sheet) return r;
 
       const updated={...r}; // nunca sobreescribir campos con valor
       const delta={name:r.name};
       let changed=false;
 
-      // cat: solo si el corredor tiene cat genérica y el historial tiene una específica
-      if(_esCatGenerica(r.cat) && known.cat && !_esCatGenerica(known.cat)){
-        delta.catAntes=r.cat||'(vacío)';
-        delta.catDespues=known.cat;
-        updated.cat=known.cat;
-        changed=true;
+      // cat: solo si el corredor tiene cat genérica. Prioridad: lámina > historial.
+      if(_esCatGenerica(r.cat)){
+        const sCat=(sheet && sheet.cat && !_esCatGenerica(sheet.cat)) ? sheet.cat : '';
+        const kCat=(known && known.cat && !_esCatGenerica(known.cat)) ? known.cat : '';
+        const newCat=sCat || kCat;
+        if(newCat){
+          delta.catAntes=r.cat||'(vacío)';
+          delta.catDespues=newCat;
+          updated.cat=newCat;
+          changed=true;
+        }
       }
 
-      // region: solo si está vacía
-      if(!r.region && known.region){
+      // region: solo si está vacía (solo del historial)
+      if(!r.region && known && known.region){
         delta.regionDespues=known.region;
         updated.region=known.region;
         changed=true;
       }
 
       // dorsal CV: solo si está vacío (no pisamos un dorsal ya presente).
-      // Se resuelve a partir de pruebas CV/inciertas; nunca de fuera de la CV.
-      if(!String(r.bib||'').trim() && known.bibs && known.bibs.length){
-        const cvBib=_resolveCVBib(known.bibs);
+      // Prioridad: lámina corregida a mano > histórico CV/incierto.
+      // NUNCA usamos dorsales de pruebas claramente de fuera de la CV.
+      if(!String(r.bib||'').trim()){
+        let cvBib = (sheet && sheet.dorsal) ? String(sheet.dorsal).trim() : '';
+        if(!cvBib && known && known.bibs && known.bibs.length) cvBib=_resolveCVBib(known.bibs);
         if(cvBib){
           delta.bibDespues=cvBib;
           updated.bib=cvBib;
