@@ -1142,6 +1142,24 @@ function _calRaceMatchesCat(r){
   const gs=_calRaceCatGroups(r);
   return gs.includes(g);               // jamás se hereda otra categoría
 }
+// Grupos de categoría de UNA prueba del histórico (no depende de .cats, que solo
+// existe en los objetos del calendario). Deriva del override raceCat y de las
+// categorías de sus corredores/inscritos. Reutilizable en cualquier módulo.
+function _raceCatGroupKeys(race){
+  const s=new Set();
+  if(!race) return s;
+  if(race.raceCat){ const g=_calCatGroup(race.raceCat); if(g) s.add(g.key); }
+  if(Array.isArray(race.cats)) race.cats.forEach(k=>{ if(k) s.add(k); });
+  (race.riders||[]).forEach(r=>{ const g=_calCatGroup(r&&r.cat); if(g) s.add(g.key); });
+  (race.inscritos||[]).forEach(r=>{ const g=_calCatGroup(r&&r.cat); if(g) s.add(g.key); });
+  return s;
+}
+// ¿La prueba del histórico encaja con la categoría del FILTRO GLOBAL? ESTRICTO.
+function _raceMatchesGlobalCatGroup(race){
+  const g=_calGlobalCatGroup();
+  if(!g) return true;                 // "Todas"
+  return _raceCatGroupKeys(race).has(g);
+}
 // Grupos de categoría realmente presentes en los datos cargados
 function _calAvailableCats(){
   const present=new Set();
@@ -12077,6 +12095,11 @@ async function renderInicio(){
   let history = Array.isArray(_cachedHistory) ? _cachedHistory : [];
   if(!history.length && typeof _ensureHistory === 'function'){
     try{ history = await _ensureHistory(); }catch(e){ history = []; }
+  }
+  // Respetar el FILTRO GLOBAL de categoría: con "Cadete" activo, el resumen de
+  // Inicio (carreras, % Top 10, podios…) solo cuenta pruebas de cadetes.
+  if(typeof _raceMatchesGlobalCatGroup === 'function'){
+    history = history.filter(_raceMatchesGlobalCatGroup);
   }
   const totalRaces = history.length;
   const uniqueRiders = new Set();
