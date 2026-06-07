@@ -1120,7 +1120,18 @@ const _CAL_CAT_GROUPS = [
   {key:'alevin',   label:'Alevines',   re:/alev[ií]n/i},
   {key:'escuela',  label:'Escuelas',   re:/escuela|promesa|principiante/i}
 ];
-function _calCatGroup(raw){ const s=String(raw||''); for(const g of _CAL_CAT_GROUPS){ if(g.re.test(s)) return g; } return null; }
+function _calCatGroup(raw){
+  const s=String(raw||'');
+  // Las categorías FEMENINAS (F-CAD, F-JUN, F-JUV, Femenino…) van SIEMPRE al
+  // grupo 'fem', NUNCA al masculino. Hay que comprobarlo ANTES, porque "F-JUN"
+  // contiene "JUN" y "F-CAD" contiene "CAD" y si no, se colarían en juvenil /
+  // cadete (bug: una carrera de cadetes con 1 F-JUN aparecía como junior).
+  if(/^\s*f[-\s.]?(cad|jun|juv|elit|sub|mast|inf|alev)/i.test(s) || /femen|f[eé]mina|mujer|dones/i.test(s)){
+    return _CAL_CAT_GROUPS.find(g=>g.key==='fem') || null;
+  }
+  for(const g of _CAL_CAT_GROUPS){ if(g.re.test(s)) return g; }
+  return null;
+}
 function _calCatLabel(key){ const g=_CAL_CAT_GROUPS.find(x=>x.key===key); return g?g.label:''; }
 function _calRaceCatGroups(r){
   if(r.type==='planned'){ const g=_calCatGroup(r.cat); return g?[g.key]:[]; }
