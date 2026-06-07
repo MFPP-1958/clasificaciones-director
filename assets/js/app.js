@@ -24685,20 +24685,28 @@ function _simRenderKpis(k){
   `;
 }
 
-function _simRenderTop10(grid, catFilter){
-  const body = document.getElementById('simTopBody');
-  if(!body) return;
-  let pool = grid.filter(g=>g.predictedPos!=null || g.avgPos!=null);
+// FUENTE ÚNICA de la predicción "Top 10 esperado": la usan TANTO el panel del
+// simulador COMO el modal "Predicho vs Real", para que SIEMPRE coincidan.
+// Incluye los corredores con predicción Y los de respaldo (solo avgPos), a los
+// que asigna una predictedPos suave. Ordena por predictedPos ascendente.
+function _simPredictedPool(grid, catFilter){
+  let pool = (grid||[]).filter(g=>g.predictedPos!=null || g.avgPos!=null);
   if(catFilter) pool = pool.filter(g=>(g.cat||'')===catFilter);
-  // Ordenar por predictedPos (fórmula 60/40 + penalización fiabilidad)
-  // Si no hay predictedPos calculado, usar avgPos con penalización suave
   pool.forEach(g=>{
     if(g.predictedPos==null){
       const rel = g.reliability ?? 30;
       g.predictedPos = (g.avgPos||99) * (1 + (100-rel)/200);
     }
   });
-  pool.sort((a,b)=>(a.predictedPos||99) - (b.predictedPos||99));
+  return pool.slice().sort((a,b)=>(a.predictedPos||99) - (b.predictedPos||99));
+}
+// Filtro de categoría activo en el simulador (desplegable simCatSelect)
+function _simActiveCatFilter(){ return (document.getElementById('simCatSelect')?.value || ''); }
+
+function _simRenderTop10(grid, catFilter){
+  const body = document.getElementById('simTopBody');
+  if(!body) return;
+  const pool = _simPredictedPool(grid, catFilter);
   const top = pool.slice(0,10);
   if(!top.length){
     body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin datos históricos suficientes para predecir el podio.</p>';
@@ -32997,14 +33005,9 @@ function _simOpenPredVsReal(){
       alert('Esta prueba aún no tiene clasificación final cargada.');
       return;
     }
-    // Predicho: top 10 según predictedPos (asc) entre los que tienen predicción
-    const predRanked = grid.filter(g=>g.predictedPos!=null)
-                           .slice()
-                           .sort((a,b)=>{
-                             const ap = a.predictedPosRaw!=null?a.predictedPosRaw:a.predictedPos;
-                             const bp = b.predictedPosRaw!=null?b.predictedPosRaw:b.predictedPos;
-                             return ap - bp;
-                           });
+    // Predicho: MISMA fuente que el panel "Top 10 esperado" para que coincidan
+    // exactamente (incluye corredores de respaldo y respeta el filtro de cat).
+    const predRanked = _simPredictedPool(grid, _simActiveCatFilter());
     const top10Pred = predRanked.slice(0, 10);
     const top10Real = actualRiders.slice(0, 10);
 
