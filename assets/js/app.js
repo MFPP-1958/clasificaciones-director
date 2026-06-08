@@ -3,6 +3,22 @@
 // El orden de definición se mantiene EXACTAMENTE como estaba en el HTML
 // ═════════════════════════════════════════════════════════════════════
 
+// ── Etiqueta de versión: muestra el ?v= del app.js realmente cargado, para
+//    poder verificar de un vistazo si el navegador tiene la última versión o
+//    está sirviendo una en caché. ──
+(function _showAppVersion(){
+  function set(){
+    try{
+      const s=[...document.getElementsByTagName('script')].find(x=>/assets\/js\/app\.js/.test(x.src||''));
+      const m=s && (s.src||'').match(/[?&]v=([^&]+)/);
+      const el=document.getElementById('appVersionBadge');
+      if(el) el.textContent = m ? ('v·'+decodeURIComponent(m[1])) : 'v·(sin versión)';
+    }catch(_){}
+  }
+  if(document.readyState!=='loading') set();
+  else document.addEventListener('DOMContentLoaded', set);
+})();
+
 // ── Bloque A (original: líneas 1733-18150 del index.html monolítico) ──
 if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'}
 function toggleLoadPanel(){
