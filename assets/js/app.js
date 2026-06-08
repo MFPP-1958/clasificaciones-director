@@ -11633,6 +11633,12 @@ async function saveHistory(){
         ['route','weather','lat','lon'].forEach(k => {
           if(oldExtra[k] != null) notesObj[k] = oldExtra[k];
         });
+        // PRESERVAR la lista de inscritos ya guardada si la carga actual NO trae
+        // inscritos: así subir la clasificación encima no borra la startlist
+        // (caso Etapa 2 Viñedos: tenía 162 inscritos y 0 clasificados).
+        if((!notesObj.inscritos || !notesObj.inscritos.length) && Array.isArray(oldExtra.inscritos) && oldExtra.inscritos.length){
+          notesObj.inscritos = oldExtra.inscritos;
+        }
       }catch(e){ /* notes vacíos o malformados, seguimos */ }
       // Borrar carrera existente (cascade borrará race_results y team_rankings si está configurado)
       const {error:delErr}=await _sb.from('races').delete().eq('id',dup.id);
