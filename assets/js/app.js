@@ -14758,6 +14758,152 @@ async function _dbExportBackup(){
     if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent=orig||'💾 Copia de la base de datos'; }
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// REVISAR CATEGORÍAS — detectar corredores "colados" (categoría que no encaja
+// con la de su carrera, p.ej. 1 junior en una prueba de cadetes) y corregir o
+// eliminar cada uno. Mantiene la base de datos limpia y la separación estricta.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Grupo de EDAD (ignora el sexo): F-CAD→cadete, F-JUN→juvenil, etc. Sirve para
+// distinguir lo realmente "colado" (otra edad) de las féminas, que SÍ pertenecen.
+function _ageCatGroup(cat){
+  const s=String(cat||'').toUpperCase();
+  if(/SUB[-\s]?23/.test(s)) return 'sub23';
+  if(/CAD/.test(s))         return 'cadete';   // CAD-1, CAD-2, F-CAD
+  if(/JUN|JUV/.test(s))     return 'juvenil';  // JUNIOR, JUN, JUV, F-JUN, F-JUV
+  if(/[EÉ]LIT/.test(s))     return 'elite';
+  if(/MAST|VETERAN/.test(s))return 'master';
+  if(/INFANT/.test(s))      return 'infantil';
+  if(/ALEV/.test(s))        return 'alevin';
+  return null;
+}
+const _AGE_LABEL = { cadete:'Cadete', juvenil:'Juvenil/Júnior', sub23:'Sub-23', elite:'Élite', master:'Máster', infantil:'Infantil', alevin:'Alevín' };
+
+let _catCleanupData = [];   // [{resultId, raceId, raceName, date, name, team, cat, group, dominant}]
+
+async function _catCleanupOpen(){
+  if(typeof _sb==='undefined' || !_sb){ alert('Supabase no disponible.'); return; }
+  const btn=document.getElementById('catCleanupBtn');
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='⏳ Analizando…'; }
+  try{
+    const { data, error } = await _sb
+      .from('races')
+      .select('id,name,date,notes,race_results(id,name,team,cat,pos)');
+    if(error) throw error;
+    const strays=[];
+    (data||[]).forEach(race=>{
+      const rrs = race.race_results||[];
+      // Conteo por grupo de EDAD
+      const counts={}; let total=0;
+      rrs.forEach(r=>{ const g=_ageCatGroup(r.cat); if(g){ counts[g]=(counts[g]||0)+1; total++; } });
+      if(!total) return;
+      // Grupos SIGNIFICATIVOS (≥3 y ≥15%) = los que "pertenecen" a la prueba
+      const significant=new Set();
+      for(const k in counts){ if(counts[k]>=3 && counts[k]/total>=0.15) significant.add(k); }
+      if(!significant.size){ let best='',n=-1; for(const k in counts){ if(counts[k]>n){n=counts[k];best=k;} } if(best) significant.add(best); }
+      const domLabel=[...significant].map(k=>_AGE_LABEL[k]||k).join(' + ');
+      // Corredores cuyo grupo de edad NO es significativo en la prueba → colados
+      rrs.forEach(r=>{
+        const g=_ageCatGroup(r.cat);
+        if(g && !significant.has(g)){
+          strays.push({
+            resultId:r.id, raceId:race.id, raceName:race.name||'(sin nombre)',
+            date:race.date||'', name:r.name||'(sin nombre)', team:r.team||'',
+            cat:r.cat||'', group:g, dominant:domLabel
+          });
+        }
+      });
+    });
+    _catCleanupData = strays;
+    _catCleanupRender();
+  }catch(e){
+    console.error('[catCleanup]', e);
+    alert('❌ No se pudo analizar:\n\n'+(e.message||e));
+  }finally{
+    if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent=orig||'🧹 Revisar categorías'; }
+  }
+}
+
+function _catCleanupRender(){
+  const old=document.getElementById('catCleanupOverlay'); if(old) old.remove();
+  const strays=_catCleanupData||[];
+  const rows = strays.map((s,i)=>`
+    <tr id="ccRow_${i}" style="border-bottom:1px solid #f1f5f9">
+      <td style="padding:8px 10px;font-size:12px;color:#475569">${escapeHtml(s.date)}<br><b style="color:#0b2f6b">${escapeHtml(s.raceName)}</b><div style="font-size:11px;color:#94a3b8">Carrera de: ${escapeHtml(s.dominant)}</div></td>
+      <td style="padding:8px 10px"><b>${escapeHtml(s.name)}</b><div style="font-size:11px;color:#6b7280">${escapeHtml(s.team)}</div></td>
+      <td style="padding:8px 10px;text-align:center"><span style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:3px 9px;font-weight:800;font-size:12px">${escapeHtml(s.cat||'(vacío)')}</span><div style="font-size:11px;color:#94a3b8;margin-top:2px">${_AGE_LABEL[s.group]||s.group}</div></td>
+      <td style="padding:8px 10px;text-align:right;white-space:nowrap">
+        <button onclick="_catCleanupFix(${i})" style="background:#fff;color:#7c3aed;border:1.5px solid #ddd6fe;border-radius:8px;padding:6px 11px;font-weight:800;font-size:12px;cursor:pointer">✏️ Corregir cat.</button>
+        <button onclick="_catCleanupDelete(${i})" style="background:#dc2626;color:#fff;border:0;border-radius:8px;padding:6px 11px;font-weight:800;font-size:12px;cursor:pointer;margin-left:6px">🗑️ Eliminar</button>
+      </td>
+    </tr>`).join('');
+  const body = strays.length
+    ? `<div style="overflow:auto;max-height:60vh;border:1px solid #e5e7eb;border-radius:10px">
+         <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff">
+           <thead><tr style="background:#f8fafc;position:sticky;top:0">
+             <th style="padding:9px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#475467">Carrera</th>
+             <th style="padding:9px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#475467">Corredor</th>
+             <th style="padding:9px 10px;text-align:center;font-size:11px;text-transform:uppercase;color:#475467">Categoría (colada)</th>
+             <th style="padding:9px 10px;text-align:right;font-size:11px;text-transform:uppercase;color:#475467">Acción</th>
+           </tr></thead><tbody>${rows}</tbody>
+         </table>
+       </div>`
+    : `<div style="padding:40px 20px;text-align:center;color:#16a34a">
+         <div style="font-size:42px">✅</div>
+         <p style="font-weight:800;color:#15803d;margin-top:8px">Todo limpio</p>
+         <p style="font-size:13px;color:#6b7280">No se han detectado corredores con una categoría que no encaje con la de su carrera.</p>
+       </div>`;
+  const overlay=document.createElement('div');
+  overlay.id='catCleanupOverlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto';
+  overlay.innerHTML=`
+    <div style="background:#fff;border-radius:16px;max-width:880px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="padding:16px 22px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <h2 style="margin:0;font-size:19px;color:#0b2f6b">🧹 Revisar categorías</h2>
+          <div style="font-size:12.5px;color:#6b7280;margin-top:3px">${strays.length} corredor(es) con categoría que no encaja con su carrera</div>
+        </div>
+        <button onclick="document.getElementById('catCleanupOverlay').remove()" style="background:#fff;color:#475569;border:1.5px solid #cbd5e1;border-radius:9px;padding:8px 14px;font-weight:800;cursor:pointer">✕ Cerrar</button>
+      </div>
+      <div style="padding:16px 22px">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#1e3a8a;line-height:1.5;margin-bottom:14px">
+          ℹ️ Se listan corredores cuya <b>categoría de edad</b> (cadete/juvenil/sub-23) NO coincide con la mayoritaria de su carrera. Suele ser un error de categoría al subir la clasificación. Puedes <b>corregir</b> la categoría o <b>eliminar</b> al corredor de esa carrera. <b>Las féminas (F-CAD, F-JUN) NO se marcan como coladas</b> si su edad coincide con la prueba.
+        </div>
+        ${body}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.remove(); });
+}
+
+async function _catCleanupFix(i){
+  const s=_catCleanupData[i]; if(!s) return;
+  const nueva=prompt(`Corregir categoría de:\n\n${s.name} — ${s.raceName}\nCategoría actual: ${s.cat||'(vacío)'}\n\nEscribe la categoría correcta (p.ej. CAD-1, CAD-2, JUNIOR):`, s.cat||'');
+  if(nueva==null) return;
+  const val=String(nueva).trim();
+  if(!val){ alert('No se ha escrito ninguna categoría.'); return; }
+  try{
+    const { error } = await _sb.from('race_results').update({ cat: val }).eq('id', s.resultId);
+    if(error) throw error;
+    const row=document.getElementById('ccRow_'+i); if(row){ row.style.transition='opacity .25s'; row.style.opacity='.4'; row.innerHTML='<td colspan="4" style="padding:10px;color:#15803d;font-weight:700">✅ Corregido a '+escapeHtml(val)+'</td>'; }
+    _cachedHistory=null;
+    if(typeof renderInicio==='function' && document.getElementById('view-inicio')?.classList.contains('active')) renderInicio();
+  }catch(e){ alert('❌ No se pudo corregir: '+(e.message||e)); }
+}
+
+async function _catCleanupDelete(i){
+  const s=_catCleanupData[i]; if(!s) return;
+  if(!confirm(`⚠️ ELIMINAR este corredor de la carrera (no se puede deshacer):\n\n${s.name}\nCategoría: ${s.cat||'(vacío)'}\nCarrera: ${s.raceName} (${s.date})\n\nSe borra SOLO este resultado, no la carrera ni los demás corredores.\n\n¿Continuar?`)) return;
+  try{
+    const { error } = await _sb.from('race_results').delete().eq('id', s.resultId);
+    if(error) throw error;
+    const row=document.getElementById('ccRow_'+i); if(row){ row.style.transition='opacity .25s'; row.style.opacity='.4'; row.innerHTML='<td colspan="4" style="padding:10px;color:#991b1b;font-weight:700">🗑️ Eliminado</td>'; }
+    _cachedHistory=null;
+    if(typeof renderInicio==='function' && document.getElementById('view-inicio')?.classList.contains('active')) renderInicio();
+  }catch(e){ alert('❌ No se pudo eliminar: '+(e.message||e)); }
+}
 // ===== BLOQUE COMPARATIVO DE CICLISTAS =====
 // Array fijo de 6 posiciones (null = slot vacío)
 let comparativoRiders=Array(6).fill(null);let compGapChart=null;let compRadarChart=null;
