@@ -24427,34 +24427,48 @@ function _simBuildData(raceId){
   // (si el director lo ha fijado). Clon para no contaminar el histórico.
   const targetForCompat = Object.assign({}, race, { _forceType: (_simTypeOverride||undefined) });
   const _compatByRaceId = new Map();
+  // ── CATEGORÍA: NUNCA mezclar. El simulador solo usa como referencia pruebas de
+  // la MISMA categoría que la prueba a predecir (junior con junior, cadete con
+  // cadete, sub-23 con sub-23…). El grupo lo marca la propia prueba (con umbral,
+  // ignorando corredores "colados"); si no se detecta, se usa el filtro global.
+  let _targetGroups = (typeof _raceCatGroupKeys==='function') ? _raceCatGroupKeys(race) : new Set();
+  if(!_targetGroups.size && typeof _calGlobalCatGroup==='function'){ const g=_calGlobalCatGroup(); if(g) _targetGroups=new Set([g]); }
+  const _sameCat = h => {
+    if(!_targetGroups.size) return true;               // objetivo sin categoría → no filtramos
+    const g = (typeof _raceCatGroupKeys==='function') ? _raceCatGroupKeys(h) : new Set();
+    for(const k of g){ if(_targetGroups.has(k)) return true; }
+    return false;
+  };
+  // 1) Misma CATEGORÍA + compatible por TIPO (lo ideal: junior CRI con junior CRI)
   let historicalRaces = hist.filter(h => {
     if(h.id === raceId) return false;
     if((h.riders||[]).length < 3) return false;
-    // Compatibilidad de formato: descartar solo si fundamentalmente incompatible
-    // try/catch defensivo: si _simRaceCompatWeight fallara por cualquier motivo,
-    // mantenemos la carrera en el histórico con peso neutro 1.0 (sin romper la app)
+    if(!_sameCat(h)) return false;                     // ← jamás mezclar categorías
     try {
       const compat = _simRaceCompatWeight(targetForCompat, h);
       if(!compat.compatible) return false;
       _compatByRaceId.set(h.id, compat.weight);
       return true;
     } catch(e) {
-      console.warn('[sim] compat error en', h.raceName, e);
       _compatByRaceId.set(h.id, 1.0);
-      return true; // mantener carrera con peso neutro
+      return true;
     }
   });
-  // ── RESPALDO: si NO hay ninguna prueba del mismo tipo (p.ej. una CRI sin otras
-  // CRI previas), en vez de dejar a todo el pelotón en "fallback equipo" (que
-  // hacía aparecer solo al ganador + mi equipo), usamos TODAS las pruebas
-  // disponibles con peso reducido. Así se estima un Top 10 ORIENTATIVO de todos
-  // los corredores con histórico, aunque la precisión sea menor. Misma filosofía
-  // que el panel por equipos.
-  let _simCompatRelaxed = false;
+  // 2) RELAJACIÓN dentro de la MISMA categoría: si no hay del mismo tipo (p.ej. no
+  // hay otra CRI junior), usamos las demás pruebas de junior (en línea…) con peso
+  // reducido, en vez de dejar a todos en "fallback equipo". NUNCA se cogen de otra
+  // categoría.
+  let _simCompatRelaxed = false, _simNoCatData = false;
   if(historicalRaces.length === 0){
-    _simCompatRelaxed = true;
-    historicalRaces = hist.filter(h => h.id !== raceId && (h.riders||[]).length >= 3);
-    historicalRaces.forEach(h => _compatByRaceId.set(h.id, 0.5)); // peso bajo = orientativo
+    const sameCatAny = hist.filter(h => h.id !== raceId && (h.riders||[]).length >= 3 && _sameCat(h));
+    if(sameCatAny.length){
+      _simCompatRelaxed = true;
+      historicalRaces = sameCatAny;
+      historicalRaces.forEach(h => _compatByRaceId.set(h.id, 0.5));
+    } else {
+      // 3) No hay NINGUNA prueba de esta categoría → no se puede predecir.
+      _simNoCatData = true;
+    }
   }
   // Info de compatibilidad para mostrar al director (transparencia)
   const _targetTT = _simIsTimeTrial(targetForCompat), _targetHC = _simIsHillClimb(targetForCompat);
@@ -24463,8 +24477,10 @@ function _simBuildData(raceId){
     targetTT:_targetTT, targetHC:_targetHC,
     total: historicalRaces.length, tt: _ttUsed,
     typeLabel: _targetHC ? 'Cronoescalada' : (_targetTT ? 'Contrarreloj (CRI)' : 'Carrera en línea / circuito'),
+    catLabel: (typeof _calCatLabel==='function' && _targetGroups.size) ? [..._targetGroups].map(k=>_calCatLabel(k)).filter(Boolean).join(' + ') : '',
     forced: !!_simTypeOverride,
-    relaxed: _simCompatRelaxed,   // true = no había pruebas del mismo tipo; se usan otras (orientativo)
+    relaxed: _simCompatRelaxed,   // true = no había del mismo tipo; se usan otras de la MISMA categoría
+    noData: _simNoCatData,        // true = no hay ninguna prueba de esta categoría → sin predicción
     // Lista exacta de pruebas usadas (para que el director compruebe cuáles son)
     races: historicalRaces.map(h=>({ name:h.raceName||'(sin nombre)', date:h.raceDate||'', n:(h.riders||[]).length, tt:_simIsTimeTrial(h), w:(_compatByRaceId.get(h.id)||1) }))
                           .sort((a,b)=>(_parseSpanishDate(b.date)||'').localeCompare(_parseSpanishDate(a.date)||''))
@@ -25014,6 +25030,26 @@ function _simRenderTop10(grid, catFilter){
   if(!body) return;
   const pool = _simPredictedPool(grid, catFilter);
   const top = pool.slice(0,10);
+  // ── SIN PREDICCIÓN: no hay NINGUNA prueba de esta categoría en el historial.
+  // Mostramos un mensaje claro y, si la carrera ya se disputó, la clasificación
+  // REAL (mejor que un Top 10 engañoso por "fallback equipo").
+  if(_simCompatInfo && _simCompatInfo.noData){
+    const catL = _simCompatInfo.catLabel || 'esta categoría';
+    const race = _simCurrentData && _simCurrentData.race;
+    const real = ((race && race.riders)||[]).filter(r=>r&&r.pos>0).slice().sort((a,b)=>(parseInt(a.pos)||999)-(parseInt(b.pos)||999)).slice(0,10);
+    let realHtml='';
+    if(real.length){
+      realHtml = `<div style="font-size:12px;font-weight:800;color:#475569;margin:4px 0 8px">🏁 Clasificación REAL (sin predicción disponible):</div>`
+        + real.map((r,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid #f1f5f9">
+            <div style="width:30px;font-weight:900;color:#0b2f6b;text-align:center">${i+1}º</div>
+            <div style="flex:1"><b>${escapeHtml(r.name||'')}</b><div style="font-size:11px;color:#6b7280">${escapeHtml(r.team||'')}${r.cat?' · '+escapeHtml(r.cat):''}</div></div>
+          </div>`).join('');
+    }
+    body.innerHTML = `<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:#1e3a8a;line-height:1.5">
+        ℹ️ <b>Predicción Top 10 no disponible.</b> No hay ninguna prueba previa de <b>${escapeHtml(catL)}</b> en el historial con la que predecir esta carrera.${real.length?' Mostramos la <b>clasificación real</b>.':''} En cuanto cargues alguna prueba de esta categoría, la predicción se activará automáticamente.
+      </div>` + realHtml;
+    return;
+  }
   if(!top.length){
     body.innerHTML = '<p class="small" style="text-align:center;padding:14px;color:#9ca3af">Sin datos históricos suficientes para predecir el podio.</p>';
     return;
@@ -25026,9 +25062,11 @@ function _simRenderTop10(grid, catFilter){
   const tt = (_simCompatInfo && _simCompatInfo.typeLabel) ? _simCompatInfo.typeLabel : 'este tipo de prueba';
   let _warnHtml = '';
   if(_simCompatInfo && _simCompatInfo.relaxed){
-    // No había ninguna prueba del mismo tipo → se han usado OTRAS (otro formato)
+    // No había prueba del mismo tipo en esta categoría → se usan OTRAS del MISMO
+    // grupo de categoría (nunca de otra categoría).
+    const catL = _simCompatInfo.catLabel ? ` de <b>${escapeHtml(_simCompatInfo.catLabel)}</b>` : '';
     _warnHtml = `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e;line-height:1.5">
-      ⚠️ <b>Predicción orientativa.</b> No hay ninguna prueba previa del mismo tipo (<b>${escapeHtml(tt)}</b>) en el historial, así que se ha estimado a partir de las <b>demás pruebas disponibles</b> (otro formato, peso reducido). Sirve para hacerse una idea del orden, pero la precisión es baja; mejorará cuando cargues más pruebas del mismo tipo.
+      ⚠️ <b>Predicción orientativa.</b> No hay ninguna prueba previa del mismo tipo (<b>${escapeHtml(tt)}</b>)${catL} en el historial, así que se ha estimado a partir de las <b>demás pruebas${catL} disponibles</b> (otro formato, peso reducido). Misma categoría siempre; nunca se mezcla con otra. Mejorará cuando cargues más pruebas del mismo tipo.
     </div>`;
   } else if(_fb >= Math.ceil(top.length*0.6)){
     _warnHtml = `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e;line-height:1.5">
