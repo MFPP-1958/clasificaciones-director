@@ -1030,17 +1030,13 @@ async function _calLoadData(){
     const ds = _parseSpanishDate(r.raceDate);
     const riders = r.riders||[];
     const inscritos = Array.isArray(r.inscritos)? r.inscritos : [];
-    // Grupos de categoría presentes en la prueba (derivados de corredores + inscritos)
-    const catGroups = new Set();
+    // Grupos de categoría presentes en la prueba. Usamos el MISMO criterio
+    // (con umbral, ignorando corredores "colados") que el resto de la app, para
+    // que el calendario respete el filtro global igual que Inicio/Historial/Sim.
+    const catGroups = (typeof _raceCatGroupKeys==='function') ? _raceCatGroupKeys(r) : new Set();
     const catRaw = new Set();
-    // Categoría FORZADA (override) manda sobre la derivación de corredores
-    if(r.raceCat){
-      const g=_calCatGroup(r.raceCat); if(g) catGroups.add(g.key); catRaw.add(r.raceCat);
-    } else {
-      [...riders, ...inscritos].forEach(p=>{
-        const c=(p&&p.cat)||''; if(c){ catRaw.add(c); const g=_calCatGroup(c); if(g) catGroups.add(g.key); }
-      });
-    }
+    if(r.raceCat){ catRaw.add(r.raceCat); }
+    else { [...riders, ...inscritos].forEach(p=>{ const c=(p&&p.cat)||''; if(c) catRaw.add(c); }); }
     // Mejor resultado de nuestro equipo en esta prueba
     let bestMine=null, mineCount=0;
     if(myKey){
@@ -1159,10 +1155,22 @@ function _calRaceMatchesCat(r){
 function _raceCatGroupKeys(race){
   const s=new Set();
   if(!race) return s;
-  if(race.raceCat){ const g=_calCatGroup(race.raceCat); if(g) s.add(g.key); }
-  if(Array.isArray(race.cats)) race.cats.forEach(k=>{ if(k) s.add(k); });
-  (race.riders||[]).forEach(r=>{ const g=_calCatGroup(r&&r.cat); if(g) s.add(g.key); });
-  (race.inscritos||[]).forEach(r=>{ const g=_calCatGroup(r&&r.cat); if(g) s.add(g.key); });
+  // 1) Override manual de categoría: manda sobre todo.
+  if(race.raceCat){ const g=_calCatGroup(race.raceCat); if(g){ s.add(g.key); return s; } }
+  // 2) Contar corredores por grupo (clasificación; si no hay, inscritos).
+  const counts={}; let total=0;
+  const tally=arr=>(arr||[]).forEach(r=>{ const g=_calCatGroup(r&&r.cat); if(g){ counts[g.key]=(counts[g.key]||0)+1; total++; } });
+  tally(race.riders);
+  if(!total) tally(race.inscritos);
+  // 3) Si no hay corredores pero el calendario precomputó cats, úsalo.
+  if(!total){ if(Array.isArray(race.cats)) race.cats.forEach(k=>{ if(k) s.add(k); }); return s; }
+  // 4) Un grupo cuenta solo si es SIGNIFICATIVO: ≥3 corredores y ≥15% del total.
+  //    Así un único corredor "colado" de otra categoría (p.ej. 1 junior en una
+  //    carrera de 91 cadetes) NO contamina el filtro, pero los eventos COMBINADOS
+  //    reales (cadete+junior con presencia sustancial) sí aparecen en ambos.
+  for(const k in counts){ if(counts[k]>=3 && counts[k]/total>=0.15) s.add(k); }
+  // 5) Si ninguno llega al umbral (carreras muy pequeñas), grupo dominante.
+  if(!s.size){ let best='',bn=-1; for(const k in counts){ if(counts[k]>bn){ bn=counts[k]; best=k; } } if(best) s.add(best); }
   return s;
 }
 // ¿La prueba del histórico encaja con la categoría del FILTRO GLOBAL? ESTRICTO.
@@ -13157,21 +13165,25 @@ async function renderHistory(){
     if(gfCat || gfGen){
       const riders = h.riders||[];
       const insArr = Array.isArray(h.inscritos) ? h.inscritos : [];
-      // Si la prueba tiene categoría FORZADA (override), manda sobre la derivación
-      if(h.raceCat && typeof _gfMatchesCatGender==='function'){
-        if(!_gfMatchesCatGender(h.raceCat, h.raceName||'')) return false;
-      } else if(typeof _gfMatchesCatGender==='function'){
-        if(isPreInsc){
-          // Si la pre-inscripción no tiene cat en ningún inscrito, dejamos pasar
-          // (mejor mostrar de más que ocultar la pre-inscripción que el usuario busca)
-          const anyHasCat = insArr.some(i => (i.cat||'').trim());
-          if(anyHasCat){
-            const anyMatch = insArr.some(i => _gfMatchesCatGender(i.cat||'', h.raceName||''));
-            if(!anyMatch) return false;
-          }
+      const g = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+      // CATEGORÍA: por GRUPOS SIGNIFICATIVOS (umbral) — un único corredor "colado"
+      // de otra categoría no arrastra la prueba al filtro equivocado. Respeta el
+      // override raceCat (lo gestiona _raceMatchesGlobalCatGroup internamente).
+      if(g && typeof _raceMatchesGlobalCatGroup==='function'){
+        const hasAnyCat = !!h.raceCat || riders.some(r=>(r.cat||'').trim()) || insArr.some(i=>(i.cat||'').trim());
+        // Pre-inscripción sin categoría conocida: no ocultar (el director la busca).
+        if(!(isPreInsc && !hasAnyCat)){
+          if(!_raceMatchesGlobalCatGroup(h)) return false;
+        }
+      }
+      // GÉNERO solo (sin categoría activa): comprobación anterior.
+      if(gfGen && !g && typeof _gfMatchesCatGender==='function'){
+        if(h.raceCat){
+          if(!_gfMatchesCatGender(h.raceCat, h.raceName||'')) return false;
         } else {
-          const any = riders.some(r => _gfMatchesCatGender(r.cat||'', h.raceName||''));
-          if(!any) return false;
+          const arr = isPreInsc ? insArr : riders;
+          const anyHasCat = arr.some(x => (x.cat||'').trim());
+          if(anyHasCat && !arr.some(x => _gfMatchesCatGender(x.cat||'', h.raceName||''))) return false;
         }
       }
     }
@@ -23512,18 +23524,25 @@ async function _simLoadPlanned(){
 // ¿La prueba encaja con la categoría/género del FILTRO GLOBAL? (override raceCat
 // manda; si no, se mira la categoría de sus corredores/inscritos).
 function _simRaceMatchesGlobalCat(h){
-  const gfCat=(typeof _globalFilters!=='undefined'&&_globalFilters&&_globalFilters.cat)||'';
+  const g = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
   const gfGen=(typeof _globalFilters!=='undefined'&&_globalFilters&&_globalFilters.gender)||'';
-  if((!gfCat && !gfGen) || typeof _gfMatchesCatGender!=='function') return true;
-  if(h.raceCat) return _gfMatchesCatGender(h.raceCat, h.raceName||'');
-  const cats=new Set();
-  (h.riders||[]).forEach(r=>{ if(r&&r.cat) cats.add(r.cat); });
-  (h.inscritos||[]).forEach(i=>{ if(i&&i.cat) cats.add(i.cat); });
-  if(h.cat) cats.add(h.cat);
-  if(cats.size) return [...cats].some(c=>_gfMatchesCatGender(c, h.raceName||''));
-  // ESTRICTO: sin categoría conocida en sus corredores/inscritos → NO se muestra
-  // bajo una categoría concreta (evita que pruebas sin cat se cuelen en Junior).
-  return false;
+  if(!g && !gfGen) return true;
+  // CATEGORÍA: por grupos SIGNIFICATIVOS (umbral) — un único corredor "colado"
+  // de otra categoría NO arrastra la prueba al filtro equivocado.
+  if(g){
+    const groups = (typeof _raceCatGroupKeys==='function') ? _raceCatGroupKeys(h) : new Set();
+    if(!groups.has(g)) return false;     // sin ese grupo significativo → no se muestra
+  }
+  // GÉNERO solo (sin categoría): mantenemos la comprobación anterior.
+  if(gfGen && !g && typeof _gfMatchesCatGender==='function'){
+    if(h.raceCat) return _gfMatchesCatGender(h.raceCat, h.raceName||'');
+    const cats=new Set();
+    (h.riders||[]).forEach(r=>{ if(r&&r.cat) cats.add(r.cat); });
+    (h.inscritos||[]).forEach(i=>{ if(i&&i.cat) cats.add(i.cat); });
+    if(!cats.size) return false;
+    return [...cats].some(c=>_gfMatchesCatGender(c, h.raceName||''));
+  }
+  return true;
 }
 const _SIM_CAT_LABEL = { cadete:'Cadetes', junior:'Juveniles / Júnior', sub23:'Sub-23', elite:'Élite', master:'Máster', femenino:'Féminas' };
 
