@@ -1383,7 +1383,8 @@ function _calBuildMonth(y, m){
         </div>
         <div style="font-size:12px;color:#6b7280;flex-shrink:0">${r.date.getDate()} ${_CAL_MONTHS_ES[r.date.getMonth()]}</div>
         ${infoBtn}
-        ${isPlan?`<button onclick="event.stopPropagation();_calEditPlanned('${r.id}')" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700;margin-right:4px" title="Editar">✏️</button><button onclick="event.stopPropagation();_calDeletePlanned('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700" title="Eliminar">✕</button>`:''}
+        ${isPlan?`<button onclick="event.stopPropagation();_calEditPlanned('${r.id}')" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700;margin-right:4px" title="Editar">✏️</button><button onclick="event.stopPropagation();_calDeletePlanned('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700" title="Eliminar">✕</button>`
+        : (r.id?`<button onclick="event.stopPropagation();_histEditRace('${escapeAttr(r.id)}')" style="background:#f5f3ff;color:#7c3aed;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700" title="Editar nombre, fecha o categoría">✏️</button>`:'')}
       </div>`;
     });
     html += '</div>';
@@ -11094,30 +11095,37 @@ async function deleteHistoryEntry(id){
 // Borrado SEGURO de UNA prueba: modal con el nombre completo de la prueba
 // para que el usuario confirme sin riesgo de equivocarse de fila.
 // ── Editar la CATEGORÍA de una prueba (override manual) ───────────────────
-function _histEditRace(id){
-  const h=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory.find(x=>x.id===id):null;
-  if(!h){ alert('Prueba no encontrada. Recarga el Historial.'); return; }
+async function _histEditRace(id){
+  let hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory)&&_cachedHistory.length)?_cachedHistory:null;
+  if(!hist && typeof _ensureHistory==='function'){ try{ hist=await _ensureHistory(); }catch(_){ hist=[]; } }
+  const h=(hist||[]).find(x=>x.id===id);
+  if(!h){ alert('Prueba no encontrada. Recarga la página.'); return; }
   const derived=[...new Set([...(h.riders||[]),...(h.inscritos||[])].map(p=>p&&p.cat).filter(Boolean))].join(', ') || '(sin categoría en los corredores)';
   const cur=h.raceCat||'';
+  const isoDate=(typeof _parseSpanishDate==='function' ? (_parseSpanishDate(h.raceDate)||'') : '') ; // YYYY-MM-DD
   const opts=[['','Automática (según los corredores)'],['CAD-1','CAD-1 (Cadete 1º)'],['CAD-2','CAD-2 (Cadete 2º)'],['CADETE','Cadete (genérico)'],['JUV-1','JUV-1 (Juvenil 1º)'],['JUV-2','JUV-2 (Juvenil 2º)'],['JUVENIL','Juvenil / Júnior (genérico)'],['SUB-23','Sub-23'],['ELITE','Élite'],['MASTER','Máster'],['FEMENINO','Féminas']];
   let ov=document.getElementById('_hecModal'); if(ov) ov.remove();
   ov=document.createElement('div'); ov.id='_hecModal';
   ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.7);display:flex;align-items:center;justify-content:center;padding:20px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
   ov.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
     <div style="background:linear-gradient(135deg,#7c3aed,#0e4d73);color:#fff;padding:16px 20px">
-      <div style="font-size:16px;font-weight:900">✏️ Editar categoría de la prueba</div>
-      <div style="font-size:12.5px;opacity:.9;margin-top:3px">${escapeHtml(h.raceName||'')}</div>
+      <div style="font-size:16px;font-weight:900">✏️ Editar prueba</div>
+      <div style="font-size:12.5px;opacity:.9;margin-top:3px">Nombre, fecha y categoría</div>
     </div>
     <div style="padding:18px 20px">
-      <div style="font-size:12.5px;color:#475569;margin-bottom:10px">Categoría detectada por los corredores: <b style="color:#0b2f6b">${escapeHtml(derived)}</b></div>
+      <label style="font-size:12px;font-weight:800;color:#475569">Nombre de la prueba</label>
+      <input id="_hecName" type="text" value="${escapeAttr(h.raceName||'')}" style="width:100%;box-sizing:border-box;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-top:5px;margin-bottom:14px" placeholder="Nombre de la carrera">
+      <label style="font-size:12px;font-weight:800;color:#475569">Fecha</label>
+      <input id="_hecDate" type="date" value="${escapeAttr(isoDate)}" style="width:100%;box-sizing:border-box;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-top:5px;margin-bottom:14px">
+      <div style="font-size:12.5px;color:#475569;margin-bottom:6px">Categoría detectada por los corredores: <b style="color:#0b2f6b">${escapeHtml(derived)}</b></div>
       <label style="font-size:12px;font-weight:800;color:#475569">Categoría de la prueba (manda sobre la detección)</label>
       <select id="_hecCatSel" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:14px;font-weight:700;color:#0b2f6b;margin-top:5px">
         ${opts.map(([v,l])=>`<option value="${v}" ${v===cur?'selected':''}>${escapeHtml(l)}</option>`).join('')}
       </select>
-      <div style="font-size:11px;color:#94a3b8;margin-top:6px">Al guardar, la prueba se moverá automáticamente al calendario/historial de la categoría elegida y desaparecerá del actual.</div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:6px">Al cambiar la categoría, la prueba se moverá al historial/calendario de esa categoría. Nombre y fecha se actualizan tal cual.</div>
     </div>
     <div style="padding:4px 20px 18px;display:flex;gap:10px">
-      <button onclick="_histSaveRaceCat('${escapeAttr(id)}')" style="flex:1;background:linear-gradient(135deg,#7c3aed,#0e4d73);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">💾 Guardar categoría</button>
+      <button onclick="_histSaveRaceCat('${escapeAttr(id)}')" style="flex:1;background:linear-gradient(135deg,#7c3aed,#0e4d73);color:#fff;border:none;border-radius:11px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">💾 Guardar cambios</button>
       <button onclick="document.getElementById('_hecModal')?.remove()" style="background:#f1f5f9;color:#475569;border:none;border-radius:11px;padding:12px 18px;font-weight:800;font-size:14px;cursor:pointer">Cancelar</button>
     </div>
   </div>`;
@@ -11127,21 +11135,34 @@ function _histEditRace(id){
 async function _histSaveRaceCat(id){
   const sel=document.getElementById('_hecCatSel'); if(!sel) return;
   const val=sel.value;
+  const newName=(document.getElementById('_hecName')?.value||'').trim();
+  const newDate=(document.getElementById('_hecDate')?.value||'').trim(); // YYYY-MM-DD
   if(!_sb){ alert('Base de datos no disponible.'); return; }
+  if(!newName){ alert('El nombre no puede quedar vacío.'); return; }
   try{
-    const {data,error}=await _sb.from('races').select('notes').eq('id',id).single();
+    const {data,error}=await _sb.from('races').select('notes,name,date').eq('id',id).single();
     if(error||!data) throw new Error(error?.message||'no encontrada');
     let extra={}; try{ extra=JSON.parse(data.notes||'{}'); }catch(_){}
     if(val) extra.raceCat=val; else delete extra.raceCat;
-    const {error:upErr}=await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',id);
+    // Si cambia la fecha, mantenemos coherente también el raceDate (display) en notes.
+    const upd={ notes:JSON.stringify(extra) };
+    if(newName && newName!==data.name) upd.name=newName;
+    if(newDate && newDate!==data.date){
+      upd.date=newDate;
+      // raceDate en notes en formato DD/MM/AAAA para la vista
+      const [y,m,d]=newDate.split('-');
+      if(y&&m&&d){ extra.raceDate=`${d}/${m}/${y}`; upd.notes=JSON.stringify(extra); }
+    }
+    const {error:upErr}=await _sb.from('races').update(upd).eq('id',id);
     if(upErr) throw upErr;
     document.getElementById('_hecModal')?.remove();
     _cachedHistory=null;   // invalidar caché → re-render reactivo
     if(typeof _calLoadData==='function'){ try{ await _calLoadData(); }catch(_){} }
     if(typeof renderHistory==='function') await renderHistory();
     if(typeof _calRender==='function') _calRender();
-    if(typeof showToast==='function') showToast(val?`✅ Categoría fijada a ${val}`:'✅ Categoría automática restaurada','ok',3500);
-  }catch(e){ alert('No se pudo guardar la categoría: '+(e.message||e)); }
+    if(typeof renderInicio==='function' && document.getElementById('view-inicio')?.classList.contains('active')) renderInicio();
+    if(typeof showToast==='function') showToast('✅ Prueba actualizada','ok',3000);
+  }catch(e){ alert('No se pudo guardar: '+(e.message||e)); }
 }
 
 function _histConfirmDelete(id, raceName){
