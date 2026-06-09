@@ -1199,6 +1199,23 @@ function _raceMatchesGlobalCatGroup(race){
   if(!g) return true;                 // "Todas"
   return _raceCatGroupKeys(race).has(g);
 }
+// Devuelve el historial FILTRADO por la categoría global: solo carreras del grupo
+// activo y, dentro de cada una, solo los corredores/inscritos de ese grupo (así
+// un corredor "colado" de otra categoría tampoco aparece). Si no hay filtro de
+// categoría, devuelve el historial tal cual. Función ÚNICA reutilizable por
+// TODOS los menús para que el filtro global se respete en toda la app.
+function _historyForGlobalCat(history){
+  const g = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  if(!g || !Array.isArray(history)) return history;
+  const inGroup = (cat)=>{ const x=(typeof _calCatGroup==='function')?_calCatGroup(cat):null; return !!x && x.key===g; };
+  return history
+    .filter(_raceMatchesGlobalCatGroup)
+    .map(race=>({
+      ...race,
+      riders:    Array.isArray(race.riders)    ? race.riders.filter(r=>inGroup(r&&r.cat))    : race.riders,
+      inscritos: Array.isArray(race.inscritos) ? race.inscritos.filter(i=>inGroup(i&&i.cat)) : race.inscritos
+    }));
+}
 // Grupos de categoría realmente presentes en los datos cargados
 function _calAvailableCats(){
   const present=new Set();
@@ -6441,7 +6458,7 @@ async function _chgInit(){
   if(typeof _ensureHistory === 'function'){
     try { await _ensureHistory(); } catch(e){ console.warn('[chg]', e); }
   }
-  const hist = _cachedHistory || [];
+  const hist = _historyForGlobalCat(_cachedHistory || []);
   const years = new Set();
   hist.forEach(r => {
     if(!r || !r.challengeCV) return;
@@ -7641,10 +7658,12 @@ async function _eqCcaaInit(){
   try{
     const {data:races, error} = await _sb
       .from('races')
-      .select('id, notes, race_results(name, team)')
+      .select('id, notes, race_results(name, team, cat)')
       .eq('race_type','clasificacion');
     if(error) throw error;
 
+    // Respetar el filtro global de categoría
+    const _gGroup = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
     // Agregar: team → {riders, regionCounts, races, totalRows}
     const agg = new Map();
     for(const race of (races||[])){
@@ -7654,6 +7673,7 @@ async function _eqCcaaInit(){
       // Normalizar nombres de region para conteo coherente
       const canon = typeof canonicalRegion==='function' ? canonicalRegion : (s=>s);
       for(const rr of (race.race_results||[])){
+        if(_gGroup){ const g=(typeof _calCatGroup==='function')?_calCatGroup(rr.cat):null; if(!g || g.key!==_gGroup) continue; }
         const team = (rr.team||'').trim();
         if(!team) continue;
         const rider = (rr.name||'').trim();
@@ -16508,7 +16528,8 @@ function showEvolTab(tab){
 async function renderEvolucion(){
   const history=await _sbLoadHistory();
   _cachedHistory=history;
-  _evolHistory=_evolSortHist(history);
+  // Respetar el filtro global de categoría en toda la vista de Evolución
+  _evolHistory=_evolSortHist(_historyForGlobalCat(history));
   _evolDestroyCharts();
   // Poblar selector de año (usa el año actual como defecto)
   _populateEvolYearSelector(_evolHistory);
@@ -17429,7 +17450,7 @@ async function renderPowerRanking(){
 
   let history;
   try {
-    history = await _ensureHistory();
+    history = _historyForGlobalCat(await _ensureHistory());
   } catch(e) {
     grid.innerHTML = `<div style="padding:20px;color:#dc2626;font-weight:700">
       ❌ ${e.message||e}<br>
@@ -18169,7 +18190,7 @@ let _trendLastHistory = null;
 
 async function renderTendencias(){
   const container = $('view-tendencias'); if(!container) return;
-  const history = await _ensureHistory();
+  const history = _historyForGlobalCat(await _ensureHistory());
   if(!_trendFiltersReady){
     _initTrendFilters(history);
     _trendFiltersReady = true;
@@ -19257,7 +19278,7 @@ function _selToggleCat(cat){
 }
 
 async function renderSeleccion(){
-  const history = await _ensureHistory();
+  const history = _historyForGlobalCat(await _ensureHistory());
   if(!_selFiltersReady){
     _initSelFilters(history);
     _selFiltersReady = true;
