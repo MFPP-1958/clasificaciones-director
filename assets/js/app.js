@@ -4202,26 +4202,35 @@ function _resSetTab(tab){
 //   ⬜ Gris   = no participó
 // Respeta el FILTRO GLOBAL de categoría (solo carreras y corredores de ese grupo).
 // ════════════════════════════════════════════════════════════════════════════
-function _resHeatColor(pos, finishers){
-  // Devuelve {bg, label} según el percentil. pos null/0 → no participó.
-  if(pos == null || pos <= 0) return null;            // no participó (sin celda)
+let _resHeatMode = 'pct';   // 'pct' = por percentil · 'top10' = verde solo Top-10
+function _resHeatColor(pos, finishers, mode){
+  // Devuelve {bg, txt, label} según el modo. pos null/0 → no participó (null).
+  if(pos == null || pos <= 0) return null;
   if(!finishers || finishers < 1) finishers = pos;
-  if(pos <= 3) return {bg:'#16a34a', txt:'#fff', label:'Podio'};   // podio siempre verde
+  const G={bg:'#16a34a',txt:'#fff'}, Y={bg:'#f59e0b',txt:'#fff'}, R={bg:'#dc2626',txt:'#fff'};
   const pct = pos / finishers;                         // 0 (mejor) … 1 (peor)
-  if(pct <= 0.25) return {bg:'#16a34a', txt:'#fff', label:'Gran actuación'};
-  if(pct <= 0.70) return {bg:'#f59e0b', txt:'#fff', label:'Media'};
-  return {bg:'#dc2626', txt:'#fff', label:'Baja'};
+  if((mode||_resHeatMode)==='top10'){
+    // Verde = Top-10 absoluto · Rojo = último 30% · resto Amarillo
+    if(pos <= 10) return {...G, label:'Top 10'};
+    if(pct >= 0.70) return {...R, label:'Baja'};
+    return {...Y, label:'Media'};
+  }
+  // Modo percentil (por defecto)
+  if(pos <= 3)     return {...G, label:'Podio'};
+  if(pct <= 0.25)  return {...G, label:'Gran actuación'};
+  if(pct <= 0.70)  return {...Y, label:'Media'};
+  return {...R, label:'Baja'};
 }
 
-async function _resRenderHeat(){
-  const body = document.getElementById('resHeatBody');
-  if(!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">⏳ Construyendo mapa de calor…</div>';
+function _resHeatToggleMode(){
+  _resHeatMode = (_resHeatMode==='pct') ? 'top10' : 'pct';
+  _resRenderHeat();
+}
 
-  let history = await _ensureHistory();
-  history = _historyForGlobalCat(history);           // ← filtro global de categoría
-
-  // Poblar selector de años (una vez)
+// Calcula la matriz (equipo, carreras, ciclistas) respetando filtros. Reutilizada
+// por la tabla HTML y por la exportación PNG/PDF.
+async function _resHeatComputeData(){
+  let history = _historyForGlobalCat(await _ensureHistory());
   const yearSel = document.getElementById('resHeatYear');
   if(yearSel && yearSel.options.length <= 1){
     const ys = [...new Set(history.map(r=>{ const d=_parseSpanishDate(r.raceDate)||''; return d.slice(0,4); }).filter(Boolean))].sort((a,b)=>b-a);
@@ -4230,34 +4239,24 @@ async function _resRenderHeat(){
   const selYear = yearSel ? yearSel.value : '';
   if(selYear) history = history.filter(r=> (_parseSpanishDate(r.raceDate)||'').slice(0,4)===selYear );
 
-  // Equipo: el del campo, o mi equipo por defecto
   const teamInput = (document.getElementById('resHeatTeam')?.value||'').trim();
   const teamName = teamInput || myTeam || '';
-  if(!teamName){
-    body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">Configura tu equipo (barra de filtros) o escribe un equipo arriba para ver su mapa de calor.</div>';
-    return;
-  }
+  if(!teamName) return {error:'noteam'};
   const teamCanon = getCanonicalTeam(teamName).toLowerCase();
   const isMine = r => getCanonicalTeam(r.team||'').toLowerCase()===teamCanon;
 
-  // Carreras (cronológicas asc) en las que participó el equipo
   const races = history
     .filter(race => (race.riders||[]).some(isMine))
     .map(race => ({
       race, iso:(_parseSpanishDate(race.raceDate)||''),
+      name:(race.raceName||'').replace(/\s+/g,' ').trim(),
       finishers:(race.riders||[]).filter(r=>r.pos>0).length,
-      // Inscritos de MI equipo (para detectar DNF: inscrito pero sin clasificar)
       insKeys: new Set((race.inscritos||[]).filter(isMine).map(i=>normalizeRiderName(i.name)).filter(Boolean))
     }))
     .sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
+  if(!races.length) return {error:'norace', teamName, selYear};
 
-  if(!races.length){
-    body.innerHTML = `<div style="text-align:center;padding:40px;color:#9ca3af"><div style="font-size:36px">🌡️</div><p style="margin-top:8px">No hay carreras de <b>${escapeHtml(teamName)}</b> en esta categoría${selYear?' ('+selYear+')':''}.</p></div>`;
-    return;
-  }
-
-  // Ciclistas del equipo (filas), con su posición por carrera
-  const ridersMap = new Map();   // nk → {name, cat, byRace:{raceIdx→pos}, count, greens}
+  const ridersMap = new Map();
   races.forEach((col, ci)=>{
     (col.race.riders||[]).filter(isMine).forEach(r=>{
       const nk = normalizeRiderName(r.name);
@@ -4271,31 +4270,42 @@ async function _resRenderHeat(){
       if(c && c.bg==='#16a34a') e.greens++;
     });
   });
-  // Ordenar ciclistas: más "verdes" primero, luego más participaciones
-  const ridersArr = [...ridersMap.values()].sort((a,b)=> b.greens-a.greens || b.count-a.count || a.name.localeCompare(b.name));
+  const riders = [...ridersMap.values()].sort((a,b)=> b.greens-a.greens || b.count-a.count || a.name.localeCompare(b.name));
+  return {teamName, selYear, races, riders};
+}
 
-  // ── Construir tabla con scroll horizontal ──
-  const headCols = races.map((col,ci)=>{
+const _RES_HEAT_LEGEND = [
+  ['#16a34a','Gran actuación'], ['#f59e0b','Media'], ['#dc2626','Baja / DNF'], ['#e5e7eb','No participó']
+];
+function _resHeatModeLabel(){ return _resHeatMode==='top10' ? 'Verde = Top 10' : 'Por percentil (podio/25%)'; }
+
+async function _resRenderHeat(){
+  const body = document.getElementById('resHeatBody');
+  if(!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">⏳ Construyendo mapa de calor…</div>';
+  const data = await _resHeatComputeData();
+  if(data.error==='noteam'){ body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">Configura tu equipo (barra de filtros) o escribe un equipo arriba para ver su mapa de calor.</div>'; return; }
+  if(data.error==='norace'){ body.innerHTML = `<div style="text-align:center;padding:40px;color:#9ca3af"><div style="font-size:36px">🌡️</div><p style="margin-top:8px">No hay carreras de <b>${escapeHtml(data.teamName)}</b> en esta categoría${data.selYear?' ('+data.selYear+')':''}.</p></div>`; return; }
+  const {teamName, races, riders} = data;
+
+  const headCols = races.map(col=>{
     const d = col.iso ? col.iso.slice(8,10)+'/'+col.iso.slice(5,7) : '';
-    const short = (col.race.raceName||'').replace(/\s+/g,' ').trim();
-    return `<th title="${escapeAttr(short)} · ${escapeHtml(col.race.raceDate||'')} · ${col.finishers} clasif." style="padding:6px 4px;min-width:46px;max-width:46px;font-size:10px;font-weight:800;color:#475467;text-align:center;border-bottom:2px solid #e5e7eb;position:relative">
-      <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;max-height:120px;overflow:hidden;text-overflow:ellipsis;margin:0 auto;line-height:1.1">${escapeHtml(short.slice(0,28))}</div>
+    return `<th title="${escapeAttr(col.name)} · ${escapeHtml(col.race.raceDate||'')} · ${col.finishers} clasif." style="padding:6px 4px;min-width:46px;max-width:46px;font-size:10px;font-weight:800;color:#475467;text-align:center;border-bottom:2px solid #e5e7eb">
+      <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;max-height:120px;overflow:hidden;text-overflow:ellipsis;margin:0 auto;line-height:1.1">${escapeHtml(col.name.slice(0,28))}</div>
       <div style="font-size:9px;color:#94a3b8;margin-top:3px">${d}</div>
     </th>`;
   }).join('');
 
-  const rowsHtml = ridersArr.map(rider=>{
+  const rowsHtml = riders.map(rider=>{
     const cells = races.map((col,ci)=>{
       const pos = rider.byRace[ci];
       const c = _resHeatColor(pos, col.finishers);
       if(!c){
-        // ¿Estaba inscrito y no terminó? → DNF (rojo). Si no, no participó (gris).
-        if(col.insKeys && col.insKeys.has(rider.nk)){
-          return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="${escapeAttr(rider.name)} · ${escapeHtml(col.race.raceName||'')}: DNF (no terminó)" style="width:26px;height:26px;border-radius:50%;background:#dc2626;color:#fff;margin:3px auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">DNF</div></td>`;
-        }
+        if(col.insKeys && col.insKeys.has(rider.nk))
+          return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="${escapeAttr(rider.name)} · ${escapeHtml(col.name)}: DNF" style="width:26px;height:26px;border-radius:50%;background:#dc2626;color:#fff;margin:3px auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">DNF</div></td>`;
         return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="No participó" style="width:26px;height:26px;border-radius:50%;background:#eef2f7;margin:3px auto;border:1px dashed #d1d5db"></div></td>`;
       }
-      return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="${escapeAttr(rider.name)} · ${escapeHtml(col.race.raceName||'')}: ${pos}º de ${col.finishers} (${c.label})" style="width:26px;height:26px;border-radius:50%;background:${c.bg};color:${c.txt};margin:3px auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;box-shadow:0 1px 2px rgba(0,0,0,.15)">${pos}</div></td>`;
+      return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="${escapeAttr(rider.name)} · ${escapeHtml(col.name)}: ${pos}º de ${col.finishers} (${c.label})" style="width:26px;height:26px;border-radius:50%;background:${c.bg};color:${c.txt};margin:3px auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;box-shadow:0 1px 2px rgba(0,0,0,.15)">${pos}</div></td>`;
     }).join('');
     return `<tr>
       <td style="position:sticky;left:0;background:#fff;z-index:2;padding:6px 10px;border-bottom:1px solid #f1f5f9;border-right:2px solid #e5e7eb;white-space:nowrap;min-width:170px">
@@ -4306,7 +4316,14 @@ async function _resRenderHeat(){
   }).join('');
 
   body.innerHTML = `
-    <div style="font-size:12px;color:#6b7280;margin-bottom:10px">🚴 <b>${escapeHtml(teamName)}</b> · ${ridersArr.length} ciclista${ridersArr.length!==1?'s':''} · ${races.length} carrera${races.length!==1?'s':''}. El número de cada celda es el puesto; el color, el rendimiento relativo en esa carrera.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+      <div style="font-size:12px;color:#6b7280">🚴 <b>${escapeHtml(teamName)}</b> · ${riders.length} ciclista${riders.length!==1?'s':''} · ${races.length} carrera${races.length!==1?'s':''} · Modo: <b>${escapeHtml(_resHeatModeLabel())}</b></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="_resHeatToggleMode()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:800;cursor:pointer" title="Conmutar entre percentil y Top-10">🔀 Modo: ${_resHeatMode==='top10'?'Top 10':'Percentil'}</button>
+        <button onclick="_resHeatExportPNG()" style="background:#0369a1;color:#fff;border:0;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:800;cursor:pointer">🖼️ PNG</button>
+        <button onclick="_resHeatExportPDF()" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:800;cursor:pointer">📄 PDF</button>
+      </div>
+    </div>
     <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:12px">
       <table style="border-collapse:collapse;background:#fff;min-width:100%">
         <thead><tr>
@@ -4316,6 +4333,86 @@ async function _resRenderHeat(){
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>`;
+}
+
+// ── Construye un SVG del mapa de calor (para PNG y PDF apaisado) ──
+function _resHeatBuildSVG(data){
+  const {teamName, races, riders, selYear} = data;
+  const LEFT=190, CW=34, ROW=30, HEAD=150, TOP=70, LEGEND=34, PAD=24;
+  const W = LEFT + races.length*CW + PAD*2;
+  const H = TOP + HEAD + riders.length*ROW + LEGEND + PAD;
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system,Segoe UI,Arial,sans-serif">`;
+  s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+  s += `<text x="${PAD}" y="${PAD+12}" font-size="18" font-weight="800" fill="#0b2f6b">🌡️ Mapa de calor · ${esc(teamName)}${selYear?' · '+esc(selYear):''}</text>`;
+  s += `<text x="${PAD}" y="${PAD+32}" font-size="11" fill="#6b7280">Modo: ${esc(_resHeatModeLabel())} · ${riders.length} ciclistas · ${races.length} carreras · el número es el puesto</text>`;
+  const gridX = PAD+LEFT, gridY = TOP+HEAD;
+  // Cabeceras de carrera (texto rotado)
+  races.forEach((col,ci)=>{
+    const cx = gridX + ci*CW + CW/2;
+    const d = col.iso ? col.iso.slice(8,10)+'/'+col.iso.slice(5,7) : '';
+    s += `<text x="${cx}" y="${gridY-8}" font-size="9" fill="#475467" text-anchor="start" transform="rotate(-60 ${cx} ${gridY-8})">${esc(col.name.slice(0,26))} (${esc(d)})</text>`;
+  });
+  // Filas
+  riders.forEach((rider,ri)=>{
+    const ry = gridY + ri*ROW;
+    s += `<text x="${PAD}" y="${ry+ROW/2+4}" font-size="11" font-weight="700" fill="#0b2f6b">${esc(rider.name.slice(0,26))}</text>`;
+    races.forEach((col,ci)=>{
+      const cx = gridX + ci*CW + CW/2, cy = ry+ROW/2;
+      const pos = rider.byRace[ci];
+      const c = _resHeatColor(pos, col.finishers);
+      if(!c){
+        if(col.insKeys && col.insKeys.has(rider.nk)){
+          s += `<circle cx="${cx}" cy="${cy}" r="11" fill="#dc2626"/><text x="${cx}" y="${cy+3}" font-size="7.5" font-weight="800" fill="#fff" text-anchor="middle">DNF</text>`;
+        } else {
+          s += `<circle cx="${cx}" cy="${cy}" r="11" fill="#eef2f7" stroke="#d1d5db" stroke-dasharray="2 2"/>`;
+        }
+        return;
+      }
+      s += `<circle cx="${cx}" cy="${cy}" r="11" fill="${c.bg}"/><text x="${cx}" y="${cy+3.5}" font-size="9" font-weight="800" fill="${c.txt}" text-anchor="middle">${pos}</text>`;
+    });
+  });
+  // Leyenda
+  const ly = gridY + riders.length*ROW + 22;
+  let lx = PAD;
+  _RES_HEAT_LEGEND.forEach(([col,lab])=>{
+    s += `<circle cx="${lx+7}" cy="${ly-4}" r="7" fill="${col}"/><text x="${lx+20}" y="${ly}" font-size="11" fill="#374151">${esc(lab)}</text>`;
+    lx += 32 + lab.length*7;
+  });
+  s += `</svg>`;
+  return {svg:s, W, H};
+}
+
+async function _resHeatExportPNG(){
+  const data = await _resHeatComputeData();
+  if(data.error){ alert('No hay datos para exportar.'); return; }
+  const {svg,W,H} = _resHeatBuildSVG(data);
+  const scale = 2;
+  const cv = document.createElement('canvas'); cv.width=W*scale; cv.height=H*scale;
+  const ctx = cv.getContext('2d'); ctx.scale(scale,scale);
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  await _infDrawSVGToCanvas(ctx, svg, 0, 0, W, H);
+  cv.toBlob(b=>{
+    if(!b){ alert('No se pudo generar el PNG.'); return; }
+    const u=URL.createObjectURL(b); const a=document.createElement('a');
+    a.href=u; a.download=`mapa-calor_${(data.teamName||'equipo').replace(/[^a-z0-9]+/gi,'-')}.png`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500);
+  },'image/png');
+}
+
+async function _resHeatExportPDF(){
+  const data = await _resHeatComputeData();
+  if(data.error){ alert('No hay datos para exportar.'); return; }
+  const {svg} = _resHeatBuildSVG(data);
+  const w = window.open('', '_blank');
+  if(!w){ alert('Permite las ventanas emergentes para exportar el PDF.'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Mapa de calor · ${escapeHtml(data.teamName||'')}</title>
+    <style>@page{size:A4 landscape;margin:10mm} *{box-sizing:border-box} body{margin:0;padding:0;font-family:-apple-system,Segoe UI,Arial,sans-serif}
+    .wrap{padding:6mm} svg{width:100%;height:auto} .no-print{margin:8px 0}
+    @media print{.no-print{display:none}}</style></head>
+    <body><div class="wrap"><div class="no-print"><button onclick="window.print()" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:800;cursor:pointer">🖨️ Imprimir / Guardar PDF</button></div>${svg}</div>
+    <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
+  w.document.close();
 }
 
 // ── Scouting: inicializar filtros ────────────────────────────
