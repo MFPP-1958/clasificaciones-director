@@ -4335,28 +4335,43 @@ async function _resRenderHeat(){
     </div>`;
 }
 
-// ── Construye un SVG del mapa de calor (para PNG y PDF apaisado) ──
+// ── Construye un SVG del mapa de calor con ENCABEZADO (logo + título) y leyenda,
+//    para PNG y PDF apaisado. Todo va en un único SVG → una sola "imagen". ──
 function _resHeatBuildSVG(data){
   const {teamName, races, riders, selYear} = data;
-  const LEFT=190, CW=34, ROW=30, HEAD=150, TOP=70, LEGEND=34, PAD=24;
-  const W = LEFT + races.length*CW + PAD*2;
-  const H = TOP + HEAD + riders.length*ROW + LEGEND + PAD;
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const logo = (document.querySelector('.brand-logo')||{}).src || '';
+  const catG = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  const catLabel = catG && typeof _calCatLabel==='function' ? _calCatLabel(catG) : '';
+
+  const PAD=26, HB=78 /*cabecera*/, CL=140 /*nombres de carrera rotados*/, ROW=30, LG=40, LEFT=200, CW=34;
+  const W = PAD + LEFT + races.length*CW + PAD;
+  const H = PAD + HB + CL + riders.length*ROW + LG + PAD;
+  const gridX = PAD + LEFT;
+  const gridY = PAD + HB + CL;
+
   let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system,Segoe UI,Arial,sans-serif">`;
   s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
-  s += `<text x="${PAD}" y="${PAD+12}" font-size="18" font-weight="800" fill="#0b2f6b">🌡️ Mapa de calor · ${esc(teamName)}${selYear?' · '+esc(selYear):''}</text>`;
-  s += `<text x="${PAD}" y="${PAD+32}" font-size="11" fill="#6b7280">Modo: ${esc(_resHeatModeLabel())} · ${riders.length} ciclistas · ${races.length} carreras · el número es el puesto</text>`;
-  const gridX = PAD+LEFT, gridY = TOP+HEAD;
-  // Cabeceras de carrera (texto rotado)
+  // ── Encabezado: logo + título + subtítulo ──
+  if(logo) s += `<image href="${logo}" x="${PAD}" y="${PAD}" height="56" width="150" preserveAspectRatio="xMinYMid meet"/>`;
+  const tx = PAD + (logo?168:0);
+  s += `<text x="${tx}" y="${PAD+26}" font-size="22" font-weight="800" fill="#0b2f6b">Rendimiento · ${esc(teamName)}</text>`;
+  const sub = [catLabel?('Categoría: '+catLabel):'', selYear?('Temporada '+selYear):'Todas las temporadas', 'Modo: '+_resHeatModeLabel()].filter(Boolean).join('  ·  ');
+  s += `<text x="${tx}" y="${PAD+48}" font-size="12" fill="#475467">${esc(sub)}</text>`;
+  s += `<text x="${tx}" y="${PAD+66}" font-size="10.5" fill="#94a3b8">${riders.length} ciclistas · ${races.length} carreras · el número de cada celda es el puesto · MFPP Cycling Specialist</text>`;
+  s += `<line x1="${PAD}" y1="${PAD+HB-6}" x2="${W-PAD}" y2="${PAD+HB-6}" stroke="#e5e7eb" stroke-width="1.5"/>`;
+
+  // Cabeceras de carrera (texto rotado -60º, terminando justo encima de la 1ª fila)
   races.forEach((col,ci)=>{
     const cx = gridX + ci*CW + CW/2;
     const d = col.iso ? col.iso.slice(8,10)+'/'+col.iso.slice(5,7) : '';
-    s += `<text x="${cx}" y="${gridY-8}" font-size="9" fill="#475467" text-anchor="start" transform="rotate(-60 ${cx} ${gridY-8})">${esc(col.name.slice(0,26))} (${esc(d)})</text>`;
+    s += `<text x="${cx}" y="${gridY-8}" font-size="9" fill="#475467" text-anchor="start" transform="rotate(-60 ${cx} ${gridY-8})">${esc(col.name.slice(0,24))} (${esc(d)})</text>`;
   });
   // Filas
   riders.forEach((rider,ri)=>{
     const ry = gridY + ri*ROW;
-    s += `<text x="${PAD}" y="${ry+ROW/2+4}" font-size="11" font-weight="700" fill="#0b2f6b">${esc(rider.name.slice(0,26))}</text>`;
+    if(ri%2===0) s += `<rect x="${PAD}" y="${ry}" width="${W-PAD*2}" height="${ROW}" fill="#f8fafc"/>`;
+    s += `<text x="${PAD}" y="${ry+ROW/2+4}" font-size="11" font-weight="700" fill="#0b2f6b">${esc(rider.name.slice(0,28))}</text>`;
     races.forEach((col,ci)=>{
       const cx = gridX + ci*CW + CW/2, cy = ry+ROW/2;
       const pos = rider.byRace[ci];
@@ -4372,12 +4387,12 @@ function _resHeatBuildSVG(data){
       s += `<circle cx="${cx}" cy="${cy}" r="11" fill="${c.bg}"/><text x="${cx}" y="${cy+3.5}" font-size="9" font-weight="800" fill="${c.txt}" text-anchor="middle">${pos}</text>`;
     });
   });
-  // Leyenda
-  const ly = gridY + riders.length*ROW + 22;
+  // Leyenda (abajo)
+  const ly = gridY + riders.length*ROW + 24;
   let lx = PAD;
   _RES_HEAT_LEGEND.forEach(([col,lab])=>{
     s += `<circle cx="${lx+7}" cy="${ly-4}" r="7" fill="${col}"/><text x="${lx+20}" y="${ly}" font-size="11" fill="#374151">${esc(lab)}</text>`;
-    lx += 32 + lab.length*7;
+    lx += 36 + lab.length*7;
   });
   s += `</svg>`;
   return {svg:s, W, H};
@@ -4406,12 +4421,23 @@ async function _resHeatExportPDF(){
   const {svg} = _resHeatBuildSVG(data);
   const w = window.open('', '_blank');
   if(!w){ alert('Permite las ventanas emergentes para exportar el PDF.'); return; }
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Mapa de calor · ${escapeHtml(data.teamName||'')}</title>
-    <style>@page{size:A4 landscape;margin:10mm} *{box-sizing:border-box} body{margin:0;padding:0;font-family:-apple-system,Segoe UI,Arial,sans-serif}
-    .wrap{padding:6mm} svg{width:100%;height:auto} .no-print{margin:8px 0}
-    @media print{.no-print{display:none}}</style></head>
-    <body><div class="wrap"><div class="no-print"><button onclick="window.print()" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:800;cursor:pointer">🖨️ Imprimir / Guardar PDF</button></div>${svg}</div>
-    <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
+  // El SVG ya incluye encabezado y leyenda. Lo escalamos para que QUEPA ENTERO en
+  // una sola hoja A4 apaisada (límites en width y height), respetando márgenes.
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rendimiento · ${escapeHtml(data.teamName||'')}</title>
+    <style>
+      @page{ size:A4 landscape; margin:8mm; }
+      html,body{ margin:0; padding:0; height:100%; font-family:-apple-system,Segoe UI,Arial,sans-serif; }
+      .bar{ padding:8px; text-align:center; }
+      .sheet{ display:flex; align-items:center; justify-content:center; }
+      /* Ajuste a UNA sola página: el SVG nunca excede ni el ancho ni el alto útiles */
+      .sheet svg{ max-width:100%; max-height:185mm; width:auto; height:auto; display:block; }
+      @media print{ .bar{ display:none; } .sheet{ height:auto; } }
+    </style></head>
+    <body>
+      <div class="bar"><button onclick="window.print()" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:800;cursor:pointer">🖨️ Imprimir / Guardar PDF (A4 horizontal)</button></div>
+      <div class="sheet">${svg}</div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},450);}<\/script>
+    </body></html>`);
   w.document.close();
 }
 
