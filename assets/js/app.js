@@ -4256,6 +4256,7 @@ async function _resHeatComputeData(){
     .sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
   if(!races.length) return {error:'norace', teamName, selYear};
 
+  races.forEach((col,ci)=>{ col.idx = ci; });   // índice estable (para trocear en páginas)
   const ridersMap = new Map();
   races.forEach((col, ci)=>{
     (col.race.riders||[]).filter(isMine).forEach(r=>{
@@ -4337,8 +4338,10 @@ async function _resRenderHeat(){
 
 // ── Construye un SVG del mapa de calor con ENCABEZADO (logo + título) y leyenda,
 //    para PNG y PDF apaisado. Todo va en un único SVG → una sola "imagen". ──
-function _resHeatBuildSVG(data){
-  const {teamName, races, riders, selYear} = data;
+function _resHeatBuildSVG(data, racesSub, ridersSub, pageInfo){
+  const {teamName, selYear} = data;
+  const races  = racesSub  || data.races;
+  const riders = ridersSub || data.riders;
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const logo = (document.querySelector('.brand-logo')||{}).src || '';
   const catG = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
@@ -4358,7 +4361,8 @@ function _resHeatBuildSVG(data){
   s += `<text x="${tx}" y="${PAD+26}" font-size="22" font-weight="800" fill="#0b2f6b">Rendimiento · ${esc(teamName)}</text>`;
   const sub = [catLabel?('Categoría: '+catLabel):'', selYear?('Temporada '+selYear):'Todas las temporadas', 'Modo: '+_resHeatModeLabel()].filter(Boolean).join('  ·  ');
   s += `<text x="${tx}" y="${PAD+48}" font-size="12" fill="#475467">${esc(sub)}</text>`;
-  s += `<text x="${tx}" y="${PAD+66}" font-size="10.5" fill="#94a3b8">${riders.length} ciclistas · ${races.length} carreras · el número de cada celda es el puesto · MFPP Cycling Specialist</text>`;
+  const pgTxt = (pageInfo && pageInfo.total>1) ? ` · Página ${pageInfo.page}/${pageInfo.total}` : '';
+  s += `<text x="${tx}" y="${PAD+66}" font-size="10.5" fill="#94a3b8">${data.riders.length} ciclistas · ${data.races.length} carreras · el número de cada celda es el puesto · MFPP Cycling Specialist${pgTxt}</text>`;
   s += `<line x1="${PAD}" y1="${PAD+HB-6}" x2="${W-PAD}" y2="${PAD+HB-6}" stroke="#e5e7eb" stroke-width="1.5"/>`;
 
   // Cabeceras de carrera (texto rotado -60º, terminando justo encima de la 1ª fila)
@@ -4374,7 +4378,7 @@ function _resHeatBuildSVG(data){
     s += `<text x="${PAD}" y="${ry+ROW/2+4}" font-size="11" font-weight="700" fill="#0b2f6b">${esc(rider.name.slice(0,28))}</text>`;
     races.forEach((col,ci)=>{
       const cx = gridX + ci*CW + CW/2, cy = ry+ROW/2;
-      const pos = rider.byRace[ci];
+      const pos = rider.byRace[col.idx];          // índice ESTABLE (válido al trocear)
       const c = _resHeatColor(pos, col.finishers);
       if(!c){
         if(col.insKeys && col.insKeys.has(rider.nk)){
@@ -4415,28 +4419,46 @@ async function _resHeatExportPNG(){
   },'image/png');
 }
 
+// Trocea un array en grupos de tamaño n
+function _chunk(arr, n){ const out=[]; for(let i=0;i<arr.length;i+=n) out.push(arr.slice(i,i+n)); return out; }
+
 async function _resHeatExportPDF(){
   const data = await _resHeatComputeData();
   if(data.error){ alert('No hay datos para exportar.'); return; }
-  const {svg} = _resHeatBuildSVG(data);
+
+  // AUTO-AJUSTE + PAGINACIÓN:
+  //  - Pocos ciclistas/carreras → 1 sola hoja, escalada para LLENAR la página
+  //    (círculos grandes).
+  //  - Si crece, se pagina para que los círculos NO queden diminutos: como
+  //    máximo COLS carreras y ROWS ciclistas por hoja; cada hoja se escala a A4
+  //    horizontal completa.
+  const COLS = 18, ROWS = 16;
+  const raceGroups  = _chunk(data.races,  COLS);
+  const riderGroups = _chunk(data.riders, ROWS);
+  const pages = [];
+  riderGroups.forEach(rg => raceGroups.forEach(cg => pages.push({riders:rg, races:cg})));
+  const total = pages.length;
+  const svgs = pages.map((p,i)=> _resHeatBuildSVG(data, p.races, p.riders, {page:i+1, total}).svg);
+
   const w = window.open('', '_blank');
   if(!w){ alert('Permite las ventanas emergentes para exportar el PDF.'); return; }
-  // El SVG ya incluye encabezado y leyenda. Lo escalamos para que QUEPA ENTERO en
-  // una sola hoja A4 apaisada (límites en width y height), respetando márgenes.
+  // Cada SVG ocupa EXACTAMENTE una hoja A4 horizontal (área útil 277×190 mm) y se
+  // escala para llenarla (preserveAspectRatio). Una hoja por página → sin página
+  // en blanco y con márgenes correctos.
+  const sheets = svgs.map((svg,i)=>`<div class="pg"${i<svgs.length-1?' style="page-break-after:always"':''}>${svg}</div>`).join('');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rendimiento · ${escapeHtml(data.teamName||'')}</title>
     <style>
-      @page{ size:A4 landscape; margin:8mm; }
-      html,body{ margin:0; padding:0; height:100%; font-family:-apple-system,Segoe UI,Arial,sans-serif; }
+      @page{ size:A4 landscape; margin:10mm; }
+      html,body{ margin:0; padding:0; font-family:-apple-system,Segoe UI,Arial,sans-serif; }
       .bar{ padding:8px; text-align:center; }
-      .sheet{ display:flex; align-items:center; justify-content:center; }
-      /* Ajuste a UNA sola página: el SVG nunca excede ni el ancho ni el alto útiles */
-      .sheet svg{ max-width:100%; max-height:185mm; width:auto; height:auto; display:block; }
-      @media print{ .bar{ display:none; } .sheet{ height:auto; } }
+      .pg{ display:flex; align-items:center; justify-content:center; }
+      .pg svg{ width:277mm; height:190mm; display:block; }   /* llena la hoja A4 apaisada */
+      @media print{ .bar{ display:none } }
     </style></head>
     <body>
-      <div class="bar"><button onclick="window.print()" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:800;cursor:pointer">🖨️ Imprimir / Guardar PDF (A4 horizontal)</button></div>
-      <div class="sheet">${svg}</div>
-      <script>window.onload=function(){setTimeout(function(){window.print();},450);}<\/script>
+      <div class="bar"><button onclick="window.print()" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:800;cursor:pointer">🖨️ Imprimir / Guardar PDF (A4 horizontal · ${total} hoja${total!==1?'s':''})</button></div>
+      ${sheets}
+      <script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>
     </body></html>`);
   w.document.close();
 }
