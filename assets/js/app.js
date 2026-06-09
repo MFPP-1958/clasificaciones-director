@@ -3975,9 +3975,22 @@ async function renderResumen(){
   }
 
   // Filtrar por año si se seleccionó uno
-  const races = selYear
+  let races = selYear
     ? history.filter(r=>{ const y=(r.raceDate||'').split('/').pop()||(r.raceDate||'').split('-')[0]; return y===selYear; })
     : history;
+  // Respetar el FILTRO GLOBAL de categoría: con "Cadete" activo, el resumen de
+  // temporada solo cuenta carreras (y corredores) de cadetes.
+  const _gGroup = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  if(_gGroup && typeof _raceMatchesGlobalCatGroup==='function'){
+    races = races.filter(_raceMatchesGlobalCatGroup);
+  }
+  // Guardia por corredor: aunque una carrera de cadetes tenga 1 junior "colado",
+  // ese corredor no se cuenta bajo el filtro Cadete (y viceversa).
+  const _riderInGlobalCat = (cat) => {
+    if(!_gGroup) return true;
+    const g = (typeof _calCatGroup==='function') ? _calCatGroup(cat) : null;
+    return !!g && g.key===_gGroup;
+  };
 
   if(races.length === 0){
     body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">No hay carreras para el año seleccionado.</div>';
@@ -3996,7 +4009,7 @@ async function renderResumen(){
   const teamCanon = myTeam ? getCanonicalTeam(myTeam).toLowerCase() : '';
   let myRaces=[], myRiders={};
   races.forEach(race=>{
-    const myInRace = (race.riders||[]).filter(r=> teamCanon && getCanonicalTeam(r.team||'').toLowerCase()===teamCanon);
+    const myInRace = (race.riders||[]).filter(r=> teamCanon && getCanonicalTeam(r.team||'').toLowerCase()===teamCanon && _riderInGlobalCat(r.cat));
     if(myInRace.length > 0){
       myRaces.push({race, riders: myInRace});
       myInRace.forEach(r=>{
@@ -4032,7 +4045,7 @@ async function renderResumen(){
   // Mejores resultados del equipo (top positions)
   const allMyResults = races.flatMap(race=>
     (race.riders||[])
-      .filter(r=> teamCanon && getCanonicalTeam(r.team||'').toLowerCase()===teamCanon)
+      .filter(r=> teamCanon && getCanonicalTeam(r.team||'').toLowerCase()===teamCanon && _riderInGlobalCat(r.cat))
       .map(r=>({...r, raceName:race.raceName, raceDate:race.raceDate}))
   ).sort((a,b)=>a.pos-b.pos).slice(0,10);
 
