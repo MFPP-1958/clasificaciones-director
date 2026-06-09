@@ -568,7 +568,11 @@ function _gfTriggerCurrentViewRerender(){
     if(id==='view-powerranking'&& typeof renderPowerRanking==='function')renderPowerRanking();
     if(id==='view-tendencias'  && typeof renderTendencias==='function')  renderTendencias();
     if(id==='view-seleccion'   && typeof renderSeleccion==='function')   renderSeleccion();
-    if(id==='view-resumen'     && typeof renderResumen==='function')     renderResumen();
+    if(id==='view-resumen'     && typeof renderResumen==='function'){    renderResumen();
+      // Si está abierta la pestaña "Seguimiento", refrescarla con el nuevo filtro
+      const _sp=document.getElementById('resPanelScout');
+      if(_sp && _sp.style.display!=='none' && typeof _scoutRender==='function') _scoutRender();
+    }
     if(id==='view-historial'   && typeof renderHistory==='function')     renderHistory();
     if(id==='view-tactica'     && typeof renderTactica==='function')     renderTactica();
     if(id==='view-informe-plantilla' && typeof _ipInit==='function')     _ipInit();
@@ -4290,6 +4294,8 @@ async function _scoutRender(){
   const teamQ  = (document.getElementById('scoutTeamSel')?.value||'').toLowerCase();
   const catQ   = (document.getElementById('scoutCatSel')?.value||'').toLowerCase();
   const posMax = parseInt(document.getElementById('scoutPosSel')?.value||'0')||0;
+  // Filtro GLOBAL de categoría (manda en toda la app): con Cadete solo cadetes, etc.
+  const _gGroup = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
 
   // Construir mapa de ciclistas con sus resultados
   const riderMap = {};
@@ -4302,6 +4308,7 @@ async function _scoutRender(){
       if(riderQ && !name.toLowerCase().includes(riderQ)) return;
       if(teamQ  && team.toLowerCase() !== teamQ) return;
       if(catQ   && cat.toLowerCase() !== catQ) return;
+      if(_gGroup){ const g=(typeof _calCatGroup==='function')?_calCatGroup(cat):null; if(!g || g.key!==_gGroup) return; }
       if(posMax && r.pos > posMax) return;
       if(!riderMap[name]) riderMap[name]={name, team, cat, races:[], best:999, top1:0, top3:0, top5:0, top10:0};
       riderMap[name].races.push({pos:r.pos, raceName:race.raceName, raceDate:race.raceDate, team});
