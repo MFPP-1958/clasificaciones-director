@@ -572,6 +572,9 @@ function _gfTriggerCurrentViewRerender(){
       // Si está abierta la pestaña "Seguimiento", refrescarla con el nuevo filtro
       const _sp=document.getElementById('resPanelScout');
       if(_sp && _sp.style.display!=='none' && typeof _scoutRender==='function') _scoutRender();
+      // Igual para la pestaña "Mapa de calor"
+      const _hp=document.getElementById('resPanelHeat');
+      if(_hp && _hp.style.display!=='none' && typeof _resRenderHeat==='function') _resRenderHeat();
     }
     if(id==='view-historial'   && typeof renderHistory==='function')     renderHistory();
     if(id==='view-tactica'     && typeof renderTactica==='function')     renderTactica();
@@ -4176,8 +4179,8 @@ function _resSetTab(tab){
   // El tab 'cal' fue extraído a su propia vista (view-calendario).
   // Si por compatibilidad alguien llama _resSetTab('cal'), redirigimos.
   if(tab==='cal'){ if(typeof showView==='function') showView('view-calendario'); return; }
-  const tabs = {stats:'resTabStats', scout:'resTabScout'};
-  const panels = {stats:'resPanelStats', scout:'resPanelScout'};
+  const tabs = {stats:'resTabStats', scout:'resTabScout', heat:'resTabHeat'};
+  const panels = {stats:'resPanelStats', scout:'resPanelScout', heat:'resPanelHeat'};
   Object.entries(tabs).forEach(([k,id])=>{
     const btn = document.getElementById(id);
     if(btn){ btn.style.borderBottomColor = k===tab?'#1a56db':'transparent'; btn.style.color = k===tab?'#1a56db':'#6b7280'; }
@@ -4187,6 +4190,132 @@ function _resSetTab(tab){
     if(el) el.style.display = k===tab?'':'none';
   });
   if(tab==='scout') _scoutInit();
+  if(tab==='heat')  _resRenderHeat();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAPA DE CALOR DE LA TEMPORADA — matriz ciclistas × carreras.
+// Color por PERCENTIL de la posición dentro de los clasificados de esa carrera:
+//   🟢 Verde  = gran actuación (podio, o primer 25% de la carrera)
+//   🟡 Amarillo = actuación media (26%–70%)
+//   🔴 Rojo   = baja / DNF (último 30%, o no terminó)
+//   ⬜ Gris   = no participó
+// Respeta el FILTRO GLOBAL de categoría (solo carreras y corredores de ese grupo).
+// ════════════════════════════════════════════════════════════════════════════
+function _resHeatColor(pos, finishers){
+  // Devuelve {bg, label} según el percentil. pos null/0 → no participó.
+  if(pos == null || pos <= 0) return null;            // no participó (sin celda)
+  if(!finishers || finishers < 1) finishers = pos;
+  if(pos <= 3) return {bg:'#16a34a', txt:'#fff', label:'Podio'};   // podio siempre verde
+  const pct = pos / finishers;                         // 0 (mejor) … 1 (peor)
+  if(pct <= 0.25) return {bg:'#16a34a', txt:'#fff', label:'Gran actuación'};
+  if(pct <= 0.70) return {bg:'#f59e0b', txt:'#fff', label:'Media'};
+  return {bg:'#dc2626', txt:'#fff', label:'Baja'};
+}
+
+async function _resRenderHeat(){
+  const body = document.getElementById('resHeatBody');
+  if(!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">⏳ Construyendo mapa de calor…</div>';
+
+  let history = await _ensureHistory();
+  history = _historyForGlobalCat(history);           // ← filtro global de categoría
+
+  // Poblar selector de años (una vez)
+  const yearSel = document.getElementById('resHeatYear');
+  if(yearSel && yearSel.options.length <= 1){
+    const ys = [...new Set(history.map(r=>{ const d=_parseSpanishDate(r.raceDate)||''; return d.slice(0,4); }).filter(Boolean))].sort((a,b)=>b-a);
+    ys.forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent='Temporada '+y; yearSel.appendChild(o); });
+  }
+  const selYear = yearSel ? yearSel.value : '';
+  if(selYear) history = history.filter(r=> (_parseSpanishDate(r.raceDate)||'').slice(0,4)===selYear );
+
+  // Equipo: el del campo, o mi equipo por defecto
+  const teamInput = (document.getElementById('resHeatTeam')?.value||'').trim();
+  const teamName = teamInput || myTeam || '';
+  if(!teamName){
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">Configura tu equipo (barra de filtros) o escribe un equipo arriba para ver su mapa de calor.</div>';
+    return;
+  }
+  const teamCanon = getCanonicalTeam(teamName).toLowerCase();
+  const isMine = r => getCanonicalTeam(r.team||'').toLowerCase()===teamCanon;
+
+  // Carreras (cronológicas asc) en las que participó el equipo
+  const races = history
+    .filter(race => (race.riders||[]).some(isMine))
+    .map(race => ({
+      race, iso:(_parseSpanishDate(race.raceDate)||''),
+      finishers:(race.riders||[]).filter(r=>r.pos>0).length,
+      // Inscritos de MI equipo (para detectar DNF: inscrito pero sin clasificar)
+      insKeys: new Set((race.inscritos||[]).filter(isMine).map(i=>normalizeRiderName(i.name)).filter(Boolean))
+    }))
+    .sort((a,b)=> (a.iso||'').localeCompare(b.iso||''));
+
+  if(!races.length){
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:#9ca3af"><div style="font-size:36px">🌡️</div><p style="margin-top:8px">No hay carreras de <b>${escapeHtml(teamName)}</b> en esta categoría${selYear?' ('+selYear+')':''}.</p></div>`;
+    return;
+  }
+
+  // Ciclistas del equipo (filas), con su posición por carrera
+  const ridersMap = new Map();   // nk → {name, cat, byRace:{raceIdx→pos}, count, greens}
+  races.forEach((col, ci)=>{
+    (col.race.riders||[]).filter(isMine).forEach(r=>{
+      const nk = normalizeRiderName(r.name);
+      if(!nk) return;
+      if(!ridersMap.has(nk)) ridersMap.set(nk, {nk, name:_evolNormName(r.name)||r.name, cat:r.cat||'', byRace:{}, count:0, greens:0});
+      const e = ridersMap.get(nk);
+      e.byRace[ci] = parseInt(r.pos,10)||null;
+      if(r.cat && !e.cat) e.cat = r.cat;
+      e.count++;
+      const c = _resHeatColor(e.byRace[ci], col.finishers);
+      if(c && c.bg==='#16a34a') e.greens++;
+    });
+  });
+  // Ordenar ciclistas: más "verdes" primero, luego más participaciones
+  const ridersArr = [...ridersMap.values()].sort((a,b)=> b.greens-a.greens || b.count-a.count || a.name.localeCompare(b.name));
+
+  // ── Construir tabla con scroll horizontal ──
+  const headCols = races.map((col,ci)=>{
+    const d = col.iso ? col.iso.slice(8,10)+'/'+col.iso.slice(5,7) : '';
+    const short = (col.race.raceName||'').replace(/\s+/g,' ').trim();
+    return `<th title="${escapeAttr(short)} · ${escapeHtml(col.race.raceDate||'')} · ${col.finishers} clasif." style="padding:6px 4px;min-width:46px;max-width:46px;font-size:10px;font-weight:800;color:#475467;text-align:center;border-bottom:2px solid #e5e7eb;position:relative">
+      <div style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;max-height:120px;overflow:hidden;text-overflow:ellipsis;margin:0 auto;line-height:1.1">${escapeHtml(short.slice(0,28))}</div>
+      <div style="font-size:9px;color:#94a3b8;margin-top:3px">${d}</div>
+    </th>`;
+  }).join('');
+
+  const rowsHtml = ridersArr.map(rider=>{
+    const cells = races.map((col,ci)=>{
+      const pos = rider.byRace[ci];
+      const c = _resHeatColor(pos, col.finishers);
+      if(!c){
+        // ¿Estaba inscrito y no terminó? → DNF (rojo). Si no, no participó (gris).
+        if(col.insKeys && col.insKeys.has(rider.nk)){
+          return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="${escapeAttr(rider.name)} · ${escapeHtml(col.race.raceName||'')}: DNF (no terminó)" style="width:26px;height:26px;border-radius:50%;background:#dc2626;color:#fff;margin:3px auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">DNF</div></td>`;
+        }
+        return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="No participó" style="width:26px;height:26px;border-radius:50%;background:#eef2f7;margin:3px auto;border:1px dashed #d1d5db"></div></td>`;
+      }
+      return `<td style="padding:0;text-align:center;border-bottom:1px solid #f1f5f9"><div title="${escapeAttr(rider.name)} · ${escapeHtml(col.race.raceName||'')}: ${pos}º de ${col.finishers} (${c.label})" style="width:26px;height:26px;border-radius:50%;background:${c.bg};color:${c.txt};margin:3px auto;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;box-shadow:0 1px 2px rgba(0,0,0,.15)">${pos}</div></td>`;
+    }).join('');
+    return `<tr>
+      <td style="position:sticky;left:0;background:#fff;z-index:2;padding:6px 10px;border-bottom:1px solid #f1f5f9;border-right:2px solid #e5e7eb;white-space:nowrap;min-width:170px">
+        <b style="font-size:12.5px;color:#0b2f6b">${escapeHtml(rider.name)}</b>
+        <div style="font-size:10.5px;color:#94a3b8">${escapeHtml(rider.cat||'')} · ${rider.count} carrera${rider.count!==1?'s':''}</div>
+      </td>${cells}
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="font-size:12px;color:#6b7280;margin-bottom:10px">🚴 <b>${escapeHtml(teamName)}</b> · ${ridersArr.length} ciclista${ridersArr.length!==1?'s':''} · ${races.length} carrera${races.length!==1?'s':''}. El número de cada celda es el puesto; el color, el rendimiento relativo en esa carrera.</div>
+    <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:12px">
+      <table style="border-collapse:collapse;background:#fff;min-width:100%">
+        <thead><tr>
+          <th style="position:sticky;left:0;background:#f8fafc;z-index:3;padding:6px 10px;border-bottom:2px solid #e5e7eb;border-right:2px solid #e5e7eb;text-align:left;font-size:11px;font-weight:800;color:#475467;min-width:170px">CICLISTA</th>
+          ${headCols}
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
 }
 
 // ── Scouting: inicializar filtros ────────────────────────────
