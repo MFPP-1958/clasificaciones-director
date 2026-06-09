@@ -4432,7 +4432,7 @@ async function _resHeatExportPDF(){
   //  - Si crece, se pagina para que los círculos NO queden diminutos: como
   //    máximo COLS carreras y ROWS ciclistas por hoja; cada hoja se escala a A4
   //    horizontal completa.
-  const COLS = 18, ROWS = 16;
+  const COLS = 22, ROWS = 16;
   const raceGroups  = _chunk(data.races,  COLS);
   const riderGroups = _chunk(data.riders, ROWS);
   const pages = [];
