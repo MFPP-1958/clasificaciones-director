@@ -908,10 +908,12 @@
           <button class="evol-tab-btn active" id="evolTab_riders" onclick="showEvolTab('riders')">👤 Mis corredores</button>
           <button class="evol-tab-btn" id="evolTab_team" onclick="showEvolTab('team')">🚴 Mi equipo</button>
           <button class="evol-tab-btn" id="evolTab_rivals" onclick="showEvolTab('rivals')">⚔️ Rivales</button>
+          <button class="evol-tab-btn" id="evolTab_irc" onclick="showEvolTab('irc')">📈 IRC (forma)</button>
         </div>
         <div id="evolPanel_riders" class="evol-panel active"></div>
         <div id="evolPanel_team" class="evol-panel"></div>
         <div id="evolPanel_rivals" class="evol-panel"></div>
+        <div id="evolPanel_irc" class="evol-panel"></div>
       </section>
     </div>
 
@@ -1243,6 +1245,8 @@
           </div>
           <span id="prInfo" style="font-size:12px;color:#667085;white-space:nowrap;align-self:center"></span>
         </div>
+        <!-- IRC actual (estado de forma) — barras horizontales -->
+        <div id="prIRCBars" style="margin:6px 0 18px"></div>
         <div class="pr-grid-wrap">
           <div id="prGrid" class="pr-grid">
             <div class="pr-loading">⏳ Cargando Power Ranking...</div>
@@ -3393,6 +3397,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=mapa-calor-22-carreras-1"></script>
+<script src="assets/js/app.js?v=irc-evolucion-powerranking-1"></script>
 </body>
 </html>

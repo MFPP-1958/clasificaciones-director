@@ -1219,6 +1219,138 @@ function _historyForGlobalCat(history){
       inscritos: Array.isArray(race.inscritos) ? race.inscritos.filter(i=>inGroup(i&&i.cat)) : race.inscritos
     }));
 }
+// ════════════════════════════════════════════════════════════════════════════
+// IRC — Índice de Rendimiento Ciclista (0–100). Nota de cada carrera según el
+// puesto y el tamaño del pelotón. Estado de forma = media ponderada de las
+// últimas carreras. Usado en Evolución (líneas) y Power Ranking (barras).
+// ════════════════════════════════════════════════════════════════════════════
+function _ircRace(pos, finishers){
+  pos = parseInt(pos,10);
+  if(!pos || pos<=0) return null;
+  let N = (finishers && finishers>0) ? finishers : pos;
+  if(N<1) N=1;
+  const v = (1 - (pos-1)/N) * 100;       // 1º = 100, último ≈ 0
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+function _ircColor(v){ return v>=70?'#16a34a' : v>=45?'#f59e0b' : '#dc2626'; }
+
+// Serie IRC por carrera (cronológica) de un equipo. DNF (inscrito sin clasificar)
+// puntúa muy bajo. Devuelve {races:[{name,iso,date,finishers,idx}], riders:[...]}.
+function _ircTeamSeries(history, teamName){
+  const teamCanon = getCanonicalTeam(teamName||'').toLowerCase();
+  const isMine = r => getCanonicalTeam(r.team||'').toLowerCase()===teamCanon;
+  const races = (history||[])
+    .filter(race => (race.riders||[]).some(isMine) || (Array.isArray(race.inscritos)&&race.inscritos.some(isMine)))
+    .map(race => ({
+      name:(race.raceName||'').replace(/\s+/g,' ').trim(),
+      iso:(_parseSpanishDate(race.raceDate)||''), date:race.raceDate||'',
+      finishers:(race.riders||[]).filter(r=>r.pos>0).length,
+      riders: race.riders||[],
+      insKeys: new Set((Array.isArray(race.inscritos)?race.inscritos:[]).filter(isMine).map(i=>normalizeRiderName(i.name)).filter(Boolean))
+    }))
+    .sort((a,b)=>(a.iso||'').localeCompare(b.iso||''));
+  races.forEach((c,i)=>c.idx=i);
+  const map = new Map();
+  races.forEach((col,ci)=>{
+    col.riders.filter(isMine).forEach(r=>{
+      const nk=normalizeRiderName(r.name); if(!nk) return;
+      if(!map.has(nk)) map.set(nk,{nk, name:_evolNormName(r.name)||r.name, cat:r.cat||'', points:[]});
+      const e=map.get(nk);
+      const irc=_ircRace(r.pos, col.finishers);
+      if(irc!=null) e.points.push({idx:ci, irc, pos:parseInt(r.pos,10)||null, dnf:false, raceName:col.name, date:col.date});
+      if(r.cat && !e.cat) e.cat=r.cat;
+    });
+    // DNF: inscrito de mi equipo que no clasificó → IRC bajo (=5)
+    col.insKeys.forEach(nk=>{
+      const finished = col.riders.some(r=> isMine(r) && r.pos>0 && normalizeRiderName(r.name)===nk);
+      if(!finished && map.has(nk)) map.get(nk).points.push({idx:ci, irc:5, pos:null, dnf:true, raceName:col.name, date:col.date});
+    });
+  });
+  const W=[0.4,0.3,0.2,0.1];   // estado de forma: las 4 últimas, la más reciente pesa más
+  const riders=[...map.values()].map(r=>{
+    r.points.sort((a,b)=>a.idx-b.idx);
+    const last=r.points.slice(-4).reverse();
+    let s=0,tw=0; last.forEach((p,i)=>{ const w=W[i]||0.05; s+=p.irc*w; tw+=w; });
+    r.current = tw? Math.round(s/tw) : 0;
+    r.count = r.points.length;
+    return r;
+  }).filter(r=>r.count>0).sort((a,b)=> b.current-a.current);
+  return {races, riders};
+}
+
+// Fotos del equipo (team_sheets) para los avatares de las barras IRC
+async function _ircTeamPhotos(teamName){
+  const map=new Map();
+  if(typeof _sb==='undefined' || !_sb || !teamName) return map;
+  try{
+    const {data}=await _sb.from('team_sheets').select('name,photo,team');
+    const tc=getCanonicalTeam(teamName).toLowerCase();
+    (data||[]).forEach(x=>{ if(x.photo && getCanonicalTeam(x.team||'').toLowerCase()===tc){ const k=normalizeForMatching(x.name); if(k) map.set(k,x.photo); } });
+  }catch(_){}
+  return map;
+}
+
+// ── Evolución: gráfico de líneas del IRC (una línea por corredor) ──
+let _evolIRCChart=null;
+function _evolRenderIRC(history, teamName){
+  const panel=document.getElementById('evolPanel_irc'); if(!panel) return;
+  teamName = teamName || myTeam || '';
+  if(!teamName){ panel.innerHTML='<div style="padding:40px;text-align:center;color:#9ca3af">Configura tu equipo para ver la evolución del IRC.</div>'; return; }
+  const data=_ircTeamSeries(history, teamName);
+  if(!data.riders.length || !data.races.length){ panel.innerHTML='<div style="padding:40px;text-align:center;color:#9ca3af">Sin datos de IRC para esta categoría/equipo todavía.</div>'; return; }
+  panel.innerHTML=`<div style="font-size:12.5px;color:#6b7280;margin-bottom:8px">📈 <b>Evolución del IRC</b> (0–100) por corredor · <b>${escapeHtml(teamName)}</b>. Más alto = mejor forma. Un <b>DNF</b> cae a ~5. Pasa el cursor por un punto para ver carrera, puesto e IRC.</div>
+    <div style="position:relative;height:460px"><canvas id="evolIRCCanvas"></canvas></div>`;
+  const labels=data.races.map(r=> (r.iso? r.iso.slice(8,10)+'/'+r.iso.slice(5,7):'') );
+  const palette=['#1f6feb','#dc2626','#16a34a','#d97706','#7c3aed','#0891b2','#db2777','#65a30d','#9333ea','#0d9488','#ca8a04','#e11d48','#2563eb','#15803d','#9a3412','#1e3a8a'];
+  const datasets=data.riders.map((r,i)=>{
+    const col=palette[i%palette.length];
+    const pts=data.races.map((_,ci)=>{ const p=r.points.find(x=>x.idx===ci); return p? p.irc : null; });
+    return {label:r.name, data:pts, borderColor:col, backgroundColor:col, spanGaps:true, tension:0.3, pointRadius:4, pointHoverRadius:6, borderWidth:2};
+  });
+  if(_evolIRCChart){ try{_evolIRCChart.destroy();}catch(_){}_evolIRCChart=null; }
+  const cv=document.getElementById('evolIRCCanvas'); if(!cv||typeof Chart==='undefined') return;
+  _evolIRCChart=new Chart(cv.getContext('2d'),{type:'line',data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',intersect:false},
+      scales:{y:{min:0,max:100,title:{display:true,text:'IRC (0–100)'}},x:{title:{display:true,text:'Carreras (cronológico)'}}},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{
+          title:(items)=>{ const rc=data.races[items[0].dataIndex]; return rc? rc.name+(rc.date?' · '+rc.date:''):''; },
+          label:(item)=>{ const r=data.riders[item.datasetIndex]; const p=r.points.find(x=>x.idx===item.dataIndex); if(!p) return r.name; return `${r.name}: IRC ${p.irc}${p.dnf?' (DNF)':(p.pos?` · ${p.pos}º`:'')}`; }
+        }}
+      }
+    }});
+}
+
+// ── Power Ranking: barras horizontales del IRC actual (estado de forma) ──
+async function _prRenderIRCBars(history){
+  const box=document.getElementById('prIRCBars'); if(!box) return;
+  const teamName = myTeam||'';
+  if(!teamName){ box.innerHTML=''; return; }
+  const data=_ircTeamSeries(history, teamName);
+  if(!data.riders.length){ box.innerHTML=''; return; }
+  const photos=await _ircTeamPhotos(teamName);
+  const rows=data.riders.map(r=>{
+    const c=_ircColor(r.current);
+    const ph=photos.get(r.nk);
+    const avatar = ph
+      ? `<img src="${escapeAttr(ph)}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${c}">`
+      : `<div style="width:30px;height:30px;border-radius:50%;background:${c}22;color:${c};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;border:2px solid ${c}">${escapeHtml((r.name||'?').trim()[0]||'?')}</div>`;
+    return `<div style="display:flex;align-items:center;gap:10px;margin:6px 0">
+      ${avatar}
+      <div style="min-width:140px;max-width:170px;font-weight:700;font-size:13px;color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeAttr(r.name)} · ${r.count} carreras">${escapeHtml(r.name)}</div>
+      <div style="flex:1;background:#f1f5f9;border-radius:8px;height:22px;position:relative;overflow:hidden;min-width:80px">
+        <div style="width:${r.current}%;height:100%;background:${c};border-radius:8px"></div>
+      </div>
+      <div style="width:34px;text-align:right;font-weight:900;color:${c};font-size:15px">${r.current}</div>
+    </div>`;
+  }).join('');
+  box.innerHTML=`<div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;background:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <h3 style="margin:0;font-size:15px;color:#0b2f6b">📊 IRC actual · estado de forma de ${escapeHtml(teamName)}</h3>
+      <span style="font-size:11.5px;color:#94a3b8">Media ponderada de las últimas 4 carreras (0–100) · 🟢 ≥70 · 🟡 ≥45 · 🔴 &lt;45</span>
+    </div>${rows}</div>`;
+}
+
 // Grupos de categoría realmente presentes en los datos cargados
 function _calAvailableCats(){
   const present=new Set();
@@ -16183,6 +16315,7 @@ function _refreshEvolIfVisible() {
     const filtered = _evolFilterByYear(_evolHistory, _evolSelectedYear);
     if (_evolCurrentTab === 'team')    { _evolRenderTeam(filtered, myTeam); return; }
     if (_evolCurrentTab === 'rivals')  { _evolRenderRivals(filtered, myTeam); return; }
+    if (_evolCurrentTab === 'irc')     { _evolRenderIRC(filtered, myTeam); return; }
     if (_evolCurrentTab === 'riders')  { _evolRenderRiders(filtered, myTeam); return; }
   } catch(e) { /* silencioso */ }
 }
@@ -16655,7 +16788,7 @@ const _RIVAL_ORANGE='#f79009';
 
 /* ── Utilidades ── */
 function _evolShortName(s){return s&&s.length>22?s.slice(0,20)+'…':s||'';}
-function _evolDestroyCharts(){evolCharts.forEach(c=>{try{c.destroy();}catch(e){}});evolCharts=[];}
+function _evolDestroyCharts(){evolCharts.forEach(c=>{try{c.destroy();}catch(e){}});evolCharts=[]; if(_evolIRCChart){try{_evolIRCChart.destroy();}catch(_){}_evolIRCChart=null;}}
 function _evolNormCat(cat){
   const c=(cat||'').replace(/[-_\s]/g,'').toUpperCase();
   if(/^CAD/.test(c)) return 'CAD';
@@ -16781,11 +16914,12 @@ function _onEvolYearChange(){
   if(_evolCurrentTab==='riders')_evolRenderRiders(filtered,myTeam);
   else if(_evolCurrentTab==='team')_evolRenderTeam(filtered,myTeam);
   else if(_evolCurrentTab==='rivals')_evolRenderRivals(filtered,myTeam);
+  else if(_evolCurrentTab==='irc')_evolRenderIRC(filtered,myTeam);
 }
 
 function showEvolTab(tab){
   _evolCurrentTab=tab;
-  ['riders','team','rivals'].forEach(t=>{
+  ['riders','team','rivals','irc'].forEach(t=>{
     document.getElementById('evolTab_'+t)?.classList.toggle('active',t===tab);
     const p=document.getElementById('evolPanel_'+t);
     if(p){p.style.display=t===tab?'block':'none';p.classList.toggle('active',t===tab);}
@@ -16796,6 +16930,7 @@ function showEvolTab(tab){
   if(tab==='riders')_evolRenderRiders(filtered,myTeam);
   else if(tab==='team')_evolRenderTeam(filtered,myTeam);
   else if(tab==='rivals')_evolRenderRivals(filtered,myTeam);
+  else if(tab==='irc')_evolRenderIRC(filtered,myTeam);
 }
 
 /* ── Entry point ── */
@@ -16814,6 +16949,7 @@ async function renderEvolucion(){
   if(_evolCurrentTab==='riders')_evolRenderRiders(filtered,myTeam);
   else if(_evolCurrentTab==='team')_evolRenderTeam(filtered,myTeam);
   else if(_evolCurrentTab==='rivals')_evolRenderRivals(filtered,myTeam);
+  else if(_evolCurrentTab==='irc')_evolRenderIRC(filtered,myTeam);
 }
 
 /* ══════════════════════════════════════════
@@ -17735,8 +17871,12 @@ async function renderPowerRanking(){
   }
   if(!history || !history.length){
     grid.innerHTML = '<div class="pr-empty-msg">No hay datos en el historial.<br><span style="font-size:12px">Carga carreras primero desde "Carga y Resumen".</span></div>';
+    const _b=document.getElementById('prIRCBars'); if(_b) _b.innerHTML='';
     return;
   }
+
+  // IRC actual (estado de forma) de mi equipo — barras horizontales arriba.
+  try{ _prRenderIRCBars(history); }catch(_){}
 
   if(!_prFiltersReady){
     _initPrFilters(history);
