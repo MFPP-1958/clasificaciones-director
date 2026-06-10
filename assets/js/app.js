@@ -568,6 +568,7 @@ function _gfTriggerCurrentViewRerender(){
     if(id==='view-powerranking'&& typeof renderPowerRanking==='function')renderPowerRanking();
     if(id==='view-tendencias'  && typeof renderTendencias==='function')  renderTendencias();
     if(id==='view-seleccion'   && typeof renderSeleccion==='function')   renderSeleccion();
+    if(id==='view-disponibilidad' && typeof _dispInit==='function')      _dispInit();
     if(id==='view-resumen'     && typeof renderResumen==='function'){    renderResumen();
       // Si está abierta la pestaña "Seguimiento", refrescarla con el nuevo filtro
       const _sp=document.getElementById('resPanelScout');
@@ -843,6 +844,7 @@ const ALL_VIEWS = [
   {id:'view-powerranking',icon:'🏆', label:'Power Ranking'},
   {id:'view-tendencias',  icon:'📉', label:'Tendencias'},
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
+  {id:'view-disponibilidad', icon:'✅', label:'Disponibilidad'},
   {id:'view-validacion',         icon:'⚠️', label:'Validación'},
   {id:'view-equipos-ccaa',       icon:'🗺️', label:'Equipos y CCAA'},
   {id:'view-ciclistas-cat',      icon:'🎽', label:'Categorías ciclistas'},
@@ -1485,6 +1487,144 @@ function _simOpenCerebro(){
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DISPONIBILIDAD SEMANAL — doble columna (sin confirmar / asisten).
+// Detecta la próxima carrera de la categoría activa y guarda en su notes la lista
+// de confirmados. Tap en una tarjeta para moverla de columna. Registro de nuevos
+// con patrón "Apellido, Nombre". Tiempo real ligero: recarga al actuar/refrescar.
+// ════════════════════════════════════════════════════════════════════════════
+let _dispState = null; // {raceId, raceName, raceDate, confirmed:[], extraRoster:[]}
+
+async function _dispInit(){
+  const body=document.getElementById('dispBody'); if(!body) return;
+  body.innerHTML='<div style="padding:40px;text-align:center;color:#9ca3af">⏳ Buscando la próxima carrera…</div>';
+  if(typeof _sb==='undefined' || !_sb){ body.innerHTML='<div style="padding:40px;text-align:center;color:#dc2626">Supabase no disponible.</div>'; return; }
+  try{
+    const today=new Date().toISOString().slice(0,10);
+    const {data,error}=await _sb.from('races')
+      .select('id,name,date,notes,race_results(cat)')
+      .gte('date',today).order('date',{ascending:true}).limit(40);
+    if(error) throw error;
+    const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+    // Próxima carrera que encaje con la categoría global (o la 1ª si no hay filtro)
+    let chosen=null;
+    for(const r of (data||[])){
+      let extra={}; try{ extra=JSON.parse(r.notes||'{}'); }catch(_){}
+      const pseudo={ raceCat:extra.raceCat||'', inscritos:extra.inscritos||[], riders:(r.race_results||[]).map(x=>({cat:x.cat})) };
+      const keys=(typeof _raceCatGroupKeys==='function')?_raceCatGroupKeys(pseudo):new Set();
+      if(!g || keys.has(g) || keys.size===0){ chosen={r,extra}; break; }
+    }
+    if(!chosen){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada${g?' en esta categoría':''}.<br><span style="font-size:12px">Añádela en el Calendario.</span></p></div>`; return; }
+    const av=chosen.extra.availability||{};
+    _dispState={ raceId:chosen.r.id, raceName:chosen.r.name||'', raceDate:chosen.r.date||'',
+                 confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
+                 extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
+    await _dispRender();
+  }catch(e){ body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}</div>`; }
+}
+
+// Plantilla de mi equipo en la categoría activa (nombres "Apellido, Nombre")
+async function _dispRoster(){
+  const set=new Map(); // nk -> displayName
+  const teamCanon = myTeam?getCanonicalTeam(myTeam).toLowerCase():'';
+  const hist=_historyForGlobalCat((typeof _cachedHistory!=='undefined'&&_cachedHistory)||[]);
+  hist.forEach(race=>(race.riders||[]).forEach(r=>{
+    if(teamCanon && getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) return;
+    const nk=normalizeForMatching(r.name); if(!nk) return;
+    if(!set.has(nk)) set.set(nk, _evolNormName(r.name)||r.name);
+  }));
+  // Láminas (team_sheets) de la categoría/año, por si hay fichajes sin carreras
+  try{
+    if(_sb){
+      const yr=(typeof _getRaceYear==='function')?String(_getRaceYear()):'';
+      const {data}=await _sb.from('team_sheets').select('name,cat,team,year');
+      (data||[]).forEach(x=>{
+        if(teamCanon && getCanonicalTeam(x.team||'').toLowerCase()!==teamCanon) return;
+        const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+        if(g){ const cg=_calCatGroup(x.cat); if(!cg||cg.key!==g) return; }
+        const nk=normalizeForMatching(x.name); if(nk && !set.has(nk)) set.set(nk, x.name);
+      });
+    }
+  }catch(_){}
+  // Extras registrados a mano
+  (_dispState?.extraRoster||[]).forEach(n=>{ const nk=normalizeForMatching(n); if(nk&&!set.has(nk)) set.set(nk,n); });
+  return [...set.values()].sort((a,b)=>a.localeCompare(b));
+}
+
+async function _dispRender(){
+  const body=document.getElementById('dispBody'); if(!body||!_dispState) return;
+  const roster=await _dispRoster();
+  const confSet=new Set(_dispState.confirmed.map(n=>normalizeForMatching(n)));
+  const pending=roster.filter(n=>!confSet.has(normalizeForMatching(n)));
+  const confirmed=_dispState.confirmed.slice().sort((a,b)=>a.localeCompare(b));
+  const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
+  const card=(name,side)=>`<button onclick="_dispToggle(${JSON.stringify(name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1.5px solid ${side==='in'?'#86efac':'#e5e7eb'};border-radius:11px;padding:11px 13px;margin-bottom:8px;cursor:pointer;transition:transform .12s,box-shadow .12s;font-size:14px;font-weight:700;color:#0b2f6b" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+      <span style="font-size:18px">${side==='in'?'✅':'⚪'}</span>
+      <span style="flex:1">${escapeHtml(name)}</span>
+      <span style="font-size:11px;color:${side==='in'?'#15803d':'#94a3b8'};font-weight:800">${side==='in'?'ASISTE ✕':'Apuntarme ▸'}</span>
+    </button>`;
+  body.innerHTML=`
+    <div style="background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px">
+      <div style="font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">Próxima carrera</div>
+      <div style="font-size:18px;font-weight:900">${escapeHtml(_dispState.raceName)}</div>
+      <div style="font-size:13px;opacity:.9;margin-top:2px">📅 ${escapeHtml(fdate||'')}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="disp-grid">
+      <div>
+        <h3 style="margin:0 0 10px;font-size:15px;color:#64748b">⚪ Sin confirmar (${pending.length})</h3>
+        ${pending.length?pending.map(n=>card(n,'out')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Todos confirmados 🎉</div>'}
+        <div style="margin-top:14px;border-top:1px dashed #cbd5e1;padding-top:12px">
+          <div style="font-size:12.5px;color:#475569;font-weight:700;margin-bottom:6px">¿No estás en la lista? Regístrate:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input id="dispNewName" type="text" placeholder="Apellido, Nombre (ej: Alcon, Manuel)" style="flex:1;min-width:160px;border:1.5px solid #cbd5e1;border-radius:9px;padding:9px 11px;font-size:13px" onkeydown="if(event.key==='Enter')_dispRegister()">
+            <button onclick="_dispRegister()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:800;font-size:13px;cursor:pointer">➕ Añadir</button>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:4px">Formato obligatorio: <b>Apellido, Nombre</b> (con la coma). Ej: <i>Gómez, Carlos</i>.</div>
+        </div>
+      </div>
+      <div>
+        <div style="background:#dcfce7;border:1px solid #86efac;border-radius:11px;padding:10px 13px;margin-bottom:12px;text-align:center;font-weight:900;color:#15803d;font-size:15px">🚴 ¡Ya somos ${confirmed.length} apuntado${confirmed.length!==1?'s':''}!</div>
+        ${confirmed.length?confirmed.map(n=>card(n,'in')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Aún no se ha apuntado nadie. ¡Sé el primero! 👈</div>'}
+      </div>
+    </div>
+    <style>@media(max-width:640px){.disp-grid{grid-template-columns:1fr!important}}</style>`;
+}
+
+async function _dispToggle(name){
+  if(!_dispState) return;
+  const nk=normalizeForMatching(name);
+  const i=_dispState.confirmed.findIndex(n=>normalizeForMatching(n)===nk);
+  if(i>=0) _dispState.confirmed.splice(i,1);
+  else _dispState.confirmed.push(name);
+  await _dispSave();
+  await _dispRender();
+}
+
+function _dispRegister(){
+  const inp=document.getElementById('dispNewName'); if(!inp) return;
+  const raw=(inp.value||'').trim();
+  if(!raw){ inp.focus(); return; }
+  if(!/^[^,]+,\s*.+$/.test(raw)){ alert('Formato incorrecto.\n\nEscribe: Apellido, Nombre  (con la coma)\nEjemplo: Alcon, Manuel'); inp.focus(); return; }
+  // Normalizar a "Apellido, Nombre" limpio
+  const norm = (typeof normalizeRiderName==='function') ? normalizeRiderName(raw) : raw;
+  const nk=normalizeForMatching(norm);
+  if(!_dispState.extraRoster.some(n=>normalizeForMatching(n)===nk) ) _dispState.extraRoster.push(norm);
+  // Lo añadimos ya como confirmado (se está apuntando) — o solo al roster? Lo dejamos en "sin confirmar".
+  inp.value='';
+  _dispSave().then(_dispRender);
+}
+
+async function _dispSave(){
+  if(!_dispState || !_sb) return;
+  try{
+    const {data,error}=await _sb.from('races').select('notes').eq('id',_dispState.raceId).single();
+    if(error) throw error;
+    let extra={}; try{ extra=JSON.parse(data?.notes||'{}'); }catch(_){}
+    extra.availability={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, roster:_dispState.extraRoster };
+    await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',_dispState.raceId);
+  }catch(e){ console.warn('[disp] save', e); }
 }
 
 // Grupos de categoría realmente presentes en los datos cargados

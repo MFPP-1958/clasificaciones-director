@@ -2681,6 +2681,18 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════
+         VISTA DISPONIBILIDAD SEMANAL — doble columna (sin confirmar / asisten)
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="view-disponibilidad" class="spa-view">
+      <section class="panel">
+        <div class="section-title"><h2 style="margin:0">✅ Disponibilidad semanal</h2>
+          <button class="btn light" onclick="_dispInit()" style="padding:6px 12px;font-size:12px">🔄 Actualizar</button>
+        </div>
+        <div id="dispBody"><div style="padding:40px;text-align:center;color:#9ca3af">⏳ Cargando próxima carrera…</div></div>
+      </section>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
          VISTA CALENDARIO — extraída de Resumen Temporada (Paso 3 UX)
          Mantiene los mismos IDs internos para no romper _calRender, _calPrint,
          _calSavePlanned, etc. La modal #calModal vive aquí.
@@ -3414,6 +3426,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=autoguardar-prediccion-1"></script>
+<script src="assets/js/app.js?v=disponibilidad-semanal-1"></script>
 </body>
 </html>
