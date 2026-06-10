@@ -961,8 +961,8 @@ async function _rbacLoadPerms(role){
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
   if(!data || data.length === 0){
     const defaults = {
-      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
-      CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos'],
+      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-disponibilidad','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
+      CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos','view-disponibilidad'],
       LECTOR:   ['view-carga','view-tabla']
     };
     (defaults[role]||[]).forEach(id => _rbacPerms.add(id));
