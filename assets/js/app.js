@@ -1430,7 +1430,11 @@ function _simOpenCerebro(){
       <h3 style="margin:18px 0 4px;font-size:15px;color:#0b2f6b">🎯 Fiabilidad del modelo por tipo de prueba</h3>
       <div style="font-size:13px">${relHtml}</div>
       ${eloHtml?`<h3 style="margin:18px 0 4px;font-size:15px;color:#4c1d95">🧬 Nivel competitivo aprendido (se ajusta solo)</h3><div>${eloHtml}</div><div style="font-size:11.5px;color:#94a3b8;margin-top:6px">${eloFootnote}</div>`:''}
-      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 13px;font-size:12px;color:#1e3a8a;margin-top:14px;line-height:1.5">ℹ️ El modelo <b>aprende solo</b> con cada carrera que guardas. Con <b>pocas pruebas</b> (como ahora) la predicción aún es orientativa —por eso en la última CRI solo acertó 4/10—; irá afinando a medida que avance la temporada. Cuando haya suficientes datos, activaremos que ese aprendizaje pese también en la predicción.</div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 13px;font-size:12px;color:#1e3a8a;margin-top:14px;line-height:1.5">ℹ️ El modelo <b>aprende solo</b> con cada carrera que guardas. Con <b>pocas pruebas</b> de un tipo (p. ej. CRI) la predicción de ese tipo aún es orientativa; afina a medida que metes más. Para <b>carretera/circuito</b>, donde ya tienes muchas, el aprendizaje es más fiable.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button onclick="_simModelSetupCloud()" style="background:#0369a1;color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer" title="Crear/activar la tabla sim_model en Supabase para sincronizar el aprendizaje entre dispositivos">☁️ Activar aprendizaje en la nube</button>
+        <button onclick="document.getElementById('_cerebroOv')?.remove(); _simToggleModelAccuracy && _simToggleModelAccuracy();" style="background:#16a34a;color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer" title="Abrir precisión del modelo y optimizar cuánto debe pesar el aprendizaje">📊 Precisión y optimizar</button>
+      </div>
       <div style="font-size:11.5px;color:#94a3b8;margin-top:12px">El IRC (0–100) mide cada actuación según el puesto y el tamaño del pelotón. "Reciente" = últimas 2 carreras; "habitual" = anteriores.</div>
     </div>
   </div>`;
@@ -24341,6 +24345,7 @@ function _simFillSelect(sel, list){
 async function renderSimulador(){
   const sel = document.getElementById('simRaceSelect');
   if(!sel) return;
+  try{ _simModelHydrate(); }catch(_){}   // traer config aprendida de la nube (1 vez/sesión)
   const hist = _cachedHistory || [];
   // Simulables: con lista de inscritos guardada O con clasificación (≥3 clasificados,
   // usaremos los clasificados como "lista" si no hay startlist — p.ej. Trofeo San Pascual).
@@ -30209,7 +30214,9 @@ function _loadEloBlendWeight(){
   return _ELO_BLEND_WEIGHT_DEFAULT;
 }
 function _saveEloBlendWeight(w){
-  try { localStorage.setItem(_ELO_WEIGHT_KEY, String(Math.max(0, Math.min(0.5, w)))); } catch(e){}
+  const v = Math.max(0, Math.min(0.5, w));
+  try { localStorage.setItem(_ELO_WEIGHT_KEY, String(v)); } catch(e){}
+  try{ _simModelSet({eloWeight: v}); }catch(_){}   // sincronizar a la nube
 }
 // Peso efectivo a usar en el blend: override > peso persistido si flag ON > 0
 function _effectiveEloWeight(){
@@ -30321,6 +30328,64 @@ function _loadEloBlendEnabled(){
 }
 function _saveEloBlendEnabled(on){
   try { localStorage.setItem(_ELO_BLEND_KEY, on ? '1' : '0'); } catch(e){}
+  try{ _simModelSet({eloEnabled: !!on}); }catch(_){}   // sincronizar a la nube
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PERSISTENCIA DEL "CEREBRO" EN LA NUBE — tabla sim_model (1 fila JSON).
+// Guarda la configuración aprendida (peso Elo, on/off, y en el futuro pesos por
+// tipo de prueba) para que se sincronice entre PC e iPad. Si la tabla no existe,
+// se trabaja solo con localStorage (sin romper nada).
+// ═══════════════════════════════════════════════════════════════════════════
+const _SIM_MODEL_SQL = `create table if not exists sim_model (
+  id int primary key default 1,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz default now()
+);
+alter table sim_model enable row level security;
+drop policy if exists "anon_all_sim_model" on sim_model;
+create policy "anon_all_sim_model" on sim_model for all to anon using (true) with check (true);
+insert into sim_model (id, data) values (1, '{}'::jsonb) on conflict (id) do nothing;`;
+let _simModelMissing = false;
+async function _simModelGet(){
+  if(typeof _sb==='undefined' || !_sb || _simModelMissing) return null;
+  try{
+    const {data,error}=await _sb.from('sim_model').select('data').eq('id',1).maybeSingle();
+    if(error){ if(/sim_model|does not exist|relation|42P01/i.test(error.message||'')) _simModelMissing=true; return null; }
+    return data ? (data.data||{}) : {};
+  }catch(_){ return null; }
+}
+async function _simModelSet(patch){
+  if(typeof _sb==='undefined' || !_sb || _simModelMissing) return false;
+  try{
+    const cur = (await _simModelGet()) || {};
+    const next = Object.assign({}, cur, patch);
+    const {error}=await _sb.from('sim_model').upsert({id:1, data:next, updated_at:new Date().toISOString()});
+    if(error){ if(/sim_model|does not exist|relation|42P01/i.test(error.message||'')) _simModelMissing=true; return false; }
+    return true;
+  }catch(_){ return false; }
+}
+let _simModelHydrated=false;
+async function _simModelHydrate(){
+  if(_simModelHydrated) return; _simModelHydrated=true;
+  const m=await _simModelGet(); if(!m) return;
+  try{
+    if(typeof m.eloWeight==='number')  localStorage.setItem(_ELO_WEIGHT_KEY, String(m.eloWeight));
+    if(typeof m.eloEnabled==='boolean')localStorage.setItem(_ELO_BLEND_KEY, m.eloEnabled?'1':'0');
+    if(typeof _simRefreshEloBlendBtnLabel==='function') _simRefreshEloBlendBtnLabel();
+  }catch(_){}
+}
+// Comprueba/crea la tabla: si falta, muestra el SQL para pegar en Supabase.
+async function _simModelSetupCloud(){
+  const m = await _simModelGet();
+  if(m && !_simModelMissing){
+    alert('☁️ El aprendizaje en la nube YA está activo (tabla sim_model). La configuración se sincroniza entre tus dispositivos.');
+    return;
+  }
+  const ta = `Para activar el aprendizaje en la nube, copia este SQL y pégalo en Supabase → SQL Editor → RUN (una sola vez):\n\n${_SIM_MODEL_SQL}`;
+  // Copia al portapapeles si se puede
+  try{ await navigator.clipboard.writeText(_SIM_MODEL_SQL); }catch(_){}
+  alert(ta + '\n\n(El SQL se ha copiado al portapapeles si tu navegador lo permite.)');
 }
 
 // Enriquece el grid actual con elo, eloRank, dnfRate. Si la mezcla Elo
