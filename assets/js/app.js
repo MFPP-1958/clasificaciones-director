@@ -1503,6 +1503,8 @@ function _simOpenCerebro(){
 // ════════════════════════════════════════════════════════════════════════════
 let _dispState = null; // {raceId, raceName, raceDate, confirmed:[], extraRoster:[]}
 let _dispRaces = [];   // todas las próximas carreras (para elegir sábado/domingo…)
+let _dispTeamCanon = ''; // equipo efectivo (canónico) para filtrar la plantilla
+let _dispCatGroup = '';  // grupo de categoría efectivo para filtrar la plantilla
 let _dispTab = 'out';  // pestaña activa en móvil
 let _dispChannel = null; // suscripción realtime
 
@@ -1537,6 +1539,16 @@ function _dispSubscribe(raceId){
   }catch(_){}
 }
 
+// Equipo (canónico) más reciente del corredor, derivado de su historial.
+async function _dispRiderTeam(riderName){
+  if(!riderName) return '';
+  const nk=normalizeForMatching(riderName); if(!nk) return '';
+  let hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory)&&_cachedHistory.length)?_cachedHistory:(typeof _ensureHistory==='function'? await _ensureHistory():[]);
+  let best='', bestDate='';
+  (hist||[]).forEach(race=>{ const d=_parseSpanishDate(race.raceDate)||''; (race.riders||[]).forEach(r=>{ if(r&&r.team && normalizeForMatching(r.name)===nk && d>=bestDate){ bestDate=d; best=getCanonicalTeam(r.team).toLowerCase(); } }); });
+  return best;
+}
+
 // Grupo de categoría del corredor en el AÑO ACTUAL (su categoría va cambiando
 // cada año: CAD-1 → CAD-2 → JUV-1…). Se deriva de su historial.
 async function _dispRiderCatGroup(riderName){
@@ -1568,9 +1580,19 @@ async function _dispInit(){
     // Categoría a usar: si es un CICLISTA, la SUYA (derivada del historial del año
     // actual); si es el director, la del filtro global.
     let g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
-    if(typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA'){
+    const isCiclista = typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA';
+    if(isCiclista){
       const rg=await _dispRiderCatGroup(_rbacUser.riderName);
       if(rg) g=rg;
+    }
+    // Equipo y categoría EFECTIVOS para filtrar la plantilla (la lista de nombres):
+    //  - Director: su equipo (myTeam) + categoría del filtro global.
+    //  - Ciclista: equipo y categoría derivados de SU historial (no tiene filtros).
+    _dispCatGroup = g;
+    if(isCiclista){
+      _dispTeamCanon = await _dispRiderTeam(_rbacUser.riderName) || (myTeam?getCanonicalTeam(myTeam).toLowerCase():'');
+    } else {
+      _dispTeamCanon = myTeam?getCanonicalTeam(myTeam).toLowerCase():'';
     }
     // Cargar las próximas. El calendario es POR CATEGORÍA: si hay filtro global,
     // mostramos las de ESA categoría (y, por compatibilidad, las antiguas sin
@@ -1600,22 +1622,26 @@ function _dispSelectRace(raceId){
 // Plantilla de mi equipo en la categoría activa (nombres "Apellido, Nombre")
 async function _dispRoster(){
   const set=new Map(); // nk -> displayName
-  const teamCanon = myTeam?getCanonicalTeam(myTeam).toLowerCase():'';
-  const hist=_historyForGlobalCat((typeof _cachedHistory!=='undefined'&&_cachedHistory)||[]);
+  // Equipo y categoría EFECTIVOS: para el director, su equipo + filtro global;
+  // para un CICLISTA (sin filtros), los derivados de su propio historial. Así el
+  // chaval solo ve a sus compañeros de equipo y de su categoría.
+  const teamCanon = _dispTeamCanon || (myTeam?getCanonicalTeam(myTeam).toLowerCase():'');
+  const catG = _dispCatGroup || ((typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'');
+  const okCat = (cat)=>{ if(!catG) return true; const cg=(typeof _calCatGroup==='function')?_calCatGroup(cat):null; return !!cg && cg.key===catG; };
+  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
   hist.forEach(race=>(race.riders||[]).forEach(r=>{
     if(teamCanon && getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) return;
+    if(!okCat(r.cat)) return;
     const nk=normalizeForMatching(r.name); if(!nk) return;
     if(!set.has(nk)) set.set(nk, _evolNormName(r.name)||r.name);
   }));
-  // Láminas (team_sheets) de la categoría/año, por si hay fichajes sin carreras
+  // Láminas (team_sheets) del equipo/categoría, por si hay fichajes sin carreras
   try{
     if(_sb){
-      const yr=(typeof _getRaceYear==='function')?String(_getRaceYear()):'';
       const {data}=await _sb.from('team_sheets').select('name,cat,team,year');
       (data||[]).forEach(x=>{
         if(teamCanon && getCanonicalTeam(x.team||'').toLowerCase()!==teamCanon) return;
-        const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
-        if(g){ const cg=_calCatGroup(x.cat); if(!cg||cg.key!==g) return; }
+        if(!okCat(x.cat)) return;
         const nk=normalizeForMatching(x.name); if(nk && !set.has(nk)) set.set(nk, x.name);
       });
     }
