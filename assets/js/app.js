@@ -924,7 +924,7 @@ async function _rbacLogin(){
   if(!data.pin){
     await _sb.from('app_users').update({pin}).eq('id', data.id);
   }
-  _rbacUser = {email: data.email, role: data.role, name: data.name||data.email};
+  _rbacUser = {email: data.email, role: data.role, name: data.name||data.email, riderName: (data.rider_name||data.name||'')};
   localStorage.setItem('_rbacSession', JSON.stringify(_rbacUser));
   // Si la BD tiene la columna my_team, restauramos el equipo de este director.
   // localStorage ya tiene "myTeam" persistido, pero la BD prevalece si hay valor.
@@ -1500,6 +1500,7 @@ function _simOpenCerebro(){
 // con patrón "Apellido, Nombre". Tiempo real ligero: recarga al actuar/refrescar.
 // ════════════════════════════════════════════════════════════════════════════
 let _dispState = null; // {raceId, raceName, raceDate, confirmed:[], extraRoster:[]}
+let _dispRaces = [];   // todas las próximas carreras (para elegir sábado/domingo…)
 let _dispTab = 'out';  // pestaña activa en móvil
 let _dispChannel = null; // suscripción realtime
 
@@ -1545,22 +1546,31 @@ async function _dispInit(){
       .gte('date',today).order('date',{ascending:true}).limit(40);
     if(error) throw error;
     const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
-    // Próxima carrera que encaje con la categoría global (o la 1ª si no hay filtro)
-    let chosen=null;
-    for(const r of (data||[])){
+    // Cargar TODAS las próximas (para poder elegir sábado/domingo/etapas)
+    _dispRaces = (data||[]).map(r=>{
       let extra={}; try{ extra=JSON.parse(r.notes||'{}'); }catch(_){}
-      const pseudo={ raceCat:extra.raceCat||'', inscritos:extra.inscritos||[], riders:(r.race_results||[]).map(x=>({cat:x.cat})) };
+      return { id:r.id, name:r.name||'', date:r.date||'', localidad:extra.localidad||'', extra };
+    });
+    if(!_dispRaces.length){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada.<br><span style="font-size:12px">Añádela en el Calendario.</span></p></div>`; return; }
+    // Por defecto: la 1ª que encaje con la categoría (o la más próxima)
+    let chosen=_dispRaces[0];
+    for(const r of _dispRaces){
+      const pseudo={ raceCat:r.extra.raceCat||'', inscritos:r.extra.inscritos||[], riders:[] };
       const keys=(typeof _raceCatGroupKeys==='function')?_raceCatGroupKeys(pseudo):new Set();
-      if(!g || keys.has(g) || keys.size===0){ chosen={r,extra}; break; }
+      if(!g || keys.has(g) || keys.size===0){ chosen=r; break; }
     }
-    if(!chosen){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada${g?' en esta categoría':''}.<br><span style="font-size:12px">Añádela en el Calendario.</span></p></div>`; return; }
-    const av=chosen.extra.availability||{};
-    _dispState={ raceId:chosen.r.id, raceName:chosen.r.name||'', raceDate:chosen.r.date||'',
-                 confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
-                 extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
-    await _dispRender();
-    _dispSubscribe(_dispState.raceId);   // sincronización en vivo
+    _dispSelectRace(chosen.id);
   }catch(e){ body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}</div>`; }
+}
+
+function _dispSelectRace(raceId){
+  const r=(_dispRaces||[]).find(x=>x.id===raceId); if(!r) return;
+  const av=r.extra.availability||{};
+  _dispState={ raceId:r.id, raceName:r.name||'', raceDate:r.date||'', localidad:r.localidad||'',
+               confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
+               extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
+  _dispRender();
+  _dispSubscribe(r.id);
 }
 
 // Plantilla de mi equipo en la categoría activa (nombres "Apellido, Nombre")
@@ -1596,18 +1606,33 @@ async function _dispRender(){
   const roster=await _dispRoster();
   const confSet=new Set(_dispState.confirmed.map(n=>normalizeForMatching(n)));
   const pending=roster.filter(n=>!confSet.has(normalizeForMatching(n)));
-  const confirmed=_dispState.confirmed.slice().sort((a,b)=>a.localeCompare(b));
+  const meNk = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.riderName) ? normalizeForMatching(_rbacUser.riderName) : '';
+  // Mi tarjeta primero en "sin confirmar"
+  pending.sort((a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); });
+  const confirmed=_dispState.confirmed.slice().sort((a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); });
   const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
-  const card=(name,side)=>`<button onclick="_dispToggle(${JSON.stringify(name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1.5px solid ${side==='in'?'#86efac':'#e5e7eb'};border-radius:11px;padding:11px 13px;margin-bottom:8px;cursor:pointer;transition:transform .12s,box-shadow .12s;font-size:14px;font-weight:700;color:#0b2f6b" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
-      <span style="font-size:18px">${side==='in'?'✅':'⚪'}</span>
-      <span style="flex:1">${escapeHtml(name)}</span>
-      <span style="font-size:11px;color:${side==='in'?'#15803d':'#94a3b8'};font-weight:800">${side==='in'?'ASISTE ✕':'Apuntarme ▸'}</span>
+  const card=(name,side)=>{
+    const isMe = meNk && normalizeForMatching(name)===meNk;
+    const border = isMe ? '#1d4ed8' : (side==='in'?'#86efac':'#e5e7eb');
+    const bg = isMe ? '#eff6ff' : '#fff';
+    const lbl = side==='in' ? (isMe?'Estás apuntado ✕':'ASISTE ✕') : (isMe?'👋 ¡SOY YO! Apuntarme':'Apuntarme ▸');
+    const lblColor = side==='in' ? '#15803d' : (isMe?'#1d4ed8':'#94a3b8');
+    return `<button onclick="_dispToggle(${JSON.stringify(name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${bg};border:${isMe?'2.5px':'1.5px'} solid ${border};border-radius:11px;padding:${isMe?'13px':'11px'} 13px;margin-bottom:8px;cursor:pointer;transition:box-shadow .12s;font-size:14px;font-weight:${isMe?'900':'700'};color:#0b2f6b" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='none'">
+      <span style="font-size:18px">${isMe?'⭐':(side==='in'?'✅':'⚪')}</span>
+      <span style="flex:1">${escapeHtml(name)}${isMe?' <span style="font-size:10px;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 6px;vertical-align:middle">TÚ</span>':''}</span>
+      <span style="font-size:11px;color:${lblColor};font-weight:800">${lbl}</span>
     </button>`;
+  };
+  // Selector de prueba (sábado/domingo/etapas): nombre + localidad + fecha
+  const raceOpts=(_dispRaces||[]).map(r=>{
+    const d=(r.date||''); const dd=d?d.slice(8,10)+'/'+d.slice(5,7):''; const loc=r.localidad?(' — '+r.localidad):'';
+    return `<option value="${escapeAttr(r.id)}" ${r.id===_dispState.raceId?'selected':''}>${escapeHtml(dd+' · '+((r.name||'').slice(0,44))+loc)}</option>`;
+  }).join('');
   body.innerHTML=`
     <div style="background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff;border-radius:12px;padding:14px 18px;margin-bottom:16px">
-      <div style="font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">Próxima carrera</div>
-      <div style="font-size:18px;font-weight:900">${escapeHtml(_dispState.raceName)}</div>
-      <div style="font-size:13px;opacity:.9;margin-top:2px">📅 ${escapeHtml(fdate||'')}</div>
+      <div style="font-size:12px;opacity:.9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📅 Elige la prueba a la que vas</div>
+      <select onchange="_dispSelectRace(this.value)" style="width:100%;border:0;border-radius:9px;padding:11px 12px;font-size:14px;font-weight:800;color:#0b2f6b;box-sizing:border-box">${raceOpts}</select>
+      <div style="font-size:13px;opacity:.95;margin-top:8px">${escapeHtml(_dispState.raceName)}<br>📅 ${escapeHtml(fdate||'')}${_dispState.localidad?' · 📍 <b>'+escapeHtml(_dispState.localidad)+'</b>':''}</div>
     </div>
     <div class="disp-tabs" style="display:none;gap:8px;margin-bottom:12px">
       <button onclick="_dispShowTab('out')" id="dispTabOut" class="disp-tab" style="flex:1;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;background:#0b2f6b;color:#fff;font-weight:800;font-size:13px;cursor:pointer">⚪ Sin confirmar (${pending.length})</button>
