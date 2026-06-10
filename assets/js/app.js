@@ -1447,7 +1447,29 @@ function _simOpenCerebro(){
       </div>
       ${_simCerebroScope==='race' && !selRace ? '<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#92400e;margin-bottom:14px">⚠️ No hay ninguna prueba seleccionada en el Simulador. Selecciona una arriba (con su lista de inscritos) y vuelve a abrir el Cerebro. Mientras, se muestran todos.</div>' : ''}
       ${_simCerebroScope==='race' && selRace ? `<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:10px;padding:8px 12px;font-size:12.5px;color:#155e75;margin-bottom:14px">🏁 Analizando los <b>inscritos</b> de: <b>${escapeHtml(scopeRaceName)}</b> que tienen histórico en esta categoría.</div>` : ''}
-      <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#6b21a8;margin-bottom:16px">Estas conclusiones se generan solas comparando el rendimiento <b>reciente</b> de cada corredor con su <b>nivel habitual</b> en esta categoría. ⭐ = tu equipo.</div>
+      <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#6b21a8;margin-bottom:12px">Estas conclusiones se generan solas comparando el rendimiento <b>reciente</b> de cada corredor con su <b>nivel habitual</b> en esta categoría. ⭐ = tu equipo.</div>
+      <details class="sim-help" style="margin-bottom:16px">
+        <summary style="cursor:pointer;font-weight:800;color:#4c1d95;font-size:13.5px">❓ ¿Qué es cada cosa y cómo se usa? (pulsa para desplegar)</summary>
+        <div style="font-size:13px;color:#374151;line-height:1.55;padding:10px 4px 2px">
+          <p style="margin:6px 0"><b>¿Qué es el Cerebro?</b> Un resumen en lenguaje claro de cómo llega tu equipo (y los rivales) a las carreras, sin tablas de números. Todo se calcula solo a partir de las clasificaciones que vas guardando.</p>
+          <p style="margin:6px 0"><b>👥 Todos / 🏁 Inscritos de la prueba:</b> "Todos" analiza toda la categoría; "Inscritos" lo limita a los corredores apuntados a la prueba que tengas seleccionada en el Simulador (para preparar esa carrera concreta).</p>
+          <p style="margin:6px 0"><b>🔥 En racha:</b> corredores cuyo rendimiento <b>reciente</b> (últimas 2 carreras) es bastante <b>mejor</b> que su nivel habitual. Están finos.</p>
+          <p style="margin:6px 0"><b>🥶 En bajón / estancados:</b> lo contrario: rinden por <b>debajo</b> de lo que suelen. Puede ser cansancio, bajón de forma o una mala racha.</p>
+          <p style="margin:6px 0"><b>IRC (0–100):</b> nota de cada actuación según el <b>puesto</b> y el <b>tamaño del pelotón</b> (1º ≈ 100, último ≈ 0; un DNF cae a ~5). "Reciente" = últimas 2 carreras; "habitual" = las anteriores.</p>
+          <p style="margin:6px 0"><b>🎯 Fiabilidad por tipo de prueba:</b> cómo de <b>predecibles</b> son los resultados en cada tipo (CRI, carretera). "Alta" = los corredores repiten nivel y es fácil predecir; "Baja" = hay muchas sorpresas. Con pocas pruebas de un tipo, será baja hasta que metas más.</p>
+          <p style="margin:6px 0"><b>🧬 Nivel competitivo aprendido:</b> el "nivel real" de cada corredor que la app <b>aprende sola</b> tras cada carrera (sube a quien gana a rivales fuertes y baja a quien rinde por debajo). No tienes que tocar nada.</p>
+          <hr style="border:0;border-top:1px solid #e5e7eb;margin:10px 0">
+          <p style="margin:6px 0"><b>☁️ Activar aprendizaje en la nube:</b> guarda lo aprendido en tu base de datos para que se <b>sincronice</b> entre tu ordenador y el iPad. Te muestra/copia un texto (SQL) que hay que pegar UNA vez en Supabase. Si no lo haces, igual funciona, pero solo en este dispositivo.</p>
+          <p style="margin:6px 0"><b>📊 Precisión y optimizar — qué hacer en esa pantalla:</b></p>
+          <ol style="margin:4px 0 6px 18px;padding:0">
+            <li>Se abre el panel <b>"Precisión del modelo"</b>. Busca el botón de <b>optimizar</b> (probar pesos del aprendizaje) y púlsalo.</li>
+            <li>La app prueba sola varios <b>"pesos"</b> del aprendizaje contra TODAS tus carreras y te dice <b>cuál acierta más</b> (más Top‑10 y podios correctos).</li>
+            <li>Aparecerá un botón para <b>aplicar</b> el peso recomendado. Púlsalo solo si <b>mejora</b> los aciertos. Eso hace que el aprendizaje empiece a <b>pesar en las predicciones</b>.</li>
+            <li>Si no mejora (por pocas carreras de ese tipo), <b>déjalo como está</b>; lo repites más adelante con más datos. No se rompe nada.</li>
+          </ol>
+          <p style="margin:6px 0;color:#6b7280">En resumen: <b>tú solo guardas las carreras</b>; el Cerebro aprende y, cuando "Precisión y optimizar" confirme que mejora, activas que ese aprendizaje cuente en las predicciones.</p>
+        </div>
+      </details>
       <h3 style="margin:6px 0 4px;font-size:15px;color:#15803d">🔥 En racha (rompen la predicción al alza)</h3>${rachaHtml}
       <h3 style="margin:18px 0 4px;font-size:15px;color:#b91c1c">🥶 En bajón / estancados (por debajo de lo esperado)</h3>${bajonHtml}
       <h3 style="margin:18px 0 4px;font-size:15px;color:#0b2f6b">🎯 Fiabilidad del modelo por tipo de prueba</h3>
