@@ -5509,7 +5509,7 @@ async function _gLoadUsers(){
   }
   tbody.innerHTML = _localUsers.map(u=>`
     <tr style="border-bottom:1px solid #f3f4f6">
-      <td style="padding:10px 14px;font-size:13px;font-weight:600">${escapeHtml(u.email)}</td>
+      <td style="padding:10px 14px"><input id="gEmail_${escapeAttr(u.id)}" type="email" value="${escapeAttr(u.email)}" style="border:1px solid #d0d5dd;border-radius:8px;padding:5px 8px;font-size:13px;width:180px;font-weight:600" title="Corrige aquí el email y pulsa ✏️ Actualizar"></td>
       <td style="padding:10px 14px"><input style="border:1px solid #d0d5dd;border-radius:8px;padding:5px 8px;font-size:13px;width:110px" value="${escapeHtml(u.name||'')}" onchange="_gUpdateUserName('${escapeAttr(u.id)}',this.value)"></td>
       <td style="padding:10px 14px"><select style="border:1px solid #d0d5dd;border-radius:8px;padding:5px 8px;font-size:13px" onchange="_gUpdateUserRole('${escapeAttr(u.id)}',this.value)">
         ${ROLES.map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join('')}
@@ -5519,7 +5519,10 @@ async function _gLoadUsers(){
         <button title="Regenerar PIN" onclick="_gRegenPin('${escapeAttr(u.id)}','${escapeAttr(u.email)}')" style="margin-left:6px;background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:11px;font-weight:700">🔄</button>
       </td>
       <td style="padding:10px 14px;text-align:center"><input type="checkbox" ${u.active?'checked':''} onchange="_gToggleUserActive('${escapeAttr(u.id)}',this.checked)" style="width:16px;height:16px;cursor:pointer"></td>
-      <td style="padding:10px 14px;text-align:center"><button style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:700" onclick="_gDeleteUser('${escapeAttr(u.id)}','${escapeAttr(u.email)}')">Eliminar</button></td>
+      <td style="padding:10px 14px;text-align:center;white-space:nowrap">
+        <button style="background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:700;margin-right:5px" onclick="_gUpdateUserEmail('${escapeAttr(u.id)}','${escapeAttr(u.email)}')" title="Guardar el email corregido y reenviar el correo de bienvenida">✏️ Actualizar</button>
+        <button style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:700" onclick="_gDeleteUser('${escapeAttr(u.id)}','${escapeAttr(u.email)}')">Eliminar</button>
+      </td>
     </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:30px">No hay usuarios todavía.</td></tr>';
 }
 
@@ -5627,6 +5630,29 @@ async function _gDeleteUser(id, email){
   if(_sb) await _sb.from('app_users').delete().eq('id',id);
   _localUsers = _localUsers.filter(u=>u.id!==id);
   _gLoadUsers();
+}
+// Actualizar el email de un usuario y reenviar el correo de bienvenida al nuevo.
+async function _gUpdateUserEmail(id, oldEmail){
+  const inp=document.getElementById('gEmail_'+id);
+  const msg=document.getElementById('gAddUserMsg');
+  if(!inp) return;
+  const newEmail=(inp.value||'').trim().toLowerCase();
+  if(!newEmail.includes('@')){ alert('⚠️ Email no válido.'); inp.focus(); return; }
+  const u=_localUsers.find(x=>x.id===id);
+  const changed = newEmail!==(oldEmail||'').toLowerCase();
+  if(_sb && !String(id).startsWith('local-')){
+    const {error}=await _sb.from('app_users').update({email:newEmail}).eq('id',id);
+    if(error){ alert('❌ No se pudo actualizar el email: '+error.message+(/duplicate|unique/i.test(error.message)?'\n\n(Ese email ya existe en otro usuario.)':'')); return; }
+  }
+  if(u) u.email=newEmail;
+  if(changed){
+    const r=await _ejsSendBienvenida(newEmail, u?.name||'', u?.pin||'');
+    if(msg){ msg.innerHTML = r.ok ? `✅ Email actualizado a <b>${escapeHtml(newEmail)}</b> y correo de bienvenida reenviado.` : `✅ Email actualizado a <b>${escapeHtml(newEmail)}</b>. ⚠️ El reenvío falló: ${escapeHtml(r.err||'')}. Puedes darle el PIN <b>${escapeHtml(u?.pin||'')}</b> a mano.`; msg.style.color = r.ok?'#059669':'#b45309'; msg.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+    else if(typeof showToast==='function') showToast('✅ Email actualizado y reenviado','ok',3000);
+  } else {
+    if(typeof showToast==='function') showToast('Email sin cambios','info',2500);
+  }
+  await _gLoadUsers();
 }
 
 // ── Gestión: Permisos ─────────────────────────────────────────
