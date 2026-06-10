@@ -1351,6 +1351,75 @@ async function _prRenderIRCBars(history){
     </div>${rows}</div>`;
 }
 
+// ── CEREBRO DEL SIMULADOR — insights de texto (sin métricas abstractas) ──
+// IRC por corredor (TODOS: equipo + rivales) para detectar rachas/bajones y la
+// fiabilidad por tipo de prueba. Lectura para director, no para estadístico.
+function _simBuildRiderIRC(history){
+  const map=new Map();
+  (history||[]).forEach(race=>{
+    const fin=(race.riders||[]).filter(r=>r.pos>0).length;
+    const iso=_parseSpanishDate(race.raceDate)||'';
+    const tt=(typeof _simIsTimeTrial==='function' && _simIsTimeTrial(race))?'CRI':'Carretera';
+    (race.riders||[]).forEach(r=>{
+      if(!(r.pos>0)) return;
+      const nk=normalizeRiderName(r.name); if(!nk) return;
+      const irc=_ircRace(r.pos, fin); if(irc==null) return;
+      if(!map.has(nk)) map.set(nk,{nk,name:_evolNormName(r.name)||r.name,team:r.team||'',pts:[]});
+      map.get(nk).pts.push({iso,irc,type:tt});
+    });
+  });
+  map.forEach(r=>r.pts.sort((a,b)=>(a.iso||'').localeCompare(b.iso||'')));
+  return map;
+}
+function _simOpenCerebro(){
+  const history=_historyForGlobalCat((typeof _cachedHistory!=='undefined'&&_cachedHistory)||[]);
+  if(!history || !history.length){ alert('No hay historial en esta categoría para analizar.'); return; }
+  const riders=_simBuildRiderIRC(history);
+  const myCanon = myTeam?getCanonicalTeam(myTeam).toLowerCase():'';
+  const avg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
+  const arr=[...riders.values()].filter(r=>r.pts.length>=3).map(r=>{
+    const all=r.pts.map(p=>p.irc);
+    const recent=all.slice(-2), base=all.slice(0,-2);
+    const rAvg=avg(recent), bAvg=avg(base.length?base:all);
+    return {...r, n:all.length, delta:Math.round(rAvg-bAvg), recent:Math.round(rAvg), base:Math.round(bAvg),
+            mine: myCanon && getCanonicalTeam(r.team).toLowerCase()===myCanon};
+  });
+  const racha=arr.filter(r=>r.delta>=10).sort((a,b)=>b.delta-a.delta).slice(0,8);
+  const bajon=arr.filter(r=>r.delta<=-10).sort((a,b)=>a.delta-b.delta).slice(0,8);
+  // Fiabilidad por tipo: menor dispersión del IRC dentro de cada corredor = más predecible
+  const sdByType={};
+  riders.forEach(r=>{ ['CRI','Carretera'].forEach(t=>{ const v=r.pts.filter(p=>p.type===t).map(p=>p.irc); if(v.length>=2){ const m=avg(v); const sd=Math.sqrt(avg(v.map(x=>(x-m)**2))); (sdByType[t]=sdByType[t]||[]).push(sd); } }); });
+  const relLabel=t=>{ const a=sdByType[t]; if(!a||!a.length) return null; const s=avg(a); return s<18?['Alta','#16a34a']:s<28?['Media','#d97706']:['Baja','#dc2626']; };
+
+  const tag=r=> r.mine?'<span style="color:#1f6feb;font-weight:800">⭐ </span>':'';
+  const line=(emoji,r,extra)=>`<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:13.5px"><span>${emoji}</span><div><b>${tag(r)}${escapeHtml(r.name)}</b> <span style="color:#94a3b8;font-size:11.5px">${escapeHtml(r.team||'')}</span><br><span style="color:#475569">${extra}</span></div></div>`;
+  const rachaHtml = racha.length? racha.map(r=>line('🔥',r,`En racha: IRC reciente <b>${r.recent}</b> frente a <b>${r.base}</b> habitual (<b style="color:#16a34a">+${r.delta}</b>). Está rindiendo por encima de lo esperado.`)).join('') : '<div style="color:#9ca3af;padding:8px 0">Sin rachas claras al alza por ahora.</div>';
+  const bajonHtml = bajon.length? bajon.map(r=>line('🥶',r,`En bajón: IRC reciente <b>${r.recent}</b> frente a <b>${r.base}</b> habitual (<b style="color:#dc2626">${r.delta}</b>). Rinde por debajo de lo esperado.`)).join('') : '<div style="color:#9ca3af;padding:8px 0">Nadie en bajón acusado por ahora.</div>';
+  const cri=relLabel('CRI'), car=relLabel('Carretera');
+  const relHtml = [['Contrarreloj (CRI)',cri],['Carretera (línea/circuito)',car]].map(([lab,v])=> v?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9"><span>${lab}</span><b style="color:${v[1]}">${v[0]} fiabilidad</b></div>`:'').join('') || '<div style="color:#9ca3af">Aún faltan carreras para medir la fiabilidad por tipo.</div>';
+
+  const nMine=arr.filter(r=>r.mine).length;
+  const old=document.getElementById('_cerebroOv'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='_cerebroOv';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:100000;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto';
+  ov.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:760px;width:100%;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+    <div style="background:linear-gradient(135deg,#4c1d95,#0e4d73);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-radius:16px 16px 0 0">
+      <div><h2 style="margin:0;font-size:19px">🧠 Cerebro del Simulador</h2><div style="font-size:12px;opacity:.9;margin-top:2px">Lectura rápida del estado de forma y la fiabilidad · ${arr.length} corredores analizados (${nMine} de tu equipo)</div></div>
+      <button onclick="document.getElementById('_cerebroOv').remove()" style="background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:9px;padding:8px 14px;font-weight:800;cursor:pointer">✕ Cerrar</button>
+    </div>
+    <div style="padding:18px 22px;max-height:72vh;overflow:auto">
+      <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#6b21a8;margin-bottom:16px">Estas conclusiones se generan solas comparando el rendimiento <b>reciente</b> de cada corredor con su <b>nivel habitual</b> en esta categoría. ⭐ = tu equipo.</div>
+      <h3 style="margin:6px 0 4px;font-size:15px;color:#15803d">🔥 En racha (rompen la predicción al alza)</h3>${rachaHtml}
+      <h3 style="margin:18px 0 4px;font-size:15px;color:#b91c1c">🥶 En bajón / estancados (por debajo de lo esperado)</h3>${bajonHtml}
+      <h3 style="margin:18px 0 4px;font-size:15px;color:#0b2f6b">🎯 Fiabilidad del modelo por tipo de prueba</h3>
+      <div style="font-size:13px">${relHtml}</div>
+      <div style="font-size:11.5px;color:#94a3b8;margin-top:12px">El IRC (0–100) mide cada actuación según el puesto y el tamaño del pelotón. "Reciente" = últimas 2 carreras; "habitual" = anteriores.</div>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+}
+
 // Grupos de categoría realmente presentes en los datos cargados
 function _calAvailableCats(){
   const present=new Set();
