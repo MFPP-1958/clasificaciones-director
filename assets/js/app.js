@@ -1628,6 +1628,8 @@ async function _dispRender(){
   const roster=await _dispRoster();
   const confSet=new Set(_dispState.confirmed.map(n=>normalizeForMatching(n)));
   const pending=roster.filter(n=>!confSet.has(normalizeForMatching(n)));
+  // Solo director/admin (o sin login = director en su PC) ven copiar/exportar.
+  const isAdmin = !(typeof _rbacUser!=='undefined' && _rbacUser) || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
   const meNk = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.riderName) ? normalizeForMatching(_rbacUser.riderName) : '';
   // Mi tarjeta primero en "sin confirmar"
   pending.sort((a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); });
@@ -1675,6 +1677,11 @@ async function _dispRender(){
       </div>
       <div class="disp-col" data-col="in">
         <div style="background:#dcfce7;border:1px solid #86efac;border-radius:11px;padding:10px 13px;margin-bottom:12px;text-align:center;font-weight:900;color:#15803d;font-size:15px">🚴 ¡Ya somos ${confirmed.length} apuntado${confirmed.length!==1?'s':''}!</div>
+        ${isAdmin && confirmed.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+          <button onclick="_dispCopyNames()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Copiar la lista de nombres al portapapeles">📋 Copiar nombres</button>
+          <button onclick="_dispExportPNG()" style="background:#0369a1;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Imagen para Instagram (cuadrada)">🖼️ PNG (Instagram)</button>
+          <button onclick="_dispExportPDF()" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer">📄 PDF</button>
+        </div>`:''}
         ${confirmed.length?confirmed.map(n=>card(n,'in')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Aún no se ha apuntado nadie. ¡Sé el primero! 👈</div>'}
       </div>
     </div>
@@ -1722,6 +1729,71 @@ async function _dispSave(){
     extra.availability={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, roster:_dispState.extraRoster };
     await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',_dispState.raceId);
   }catch(e){ console.warn('[disp] save', e); }
+}
+
+// Copiar la lista de confirmados al portapapeles
+function _dispCopyNames(){
+  if(!_dispState) return;
+  const list=(_dispState.confirmed||[]).slice().sort((a,b)=>a.localeCompare(b));
+  if(!list.length){ alert('Aún no hay nadie apuntado.'); return; }
+  const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
+  const head=`${_dispState.raceName}${_dispState.localidad?' · '+_dispState.localidad:''} · ${fdate}\n${list.length} corredores:\n`;
+  const txt=head+list.map((n,i)=>`${i+1}. ${n}`).join('\n');
+  const done=()=>{ if(typeof showToast==='function') showToast('📋 Lista copiada al portapapeles','ok',2500); else alert('Copiado.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{ prompt('Copia manualmente:', txt); }); }
+  else prompt('Copia manualmente:', txt);
+}
+
+// Póster (SVG) de confirmados para Instagram / PDF
+function _dispBuildPosterSVG(){
+  const list=(_dispState.confirmed||[]).slice().sort((a,b)=>a.localeCompare(b));
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const logo=(document.querySelector('.brand-logo')||{}).src||'';
+  const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
+  const W=1080,H=1080;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system,Segoe UI,Arial,sans-serif">`;
+  s+=`<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b2f6b"/><stop offset="1" stop-color="#1286c7"/></linearGradient></defs>`;
+  s+=`<rect width="${W}" height="${H}" fill="url(#bg)"/>`;
+  s+=`<rect x="48" y="48" width="${W-96}" height="${H-96}" rx="28" fill="#ffffff"/>`;
+  if(logo) s+=`<image href="${logo}" x="80" y="78" height="92" width="260" preserveAspectRatio="xMinYMid meet"/>`;
+  s+=`<text x="${W-80}" y="135" text-anchor="end" font-size="26" font-weight="800" fill="#0b2f6b">${esc(myTeam||'TBG-WIXUM')}</text>`;
+  s+=`<text x="${W/2}" y="248" text-anchor="middle" font-size="44" font-weight="900" fill="#0b2f6b">🚴 ¡Competimos!</text>`;
+  s+=`<text x="${W/2}" y="300" text-anchor="middle" font-size="30" font-weight="800" fill="#1286c7">${esc((_dispState.raceName||'').slice(0,52))}</text>`;
+  s+=`<text x="${W/2}" y="342" text-anchor="middle" font-size="24" fill="#475467">📅 ${esc(fdate||'')}${_dispState.localidad?'   📍 '+esc(_dispState.localidad):''}</text>`;
+  s+=`<line x1="120" y1="372" x2="${W-120}" y2="372" stroke="#e5e7eb" stroke-width="2"/>`;
+  s+=`<text x="${W/2}" y="412" text-anchor="middle" font-size="22" font-weight="800" fill="#15803d">NUESTROS ${list.length} CORREDORES</text>`;
+  // Lista: 1 o 2 columnas según cantidad
+  const top=420, bottom=H-110, avail=bottom-top;
+  const twoCol = list.length>12;
+  const per = twoCol ? Math.ceil(list.length/2) : list.length;
+  const lh = Math.max(34, Math.min(64, Math.floor(avail/Math.max(per,1))));
+  const fs = Math.max(20, Math.min(34, lh-12));
+  const draw=(arr,cx,anchor)=>arr.map((n,i)=>`<text x="${cx}" y="${top+28+i*lh}" text-anchor="${anchor}" font-size="${fs}" font-weight="700" fill="#0b2f6b">${esc(n)}</text>`).join('');
+  if(twoCol){ s+=draw(list.slice(0,per), W*0.30, 'middle'); s+=draw(list.slice(per), W*0.70, 'middle'); }
+  else { s+=draw(list, W/2, 'middle'); }
+  s+=`<text x="${W/2}" y="${H-72}" text-anchor="middle" font-size="20" fill="#94a3b8">MFPP Cycling Specialist · ¡Vamos equipo! 💪</text>`;
+  s+=`</svg>`;
+  return {svg:s,W,H};
+}
+
+async function _dispExportPNG(){
+  if(!_dispState || !(_dispState.confirmed||[]).length){ alert('Aún no hay nadie apuntado.'); return; }
+  const {svg,W,H}=_dispBuildPosterSVG();
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  if(typeof _infDrawSVGToCanvas==='function') await _infDrawSVGToCanvas(ctx,svg,0,0,W,H);
+  cv.toBlob(b=>{ if(!b){alert('No se pudo generar la imagen.');return;} const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=`convocatoria_${(_dispState.raceName||'carrera').replace(/[^a-z0-9]+/gi,'-').slice(0,40)}.png`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); },'image/png');
+}
+
+async function _dispExportPDF(){
+  if(!_dispState || !(_dispState.confirmed||[]).length){ alert('Aún no hay nadie apuntado.'); return; }
+  const {svg}=_dispBuildPosterSVG();
+  const w=window.open('','_blank'); if(!w){ alert('Permite las ventanas emergentes.'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Convocatoria · ${escapeHtml(_dispState.raceName||'')}</title>
+    <style>@page{size:A4 portrait;margin:12mm} html,body{margin:0;padding:0} .bar{padding:8px;text-align:center} .sheet svg{max-width:100%;max-height:250mm;height:auto;display:block;margin:auto} @media print{.bar{display:none}}</style></head>
+    <body><div class="bar"><button onclick="window.print()" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:800;cursor:pointer">🖨️ Imprimir / Guardar PDF</button></div><div class="sheet">${svg}</div>
+    <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script></body></html>`);
+  w.document.close();
 }
 
 // Grupos de categoría realmente presentes en los datos cargados
