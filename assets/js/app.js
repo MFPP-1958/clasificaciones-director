@@ -1623,9 +1623,21 @@ async function _dispRoster(){
   return [...set.values()].sort((a,b)=>a.localeCompare(b));
 }
 
+// Mapa nombre→dorsal CV (de las láminas del año) para mostrarlo junto al nombre
+let _dispBibs = new Map();
+async function _dispBibMap(){
+  const m=new Map();
+  try{
+    const yr=(typeof _getRaceYear==='function')?String(_getRaceYear()):String(new Date().getFullYear());
+    if(typeof _csSavedSheets==='function'){ const sheets=await _csSavedSheets(yr); if(sheets&&sheets.forEach) sheets.forEach((v,k)=>{ if(v&&v.dorsal) m.set(k,String(v.dorsal)); }); }
+  }catch(_){}
+  return m;
+}
+
 async function _dispRender(){
   const body=document.getElementById('dispBody'); if(!body||!_dispState) return;
   const roster=await _dispRoster();
+  _dispBibs = await _dispBibMap();
   const confSet=new Set(_dispState.confirmed.map(n=>normalizeForMatching(n)));
   const pending=roster.filter(n=>!confSet.has(normalizeForMatching(n)));
   // Solo director/admin (o sin login = director en su PC) ven copiar/exportar.
@@ -1641,8 +1653,11 @@ async function _dispRender(){
     const bg = isMe ? '#eff6ff' : '#fff';
     const lbl = side==='in' ? (isMe?'Estás apuntado ✕':'ASISTE ✕') : (isMe?'👋 ¡SOY YO! Apuntarme':'Apuntarme ▸');
     const lblColor = side==='in' ? '#15803d' : (isMe?'#1d4ed8':'#94a3b8');
+    const bib=_dispBibs.get(normalizeForMatching(name));
+    const bibTag = bib?`<span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;background:#0b2f6b;color:#fff;border-radius:6px;font-size:11px;font-weight:900;padding:0 5px">${escapeHtml(bib)}</span>`:'';
     return `<button onclick="_dispToggle(${JSON.stringify(name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${bg};border:${isMe?'2.5px':'1.5px'} solid ${border};border-radius:11px;padding:${isMe?'13px':'11px'} 13px;margin-bottom:8px;cursor:pointer;transition:box-shadow .12s;font-size:14px;font-weight:${isMe?'900':'700'};color:#0b2f6b" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='none'">
       <span style="font-size:18px">${isMe?'⭐':(side==='in'?'✅':'⚪')}</span>
+      ${bibTag}
       <span style="flex:1">${escapeHtml(name)}${isMe?' <span style="font-size:10px;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 6px;vertical-align:middle">TÚ</span>':''}</span>
       <span style="font-size:11px;color:${lblColor};font-weight:800">${lbl}</span>
     </button>`;
@@ -1678,7 +1693,8 @@ async function _dispRender(){
       <div class="disp-col" data-col="in">
         <div style="background:#dcfce7;border:1px solid #86efac;border-radius:11px;padding:10px 13px;margin-bottom:12px;text-align:center;font-weight:900;color:#15803d;font-size:15px">🚴 ¡Ya somos ${confirmed.length} apuntado${confirmed.length!==1?'s':''}!</div>
         ${isAdmin && confirmed.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-          <button onclick="_dispCopyNames()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Copiar la lista de nombres al portapapeles">📋 Copiar nombres</button>
+          <button onclick="_dispCopyNames()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Copiar la lista de nombres (con dorsal) al portapapeles">📋 Copiar nombres</button>
+          <button onclick="_dispCopyCaption()" style="background:#db2777;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Copiar el texto del post de Instagram con hashtags">📝 Texto Instagram</button>
           <button onclick="_dispExportPNG()" style="background:#0369a1;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Imagen para Instagram (cuadrada)">🖼️ PNG (Instagram)</button>
           <button onclick="_dispExportPDF()" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer">📄 PDF</button>
         </div>`:''}
@@ -1731,17 +1747,36 @@ async function _dispSave(){
   }catch(e){ console.warn('[disp] save', e); }
 }
 
-// Copiar la lista de confirmados al portapapeles
+function _dispBibOf(name){ return _dispBibs.get(normalizeForMatching(name))||''; }
+function _dispCopyToClipboard(txt){
+  const done=()=>{ if(typeof showToast==='function') showToast('📋 Copiado al portapapeles','ok',2500); else alert('Copiado.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>prompt('Copia manualmente:',txt)); }
+  else prompt('Copia manualmente:', txt);
+}
+// Copiar la lista de confirmados (con dorsal) al portapapeles
 function _dispCopyNames(){
   if(!_dispState) return;
   const list=(_dispState.confirmed||[]).slice().sort((a,b)=>a.localeCompare(b));
   if(!list.length){ alert('Aún no hay nadie apuntado.'); return; }
   const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
   const head=`${_dispState.raceName}${_dispState.localidad?' · '+_dispState.localidad:''} · ${fdate}\n${list.length} corredores:\n`;
-  const txt=head+list.map((n,i)=>`${i+1}. ${n}`).join('\n');
-  const done=()=>{ if(typeof showToast==='function') showToast('📋 Lista copiada al portapapeles','ok',2500); else alert('Copiado.'); };
-  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{ prompt('Copia manualmente:', txt); }); }
-  else prompt('Copia manualmente:', txt);
+  const txt=head+list.map((n,i)=>{ const b=_dispBibOf(n); return `${i+1}. ${b?'('+b+') ':''}${n}`; }).join('\n');
+  _dispCopyToClipboard(txt);
+}
+// Texto listo para el post de Instagram (con hashtags)
+function _dispCopyCaption(){
+  if(!_dispState) return;
+  const list=(_dispState.confirmed||[]).slice().sort((a,b)=>a.localeCompare(b));
+  if(!list.length){ alert('Aún no hay nadie apuntado.'); return; }
+  const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
+  const team=(myTeam||'TBG-WIXUM');
+  const teamTag='#'+team.replace(/[^a-z0-9]+/gi,'');
+  // Categoría (del grupo derivado de los corredores) para hashtag
+  let catTag='';
+  try{ const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():''; const lbl={cadete:'cadetes',juvenil:'juveniles',sub23:'sub23',elite:'elite',master:'master',fem:'femenino'}[g]; if(lbl) catTag='#'+lbl; }catch(_){}
+  const lines=list.map(n=>{ const b=_dispBibOf(n); return `• ${b?'#'+b+' ':''}${n}`; }).join('\n');
+  const caption=`🚴‍♂️ ¡Este ${fdate} competimos! 💪\n📍 ${_dispState.raceName}${_dispState.localidad?(' · '+_dispState.localidad):''}\n\nNuestros ${list.length} corredores:\n${lines}\n\n¡A por todas, equipo! 🔵 Gracias a las familias por acompañarnos. 🙌\n\n${['#ciclismo','#ciclismobase',catTag,teamTag,'#ComunitatValenciana','#FCCV','#cantera','#vamosequipo'].filter(Boolean).join(' ')}`;
+  _dispCopyToClipboard(caption);
 }
 
 // Póster (SVG) de confirmados para Instagram / PDF
@@ -1768,7 +1803,7 @@ function _dispBuildPosterSVG(){
   const per = twoCol ? Math.ceil(list.length/2) : list.length;
   const lh = Math.max(34, Math.min(64, Math.floor(avail/Math.max(per,1))));
   const fs = Math.max(20, Math.min(34, lh-12));
-  const draw=(arr,cx,anchor)=>arr.map((n,i)=>`<text x="${cx}" y="${top+28+i*lh}" text-anchor="${anchor}" font-size="${fs}" font-weight="700" fill="#0b2f6b">${esc(n)}</text>`).join('');
+  const draw=(arr,cx,anchor)=>arr.map((n,i)=>{ const b=_dispBibOf(n); const label=(b?b+' · ':'')+n; return `<text x="${cx}" y="${top+28+i*lh}" text-anchor="${anchor}" font-size="${fs}" font-weight="700" fill="#0b2f6b">${esc(label)}</text>`; }).join('');
   if(twoCol){ s+=draw(list.slice(0,per), W*0.30, 'middle'); s+=draw(list.slice(per), W*0.70, 'middle'); }
   else { s+=draw(list, W/2, 'middle'); }
   s+=`<text x="${W/2}" y="${H-72}" text-anchor="middle" font-size="20" fill="#94a3b8">MFPP Cycling Specialist · ¡Vamos equipo! 💪</text>`;
