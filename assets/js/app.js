@@ -1546,20 +1546,18 @@ async function _dispInit(){
       .gte('date',today).order('date',{ascending:true}).limit(40);
     if(error) throw error;
     const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
-    // Cargar TODAS las próximas (para poder elegir sábado/domingo/etapas)
-    _dispRaces = (data||[]).map(r=>{
+    // Cargar las próximas. El calendario es POR CATEGORÍA: si hay filtro global,
+    // mostramos las de ESA categoría (y, por compatibilidad, las antiguas sin
+    // categoría asignada). Cada chaval verá las de su categoría.
+    const all = (data||[]).map(r=>{
       let extra={}; try{ extra=JSON.parse(r.notes||'{}'); }catch(_){}
-      return { id:r.id, name:r.name||'', date:r.date||'', localidad:extra.localidad||'', extra };
-    });
-    if(!_dispRaces.length){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada.<br><span style="font-size:12px">Añádela en el Calendario.</span></p></div>`; return; }
-    // Por defecto: la 1ª que encaje con la categoría (o la más próxima)
-    let chosen=_dispRaces[0];
-    for(const r of _dispRaces){
-      const pseudo={ raceCat:r.extra.raceCat||'', inscritos:r.extra.inscritos||[], riders:[] };
+      const pseudo={ raceCat:extra.raceCat||extra.cat||'', inscritos:extra.inscritos||[], riders:(r.race_results||[]).map(x=>({cat:x.cat})) };
       const keys=(typeof _raceCatGroupKeys==='function')?_raceCatGroupKeys(pseudo):new Set();
-      if(!g || keys.has(g) || keys.size===0){ chosen=r; break; }
-    }
-    _dispSelectRace(chosen.id);
+      return { id:r.id, name:r.name||'', date:r.date||'', localidad:extra.localidad||'', extra, _keys:keys };
+    });
+    _dispRaces = g ? all.filter(r=> r._keys.has(g) || r._keys.size===0) : all;
+    if(!_dispRaces.length){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada${g?' en esta categoría':''}.<br><span style="font-size:12px">Añádela en el Calendario${g?' con el filtro en esta categoría':''}.</span></p></div>`; return; }
+    _dispSelectRace(_dispRaces[0].id);
   }catch(e){ body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}</div>`; }
 }
 
@@ -4348,7 +4346,13 @@ async function _calSavePlanned(){
   if(!date){ if(msg){msg.textContent='⚠️ La fecha es obligatoria.';msg.style.color='#dc2626';} return; }
   if(msg){msg.textContent='Guardando...';msg.style.color='#6b7280';}
 
-  const notesJson = JSON.stringify({cat, localidad:loc, notes});
+  // El calendario es POR CATEGORÍA: si no se indica categoría a mano, se toma la
+  // del FILTRO GLOBAL activo (cadete/junior/sub23…). Así una prueba creada con el
+  // filtro en Cadete queda marcada como cadete y solo le sale a los cadetes.
+  const _gfCat = (typeof _globalFilters!=='undefined' && _globalFilters) ? (_globalFilters.cat||'') : '';
+  const _gLbl  = (typeof _CAT_IMPORT_LABEL!=='undefined' && _gfCat) ? (_CAT_IMPORT_LABEL[_gfCat]||'') : '';
+  const effCat = cat || _gLbl;   // categoría efectiva de la prueba
+  const notesJson = JSON.stringify({cat:effCat, raceCat:effCat, localidad:loc, notes});
 
   if(_calEditingId){
     // ── MODO EDICIÓN ──
@@ -4359,15 +4363,15 @@ async function _calSavePlanned(){
     }
     // Actualizar en memoria
     const idx = _calPlanned.findIndex(r=>r.id===id);
-    if(idx>=0) _calPlanned[idx] = {..._calPlanned[idx], name, date:new Date(date+'T12:00:00'), dateStr:date, localidad:loc||'', cat:cat||'', notes:notes||''};
+    if(idx>=0) _calPlanned[idx] = {..._calPlanned[idx], name, date:new Date(date+'T12:00:00'), dateStr:date, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||''};
   } else {
     // ── MODO AÑADIR ──
     if(_sb){
       const {data, error} = await _sb.from('races').insert({name, date, notes:notesJson, race_type:'planificada'}).select().single();
       if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
-      _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:cat||'', notes:notes||'', type:'planned'});
+      _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
     } else {
-      _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:cat||'', notes:notes||'', type:'planned'});
+      _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
     }
   }
   _calCloseModal();
