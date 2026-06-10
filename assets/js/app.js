@@ -761,16 +761,18 @@ async function _ejsSendBienvenida(email, nombre, pin){
     return {ok: false, err: 'EmailJS no disponible'};
   }
   try {
-    // 1. Email al nuevo usuario con su PIN
+    // 1. Email al NUEVO USUARIO con su PIN. Pasamos el destinatario con varios
+    //    alias por si la plantilla de EmailJS usa otro nombre de variable en su
+    //    campo "To Email" (to_email / email / user_email / reply_to).
     await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
-      to_email: email,
+      to_email: email, email: email, user_email: email, reply_to: email, recipient: email,
       nombre:   nombre || email.split('@')[0],
       pin:      pin,
       app_url:  _APP_URL
     });
-    // 2. Copia de confirmación al administrador
+    // 2. Copia de confirmación al ADMINISTRADOR
     await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
-      to_email: _ADMIN_EMAIL,
+      to_email: _ADMIN_EMAIL, email: _ADMIN_EMAIL, user_email: _ADMIN_EMAIL, reply_to: _ADMIN_EMAIL, recipient: _ADMIN_EMAIL,
       nombre:   `Admin — nuevo acceso para ${nombre || email}`,
       pin:      `${pin} (usuario: ${email})`,
       app_url:  _APP_URL
