@@ -1371,13 +1371,29 @@ function _simBuildRiderIRC(history){
   map.forEach(r=>r.pts.sort((a,b)=>(a.iso||'').localeCompare(b.iso||'')));
   return map;
 }
+let _simCerebroScope='all';   // 'all' = toda la categoría · 'race' = inscritos de la prueba seleccionada
+function _simCerebroSetScope(s){ _simCerebroScope=s; _simOpenCerebro(); }
 function _simOpenCerebro(){
   const history=_historyForGlobalCat((typeof _cachedHistory!=='undefined'&&_cachedHistory)||[]);
   if(!history || !history.length){ alert('No hay historial en esta categoría para analizar.'); return; }
   const riders=_simBuildRiderIRC(history);
   const myCanon = myTeam?getCanonicalTeam(myTeam).toLowerCase():'';
   const avg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
-  const arr=[...riders.values()].filter(r=>r.pts.length>=3).map(r=>{
+  // ── Ámbito: TODOS o solo los INSCRITOS de la prueba seleccionada ──
+  const selRace = (typeof _simCurrentData!=='undefined' && _simCurrentData) ? _simCurrentData.race : null;
+  let startNR=null, startNFM=null, scopeRaceName='';
+  if(_simCerebroScope==='race'){
+    if(!selRace){ /* sin prueba seleccionada: avisamos abajo y mostramos todos */ }
+    else{
+      scopeRaceName = (selRace.raceName||'').replace(/\s+/g,' ').trim();
+      const list=[...(selRace.inscritos||[]), ...(selRace.riders||[])];
+      startNR =new Set(list.map(x=>normalizeRiderName(x.name)).filter(Boolean));
+      startNFM=new Set(list.map(x=>normalizeForMatching(x.name)).filter(Boolean));
+    }
+  }
+  const inScopeNR  = nk => (_simCerebroScope!=='race' || !startNR)  ? true : startNR.has(nk);
+  const inScopeNFM = nk => (_simCerebroScope!=='race' || !startNFM) ? true : startNFM.has(nk);
+  const arr=[...riders.values()].filter(r=>r.pts.length>=3 && inScopeNR(r.nk)).map(r=>{
     const all=r.pts.map(p=>p.irc);
     const recent=all.slice(-2), base=all.slice(0,-2);
     const rAvg=avg(recent), bAvg=avg(base.length?base:all);
@@ -1388,7 +1404,7 @@ function _simOpenCerebro(){
   const bajon=arr.filter(r=>r.delta<=-10).sort((a,b)=>a.delta-b.delta).slice(0,8);
   // Fiabilidad por tipo: menor dispersión del IRC dentro de cada corredor = más predecible
   const sdByType={};
-  riders.forEach(r=>{ ['CRI','Carretera'].forEach(t=>{ const v=r.pts.filter(p=>p.type===t).map(p=>p.irc); if(v.length>=2){ const m=avg(v); const sd=Math.sqrt(avg(v.map(x=>(x-m)**2))); (sdByType[t]=sdByType[t]||[]).push(sd); } }); });
+  riders.forEach(r=>{ if(!inScopeNR(r.nk)) return; ['CRI','Carretera'].forEach(t=>{ const v=r.pts.filter(p=>p.type===t).map(p=>p.irc); if(v.length>=2){ const m=avg(v); const sd=Math.sqrt(avg(v.map(x=>(x-m)**2))); (sdByType[t]=sdByType[t]||[]).push(sd); } }); });
   const relLabel=t=>{ const a=sdByType[t]; if(!a||!a.length) return null; const s=avg(a); return s<18?['Alta','#16a34a']:s<28?['Media','#d97706']:['Baja','#dc2626']; };
 
   const tag=r=> r.mine?'<span style="color:#1f6feb;font-weight:800">⭐ </span>':'';
@@ -1403,7 +1419,7 @@ function _simOpenCerebro(){
   try{
     const elo = (typeof _computeRiderEloRatings==='function') ? _computeRiderEloRatings() : new Map();
     const catNk = new Map();
-    history.forEach(race => (race.riders||[]).forEach(r=>{ if(r&&r.pos>0){ const nk=normalizeForMatching(r.name); if(nk&&!catNk.has(nk)) catNk.set(nk,{name:_evolNormName(r.name)||r.name, team:r.team||'', mine: myCanon&&getCanonicalTeam(r.team||'').toLowerCase()===myCanon}); } }));
+    history.forEach(race => (race.riders||[]).forEach(r=>{ if(r&&r.pos>0){ const nk=normalizeForMatching(r.name); if(nk&&inScopeNFM(nk)&&!catNk.has(nk)) catNk.set(nk,{name:_evolNormName(r.name)||r.name, team:r.team||'', mine: myCanon&&getCanonicalTeam(r.team||'').toLowerCase()===myCanon}); } }));
     const eloArr=[...catNk.entries()].map(([nk,info])=>{ const e=elo.get(nk); return e?{...info, rating:e.rating, games:e.games}:null; }).filter(x=>x&&x.games>=2).sort((a,b)=>b.rating-a.rating);
     if(eloArr.length){
       const n=eloArr.length;
@@ -1424,6 +1440,13 @@ function _simOpenCerebro(){
       <button onclick="document.getElementById('_cerebroOv').remove()" style="background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:9px;padding:8px 14px;font-weight:800;cursor:pointer">✕ Cerrar</button>
     </div>
     <div style="padding:18px 22px;max-height:72vh;overflow:auto">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:#475569;font-weight:700">Mostrar:</span>
+        <button onclick="_simCerebroSetScope('all')" style="border:1.5px solid ${_simCerebroScope!=='race'?'#4c1d95':'#cbd5e1'};background:${_simCerebroScope!=='race'?'#4c1d95':'#fff'};color:${_simCerebroScope!=='race'?'#fff':'#475569'};border-radius:9px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer">👥 Todos (${(history.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name))).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i)).length})</button>
+        <button onclick="_simCerebroSetScope('race')" style="border:1.5px solid ${_simCerebroScope==='race'?'#4c1d95':'#cbd5e1'};background:${_simCerebroScope==='race'?'#4c1d95':'#fff'};color:${_simCerebroScope==='race'?'#fff':'#475569'};border-radius:9px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer">🏁 Inscritos de la prueba seleccionada</button>
+      </div>
+      ${_simCerebroScope==='race' && !selRace ? '<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#92400e;margin-bottom:14px">⚠️ No hay ninguna prueba seleccionada en el Simulador. Selecciona una arriba (con su lista de inscritos) y vuelve a abrir el Cerebro. Mientras, se muestran todos.</div>' : ''}
+      ${_simCerebroScope==='race' && selRace ? `<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:10px;padding:8px 12px;font-size:12.5px;color:#155e75;margin-bottom:14px">🏁 Analizando los <b>inscritos</b> de: <b>${escapeHtml(scopeRaceName)}</b> que tienen histórico en esta categoría.</div>` : ''}
       <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 13px;font-size:12.5px;color:#6b21a8;margin-bottom:16px">Estas conclusiones se generan solas comparando el rendimiento <b>reciente</b> de cada corredor con su <b>nivel habitual</b> en esta categoría. ⭐ = tu equipo.</div>
       <h3 style="margin:6px 0 4px;font-size:15px;color:#15803d">🔥 En racha (rompen la predicción al alza)</h3>${rachaHtml}
       <h3 style="margin:18px 0 4px;font-size:15px;color:#b91c1c">🥶 En bajón / estancados (por debajo de lo esperado)</h3>${bajonHtml}
