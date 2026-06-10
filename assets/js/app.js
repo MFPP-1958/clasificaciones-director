@@ -1535,6 +1535,24 @@ function _dispSubscribe(raceId){
   }catch(_){}
 }
 
+// Grupo de categoría del corredor en el AÑO ACTUAL (su categoría va cambiando
+// cada año: CAD-1 → CAD-2 → JUV-1…). Se deriva de su historial.
+async function _dispRiderCatGroup(riderName){
+  if(!riderName) return '';
+  const nk=normalizeForMatching(riderName); if(!nk) return '';
+  let hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory)&&_cachedHistory.length)?_cachedHistory:(typeof _ensureHistory==='function'? await _ensureHistory():[]);
+  const yr=String(new Date().getFullYear());
+  const cur=[], any=[];
+  (hist||[]).forEach(race=>{
+    const ry=(_parseSpanishDate(race.raceDate)||'').slice(0,4);
+    (race.riders||[]).forEach(r=>{ if(r&&r.cat && normalizeForMatching(r.name)===nk){ (ry===yr?cur:any).push(r.cat); } });
+  });
+  const pick=cur.length?cur:any; if(!pick.length) return '';
+  const cnt={}; pick.forEach(c=>{ const g=_calCatGroup(c); if(g) cnt[g.key]=(cnt[g.key]||0)+1; });
+  let best='',n=-1; for(const k in cnt){ if(cnt[k]>n){ n=cnt[k]; best=k; } }
+  return best;
+}
+
 async function _dispInit(){
   const body=document.getElementById('dispBody'); if(!body) return;
   body.innerHTML='<div style="padding:40px;text-align:center;color:#9ca3af">⏳ Buscando la próxima carrera…</div>';
@@ -1545,7 +1563,13 @@ async function _dispInit(){
       .select('id,name,date,notes,race_results(cat)')
       .gte('date',today).order('date',{ascending:true}).limit(40);
     if(error) throw error;
-    const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+    // Categoría a usar: si es un CICLISTA, la SUYA (derivada del historial del año
+    // actual); si es el director, la del filtro global.
+    let g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+    if(typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA'){
+      const rg=await _dispRiderCatGroup(_rbacUser.riderName);
+      if(rg) g=rg;
+    }
     // Cargar las próximas. El calendario es POR CATEGORÍA: si hay filtro global,
     // mostramos las de ESA categoría (y, por compatibilidad, las antiguas sin
     // categoría asignada). Cada chaval verá las de su categoría.
