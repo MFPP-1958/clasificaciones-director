@@ -718,6 +718,7 @@ function showView(viewId){
       if(viewId==='view-challenge') { if(typeof _chgInit==='function') _chgInit(); }
       if(viewId==='view-equipos-ccaa') { if(typeof _eqCcaaInit==='function') _eqCcaaInit(); }
       if(viewId==='view-ciclistas-cat') { if(typeof _riderCatInit==='function') _riderCatInit(); }
+      if(viewId==='view-disponibilidad') { if(typeof _dispInit==='function') _dispInit(); }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -1496,6 +1497,39 @@ function _simOpenCerebro(){
 // con patrón "Apellido, Nombre". Tiempo real ligero: recarga al actuar/refrescar.
 // ════════════════════════════════════════════════════════════════════════════
 let _dispState = null; // {raceId, raceName, raceDate, confirmed:[], extraRoster:[]}
+let _dispTab = 'out';  // pestaña activa en móvil
+let _dispChannel = null; // suscripción realtime
+
+function _dispShowTab(which){
+  _dispTab = which;
+  const grid=document.querySelector('#dispBody .disp-grid');
+  if(grid) grid.classList.toggle('show-in', which==='in');
+  const o=document.getElementById('dispTabOut'), i=document.getElementById('dispTabIn');
+  if(o){ o.style.background = which==='out'?'#0b2f6b':'#fff'; o.style.color = which==='out'?'#fff':'#475569'; }
+  if(i){ i.style.background = which==='in'?'#16a34a':'#fff'; i.style.color = which==='in'?'#fff':'#475569'; }
+}
+
+// Sincronización en tiempo real (Supabase Realtime): cuando cualquiera confirma
+// desde su móvil, la fila de la carrera se actualiza y todas las pantallas (incl.
+// el ordenador del director) se refrescan al instante.
+function _dispSubscribe(raceId){
+  try{
+    if(_dispChannel && _sb){ _sb.removeChannel(_dispChannel); _dispChannel=null; }
+    if(!_sb || !raceId) return;
+    _dispChannel=_sb.channel('disp-'+raceId)
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'races',filter:'id=eq.'+raceId}, payload=>{
+        try{
+          const notes=payload && payload.new && payload.new.notes; if(!notes) return;
+          const extra=JSON.parse(notes||'{}'); const av=extra.availability||{};
+          if(_dispState && _dispState.raceId===raceId){
+            _dispState.confirmed=Array.isArray(av.confirmed)?av.confirmed:[];
+            _dispState.extraRoster=Array.isArray(av.roster)?av.roster:[];
+            _dispRender();
+          }
+        }catch(_){}
+      }).subscribe();
+  }catch(_){}
+}
 
 async function _dispInit(){
   const body=document.getElementById('dispBody'); if(!body) return;
@@ -1522,6 +1556,7 @@ async function _dispInit(){
                  confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
                  extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
     await _dispRender();
+    _dispSubscribe(_dispState.raceId);   // sincronización en vivo
   }catch(e){ body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}</div>`; }
 }
 
@@ -1571,25 +1606,37 @@ async function _dispRender(){
       <div style="font-size:18px;font-weight:900">${escapeHtml(_dispState.raceName)}</div>
       <div style="font-size:13px;opacity:.9;margin-top:2px">📅 ${escapeHtml(fdate||'')}</div>
     </div>
+    <div class="disp-tabs" style="display:none;gap:8px;margin-bottom:12px">
+      <button onclick="_dispShowTab('out')" id="dispTabOut" class="disp-tab" style="flex:1;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;background:#0b2f6b;color:#fff;font-weight:800;font-size:13px;cursor:pointer">⚪ Sin confirmar (${pending.length})</button>
+      <button onclick="_dispShowTab('in')" id="dispTabIn" class="disp-tab" style="flex:1;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;background:#fff;color:#475569;font-weight:800;font-size:13px;cursor:pointer">✅ Asisten (${confirmed.length})</button>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="disp-grid">
-      <div>
+      <div class="disp-col" data-col="out">
         <h3 style="margin:0 0 10px;font-size:15px;color:#64748b">⚪ Sin confirmar (${pending.length})</h3>
         ${pending.length?pending.map(n=>card(n,'out')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Todos confirmados 🎉</div>'}
         <div style="margin-top:14px;border-top:1px dashed #cbd5e1;padding-top:12px">
           <div style="font-size:12.5px;color:#475569;font-weight:700;margin-bottom:6px">¿No estás en la lista? Regístrate:</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <input id="dispNewName" type="text" placeholder="Apellido, Nombre (ej: Alcon, Manuel)" style="flex:1;min-width:160px;border:1.5px solid #cbd5e1;border-radius:9px;padding:9px 11px;font-size:13px" onkeydown="if(event.key==='Enter')_dispRegister()">
-            <button onclick="_dispRegister()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:800;font-size:13px;cursor:pointer">➕ Añadir</button>
+            <input id="dispNewName" type="text" placeholder="Apellido, Nombre (ej: Alcon, Manuel)" style="flex:1;min-width:160px;border:1.5px solid #cbd5e1;border-radius:9px;padding:11px 12px;font-size:14px" onkeydown="if(event.key==='Enter')_dispRegister()">
+            <button onclick="_dispRegister()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:11px 16px;font-weight:800;font-size:14px;cursor:pointer">➕ Añadir</button>
           </div>
           <div style="font-size:11px;color:#94a3b8;margin-top:4px">Formato obligatorio: <b>Apellido, Nombre</b> (con la coma). Ej: <i>Gómez, Carlos</i>.</div>
         </div>
       </div>
-      <div>
+      <div class="disp-col" data-col="in">
         <div style="background:#dcfce7;border:1px solid #86efac;border-radius:11px;padding:10px 13px;margin-bottom:12px;text-align:center;font-weight:900;color:#15803d;font-size:15px">🚴 ¡Ya somos ${confirmed.length} apuntado${confirmed.length!==1?'s':''}!</div>
         ${confirmed.length?confirmed.map(n=>card(n,'in')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Aún no se ha apuntado nadie. ¡Sé el primero! 👈</div>'}
       </div>
     </div>
-    <style>@media(max-width:640px){.disp-grid{grid-template-columns:1fr!important}}</style>`;
+    <style>@media(max-width:760px){
+      .disp-tabs{display:flex!important}
+      .disp-grid{grid-template-columns:1fr!important}
+      .disp-col[data-col="in"]{display:none}
+      .disp-grid.show-in .disp-col[data-col="out"]{display:none}
+      .disp-grid.show-in .disp-col[data-col="in"]{display:block}
+    }</style>`;
+  // Restaurar pestaña activa en móvil
+  if(_dispTab==='in') _dispShowTab('in');
 }
 
 async function _dispToggle(name){
