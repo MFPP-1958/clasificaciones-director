@@ -957,6 +957,9 @@ async function _rbacLoadPerms(role){
     ALL_VIEWS.forEach(v => _rbacPerms.add(v.id));
     return;
   }
+  // CICLISTA: de momento SOLO ve "Disponibilidad" (la app aún no está acabada;
+  // en el futuro se le darán más secciones cambiando esta línea o por BD).
+  if(role === 'CICLISTA'){ _rbacPerms = new Set(['view-disponibilidad']); return; }
   if(!_sb) return;
   const {data} = await _sb.from('app_permissions').select('view_id, allowed').eq('role', role);
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
