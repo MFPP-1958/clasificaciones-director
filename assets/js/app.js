@@ -1398,6 +1398,22 @@ function _simOpenCerebro(){
   const cri=relLabel('CRI'), car=relLabel('Carretera');
   const relHtml = [['Contrarreloj (CRI)',cri],['Carretera (línea/circuito)',car]].map(([lab,v])=> v?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9"><span>${lab}</span><b style="color:${v[1]}">${v[0]} fiabilidad</b></div>`:'').join('') || '<div style="color:#9ca3af">Aún faltan carreras para medir la fiabilidad por tipo.</div>';
 
+  // ── Nivel competitivo APRENDIDO (rating Elo adaptativo) ──
+  let eloHtml='', eloFootnote='';
+  try{
+    const elo = (typeof _computeRiderEloRatings==='function') ? _computeRiderEloRatings() : new Map();
+    const catNk = new Map();
+    history.forEach(race => (race.riders||[]).forEach(r=>{ if(r&&r.pos>0){ const nk=normalizeForMatching(r.name); if(nk&&!catNk.has(nk)) catNk.set(nk,{name:_evolNormName(r.name)||r.name, team:r.team||'', mine: myCanon&&getCanonicalTeam(r.team||'').toLowerCase()===myCanon}); } }));
+    const eloArr=[...catNk.entries()].map(([nk,info])=>{ const e=elo.get(nk); return e?{...info, rating:e.rating, games:e.games}:null; }).filter(x=>x&&x.games>=2).sort((a,b)=>b.rating-a.rating);
+    if(eloArr.length){
+      const n=eloArr.length;
+      const nivel=i=> i< n/3 ? ['Alto','#16a34a'] : i< 2*n/3 ? ['Medio','#d97706'] : ['En desarrollo','#64748b'];
+      const top=eloArr.slice(0,10).map((r,i)=>{ const lv=nivel(i); return `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:13px"><span>${i+1}. ${r.mine?'<span style="color:#1f6feb;font-weight:800">⭐ </span>':''}<b>${escapeHtml(r.name)}</b> <span style="color:#94a3b8;font-size:11px">${escapeHtml(r.team||'')}</span></span><b style="color:${lv[1]}">Nivel ${lv[0]}</b></div>`; }).join('');
+      eloHtml = top;
+      eloFootnote = `El modelo ha aprendido del orden real de <b>${history.length}</b> carreras de esta categoría. Este "nivel" se actualiza solo tras cada carrera que guardas (sube a quien gana a rivales fuertes, baja a quien rinde por debajo).`;
+    }
+  }catch(_){}
+
   const nMine=arr.filter(r=>r.mine).length;
   const old=document.getElementById('_cerebroOv'); if(old) old.remove();
   const ov=document.createElement('div'); ov.id='_cerebroOv';
@@ -1413,6 +1429,8 @@ function _simOpenCerebro(){
       <h3 style="margin:18px 0 4px;font-size:15px;color:#b91c1c">🥶 En bajón / estancados (por debajo de lo esperado)</h3>${bajonHtml}
       <h3 style="margin:18px 0 4px;font-size:15px;color:#0b2f6b">🎯 Fiabilidad del modelo por tipo de prueba</h3>
       <div style="font-size:13px">${relHtml}</div>
+      ${eloHtml?`<h3 style="margin:18px 0 4px;font-size:15px;color:#4c1d95">🧬 Nivel competitivo aprendido (se ajusta solo)</h3><div>${eloHtml}</div><div style="font-size:11.5px;color:#94a3b8;margin-top:6px">${eloFootnote}</div>`:''}
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 13px;font-size:12px;color:#1e3a8a;margin-top:14px;line-height:1.5">ℹ️ El modelo <b>aprende solo</b> con cada carrera que guardas. Con <b>pocas pruebas</b> (como ahora) la predicción aún es orientativa —por eso en la última CRI solo acertó 4/10—; irá afinando a medida que avance la temporada. Cuando haya suficientes datos, activaremos que ese aprendizaje pese también en la predicción.</div>
       <div style="font-size:11.5px;color:#94a3b8;margin-top:12px">El IRC (0–100) mide cada actuación según el puesto y el tamaño del pelotón. "Reciente" = últimas 2 carreras; "habitual" = anteriores.</div>
     </div>
   </div>`;
