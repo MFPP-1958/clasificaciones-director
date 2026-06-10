@@ -2295,9 +2295,25 @@
           <h2 style="margin:0;color:#166534">📊 Histórico de precisión del modelo</h2>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn light" onclick="_simRenderModelAccuracy()" style="padding:5px 11px;font-size:12px">🔄 Recalcular</button>
-            <button class="btn" onclick="_simRunEloWeightOptimization()" style="padding:5px 11px;font-size:12px;background:#7c3aed;color:#fff;border:0;font-weight:800" title="Prueba 6 pesos del Elo (0%, 10%, 20%, 30%, 40%, 50%) contra todas tus carreras y te dice cuál minimiza el error">🧪 Optimizar peso Elo</button>
+            <button class="btn" onclick="_simRunEloWeightOptimization()" style="padding:5px 11px;font-size:12px;background:#7c3aed;color:#fff;border:0;font-weight:800" title="Prueba varios pesos del aprendizaje (0%–50%) contra todas tus carreras y te dice cuál acierta más">🧪 Optimizar aprendizaje (peso Elo)</button>
           </div>
         </div>
+        <details class="sim-help" style="margin-bottom:12px">
+          <summary style="cursor:pointer;font-weight:800;color:#166534;font-size:13.5px">❓ ¿Qué es esto y qué hace "Optimizar aprendizaje (peso Elo)"?</summary>
+          <div style="font-size:13px;color:#374151;line-height:1.55;padding:10px 4px 2px">
+            <p style="margin:6px 0"><b>Este panel</b> mide cómo de bien acierta el simulador, comparando lo que <b>habría predicho</b> en tus carreras pasadas con lo que <b>pasó de verdad</b> (eso es el "backtest retroactivo").</p>
+            <p style="margin:6px 0"><b>¿Qué es el "Elo"?</b> Es el <b>nivel competitivo</b> que la app aprende sola de cada corredor tras cada carrera (sube a quien gana a rivales fuertes, baja a quien rinde por debajo).</p>
+            <p style="margin:6px 0"><b>¿Qué es el "peso"?</b> Cuánto <b>influye</b> ese nivel aprendido en la predicción: <b>0%</b> = no se usa (como hasta ahora) · <b>50%</b> = se usa mucho.</p>
+            <p style="margin:6px 0"><b>🧪 Optimizar aprendizaje</b> hace esto solo:</p>
+            <ol style="margin:4px 0 6px 18px;padding:0">
+              <li>Prueba varios pesos (0%, 10%, 20%, 30%, 40%, 50%) contra <b>todas</b> tus carreras.</li>
+              <li>Te muestra con cuál se <b>acierta más</b> (más Top‑10 y podios correctos) y lo marca como recomendado.</li>
+              <li>Aparece un botón para <b>aplicar</b> ese peso. Púlsalo solo si mejora respecto al 0%.</li>
+              <li>Si el mejor es 0%, significa que <b>aún no hay datos suficientes</b> de ese tipo de prueba: déjalo y repítelo más adelante. No se estropea nada.</li>
+            </ol>
+            <p style="margin:6px 0;color:#6b7280">Tarda 20–40 s porque recalcula muchas predicciones. Cuanto más historial tengas (carretera/circuito ya tienes mucho), más fiable es la recomendación.</p>
+          </div>
+        </details>
         <div id="simModelAccBody"></div>
       </section>
 
@@ -3398,6 +3414,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=cerebro-ayuda-contextual-1"></script>
+<script src="assets/js/app.js?v=precision-modelo-ayuda-1"></script>
 </body>
 </html>
