@@ -24238,6 +24238,7 @@ function exportFinishStatsPDF(){
 
 let _simSelectedRaceId = null;
 let _simCurrentData = null; // {race, inscritos[], grid[], kpis}
+let _simAutoSavedPredId = null; // id de la prueba cuya predicción ya se autoguardó en esta sesión
 let _simTypeOverride = '';  // '' = auto · 'tt' = contrarreloj · 'hillclimb' = cronoescalada · 'road' = ruta/circuito
 let _simCompatInfo = null;  // {typeLabel, total, tt, targetTT, forced} para mostrar al director
 function _simSetType(v){
@@ -25482,6 +25483,18 @@ function _simRenderCurrent(){
   const ridersN = (race.riders||[]).length;
   const realizada = _raceIsRealizada(race.raceDate);
   const isPre = !realizada;   // antes de su fecha → pendiente, aunque tenga inscritos
+  // ── GUARDADO AUTOMÁTICO de la predicción ──
+  // Si la prueba está PENDIENTE (aún no disputada) y tiene lista de salida, se
+  // guarda sola la predicción actual. Así, cuando se corra, el panel "Predicción
+  // vs real" podrá comparar SIN que el director tenga que pulsar nada. Una prueba
+  // ya disputada NO se toca (sería trampa predecir con el resultado ya conocido).
+  try{
+    const _hasStart = (Array.isArray(inscritos)&&inscritos.length>=3) || (Array.isArray(race.inscritos)&&race.inscritos.length>=3);
+    if(isPre && _hasStart && _simAutoSavedPredId!==race.id){
+      _simAutoSavedPredId = race.id;             // evita reescrituras repetidas en la sesión
+      setTimeout(()=>{ try{ _simSavePrediction(true); }catch(_){} }, 400);
+    }
+  }catch(_){}
   const stateChip = !realizada
     ? '<span class="ib-chip" style="background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a">🔮 Pendiente (aún no disputada)</span>'
     : (ridersN>=3
@@ -26855,10 +26868,11 @@ if(_origSimShowEmpty){
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── A) GUARDAR PREDICCIÓN EN SUPABASE ────────────────────────────────────
-async function _simSavePrediction(){
-  if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
-  if(!_sb){ alert('Supabase no disponible.'); return; }
+async function _simSavePrediction(silent){
+  if(!_simCurrentData){ if(!silent) alert('Selecciona una prueba primero.'); return; }
+  if(!_sb){ if(!silent) alert('Supabase no disponible.'); return; }
   const {race, grid, kpis} = _simCurrentData;
+  if(!grid || !grid.length){ return; }
   // Construir snapshot ligero (no guardamos toda la grid para evitar bloat)
   const top10 = (()=>{
     const pool = grid.filter(g=>g.avgPos!=null);
@@ -26886,21 +26900,23 @@ async function _simSavePrediction(){
 
   // Leer notes existentes y fusionar
   const {data:current, error:fetchErr} = await _sb.from('races').select('notes').eq('id', race.id).single();
-  if(fetchErr){ alert('Error leyendo la prueba: '+fetchErr.message); return; }
+  if(fetchErr){ if(!silent) alert('Error leyendo la prueba: '+fetchErr.message); return; }
   let extra = {};
   try{ extra = JSON.parse(current?.notes||'{}'); }catch(e){}
   extra.prediction = snapshot;
   const {error:updErr} = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', race.id);
-  if(updErr){ alert('Error guardando predicción: '+updErr.message); return; }
+  if(updErr){ if(!silent) alert('Error guardando predicción: '+updErr.message); return; }
   // Refrescar cachéd history para que aparezca en futuras vistas
   if(_cachedHistory){
     const h = _cachedHistory.find(x=>x.id===race.id);
     if(h){ h.prediction = snapshot; }
   }
-  const hint = document.getElementById('simSavedHint');
-  if(hint){
-    hint.style.display = '';
-    hint.innerHTML = `✅ Predicción guardada en Supabase (${snapshot.top10.length} candidatos top 10${myTeamPred.length?' · '+myTeamPred.length+' corredores de tu equipo':''}). Podrás comparar contra el resultado real cuando se dispute la carrera.`;
+  if(!silent){
+    const hint = document.getElementById('simSavedHint');
+    if(hint){
+      hint.style.display = '';
+      hint.innerHTML = `✅ Predicción guardada en Supabase (${snapshot.top10.length} candidatos top 10${myTeamPred.length?' · '+myTeamPred.length+' corredores de tu equipo':''}). Podrás comparar contra el resultado real cuando se dispute la carrera.`;
+    }
   }
 }
 
