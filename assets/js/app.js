@@ -28405,47 +28405,59 @@ function _renderEloOptimizationResults(results){
     ? null
     : { mae: baselineMae - best.avgMae, acc: best.avgAccTop10 - baselineAcc };
 
+  // ── AUTOMÁTICO: la app aplica sola la mejor opción. El director no tiene que
+  // entender MAE ni "peso Elo": se le explica el resultado en lenguaje claro. ──
+  try{ _simApplyEloWeight(best.weight, true); }catch(_){}
+
+  const maeMej = bestImprovement ? Math.abs(bestImprovement.mae) : 0;
+  const accMej = bestImprovement ? bestImprovement.acc : 0;
   const verdictHtml = best.weight === 0
-    ? `<div style="background:#fef3c7;border:1px solid #fde68a;color:#92400e;padding:10px 14px;border-radius:8px;font-size:13px">
-        🟡 <b>El predictor heurístico puro (0% Elo) es la mejor opción</b> con tu histórico actual.<br>
-        <span style="font-size:11.5px">Posibles razones: histórico aún pequeño (12 carreras), corredores aparecen pocas veces, el rating Elo no ha tenido tiempo de estabilizarse. Vuelve a ejecutar esto cuando hayas cargado más carreras.</span>
+    ? `<div style="background:#fef3c7;border:1px solid #fde68a;color:#92400e;padding:14px 16px;border-radius:10px;font-size:14px;line-height:1.5">
+        🟡 <b>De momento NO conviene usar el aprendizaje.</b> Con las carreras que hay ahora, el simulador acierta igual o mejor sin él, así que <b>lo he dejado desactivado</b> automáticamente.<br>
+        <span style="font-size:12.5px;color:#a16207">No tienes que hacer nada. Cuando cargues más carreras, vuelve a pulsar "🧪 Optimizar aprendizaje" y, si entonces mejora, lo activaré solo.</span>
       </div>`
-    : `<div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:10px 14px;border-radius:8px;font-size:13px">
-        🏆 <b>El peso óptimo del Elo es ${(best.weight*100).toFixed(0)}%</b> — mejora MAE en <b>${Math.abs(bestImprovement.mae).toFixed(2)} puestos</b> y precisión Top 10 en <b>${bestImprovement.acc>=0?'+':''}${bestImprovement.acc.toFixed(1)} puntos</b> vs el predictor sin Elo.<br>
-        <span style="font-size:11.5px">Esto significa que para tu pelotón el rating Elo del corredor es un buen ajuste a la fórmula heurística. Pulsa el botón de abajo para aplicarlo en TODAS las predicciones futuras.</span>
+    : `<div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:14px 16px;border-radius:10px;font-size:14px;line-height:1.5">
+        ✅ <b>Listo. He activado el aprendizaje automáticamente</b> porque mejora la predicción: ahora acierta de media <b>${maeMej.toFixed(1)} puesto(s) mejor</b>${accMej>0?` y mete <b>${accMej.toFixed(0)}% más</b> de corredores en el Top 10`:''}.<br>
+        <span style="font-size:12.5px;color:#15803d">No tienes que hacer nada más: todas las predicciones a partir de ahora ya lo usan.</span>
       </div>`;
 
-  const applyBtn = best.weight === 0
-    ? `<button class="btn" onclick="_simApplyEloWeight(0)" style="background:#fff;color:#374151;border:1px solid #d1d5db;font-weight:700">↺ Desactivar Elo (peso 0%)</button>`
-    : `<button class="btn" onclick="_simApplyEloWeight(${best.weight})" style="background:#15803d;color:#fff;border:0;font-weight:800;padding:9px 18px">✅ Aplicar peso óptimo ${(best.weight*100).toFixed(0)}%</button>`;
+  const undoBtn = best.weight === 0
+    ? ''
+    : `<button class="btn light" onclick="_simApplyEloWeight(0)" style="font-weight:700">Prefiero no usarlo (volver a como estaba)</button>`;
 
   body.innerHTML = `
     ${verdictHtml}
-    <table class="sim-acc-table" style="margin-top:14px;width:100%">
-      <thead><tr>
-        <th>Peso Elo</th>
-        <th style="text-align:center">Carreras</th>
-        <th style="text-align:center">Precisión Top 10</th>
-        <th style="text-align:center">Δ vs sin Elo</th>
-        <th style="text-align:center">Aciertos podio</th>
-        <th style="text-align:center">Error medio (MAE)</th>
-        <th style="text-align:center">Δ MAE</th>
-      </tr></thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>
     <div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-      ${applyBtn}
-      <button class="btn light" onclick="_simRunRetroactiveBacktest()" style="font-weight:700">↻ Volver al backtest normal</button>
+      ${undoBtn}
+      <button class="btn light" onclick="_simRunRetroactiveBacktest()" style="font-weight:700">↻ Ver backtest normal</button>
     </div>
-    <p class="small" style="margin-top:10px;color:#6b7280">💡 El criterio de optimización es el <b>MAE (error medio en puestos)</b>. Empates se resuelven por mayor precisión Top 10. Si pulsas "Aplicar", el peso se guarda en este navegador y el botón <b>🧬 Mezcla Elo</b> de la cabecera se pone en ON automáticamente.</p>`;
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;font-weight:700;color:#6b7280;font-size:12.5px">🔍 Ver el detalle técnico (para curiosos)</summary>
+      <table class="sim-acc-table" style="margin-top:10px;width:100%">
+        <thead><tr>
+          <th>Peso aprendizaje</th>
+          <th style="text-align:center">Carreras</th>
+          <th style="text-align:center">Precisión Top 10</th>
+          <th style="text-align:center">Δ vs sin aprendizaje</th>
+          <th style="text-align:center">Aciertos podio</th>
+          <th style="text-align:center">Error medio (puestos)</th>
+          <th style="text-align:center">Δ error</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <p class="small" style="margin-top:8px;color:#94a3b8">El "error medio" es cuántos puestos se equivoca de media la predicción (menos = mejor). El "peso" es cuánto influye el nivel aprendido (Elo). La app elige y aplica sola el que menos se equivoca.</p>
+    </details>`;
 }
 
-function _simApplyEloWeight(w){
+function _simApplyEloWeight(w, silent){
   _saveEloBlendWeight(w);
   _saveEloBlendEnabled(w > 0);
-  alert(w > 0
-    ? `✅ Peso Elo ${(w*100).toFixed(0)}% aplicado.\n\nTodas las predicciones futuras usarán esta mezcla. Persistido en este navegador.`
-    : `↺ Elo desactivado (peso 0%).\n\nVuelves al predictor heurístico puro.`);
+  if(!silent){
+    if(w > 0 && typeof showToast==='function') showToast('✅ Aprendizaje activado en las predicciones','ok',3000);
+    else if(typeof showToast==='function') showToast('↺ Aprendizaje desactivado','info',3000);
+    // Si se desactiva manualmente, refrescar el panel para reflejarlo
+    if(w===0){ const b=document.getElementById('simModelAccBody'); if(b) b.innerHTML='<div style="background:#fef3c7;border:1px solid #fde68a;color:#92400e;padding:14px 16px;border-radius:10px;font-size:14px">↺ Aprendizaje <b>desactivado</b>. Vuelves a la predicción de siempre. Puedes reactivarlo con "🧪 Optimizar aprendizaje".</div>'; }
+  }
   // Recalcular la prueba activa
   if(typeof _simSelectedRaceId !== 'undefined' && _simSelectedRaceId){
     try { _simBuildData(_simSelectedRaceId); _simRenderCurrent(); } catch(e){}
