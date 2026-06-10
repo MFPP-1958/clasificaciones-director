@@ -5552,7 +5552,22 @@ async function _gAddUser(){
       await _gLoadUsers();
       return;
     }
-    if(msg){msg.textContent='⚠️ Supabase no disponible — usuario añadido localmente.';msg.style.color='#d97706';}
+    // La tabla app_users existe pero le falta la columna 'pin' (migración pendiente).
+    // Creamos el usuario IGUAL en la nube (sin pin) para que aparezca y pueda entrar,
+    // y avisamos del SQL exacto a ejecutar una sola vez.
+    if(error && /pin/i.test(error.message||'') && /(column|schema cache)/i.test(error.message||'')){
+      const {error:e2}=await _sb.from('app_users').upsert({email, role, name, active:true},{onConflict:'email'});
+      if(!e2){
+        emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
+        if(msg){
+          msg.innerHTML=`✅ Usuario <b>${escapeHtml(email)}</b> creado en la nube (ya aparece en la lista).<br><span style="color:#b45309">⚠️ Para activar los PIN, ejecuta UNA vez en Supabase → SQL Editor:</span><br><code style="display:block;background:#f1f5f9;color:#0b2f6b;padding:8px 10px;border-radius:8px;margin-top:6px;font-size:11px;white-space:pre-wrap">ALTER TABLE app_users ADD COLUMN IF NOT EXISTS pin text DEFAULT '';\nALTER TABLE app_users ADD COLUMN IF NOT EXISTS rider_name text;</code><span style="font-size:12px;color:#6b7280">Mientras tanto, este usuario puede entrar con CUALQUIER PIN.</span>`;
+          msg.style.color='#059669';
+        }
+        await _gLoadUsers();
+        return;
+      }
+    }
+    if(msg){msg.innerHTML=`❌ No se pudo guardar en Supabase: ${escapeHtml(error?.message||'error')}.<br>Se ha añadido en local temporalmente.`;msg.style.color='#dc2626';}
   } else {
     if(msg){msg.textContent='⚠️ Sin Supabase — usuario añadido localmente.';msg.style.color='#d97706';}
   }
