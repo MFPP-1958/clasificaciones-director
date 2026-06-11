@@ -1603,7 +1603,9 @@ async function _dispInit(){
       const keys=(typeof _raceCatGroupKeys==='function')?_raceCatGroupKeys(pseudo):new Set();
       return { id:r.id, name:r.name||'', date:r.date||'', localidad:extra.localidad||'', extra, _keys:keys };
     });
-    _dispRaces = g ? all.filter(r=> r._keys.has(g) || r._keys.size===0) : all;
+    // ESTRICTO por categoría: si hay categoría activa, SOLO las de esa categoría
+    // (las sin categoría no se cuelan en ningún grupo; hay que etiquetarlas).
+    _dispRaces = g ? all.filter(r=> r._keys.has(g)) : all;
     if(!_dispRaces.length){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada${g?' en esta categoría':''}.<br><span style="font-size:12px">Añádela en el Calendario${g?' con el filtro en esta categoría':''}.</span></p></div>`; return; }
     _dispSelectRace(_dispRaces[0].id);
   }catch(e){ body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}</div>`; }
