@@ -1670,6 +1670,7 @@ async function _dispRender(){
   const pending=roster.filter(n=>!confSet.has(normalizeForMatching(n)));
   // Solo director/admin (o sin login = director en su PC) ven copiar/exportar.
   const isAdmin = !(typeof _rbacUser!=='undefined' && _rbacUser) || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
+  const isCiclista = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA');
   const meNk = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.riderName) ? normalizeForMatching(_rbacUser.riderName) : '';
   // Mi tarjeta primero en "sin confirmar"
   pending.sort((a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); });
@@ -1677,13 +1678,17 @@ async function _dispRender(){
   const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
   const card=(name,side)=>{
     const isMe = meNk && normalizeForMatching(name)===meNk;
+    // Un CICLISTA SOLO puede tocar su propia tarjeta. Las demás se ven pero están
+    // bloqueadas (no puede apuntar/quitar a compañeros por error).
+    const locked = isCiclista && meNk && !isMe;
     const border = isMe ? '#1d4ed8' : (side==='in'?'#86efac':'#e5e7eb');
-    const bg = isMe ? '#eff6ff' : '#fff';
-    const lbl = side==='in' ? (isMe?'Estás apuntado ✕':'ASISTE ✕') : (isMe?'👋 ¡SOY YO! Apuntarme':'Apuntarme ▸');
+    const bg = isMe ? '#eff6ff' : (locked?'#f8fafc':'#fff');
+    const lbl = locked ? '🔒' : (side==='in' ? (isMe?'Quitarme ✕':'ASISTE ✕') : (isMe?'👋 ¡SOY YO! Apuntarme':'Apuntarme ▸'));
     const lblColor = side==='in' ? '#15803d' : (isMe?'#1d4ed8':'#94a3b8');
     const bib=_dispBibs.get(normalizeForMatching(name));
     const bibTag = bib?`<span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;background:#0b2f6b;color:#fff;border-radius:6px;font-size:11px;font-weight:900;padding:0 5px">${escapeHtml(bib)}</span>`:'';
-    return `<button onclick="_dispToggle(${JSON.stringify(name).replace(/"/g,'&quot;')})" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${bg};border:${isMe?'2.5px':'1.5px'} solid ${border};border-radius:11px;padding:${isMe?'13px':'11px'} 13px;margin-bottom:8px;cursor:pointer;transition:box-shadow .12s;font-size:14px;font-weight:${isMe?'900':'700'};color:#0b2f6b" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='none'">
+    const click = locked ? '' : `onclick="_dispToggle(${JSON.stringify(name).replace(/"/g,'&quot;')})"`;
+    return `<button ${click} ${locked?'disabled':''} style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${bg};border:${isMe?'2.5px':'1.5px'} solid ${border};border-radius:11px;padding:${isMe?'13px':'11px'} 13px;margin-bottom:8px;cursor:${locked?'not-allowed':'pointer'};opacity:${locked?'.55':'1'};transition:box-shadow .12s;font-size:14px;font-weight:${isMe?'900':'700'};color:#0b2f6b" ${locked?'':"onmouseover=\"this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'\" onmouseout=\"this.style.boxShadow='none'\""}>
       <span style="font-size:18px">${isMe?'⭐':(side==='in'?'✅':'⚪')}</span>
       ${bibTag}
       <span style="flex:1">${escapeHtml(name)}${isMe?' <span style="font-size:10px;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 6px;vertical-align:middle">TÚ</span>':''}</span>
@@ -1701,6 +1706,7 @@ async function _dispRender(){
       <select onchange="_dispSelectRace(this.value)" style="width:100%;border:0;border-radius:9px;padding:11px 12px;font-size:14px;font-weight:800;color:#0b2f6b;box-sizing:border-box">${raceOpts}</select>
       <div style="font-size:13px;opacity:.95;margin-top:8px">${escapeHtml(_dispState.raceName)}<br>📅 ${escapeHtml(fdate||'')}${_dispState.localidad?' · 📍 <b>'+escapeHtml(_dispState.localidad)+'</b>':''}</div>
     </div>
+    ${isCiclista ? `<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:#1e3a8a">👉 Toca <b>solo TU nombre</b> (el de la estrella ⭐) para apuntarte o quitarte. Los demás aparecen para que veas el grupo, pero <b>no puedes cambiarlos</b>.${!meNk?'<br><span style="color:#b45309">⚠️ No hemos podido identificarte. Pide al director que revise tu nombre.</span>':''}</div>`:''}
     <div class="disp-tabs" style="display:none;gap:8px;margin-bottom:12px">
       <button onclick="_dispShowTab('out')" id="dispTabOut" class="disp-tab" style="flex:1;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;background:#0b2f6b;color:#fff;font-weight:800;font-size:13px;cursor:pointer">⚪ Sin confirmar (${pending.length})</button>
       <button onclick="_dispShowTab('in')" id="dispTabIn" class="disp-tab" style="flex:1;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;background:#fff;color:#475569;font-weight:800;font-size:13px;cursor:pointer">✅ Asisten (${confirmed.length})</button>
@@ -1742,6 +1748,12 @@ async function _dispRender(){
 
 async function _dispToggle(name){
   if(!_dispState) return;
+  // Seguridad: un CICLISTA solo puede cambiar SU propio nombre.
+  if(typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA'){
+    const me=_rbacUser.riderName?normalizeForMatching(_rbacUser.riderName):'';
+    if(!me){ if(typeof showToast==='function') showToast('No podemos identificarte. Avisa al director.','warn',3000); return; }
+    if(normalizeForMatching(name)!==me){ if(typeof showToast==='function') showToast('🔒 Solo puedes apuntarte a TI mismo','warn',2800); return; }
+  }
   const nk=normalizeForMatching(name);
   const i=_dispState.confirmed.findIndex(n=>normalizeForMatching(n)===nk);
   if(i>=0) _dispState.confirmed.splice(i,1);
