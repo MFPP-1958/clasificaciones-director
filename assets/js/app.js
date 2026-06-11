@@ -4053,15 +4053,25 @@ function _fccvRenderResults(races){
     .replace(/[^a-z0-9 ]/g,'')
     .replace(/\s+/g,' ').trim();
 
+  // El calendario es POR CATEGORÍA: una prueba FCCV solo cuenta como "ya
+  // planificada/disputada" si la del calendario es de la MISMA categoría. Así, el
+  // Memorial X de cadetes no marca como planificado el de juniors.
   const findMatch = (race)=>{
     const nKey = normalize(race.name);
     if(!nKey || nKey.length<5) return null;
-    // Matching por nombre normalizado (substring de 8+ caracteres)
+    const raceGroup = (typeof _calCatGroup==='function') ? _calCatGroup(race.category || race.cat || '') : null;
     const snippet = nKey.slice(0,Math.min(20, nKey.length));
     const matchInList = (list, type)=>{
       for(const it of list){
         const itKey = normalize(it.name);
         if(!itKey) continue;
+        // Filtro de categoría: si conocemos la categoría de la prueba FCCV, la del
+        // calendario debe coincidir (y si la del calendario no tiene categoría,
+        // NO se considera del mismo grupo: el calendario es por categoría).
+        if(raceGroup){
+          const ig = (typeof _calCatGroup==='function') ? _calCatGroup(it.cat || it.raceCat || '') : null;
+          if(!ig || ig.key !== raceGroup.key) continue;
+        }
         if(itKey === nKey || itKey.includes(snippet) || nKey.includes(itKey.slice(0,Math.min(20,itKey.length)))){
           return {item:it, type};
         }
@@ -4442,11 +4452,16 @@ async function _fccvAddRace(idx){
     .normalize('NFD').replace(/[̀-ͯ]/g,'')
     .replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
 
-  // Comprobar si ya está en planificadas (match flexible)
+  // Comprobar si ya está en planificadas DE LA MISMA CATEGORÍA (el calendario es
+  // por categoría: el Memorial de cadetes no es el mismo que el de juniors).
+  const raceGroup = (typeof _calCatGroup==='function') ? _calCatGroup(race.category || race.cat || '') : null;
   const existing = (_calPlanned||[]).find(p=>{
     const a=normalize(p.name), b=normalize(race.name);
     if(!a||!b) return false;
-    return a===b || a.includes(b.slice(0,Math.min(20,b.length))) || b.includes(a.slice(0,Math.min(20,a.length)));
+    const nameMatch = a===b || a.includes(b.slice(0,Math.min(20,b.length))) || b.includes(a.slice(0,Math.min(20,a.length)));
+    if(!nameMatch) return false;
+    if(raceGroup){ const ig=(typeof _calCatGroup==='function')?_calCatGroup(p.cat||p.raceCat||''):null; if(!ig || ig.key!==raceGroup.key) return false; }
+    return true;
   });
 
   try{
@@ -4477,6 +4492,7 @@ async function _fccvAddRace(idx){
       const notes = JSON.stringify({
         localidad: race.location || '',
         cat: race.category || '',
+        raceCat: race.category || '',
         modality: race.modality || '',
         notes: '',
         fccvId: race.fccvId || '',
