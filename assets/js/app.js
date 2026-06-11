@@ -25949,6 +25949,10 @@ function _simRenderCurrent(){
   // vs real" podrá comparar SIN que el director tenga que pulsar nada. Una prueba
   // ya disputada NO se toca (sería trampa predecir con el resultado ya conocido).
   try{
+    // Estado del aviso "Predicción guardada" según la prueba seleccionada
+    const _pill=document.getElementById('simTop10SavedHint'), _sbtn=document.getElementById('simTop10SaveBtn');
+    if(race.prediction){ if(_pill)_pill.style.display=''; if(_sbtn)_sbtn.textContent='💾 Actualizar predicción'; }
+    else { if(_pill)_pill.style.display='none'; if(_sbtn)_sbtn.textContent='💾 Guardar predicción'; }
     const _hasStart = (Array.isArray(inscritos)&&inscritos.length>=3) || (Array.isArray(race.inscritos)&&race.inscritos.length>=3);
     if(isPre && _hasStart && _simAutoSavedPredId!==race.id){
       _simAutoSavedPredId = race.id;             // evita reescrituras repetidas en la sesión
@@ -27371,12 +27375,16 @@ async function _simSavePrediction(silent){
     const h = _cachedHistory.find(x=>x.id===race.id);
     if(h){ h.prediction = snapshot; }
   }
+  // Aviso visible junto al Top 10 (tanto al autoguardar como al pulsar el botón)
+  const pill = document.getElementById('simTop10SavedHint'); if(pill) pill.style.display='';
+  const sb = document.getElementById('simTop10SaveBtn'); if(sb) sb.textContent='💾 Actualizar predicción';
   if(!silent){
     const hint = document.getElementById('simSavedHint');
     if(hint){
       hint.style.display = '';
       hint.innerHTML = `✅ Predicción guardada en Supabase (${snapshot.top10.length} candidatos top 10${myTeamPred.length?' · '+myTeamPred.length+' corredores de tu equipo':''}). Podrás comparar contra el resultado real cuando se dispute la carrera.`;
     }
+    if(typeof showToast==='function') showToast('✅ Predicción guardada','ok',2500);
   }
 }
 

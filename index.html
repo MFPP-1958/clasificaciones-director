@@ -1672,6 +1672,12 @@
           <h2 style="margin:0">🏆 Top 10 esperado (predicción IA)</h2>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <span class="small">Pondera puesto medio + fiabilidad</span>
+            <span id="simTop10SavedHint" style="display:none;font-size:11.5px;font-weight:800;color:#15803d;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 10px">✅ Predicción guardada</span>
+            <button class="btn light" onclick="_simSavePrediction()" id="simTop10SaveBtn"
+              style="background:#3730a3;color:#fff;border:0;font-weight:800;font-size:12px;padding:7px 13px"
+              title="Guardar esta predicción para luego compararla con el resultado real (se guarda sola al abrir una prueba pendiente)">
+              💾 Guardar predicción
+            </button>
             <button class="btn light" onclick="_simOpenPredVsReal()" id="simPredVsRealBtn2"
               style="display:none;background:#dc2626;color:#fff;border:0;font-weight:800;font-size:12px;padding:7px 13px"
               title="Comparar el Top 10 predicho con el resultado REAL de esta prueba">
@@ -3427,6 +3433,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=inscritos-num-por-equipo-1"></script>
+<script src="assets/js/app.js?v=boton-guardar-prediccion-visible-1"></script>
 </body>
 </html>
