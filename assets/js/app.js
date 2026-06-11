@@ -1611,9 +1611,13 @@ async function _dispInit(){
   }catch(e){ body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}</div>`; }
 }
 
-function _dispSelectRace(raceId){
+async function _dispSelectRace(raceId){
   const r=(_dispRaces||[]).find(x=>x.id===raceId); if(!r) return;
-  const av=r.extra.availability||{};
+  // Releer la disponibilidad FRESCA de la BD (por si se apuntó alguien desde otro
+  // dispositivo después de cargar la pantalla). Así al cambiar de prueba o al
+  // pulsar "Actualizar" siempre se ve lo último, sin perder a nadie.
+  let av=r.extra.availability||{};
+  try{ if(_sb){ const {data}=await _sb.from('races').select('notes').eq('id',raceId).single(); if(data&&data.notes){ const ex=JSON.parse(data.notes); r.extra=ex; av=ex.availability||{}; } } }catch(_){}
   _dispState={ raceId:r.id, raceName:r.name||'', raceDate:r.date||'', localidad:r.localidad||'',
                confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
                extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
@@ -4547,7 +4551,14 @@ async function _calSavePlanned(){
     // ── MODO EDICIÓN ──
     const id = _calEditingId;
     if(_sb && !String(id).startsWith('local-')){
-      const {error} = await _sb.from('races').update({name, date, notes:notesJson}).eq('id',id);
+      // IMPORTANTE: NO reconstruir las notas desde cero. Leemos las existentes y
+      // solo cambiamos cat/localidad/notes, preservando TODO lo demás (apuntados
+      // de disponibilidad, inscritos, predicción, fccvId, clima…). Antes esto
+      // borraba la lista de confirmados al editar la prueba.
+      let extra={};
+      try{ const {data}=await _sb.from('races').select('notes').eq('id',id).single(); if(data&&data.notes) extra=JSON.parse(data.notes); }catch(_){}
+      extra.cat=effCat; extra.raceCat=effCat; extra.localidad=loc; extra.notes=notes;
+      const {error} = await _sb.from('races').update({name, date, notes:JSON.stringify(extra)}).eq('id',id);
       if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
     }
     // Actualizar en memoria
