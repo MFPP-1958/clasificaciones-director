@@ -22442,7 +22442,7 @@ function _renderInscritosEditableList(){
     }).join('');
     const teamHeader = isMy
       ? `<div style="background:#dbeafe;color:#1e3a8a;border:1.5px solid #93c5fd;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:800;font-size:12.5px;display:flex;justify-content:space-between;align-items:center"><span>🔵 ${escapeHtml(team)} <span style="font-weight:600;color:#475569">(${filtered.length})</span></span><span style="font-size:11px;font-weight:700">MI EQUIPO</span></div>`
-      : `<div style="background:#f3f6fb;color:#0b2f6b;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:700;font-size:12.5px;display:flex;justify-content:space-between"><span>${escapeHtml(team)}</span><span style="color:#6b7280;font-weight:600">${filtered.length} inscrito${filtered.length===1?'':'s'}</span></div>`;
+      : `<div style="background:#f3f6fb;color:#0b2f6b;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px 6px 0 0;font-weight:700;font-size:12.5px;display:flex;justify-content:space-between"><span>${escapeHtml(team)} <span style="font-weight:600;color:#475569">(${filtered.length})</span></span><span style="color:#6b7280;font-weight:600">${filtered.length} inscrito${filtered.length===1?'':'s'}</span></div>`;
     return `<div style="margin-bottom:8px">
       ${teamHeader}
       <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 6px 6px;overflow:hidden">
