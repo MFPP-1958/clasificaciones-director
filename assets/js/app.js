@@ -884,9 +884,13 @@ let _rbacAllPerms = {};     // {role: {viewId: bool}} — for admin panel
       }
     }catch(e){}
   }
+  // ¿Venimos de un enlace mágico (o hay sesión Auth previa)? — solo si el
+  // interruptor está activo; cualquier fallo cae al login clásico sin romper.
+  try{ if(typeof _rbacResolveAuthSession==='function' && await _rbacResolveAuthSession()) return; }catch(_){}
   // Mostrar overlay de login
   const ov = document.getElementById('rbacOverlay');
   if(ov) ov.classList.remove('hidden');
+  if(typeof _rbacInitMagicUI==='function') _rbacInitMagicUI();
   // Enter key en el input
   const inp = document.getElementById('rbacEmailInput');
   if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') _rbacLogin(); });
@@ -926,7 +930,14 @@ async function _rbacLogin(){
   if(!data.pin){
     await _sb.from('app_users').update({pin}).eq('id', data.id);
   }
-  _rbacUser = {email: data.email, role: data.role, name: data.name||data.email, riderName: (data.rider_name||data.name||'')};
+  await _rbacFinishLogin(data, 'pin');
+}
+
+// Cierre de sesión COMÚN a las dos vías (PIN y enlace mágico): fija el usuario,
+// restaura su equipo/filtros desde la BD y aplica permisos. La vinculación con
+// el historial es por email → idéntica en ambas vías (migración suave).
+async function _rbacFinishLogin(data, via){
+  _rbacUser = {email: data.email, role: data.role, name: data.name||data.email, riderName: (data.rider_name||data.name||''), via: via||'pin'};
   localStorage.setItem('_rbacSession', JSON.stringify(_rbacUser));
   // Si la BD tiene la columna my_team, restauramos el equipo de este director.
   // localStorage ya tiene "myTeam" persistido, pero la BD prevalece si hay valor.
@@ -950,6 +961,72 @@ async function _rbacLogin(){
   }catch(_){}
   await _rbacLoadPerms(data.role);
   _rbacApplySession();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MIGRACIÓN AUTH · PASO 2 — Enlace mágico (Supabase Auth) CONVIVIENDO con el PIN
+// ════════════════════════════════════════════════════════════════════════════
+// INTERRUPTOR DE SEGURIDAD: con false, el botón de enlace mágico NO aparece y
+// todo funciona exactamente como siempre (rollback instantáneo = poner false).
+const _AUTH_MAGIC_ENABLED = false;
+
+function _rbacInitMagicUI(){
+  ['rbacMagicSep','rbacMagicBtn'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = _AUTH_MAGIC_ENABLED ? '' : 'none';
+  });
+}
+
+// Enviar enlace mágico al correo escrito en el campo de email.
+// Antibloqueo: tiempo límite de 12 s y mensaje amable que recuerda que el PIN
+// sigue funcionando — nunca una pantalla colgada.
+async function _rbacSendMagicLink(){
+  const err=document.getElementById('rbacErrorMsg');
+  const btn=document.getElementById('rbacMagicBtn');
+  const email=(document.getElementById('rbacEmailInput')?.value||'').trim().toLowerCase();
+  if(err){ err.style.color=''; err.textContent=''; }
+  if(!email || !email.includes('@')){ if(err) err.textContent='Escribe tu correo arriba y vuelve a pulsar.'; return; }
+  if(!_sb){ if(err) err.textContent='Sin conexión a la base de datos. Prueba con tu PIN.'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Enviando enlace…'; }
+  try{
+    const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('_timeout_')),12000));
+    const {error}=await Promise.race([
+      _sb.auth.signInWithOtp({ email, options:{ emailRedirectTo:_APP_URL, shouldCreateUser:true } }),
+      timeout
+    ]);
+    if(error) throw error;
+    if(err){ err.style.color='#059669'; err.textContent='✉️ Enlace enviado. Abre tu correo (mira también spam) y pulsa el enlace DESDE ESTE dispositivo.'; }
+  }catch(e){
+    if(err){
+      err.textContent = (e && e.message==='_timeout_')
+        ? 'El servidor tarda en responder (¿poca cobertura?). Entra con tu PIN como siempre.'
+        : 'No se pudo enviar el enlace ('+((e&&e.message)||e)+'). Entra con tu PIN como siempre.';
+    }
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='✉️ Recibir enlace de acceso por email'; }
+  }
+}
+
+// Al volver del enlace mágico (o si hay sesión Auth previa): validar contra
+// app_users por email. Si el correo no está autorizado → cerrar sesión y avisar.
+async function _rbacResolveAuthSession(){
+  if(!_AUTH_MAGIC_ENABLED || !_sb || !_sb.auth) return false;
+  try{
+    const timeout=new Promise(res=>setTimeout(()=>res(null),8000));
+    const r=await Promise.race([_sb.auth.getSession(), timeout]);
+    const session=r && r.data && r.data.session;
+    if(!session || !session.user || !session.user.email) return false;
+    const email=session.user.email.toLowerCase();
+    const {data:u,error}=await _sb.from('app_users').select('*').eq('email',email).eq('active',true).maybeSingle();
+    if(error || !u){
+      try{ await _sb.auth.signOut(); }catch(_){}
+      const err=document.getElementById('rbacErrorMsg');
+      if(err) err.textContent='Tu correo no está autorizado en el equipo. Contacta con el director.';
+      return false;
+    }
+    await _rbacFinishLogin(u, 'magic');
+    return true;
+  }catch(_){ return false; }   // antibloqueo: cualquier fallo de Auth no rompe el login clásico
 }
 
 async function _rbacLoadPerms(role){
@@ -1012,6 +1089,9 @@ function _rbacRenderMenu(){
 
 function _rbacLogout(){
   localStorage.removeItem('_rbacSession');
+  // Cerrar también la sesión de Supabase Auth si existe (enlace mágico).
+  // try/catch: si no hay red, el cierre local basta y no bloquea.
+  try{ if(_sb && _sb.auth) _sb.auth.signOut(); }catch(_){}
   _rbacUser = null;
   _rbacPerms = new Set();
   // Ocultar todo y mostrar overlay

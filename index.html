@@ -43,6 +43,9 @@
       onfocus="this.style.borderColor='#1a56db'" onblur="this.style.borderColor='#d0d5dd'"
       onkeydown="if(event.key==='Enter')_rbacLogin()">
     <button id="rbacLoginBtn" class="rbac-btn" onclick="_rbacLogin()">Entrar →</button>
+    <!-- MIGRACIÓN AUTH · Paso 2: vía alternativa por enlace mágico (oculta hasta activar el interruptor _AUTH_MAGIC_ENABLED) -->
+    <div id="rbacMagicSep" style="display:none;margin:14px 0 10px;font-size:12px;color:#94a3b8">─── o, si lo prefieres ───</div>
+    <button id="rbacMagicBtn" style="display:none;width:100%;background:#fff;color:#1a56db;border:2px solid #bfdbfe;border-radius:12px;padding:12px;font-size:14px;font-weight:800;cursor:pointer" onclick="_rbacSendMagicLink()">✉️ Recibir enlace de acceso por email</button>
     <div id="rbacErrorMsg" class="rbac-error"></div>
   </div>
 </div>
@@ -3433,6 +3436,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=boton-guardar-prediccion-visible-1"></script>
+<script src="assets/js/app.js?v=auth-paso2-doble-login-apagado-1"></script>
 </body>
 </html>
