@@ -16,7 +16,7 @@
      no expone global con <script>). -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="assets/css/styles.css?v=powerranking-scouting-generacion-1">
+<link rel="stylesheet" href="assets/css/styles.css?v=powerranking-scouting-equipo-y-conteo-2">
 </head>
 <body>
 <div id="loadingOverlay" class="loading-overlay hidden"><div class="loader-card"><div class="spinner"></div><b id="loadingText">Procesando archivo…</b><div class="small" id="loadingDetail">Puede tardar unos segundos si el PDF es grande.</div></div></div>
@@ -1254,6 +1254,15 @@
           <button class="pr-gen-tab pr-gen-tab-on" data-gen="general" onclick="_prSetGenMode('general')">👥 General <span>(Todos)</span></button>
           <button class="pr-gen-tab" data-gen="g1" onclick="_prSetGenMode('g1')">🌱 Promesas <span>(1er año)</span></button>
           <button class="pr-gen-tab" data-gen="g2" onclick="_prSetGenMode('g2')">🎖️ Veteranos <span>(2º año)</span></button>
+        </div>
+        <!-- Filtros de la lente de generación (solo visibles en Promesas/Veteranos) -->
+        <div id="prGenFilters" class="pr-gen-filters" style="display:none">
+          <label>🚴 Equipo:
+            <select id="prGenTeamFilter" class="pr-select" onchange="renderPowerRanking()">
+              <option value="">Todos los equipos</option>
+            </select>
+          </label>
+          <label class="pr-gen-mine"><input type="checkbox" id="prGenMineOnly" onchange="renderPowerRanking()"> ⭐ Solo mi equipo</label>
         </div>
         <!-- IRC actual (estado de forma) — barras horizontales -->
         <div id="prIRCBars" style="margin:6px 0 18px"></div>
@@ -3444,6 +3453,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=powerranking-scouting-generacion-1"></script>
+<script src="assets/js/app.js?v=powerranking-scouting-equipo-y-conteo-2"></script>
 </body>
 </html>

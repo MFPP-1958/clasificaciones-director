@@ -18448,6 +18448,9 @@ function _prSetGenMode(m){
   document.querySelectorAll('.pr-gen-tab').forEach(b=>{
     b.classList.toggle('pr-gen-tab-on', b.dataset.gen===_prGenMode);
   });
+  // Mostrar los filtros de equipo solo en las lentes individuales
+  const gf=document.getElementById('prGenFilters');
+  if(gf) gf.style.display = (_prGenMode==='g1'||_prGenMode==='g2') ? '' : 'none';
   renderPowerRanking();
 }
 
@@ -18519,18 +18522,40 @@ function _prRenderGenerationTable(riderMap, totalRaces, mode, adnFilter){
   const genWanted = mode==='g2' ? '2' : '1';
   let list=all.filter(r=>r.gen===genWanted);
   list.sort((a,b)=>a.avg-b.avg);
+  // Posición DENTRO de la generación (1..N), antes de filtrar por equipo, para
+  // que al elegir un equipo siga viéndose "este va 5º de toda la generación".
+  list.forEach((r,i)=>{ r.genRank=i+1; });
+
+  // ── Filtro por equipo / "solo mi equipo" ──
+  const teamSel=document.getElementById('prGenTeamFilter');
+  const mineOnly=document.getElementById('prGenMineOnly')?.checked;
+  const myCanon=(typeof myTeam!=='undefined')?getCanonicalTeam(myTeam||'').toLowerCase():'';
+  // Poblar el desplegable con los equipos presentes en esta generación
+  if(teamSel){
+    const prev=teamSel.value;
+    const teams=[...new Set(list.map(r=>r.team))].sort((a,b)=>a.localeCompare(b));
+    teamSel.innerHTML='<option value="">Todos los equipos</option>'+
+      teams.map(t=>`<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
+    if(teams.includes(prev)) teamSel.value=prev; else teamSel.value='';
+  }
+  const teamPick=teamSel?teamSel.value:'';
+  let view=list.slice();
+  if(mineOnly && myCanon) view=view.filter(r=>String(r.team||'').toLowerCase()===myCanon);
+  else if(teamPick)       view=view.filter(r=>r.team===teamPick);
 
   const titleGen = genWanted==='1' ? '🌱 Promesas · 1er año' : '🎖️ Veteranos · 2º año';
+  const scopeTxt = (mineOnly&&myCanon) ? ' · ⭐ solo mi equipo' : (teamPick?` · ${teamPick}`:'');
   const info=$('prInfo');
-  if(info) info.textContent = `${titleGen} · ${list.length} ciclista${list.length!==1?'s':''} de esta generación`;
+  if(info) info.textContent = `${titleGen}${scopeTxt} · ${view.length}/${list.length} ciclista${list.length!==1?'s':''}`;
 
-  if(!list.length){
+  if(!view.length){
     wrap.innerHTML=`<div class="pr-empty-msg" style="padding:24px">No hay ciclistas de ${genWanted==='1'?'1er':'2º'} año con los filtros actuales.<br>
       <span style="font-size:12px">El año de generación se toma de la categoría exacta (p.ej. CAD-1 / CAD-2). Revisa que las clasificaciones traigan esa categoría.</span></div>`;
     return;
   }
 
-  const rows=list.map((r,i)=>{
+  const rows=view.map((r)=>{
+    const i=r.genRank-1;
     const gen1 = r.gen==='1';
     const giant = gen1 && r.races>=2 && r.avg<=top15cut;
     const tr=_prTrend(r.raceHistory);
@@ -18750,11 +18775,18 @@ async function renderPowerRanking(){
     return !year || ry === year;
   });
 
-  const totalRacesInPeriod = filteredRaces.length;
+  // CARRERAS REALES de la categoría: history ya viene filtrado por el grupo
+  // global (cadete/juvenil…) con _historyForGlobalCat, así que race.riders solo
+  // contiene corredores de ESE grupo. Exigimos ≥3 para que NO cuenten como
+  // "carrera del calendario" las pruebas donde solo apareció 1-2 corredores del
+  // grupo (p.ej. el CRI con 1 cadete suelto). Así el "X/N" es honesto y NUNCA
+  // mezcla otra categoría. Numerador y denominador usan el MISMO conjunto.
+  const statRaces = filteredRaces.filter(r => (r.riders||[]).length >= 3);
+  const totalRacesInPeriod = statRaces.length;
 
   // Penalización por carrera no disputada:
   // igual al mayor campo de participantes visto + 1 (siempre peor que el último)
-  const maxFieldSize = filteredRaces.reduce((m,r)=>Math.max(m,(r.riders||[]).length),50);
+  const maxFieldSize = statRaces.reduce((m,r)=>Math.max(m,(r.riders||[]).length),50);
   const missedRacePenalty = maxFieldSize + 1;
 
   // Inferir región y género de cada equipo (año filtrado, sin otros filtros)
@@ -18763,7 +18795,7 @@ async function renderPowerRanking(){
   // Acumular estadísticas por rider
   const riderMap = {};
 
-  for(const race of filteredRaces){
+  for(const race of statRaces){
     const raceYear = (_parseSpanishDate(race.raceDate)||race.raceDate||'').slice(0,4);
 
     for(const r of (race.riders||[])){

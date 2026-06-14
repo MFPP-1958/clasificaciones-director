@@ -664,6 +664,10 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 .pr-gen-tab:hover{border-color:#93c5fd;background:#f0f9ff}
 .pr-gen-tab-on{border-color:#1d4ed8;background:#1d4ed8;color:#fff}
 .pr-gen-tab-on span{opacity:.9}
+.pr-gen-filters{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:0 0 12px;padding:10px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px}
+.pr-gen-filters label{font-size:13px;font-weight:700;color:#0b2f6b;display:flex;align-items:center;gap:6px}
+.pr-gen-mine{cursor:pointer;user-select:none}
+.pr-gen-mine input{width:16px;height:16px;cursor:pointer}
 .pr-gen-legend{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:#475467;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 12px;margin-bottom:10px;line-height:1.5}
 .pr-gen-tablewrap{overflow-x:auto;background:#fff;border-radius:12px;border:1px solid #e5e7eb}
 .pr-gen-table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
