@@ -16,7 +16,7 @@
      no expone global con <script>). -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="assets/css/styles.css?v=powerranking-scouting-generacion-1">
 </head>
 <body>
 <div id="loadingOverlay" class="loading-overlay hidden"><div class="loader-card"><div class="spinner"></div><b id="loadingText">Procesando archivo…</b><div class="small" id="loadingDetail">Puede tardar unos segundos si el PDF es grande.</div></div></div>
@@ -1209,7 +1209,7 @@
       <section class="panel">
         <div class="section-title">
           <h2>🏆 Power Ranking de Temporada</h2>
-          <button class="help-btn" data-help="&lt;strong&gt;🏆 Power Ranking&lt;/strong&gt;Clasificación automática de ciclistas por rendimiento global.&lt;ul&gt;&lt;li&gt;Combina posición media (60%), regularidad y participación (40%).&lt;/li&gt;&lt;li&gt;&lt;b&gt;Posición más baja = mejor&lt;/b&gt;: el nº 1 es el ciclista más en forma.&lt;/li&gt;&lt;li&gt;La barra de forma muestra la tendencia de las últimas 3 carreras.&lt;/li&gt;&lt;/ul&gt;">?</button>
+          <button class="help-btn" data-help="&lt;strong&gt;🏆 Power Ranking&lt;/strong&gt;Clasificación automática de ciclistas por rendimiento global.&lt;ul&gt;&lt;li&gt;Combina posición media (60%), regularidad y participación (40%).&lt;/li&gt;&lt;li&gt;&lt;b&gt;Posición más baja = mejor&lt;/b&gt;: el nº 1 es el ciclista más en forma.&lt;/li&gt;&lt;li&gt;La barra de forma muestra la tendencia de las últimas 3 carreras.&lt;/li&gt;&lt;/ul&gt;&lt;strong&gt;🔬 Lentes de scouting&lt;/strong&gt;&lt;ul&gt;&lt;li&gt;&lt;b&gt;👥 General&lt;/b&gt;: clasificación por equipos de siempre.&lt;/li&gt;&lt;li&gt;&lt;b&gt;🌱 Promesas (1er año)&lt;/b&gt; / &lt;b&gt;🎖️ Veteranos (2º año)&lt;/b&gt;: tabla individual con las posiciones recalculadas SOLO dentro de esa generación (el mejor de 1er año aparece como 1º aunque en la general fuera 8º).&lt;/li&gt;&lt;li&gt;Columna &lt;b&gt;Tendencia&lt;/b&gt;: pendiente de los últimos 5 puestos. 🔥/📈 está mejorando, ➡️ estable, 📉 a la baja.&lt;/li&gt;&lt;li&gt;🌟 &lt;b&gt;Matagigantes&lt;/b&gt;: señala a los talentos de 1er año cuya media los mete en el Top-15 absoluto, es decir, capaces de pelear de tú a tú con la generación superior (los de 2º año).&lt;/li&gt;&lt;/ul&gt;">?</button>
           <button class="btn light" id="prExportBtn" onclick="exportPowerRankingImg()">📸 Generar Informe (Imagen)</button>
         </div>
         <div class="pr-filters">
@@ -1249,12 +1249,20 @@
           </div>
           <span id="prInfo" style="font-size:12px;color:#667085;white-space:nowrap;align-self:center"></span>
         </div>
+        <!-- Lentes de scouting por generación (1º/2º año) -->
+        <div class="pr-gen-tabs">
+          <button class="pr-gen-tab pr-gen-tab-on" data-gen="general" onclick="_prSetGenMode('general')">👥 General <span>(Todos)</span></button>
+          <button class="pr-gen-tab" data-gen="g1" onclick="_prSetGenMode('g1')">🌱 Promesas <span>(1er año)</span></button>
+          <button class="pr-gen-tab" data-gen="g2" onclick="_prSetGenMode('g2')">🎖️ Veteranos <span>(2º año)</span></button>
+        </div>
         <!-- IRC actual (estado de forma) — barras horizontales -->
         <div id="prIRCBars" style="margin:6px 0 18px"></div>
         <div class="pr-grid-wrap">
           <div id="prGrid" class="pr-grid">
             <div class="pr-loading">⏳ Cargando Power Ranking...</div>
           </div>
+          <!-- Tabla individual por generación (Promesas/Veteranos) -->
+          <div id="prIndivWrap" style="display:none"></div>
         </div>
         <div style="font-size:11px;color:#9ca3af;margin-top:10px;line-height:1.5">
           📌 <b>Puntuación de Regularidad</b> = suma de todos los puestos en la temporada (menor es mejor).
@@ -3436,6 +3444,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=calendario-texto-largo-multilinea-1"></script>
+<script src="assets/js/app.js?v=powerranking-scouting-generacion-1"></script>
 </body>
 </html>

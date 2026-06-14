@@ -18437,6 +18437,140 @@ function _adnBadgeHtml(adn,size='normal'){
 let _prFiltersReady = false;
 let _prSelectedCats  = new Set(); // categorías activas (vacío = todas)
 
+// ════════════════════════════════════════════════════════════════════════════
+// SCOUTING POR GENERACIÓN (1º / 2º año) — lentes analíticas del Power Ranking
+// ════════════════════════════════════════════════════════════════════════════
+// 'general' = tarjetas de equipo de siempre. 'g1' = solo 1er año (Promesas).
+// 'g2' = solo 2º año (Veteranos). Filtrado y re-ranking 100% en el cliente.
+let _prGenMode = 'general';
+function _prSetGenMode(m){
+  _prGenMode = m || 'general';
+  document.querySelectorAll('.pr-gen-tab').forEach(b=>{
+    b.classList.toggle('pr-gen-tab-on', b.dataset.gen===_prGenMode);
+  });
+  renderPowerRanking();
+}
+
+// Generación a partir de la categoría exacta (CAD-1/CAD-2, JUV-1/JUV-2…).
+// Devuelve '1' (primer año), '2' (segundo año) o '' (sin año / no aplica).
+function _prGeneration(cat){
+  const c=(cat||'').toString().toUpperCase().replace(/\s+/g,'');
+  if(!c) return '';
+  if(/(PRIMER|1ER|1AÑO|1ºAÑO)/.test(c) || /[-_]?1º?$/.test(c)) return '1';
+  if(/(SEGUND|2DO|2AÑO|2ºAÑO)/.test(c) || /[-_]?2º?$/.test(c)) return '2';
+  return '';
+}
+
+// Tendencia (curva de aprendizaje): pendiente de los últimos 5 puestos en orden
+// cronológico. Como "menos puesto = mejor", una pendiente NEGATIVA significa que
+// el ciclista mejora. Devuelve {icon,label,slope}.
+function _prTrend(raceHistory){
+  const pts=(raceHistory||[])
+    .filter(h=>h && h.pos>0)
+    .map(h=>({ k:(_parseSpanishDate(h.raceDate)||h.raceDate||''), pos:h.pos }))
+    .sort((a,b)=>String(a.k).localeCompare(String(b.k)))
+    .slice(-5);
+  if(pts.length<3) return {icon:'—', label:'Pocos datos (mín. 3 carreras)', slope:0};
+  const n=pts.length; let sx=0,sy=0,sxx=0,sxy=0;
+  pts.forEach((p,i)=>{ sx+=i; sy+=p.pos; sxx+=i*i; sxy+=i*p.pos; });
+  const den=(n*sxx - sx*sx)||1;
+  const slope=(n*sxy - sx*sy)/den;   // puestos por carrera
+  if(slope<=-1.0) return {icon:'🔥', label:'En plena progresión (mejora fuerte)', slope};
+  if(slope<=-0.3) return {icon:'📈', label:'Mejorando', slope};
+  if(slope< 0.3)  return {icon:'➡️', label:'Estable', slope};
+  return {icon:'📉', label:'A la baja', slope};
+}
+
+// Construye la lista individual a partir del riderMap del Power Ranking.
+function _prBuildIndividuals(riderMap){
+  return Object.values(riderMap).map(s=>{
+    const races=s.raceIds.size;
+    const sum=s.positions.reduce((a,p)=>a+(p||0),0);
+    const avg= races ? sum/races : 9999;
+    return {
+      name:s.name, team:s.team, cat:s.cat, gen:_prGeneration(s.cat),
+      races, avg, raceHistory:(s.raceHistory||[]).slice(),
+      adn:(typeof _computeADN==='function')?_computeADN(s.positions,s.raceHistory):null
+    };
+  });
+}
+
+// Renderiza la TABLA INDIVIDUAL de una generación (Promesas/Veteranos), con
+// posiciones re-calculadas dentro de la generación, columna Tendencia y el
+// distintivo 🌟 Matagigantes (1er año que se cuela en el Top-15 absoluto).
+function _prRenderGenerationTable(riderMap, totalRaces, mode, adnFilter){
+  const wrap=document.getElementById('prIndivWrap');
+  const grid=document.getElementById('prGrid');
+  const ircEl=document.getElementById('prIRCBars');
+  if(grid) grid.style.display='none';
+  if(ircEl) ircEl.style.display='none';
+  if(!wrap) return;
+  wrap.style.display='';
+
+  let all=_prBuildIndividuals(riderMap);
+  if(adnFilter) all=all.filter(r=>r.adn && r.adn.label===adnFilter);
+
+  // Ranking GENERAL absoluto (todas las generaciones) para 2 cosas:
+  //  (a) el corte del Top-15 (Matagigantes)  (b) el "iba Nº en la general".
+  const ranked=[...all].filter(r=>r.races>=2).sort((a,b)=>a.avg-b.avg);
+  const absRank=new Map(); ranked.forEach((r,i)=>absRank.set(r.name+'|||'+r.team, i+1));
+  const top15cut = ranked.length ? ranked[Math.min(14,ranked.length-1)].avg : Infinity;
+
+  const genWanted = mode==='g2' ? '2' : '1';
+  let list=all.filter(r=>r.gen===genWanted);
+  list.sort((a,b)=>a.avg-b.avg);
+
+  const titleGen = genWanted==='1' ? '🌱 Promesas · 1er año' : '🎖️ Veteranos · 2º año';
+  const info=$('prInfo');
+  if(info) info.textContent = `${titleGen} · ${list.length} ciclista${list.length!==1?'s':''} de esta generación`;
+
+  if(!list.length){
+    wrap.innerHTML=`<div class="pr-empty-msg" style="padding:24px">No hay ciclistas de ${genWanted==='1'?'1er':'2º'} año con los filtros actuales.<br>
+      <span style="font-size:12px">El año de generación se toma de la categoría exacta (p.ej. CAD-1 / CAD-2). Revisa que las clasificaciones traigan esa categoría.</span></div>`;
+    return;
+  }
+
+  const rows=list.map((r,i)=>{
+    const gen1 = r.gen==='1';
+    const giant = gen1 && r.races>=2 && r.avg<=top15cut;
+    const tr=_prTrend(r.raceHistory);
+    const aRank=absRank.get(r.name+'|||'+r.team);
+    const mine = (typeof myTeam!=='undefined') && getCanonicalTeam(myTeam||'').toLowerCase()===String(r.team||'').toLowerCase();
+    return `<tr class="pr-gen-row${mine?' pr-gen-row-mine':''}" onclick="prGoToRider('${escapeAttr(r.name)}','${escapeAttr(r.team)}')" title="Ver trayectoria de ${escapeHtml(r.name)}">
+      <td class="pr-gen-pos">${i+1}º</td>
+      <td class="pr-gen-name">
+        ${giant?'<span title="Matagigantes: pelea de tú a tú con los de 2º año (entra en el Top-15 absoluto)">🌟 </span>':''}${escapeHtml(_evolNormName(r.name))}
+        ${r.adn?` ${_adnBadgeHtml(r.adn,'pr')}`:''}
+        ${mine?' <span style="font-size:10px;color:#1d4ed8;font-weight:800">⭐ MI EQUIPO</span>':''}
+      </td>
+      <td class="pr-gen-team">${escapeHtml(r.team)}</td>
+      <td class="pr-gen-cat">${escapeHtml(r.cat||'—')}</td>
+      <td class="pr-gen-avg" title="Posición media en ${r.races} carrera${r.races!==1?'s':''}">${r.avg<9999?r.avg.toFixed(1):'—'} Ø</td>
+      <td class="pr-gen-races">${r.races}/${totalRaces}</td>
+      <td class="pr-gen-trend" title="${tr.label}">${tr.icon}</td>
+      <td class="pr-gen-gral" title="Posición en la clasificación GENERAL absoluta (todas las generaciones)">${aRank?('#'+aRank):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML=`
+    <div class="pr-gen-legend">
+      <span><b>${titleGen}</b> — posiciones recalculadas SOLO entre los de esta generación.</span>
+      <span>🌟 <b>Matagigantes</b>: 1er año con media de Top-15 absoluto · 📈/🔥 mejora · ➡️ estable · 📉 baja · columna <b>Gral</b> = puesto en la general absoluta.</span>
+    </div>
+    <div class="pr-gen-tablewrap">
+      <table class="pr-gen-table">
+        <thead><tr>
+          <th>#</th><th>Ciclista</th><th>Equipo</th><th>Cat.</th>
+          <th title="Posición media (menos es mejor)">Media</th>
+          <th title="Carreras disputadas">Carr.</th>
+          <th title="Tendencia de los últimos 5 puestos">Tend.</th>
+          <th title="Puesto en la clasificación general absoluta">Gral</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 const _PR_PALETTE = [
   '#0b2f6b','#1d4ed8','#6d28d9','#be185d','#b45309',
   '#047857','#0e7490','#9333ea','#c2410c','#15803d',
@@ -18654,6 +18788,18 @@ async function renderPowerRanking(){
       riderMap[mapKey].raceHistory.push({raceDate:race.raceDate||'', pos:r.pos});
     }
   }
+
+  // ── LENTE DE GENERACIÓN (scouting 1º/2º año) ──────────────────────────────
+  // Si el director ha elegido "Promesas" o "Veteranos", mostramos la tabla
+  // individual re-rankeada y salimos (las tarjetas de equipo son la vista General).
+  if(_prGenMode==='g1' || _prGenMode==='g2'){
+    _prRenderGenerationTable(riderMap, totalRacesInPeriod, _prGenMode, adnFilter);
+    return;
+  }
+  // Modo General: asegurar que se ven las tarjetas de equipo y se oculta la tabla.
+  { const _w=document.getElementById('prIndivWrap'); if(_w) _w.style.display='none';
+    if(grid) grid.style.display='';
+    const _irc=document.getElementById('prIRCBars'); if(_irc) _irc.style.display=''; }
 
   // Agrupar por equipo
   const teamMap = {};

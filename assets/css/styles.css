@@ -657,6 +657,31 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 .pr-filter-group{display:flex;align-items:center;gap:6px}
 .pr-filter-group label{font-size:12px;font-weight:700;color:#475467;white-space:nowrap}
 .pr-select{padding:7px 10px;border:1px solid #d0d5dd;border-radius:10px;font-size:13px;background:#fff;cursor:pointer;min-width:90px}
+/* ── Lentes de scouting por generación (1º/2º año) ── */
+.pr-gen-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px}
+.pr-gen-tab{flex:1 1 160px;min-width:140px;padding:11px 14px;border:2px solid #d0d5dd;border-radius:12px;background:#fff;color:#475467;font-size:14px;font-weight:800;cursor:pointer;transition:all .15s;text-align:center}
+.pr-gen-tab span{font-weight:600;opacity:.8;font-size:12px}
+.pr-gen-tab:hover{border-color:#93c5fd;background:#f0f9ff}
+.pr-gen-tab-on{border-color:#1d4ed8;background:#1d4ed8;color:#fff}
+.pr-gen-tab-on span{opacity:.9}
+.pr-gen-legend{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:#475467;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 12px;margin-bottom:10px;line-height:1.5}
+.pr-gen-tablewrap{overflow-x:auto;background:#fff;border-radius:12px;border:1px solid #e5e7eb}
+.pr-gen-table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+.pr-gen-table thead th{background:#0b2f6b;color:#fff;font-weight:700;font-size:11px;text-align:left;padding:9px 10px;white-space:nowrap;position:sticky;top:0}
+.pr-gen-table tbody td{padding:9px 10px;border-bottom:1px solid #eef2f7;vertical-align:middle}
+.pr-gen-row{cursor:pointer;transition:background .12s}
+.pr-gen-row:hover{background:#f0f9ff}
+.pr-gen-row-mine{background:#eff6ff}
+.pr-gen-row-mine:hover{background:#dbeafe}
+.pr-gen-pos{font-weight:900;color:#0b2f6b;width:46px}
+.pr-gen-name{font-weight:700;color:#111827;min-width:160px}
+.pr-gen-team{color:#475467;font-size:12px}
+.pr-gen-cat{font-size:11px;color:#6b7280;white-space:nowrap}
+.pr-gen-avg{font-weight:800;color:#1d4ed8;white-space:nowrap}
+.pr-gen-races{font-size:11px;color:#9ca3af;white-space:nowrap}
+.pr-gen-trend{font-size:18px;text-align:center;width:54px}
+.pr-gen-gral{font-weight:700;color:#475467;width:54px;text-align:center}
+@media(max-width:680px){.pr-gen-team,.pr-gen-cat{display:none}}
 .pr-grid-wrap{background:#f4f7fb;border-radius:14px;padding:14px}
 .pr-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
 @media(max-width:1400px){.pr-grid{grid-template-columns:repeat(5,1fr)}}
