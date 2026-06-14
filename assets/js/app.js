@@ -2112,7 +2112,7 @@ function _calBuildMonth(y, m){
 
   let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">`;
   _CAL_DAYS_ES.forEach(d=>{ html+=`<div style="text-align:center;font-size:12px;font-weight:800;color:#6b7280;padding:6px 0">${d}</div>`; });
-  html += '</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+  html += '</div><div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px">';
 
   // Celdas vacías al inicio
   for(let i=0;i<startDow;i++) html+=`<div></div>`;
@@ -2143,7 +2143,7 @@ function _calBuildMonth(y, m){
         const onClickAttr = isPastClickable
           ? `onclick="event.stopPropagation();_calOpenRaceDetails('${escapeAttr(String(r.id))}')"`
           : '';
-        return `<div ${onClickAttr} style="font-size:10px;font-weight:700;background:${done?'#3b82f6':'#10b981'};color:#fff;border-radius:4px;padding:2px 5px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;cursor:${isPastClickable?'pointer':'default'};${isPastClickable?'box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)':''}" title="${escapeHtml(r.name)}${isPastClickable?' — Click para ver participantes':''}">
+        return `<div ${onClickAttr} style="font-size:10px;font-weight:700;background:${done?'#3b82f6':'#10b981'};color:#fff;border-radius:4px;padding:2px 5px;margin-bottom:2px;overflow:hidden;white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.2;max-width:100%;cursor:${isPastClickable?'pointer':'default'};${isPastClickable?'box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)':''}" title="${escapeHtml(r.name)}${isPastClickable?' — Click para ver participantes':''}">
           ${!done?'📋 ':''}${escapeHtml(r.name)}
         </div>`;
       }).join('')}
