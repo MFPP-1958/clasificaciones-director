@@ -664,6 +664,23 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 .pr-gen-tab:hover{border-color:#93c5fd;background:#f0f9ff}
 .pr-gen-tab-on{border-color:#1d4ed8;background:#1d4ed8;color:#fff}
 .pr-gen-tab-on span{opacity:.9}
+/* ── Demografía / supervivencia generacional (1º vs 2º año) ── */
+.gen-demo{margin-top:12px;padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px}
+.gen-demo-hdr,.gen-surv-hdr{font-size:13px;font-weight:800;color:#0b2f6b;margin-bottom:10px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.gen-demo-sub{font-size:11px;font-weight:600;color:#94a3b8}
+.gen-bar-row{display:flex;align-items:center;gap:10px;margin:6px 0}
+.gen-bar-label{font-size:12px;font-weight:700;color:#475467;min-width:64px;flex-shrink:0}
+.gen-bar-track{flex:1;height:18px;background:#e5e7eb;border-radius:9px;overflow:hidden;min-width:0}
+.gen-bar-fill{height:100%;border-radius:9px;transition:width .4s ease}
+.gen-bar-val{font-size:13px;font-weight:800;color:#0b2f6b;min-width:30px;text-align:right;flex-shrink:0}
+.gen-bar-sub{font-size:10px;font-weight:600;color:#94a3b8}
+.gen-surv{margin:6px 0 14px;padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px}
+.gen-surv-row{margin:10px 0}
+.gen-surv-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.gen-surv-label{font-size:13px;font-weight:800;color:#374151}
+.gen-surv-rate{font-size:16px;font-weight:900}
+.gen-surv-detail{font-size:11px;color:#6b7280;margin-top:3px}
+.gen-surv-foot{font-size:11px;color:#94a3b8;margin-top:8px;font-style:italic;line-height:1.4}
 .pr-gen-filters{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:0 0 12px;padding:10px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px}
 .pr-gen-filters label{font-size:13px;font-weight:700;color:#0b2f6b;display:flex;align-items:center;gap:6px}
 .pr-gen-mine{cursor:pointer;user-select:none}

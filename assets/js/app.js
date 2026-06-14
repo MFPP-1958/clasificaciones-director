@@ -2657,7 +2657,12 @@ function _calRaceModalRenderCurrent(){
     ? `⭐ Mis corredores en "${escapeHtml(race.raceName||'')}" (${list.length})`
     : `👥 Lista completa de participantes (${totalRiders})${myRiders.length?` · ⭐ ${myRiders.length} de mi equipo`:''}`;
 
-  body.innerHTML = tabsHtml + `
+  // Tasa de supervivencia generacional (solo en la vista "Todos": es del campo
+  // completo). Cruza la parrilla de inscritos con la clasificación final.
+  let survivalHtml='';
+  if(!showMine){ try{ survivalHtml=_genSurvivalHtml(race.inscritos, ridersAll); }catch(_){} }
+
+  body.innerHTML = tabsHtml + survivalHtml + `
     <div style="margin:6px 0 10px 0;font-size:12px;color:#6b7280;font-weight:600">${subtitle}</div>
     <div style="display:flex;flex-direction:column;gap:4px">
       ${list.map(r=>{
@@ -26233,11 +26238,113 @@ function _simBuildData(raceId){
   };
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// DEMOGRAFÍA Y SUPERVIVENCIA GENERACIONAL (1º vs 2º año) — módulo independiente
+// Funciona para CUALQUIER categoría: lee el año de la categoría exacta
+// (CAD-1/CAD-2, JUV-1/JUV-2…) con _prGeneration; los que no traen año van a
+// "Sin año" y no contaminan el cálculo.
+// ════════════════════════════════════════════════════════════════════════════
+function _genBucket(list){
+  const o={g1:0,g2:0,unk:0,total:0};
+  (list||[]).forEach(r=>{
+    const g=_prGeneration(r&&r.cat);
+    if(g==='1') o.g1++; else if(g==='2') o.g2++; else o.unk++;
+    o.total++;
+  });
+  return o;
+}
+
+// Barra horizontal CSS pura (sin librerías): etiqueta + barra + valor.
+function _genBarRow(label, value, max, color, sub){
+  const pct = max>0 ? Math.round(value/max*100) : 0;
+  return `<div class="gen-bar-row">
+    <div class="gen-bar-label">${label}</div>
+    <div class="gen-bar-track"><div class="gen-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    <div class="gen-bar-val">${value}${sub?`<span class="gen-bar-sub"> ${sub}</span>`:''}</div>
+  </div>`;
+}
+
+// PRE-CARRERA: Demografía de la parrilla (nº de inscritos 1º vs 2º año).
+function _simRenderDemografia(inscritos){
+  const el=document.getElementById('simDemografia');
+  if(!el) return;
+  const b=_genBucket(inscritos);
+  // Si no hay NINGÚN corredor con año detectable, no mostramos el panel (evita
+  // ruido en juveniles que llegan sin año, etc.).
+  if(b.g1+b.g2===0){ el.style.display='none'; el.innerHTML=''; return; }
+  const max=Math.max(b.g1,b.g2,1);
+  el.style.display='';
+  el.innerHTML=`
+    <div class="gen-demo-hdr">👥 Demografía de la parrilla
+      <span class="gen-demo-sub">${b.total} inscritos${b.unk?` · ${b.unk} sin año`:''}</span>
+    </div>
+    ${_genBarRow('🌱 1º año', b.g1, max, '#16a34a')}
+    ${_genBarRow('🎖️ 2º año', b.g2, max, '#1d4ed8')}`;
+}
+
+// Cruza inscritos (parrilla) con la clasificación (riders con pos>0) y calcula,
+// por generación: inscritos, clasificados (acaban) y tasa de finalización.
+function _genSurvival(inscritos, riders){
+  const _n = (s)=> (typeof normalizeForMatching==='function') ? normalizeForMatching(s||'') : (s||'').trim().toLowerCase();
+  // Mapa de finishers por nombre → su cat en la clasificación (por si el inscrito
+  // no traía cat). Solo cuentan los que tienen puesto real (pos>0).
+  const finCat=new Map();
+  (riders||[]).forEach(r=>{ if(r && r.pos>0 && r.name) finCat.set(_n(r.name), r.cat||''); });
+  const out={ g1:{ins:0,fin:0}, g2:{ins:0,fin:0} };
+  // Base: la PARRILLA de inscritos. Si no hay inscritos, usamos la clasificación
+  // como base (todos los clasificados fueron, lógicamente, inscritos).
+  const base = (inscritos&&inscritos.length) ? inscritos
+             : (riders||[]).filter(r=>r&&r.pos>0).map(r=>({name:r.name,cat:r.cat}));
+  base.forEach(p=>{
+    const key=_n(p.name);
+    const finished=finCat.has(key);
+    // Generación: la del inscrito; si no trae año, la de su fila en la clasificación
+    let g=_prGeneration(p.cat);
+    if(!g && finished) g=_prGeneration(finCat.get(key));
+    if(g!=='1' && g!=='2') return;
+    const slot = g==='1'?out.g1:out.g2;
+    slot.ins++; if(finished) slot.fin++;
+  });
+  return out;
+}
+
+// POST-CARRERA: módulo "Tasa de Supervivencia Generacional" (HTML).
+function _genSurvivalHtml(inscritos, riders){
+  // Sin parrilla de inscritos guardada NO se puede saber quién abandonó: la tasa
+  // saldría 100% y sería engañosa. En ese caso, no mostramos el módulo.
+  if(!Array.isArray(inscritos) || inscritos.length===0) return '';
+  const s=_genSurvival(inscritos, riders);
+  if(s.g1.ins+s.g2.ins===0) return ''; // sin datos de año → no se muestra
+  const row=(label,d,emoji)=>{
+    const rate = d.ins ? Math.round(d.fin/d.ins*100) : 0;
+    // Si la tasa es muy baja, color de alarma (resalta la dureza para los jóvenes)
+    const color = rate<25 ? '#dc2626' : rate<50 ? '#f59e0b' : '#16a34a';
+    return `<div class="gen-surv-row">
+      <div class="gen-surv-top">
+        <span class="gen-surv-label">${emoji} ${label}</span>
+        <span class="gen-surv-rate" style="color:${color}">${rate}%</span>
+      </div>
+      <div class="gen-bar-track"><div class="gen-bar-fill" style="width:${rate}%;background:${color}"></div></div>
+      <div class="gen-surv-detail">${d.fin} clasificados de ${d.ins} que salieron</div>
+    </div>`;
+  };
+  return `<div class="gen-surv">
+    <div class="gen-surv-hdr">💪 Tasa de supervivencia generacional
+      <span class="gen-demo-sub">cuántos llegaron a meta de los que salieron</span>
+    </div>
+    ${row('1º año', s.g1, '🌱')}
+    ${row('2º año', s.g2, '🎖️')}
+    <div class="gen-surv-foot">Una tasa baja en 1º año indica una prueba muy dura para los más jóvenes — es normal y esperable.</div>
+  </div>`;
+}
+
 function _simRenderCurrent(){
   if(!_simCurrentData){ _simShowEmpty(); return; }
   const {race, inscritos, grid, kpis} = _simCurrentData;
   // Prueba activa global → banner superior coherente en todas las pantallas
   try{ if(race) _setActiveRace(race, 'simulador'); }catch(_){}
+  // Demografía de la parrilla (1º vs 2º año)
+  try{ _simRenderDemografia(inscritos); }catch(_){}
   // Mostrar paneles
   document.getElementById('simEmptyPanel').style.display = 'none';
   document.getElementById('simKpiPanel').style.display = '';

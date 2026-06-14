@@ -16,7 +16,7 @@
      no expone global con <script>). -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="assets/css/styles.css?v=powerranking-scouting-equipo-y-conteo-2">
+<link rel="stylesheet" href="assets/css/styles.css?v=generacion-demografia-supervivencia-1">
 </head>
 <body>
 <div id="loadingOverlay" class="loading-overlay hidden"><div class="loader-card"><div class="spinner"></div><b id="loadingText">Procesando archivo…</b><div class="small" id="loadingDetail">Puede tardar unos segundos si el PDF es grande.</div></div></div>
@@ -1685,6 +1685,8 @@
         </details>
 
         <div id="simKpiBody" class="sim-kpi-grid"></div>
+        <!-- Demografía de la parrilla: 1º vs 2º año (se rellena en _simRenderCurrent) -->
+        <div id="simDemografia" class="gen-demo" style="display:none"></div>
       </section>
 
       <section class="panel" id="simTopPanel" style="display:none">
@@ -3453,6 +3455,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=inicio-conteo-carreras-reales-1"></script>
+<script src="assets/js/app.js?v=generacion-demografia-supervivencia-1"></script>
 </body>
 </html>
