@@ -13329,10 +13329,18 @@ async function renderInicio(){
     try{ history = await _ensureHistory(); }catch(e){ history = []; }
   }
   // Respetar el FILTRO GLOBAL de categoría: con "Cadete" activo, el resumen de
-  // Inicio (carreras, % Top 10, podios…) solo cuenta pruebas de cadetes.
-  if(typeof _raceMatchesGlobalCatGroup === 'function'){
+  // Inicio (carreras, % Top 10, podios…) solo cuenta pruebas de cadetes, y DENTRO
+  // de cada una solo a los corredores de ese grupo (usa _historyForGlobalCat, que
+  // filtra carreras Y corredores; así no se cuela ningún juvenil).
+  if(typeof _historyForGlobalCat === 'function'){
+    history = _historyForGlobalCat(history);
+  } else if(typeof _raceMatchesGlobalCatGroup === 'function'){
     history = history.filter(_raceMatchesGlobalCatGroup);
   }
+  // Solo carreras REALES de la categoría: ≥3 corredores del grupo. Excluye las
+  // pruebas "fantasma" donde solo aparecía 1-2 corredores sueltos (p.ej. un CRI
+  // con 1 cadete), que inflaban el contador "carreras en historial".
+  history = history.filter(r => (r.riders||[]).length >= 3);
   const totalRaces = history.length;
   const uniqueRiders = new Set();
   history.forEach(race => (race.riders||[]).forEach(r => {
