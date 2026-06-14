@@ -2749,6 +2749,10 @@ async function _calRaceModalExport(){
     ? `<tr><th>Pos.</th><th>Ciclista</th><th>Cat.</th><th>Tiempo</th></tr>`
     : `<tr><th>Pos.</th><th>Ciclista</th><th>Equipo</th><th>Cat.</th><th>CCAA</th><th>Tiempo</th></tr>`;
 
+  // Tasa de supervivencia generacional para el PDF (solo vista "Todos").
+  let survivalHtml='';
+  if(!showMine){ try{ survivalHtml=_genSurvivalHtml(race.inscritos, ridersAll); }catch(_){} }
+
   const _pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
   const filenameSuffix = showMine ? `-${(myTeam||'mi-equipo').toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,20)}` : '';
   const w = window.open('','_blank');
@@ -2770,6 +2774,18 @@ async function _calRaceModalExport(){
   td{padding:6px 9px;border-bottom:1px solid #f3f4f6}
   tr:nth-child(even) td{background:#f9fbff!important}
   .footer{margin-top:16px;font-size:10px;color:#9ca3af;text-align:center}
+  /* Tasa de supervivencia generacional (mismo aspecto que el modal) */
+  .gen-surv{margin:0 0 18px;padding:12px 14px;background:#f8fafc!important;border:1px solid #e5e7eb;border-radius:12px}
+  .gen-surv-hdr{font-size:13px;font-weight:800;color:#0b2f6b;margin-bottom:8px}
+  .gen-demo-sub{font-size:11px;font-weight:600;color:#94a3b8;margin-left:6px}
+  .gen-surv-row{margin:10px 0}
+  .gen-surv-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+  .gen-surv-label{font-size:13px;font-weight:800;color:#374151}
+  .gen-surv-rate{font-size:16px;font-weight:900}
+  .gen-bar-track{height:18px;background:#e5e7eb!important;border-radius:9px;overflow:hidden}
+  .gen-bar-fill{height:100%;border-radius:9px}
+  .gen-surv-detail{font-size:11px;color:#6b7280;margin-top:3px}
+  .gen-surv-foot{font-size:11px;color:#94a3b8;margin-top:8px;font-style:italic}
   </style></head><body>
   <div class="hdr">
     <div style="flex:1">
@@ -2780,6 +2796,7 @@ async function _calRaceModalExport(){
     </div>
     ${_pdfLogoSrc ? `<img class="hdr-logo" src="${_pdfLogoSrc}" alt="MFPP">` : ''}
   </div>
+  ${survivalHtml}
   <table>
     <thead>${tableHead}</thead>
     <tbody>${rowsHtml}</tbody>
