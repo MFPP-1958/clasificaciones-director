@@ -734,6 +734,25 @@ function showView(viewId){
   if(layout) layout.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+// PRUEBA ACTIVA GLOBAL: la prueba con la que el director está trabajando ahora
+// mismo, aunque NO tenga clasificación cargada (p.ej. una planificada elegida en
+// el Simulador o en Disponibilidad). Sirve para que el banner superior muestre
+// SIEMPRE en qué prueba estamos, en todas las pantallas.
+let _activeRace=null; // {id,name,date,localidad,type,source}
+function _setActiveRace(race, source){
+  if(!race){ _activeRace=null; }
+  else {
+    _activeRace={
+      id: race.id||'',
+      name: (race.name||race.raceName||'').trim(),
+      date: (race.date||race.raceDate||race.dateStr||'').toString(),
+      localidad: (race.localidad||'').trim(),
+      type: (race.type||race.circuitType||race.modality||'').trim(),
+      source: source||''
+    };
+  }
+  try{ const av=document.querySelector('.spa-view.active'); updateRaceHeader(av?av.id:''); }catch(_){}
+}
 let riders=[];let filtered=[];let canonicalTeams=[];let chartTeam=null;let chartCat=null;let chartScatter=null;let chartTopTeam=null;let chartTeamCompare=null;let chartTop10Teams=null;let chartTop10Cat=null;let chartTeamFinishers=null;let selectedCompare=[];let compareChart=null;let teamRankingCategories=[];let teamRankingMode='time';let sortState={key:'pos',dir:'asc'};let hasValidData=false;
 let selectedCatChips = new Set(); let onlyMyTeam = false;
 // ===== BLOQUE SUPABASE INIT =====
@@ -1701,6 +1720,8 @@ async function _dispSelectRace(raceId){
   _dispState={ raceId:r.id, raceName:r.name||'', raceDate:r.date||'', localidad:r.localidad||'',
                confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
                extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
+  // Prueba activa global → banner superior coherente en todas las pantallas
+  try{ _setActiveRace({id:r.id, name:r.name, date:r.date, localidad:r.localidad}, 'disponibilidad'); }catch(_){}
   _dispRender();
   _dispSubscribe(r.id);
 }
@@ -8297,26 +8318,49 @@ function renderAll(){riders=enrichRiders(riders);filtered=filtered.map(fr=>rider
 function updateRaceHeader(viewId){
   const el=$('raceHeader');
   if(!el) return;
-  // Ocultar en Evolución (abarca toda la temporada, no una prueba concreta)
-  const hideIn=['view-evolucion'];
+  // Ocultar en las pantallas de TEMPORADA COMPLETA (no van de una prueba concreta).
+  const hideIn=['view-evolucion','view-resumen','view-tendencias','view-powerranking',
+                'view-seleccion','view-equipos-ccaa','view-ciclistas-cat','view-gestion',
+                'view-fccv-docs','view-inicio'];
   if(hideIn.includes(viewId||'')){el.classList.remove('visible');return;}
-  const name=($('raceName')?.value||'').trim();
-  if(!name||!riders.length){el.classList.remove('visible');return;}
-  $('raceHeaderTitle').textContent=name;
-  const date=formatDateDisplay(parseRaceDate(($('raceDate')?.value||'').trim()))||($('raceDate')?.value||'').trim();
-  const km=($('raceKm')?.value||'').trim();
-  const avg=($('raceAvg')?.value||'').trim();
-  const loc=($('raceLocalidad')?.value||'').trim();
-  const type=($('raceCircuitType')?.value||'').trim();
-  const parts=[];
-  if(date) parts.push('📅 '+date);
-  if(loc)  parts.push('📍 '+escapeHtml(loc));
-  if(km)   parts.push('📏 '+escapeHtml(km));
-  if(avg)  parts.push('💨 '+escapeHtml(avg));
-  if(type) parts.push('🔄 '+escapeHtml(type));
   const sep='<span class="race-header-sep">·</span>';
-  $('raceHeaderMeta').innerHTML=parts.join(sep);
-  el.classList.add('visible');
+
+  // 1) PRIORIDAD: clasificación cargada (datos completos: km, media…)
+  const name=($('raceName')?.value||'').trim();
+  if(name && riders.length){
+    $('raceHeaderTitle').textContent=name;
+    const date=formatDateDisplay(parseRaceDate(($('raceDate')?.value||'').trim()))||($('raceDate')?.value||'').trim();
+    const km=($('raceKm')?.value||'').trim();
+    const avg=($('raceAvg')?.value||'').trim();
+    const loc=($('raceLocalidad')?.value||'').trim();
+    const type=($('raceCircuitType')?.value||'').trim();
+    const parts=[];
+    if(date) parts.push('📅 '+date);
+    if(loc)  parts.push('📍 '+escapeHtml(loc));
+    if(km)   parts.push('📏 '+escapeHtml(km));
+    if(avg)  parts.push('💨 '+escapeHtml(avg));
+    if(type) parts.push('🔄 '+escapeHtml(type));
+    $('raceHeaderMeta').innerHTML=parts.join(sep);
+    el.classList.add('visible');
+    return;
+  }
+
+  // 2) Sin clasificación cargada: usar la PRUEBA ACTIVA (p.ej. seleccionada en el
+  //    Simulador o en Disponibilidad). Así el banner nunca queda en blanco.
+  if(_activeRace && _activeRace.name){
+    $('raceHeaderTitle').textContent=_activeRace.name;
+    let dStr=_activeRace.date||'';
+    try{ const d=parseRaceDate(dStr); if(d) dStr=formatDateDisplay(d); }catch(_){}
+    const parts=[];
+    if(dStr)               parts.push('📅 '+escapeHtml(dStr));
+    if(_activeRace.localidad) parts.push('📍 '+escapeHtml(_activeRace.localidad));
+    if(_activeRace.type)      parts.push('🔄 '+escapeHtml(_activeRace.type));
+    $('raceHeaderMeta').innerHTML=parts.join(sep);
+    el.classList.add('visible');
+    return;
+  }
+
+  el.classList.remove('visible');
 }
 
 function renderStats(){
@@ -24972,6 +25016,8 @@ function _simOnRaceChange(){
   _simSelectedRaceId = id;
   _simBuildData(id);
   _simRenderCurrent();
+  // Prueba activa global → el banner superior muestra esta prueba en todas las pantallas
+  try{ if(_simCurrentData && _simCurrentData.race) _setActiveRace(_simCurrentData.race, 'simulador'); }catch(_){}
 }
 
 // Recalcula TODO el módulo simulador y muestra confirmación al usuario.
@@ -26004,6 +26050,8 @@ function _simBuildData(raceId){
 function _simRenderCurrent(){
   if(!_simCurrentData){ _simShowEmpty(); return; }
   const {race, inscritos, grid, kpis} = _simCurrentData;
+  // Prueba activa global → banner superior coherente en todas las pantallas
+  try{ if(race) _setActiveRace(race, 'simulador'); }catch(_){}
   // Mostrar paneles
   document.getElementById('simEmptyPanel').style.display = 'none';
   document.getElementById('simKpiPanel').style.display = '';
