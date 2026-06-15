@@ -890,8 +890,16 @@ let _rbacAllPerms = {};     // {role: {viewId: bool}} — for admin panel
   const appLogo = document.querySelector('.brand-logo');
   if(logoEl && appLogo) logoEl.src = appLogo.src;
 
+  // Escuchar la confirmación de sesión de Supabase (enlace mágico) cuanto antes,
+  // para no perder el evento por una carrera de tiempos.
+  if(typeof _rbacListenAuth==='function') _rbacListenAuth();
+
+  // Si la URL trae un token de enlace mágico, NO restauramos la sesión guardada:
+  // damos prioridad a entrar con ese enlace (y a su validación por email).
+  const _hasMagicToken = (typeof location!=='undefined') && /access_token=/.test(location.hash||'');
+
   // Restaurar sesión desde localStorage
-  const saved = localStorage.getItem('_rbacSession');
+  const saved = !_hasMagicToken && localStorage.getItem('_rbacSession');
   if(saved){
     try{
       const s = JSON.parse(saved);
@@ -1026,6 +1034,45 @@ async function _rbacSendMagicLink(){
   }
 }
 
+// Valida un email de sesión Auth contra app_users y, si es válido, entra. Si no
+// está autorizado, cierra la sesión Auth y avisa. Limpia el #access_token de la
+// URL tras entrar para que un refresco no reprocese el enlace.
+async function _rbacApplyAuthUser(email){
+  if(!email || _rbacUser) return false;
+  try{
+    const e=String(email).toLowerCase();
+    const {data:u,error}=await _sb.from('app_users').select('*').eq('email',e).eq('active',true).maybeSingle();
+    if(error || !u){
+      try{ await _sb.auth.signOut(); }catch(_){}
+      const err=document.getElementById('rbacErrorMsg');
+      if(err) err.textContent='Tu correo no está autorizado en el equipo. Contacta con el director.';
+      return false;
+    }
+    await _rbacFinishLogin(u, 'magic');
+    // Quitar el token de la URL (estética y seguridad); no recarga la página.
+    try{ if(location.hash && location.hash.includes('access_token')) history.replaceState(null,'',location.pathname+location.search); }catch(_){}
+    return true;
+  }catch(_){ return false; }
+}
+
+// Escucha el momento EXACTO en que Supabase confirma la sesión (al volver del
+// enlace mágico la detección del token es asíncrona; comprobarla una sola vez
+// puede llegar antes de tiempo). Esto cubre ese caso de carrera.
+function _rbacListenAuth(){
+  if(!_AUTH_MAGIC_ENABLED || !_sb || !_sb.auth || !_sb.auth.onAuthStateChange) return;
+  try{
+    _sb.auth.onAuthStateChange((event, session)=>{
+      const email = session && session.user && session.user.email;
+      if(!email || _rbacUser) return;
+      if(event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='TOKEN_REFRESHED'){
+        // Diferir: la guía de supabase-js desaconseja llamar a la BD dentro del
+        // propio callback (riesgo de bloqueo). Lo hacemos en el siguiente tick.
+        setTimeout(()=>{ _rbacApplyAuthUser(email); }, 0);
+      }
+    });
+  }catch(_){}
+}
+
 // Al volver del enlace mágico (o si hay sesión Auth previa): validar contra
 // app_users por email. Si el correo no está autorizado → cerrar sesión y avisar.
 async function _rbacResolveAuthSession(){
@@ -1035,16 +1082,7 @@ async function _rbacResolveAuthSession(){
     const r=await Promise.race([_sb.auth.getSession(), timeout]);
     const session=r && r.data && r.data.session;
     if(!session || !session.user || !session.user.email) return false;
-    const email=session.user.email.toLowerCase();
-    const {data:u,error}=await _sb.from('app_users').select('*').eq('email',email).eq('active',true).maybeSingle();
-    if(error || !u){
-      try{ await _sb.auth.signOut(); }catch(_){}
-      const err=document.getElementById('rbacErrorMsg');
-      if(err) err.textContent='Tu correo no está autorizado en el equipo. Contacta con el director.';
-      return false;
-    }
-    await _rbacFinishLogin(u, 'magic');
-    return true;
+    return await _rbacApplyAuthUser(session.user.email);
   }catch(_){ return false; }   // antibloqueo: cualquier fallo de Auth no rompe el login clásico
 }
 
