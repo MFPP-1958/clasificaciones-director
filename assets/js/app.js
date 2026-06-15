@@ -1778,7 +1778,22 @@ async function _dispInit(){
     _dispRaces = g ? all.filter(r=> r._keys.has(g)) : all;
     if(!_dispRaces.length){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada${g?' en esta categoría':''}.<br><span style="font-size:12px">Añádela en el Calendario${g?' con el filtro en esta categoría':''}.</span></p></div>`; return; }
     _dispSelectRace(_dispRaces[0].id);
-  }catch(e){ body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}</div>`; }
+  }catch(e){
+    // "Failed to fetch" = sin conexión (típico en el coche, sin cobertura).
+    // Mostramos un mensaje amable con botón de reintento, no un error técnico.
+    const offline = (typeof navigator!=='undefined' && navigator.onLine===false) || /failed to fetch|networkerror|load failed/i.test(e.message||'');
+    if(offline){
+      body.innerHTML=`<div style="padding:40px;text-align:center;color:#6b7280">
+        <div style="font-size:42px">📡</div>
+        <p style="margin-top:10px;font-weight:700;color:#374151">Sin conexión a internet</p>
+        <p style="font-size:13px;margin-top:4px">La disponibilidad necesita conexión para mostrar los apuntados en tiempo real.<br>Conéctate al wifi o a los datos del móvil y pulsa Reintentar.</p>
+        <button onclick="_dispInit()" style="margin-top:14px;padding:10px 20px;background:#1d4ed8;color:#fff;border:none;border-radius:10px;font-weight:800;cursor:pointer">🔄 Reintentar</button>
+      </div>`;
+    } else {
+      body.innerHTML=`<div style="padding:30px;text-align:center;color:#dc2626">Error: ${escapeHtml(e.message||String(e))}
+        <div style="margin-top:10px"><button onclick="_dispInit()" style="padding:8px 16px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">🔄 Reintentar</button></div></div>`;
+    }
+  }
 }
 
 async function _dispSelectRace(raceId){
