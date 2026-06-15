@@ -2758,9 +2758,13 @@ async function _calRaceModalExport(){
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(race.raceName||'Carrera')}${filenameSuffix}</title>
   <style>
-  @page{size:A4 portrait;margin:14mm}
+  /* Márgenes los controla @page: así se respetan en TODAS las páginas (arriba y
+     abajo), no solo en la primera. El body NO lleva padding propio para no sumar
+     un margen extra solo en la página 1. */
+  @page{size:A4 portrait;margin:16mm 14mm}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-  body{font-family:Arial,sans-serif;padding:24px;color:#111;max-width:1100px;margin:0 auto}
+  html,body{margin:0;padding:0}
+  body{font-family:Arial,sans-serif;color:#111;max-width:1100px;margin:0 auto}
   .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:20px 24px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
   .hdr *{color:#fff!important}
   .hdr-title{font-size:22px;font-weight:900;margin:0 0 4px}
@@ -2770,12 +2774,14 @@ async function _calRaceModalExport(){
   .kpi{background:rgba(255,255,255,.2)!important;border-radius:8px;padding:6px 14px;text-align:center}
   .kpi-v{font-size:18px;font-weight:900}.kpi-l{font-size:9px;opacity:.7;text-transform:uppercase}
   table{width:100%;border-collapse:collapse;font-size:11px}
+  thead{display:table-header-group}            /* repite la cabecera en cada página */
   th{background:#f0f4f8!important;padding:7px 9px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467}
   td{padding:6px 9px;border-bottom:1px solid #f3f4f6}
+  tr{break-inside:avoid;page-break-inside:avoid}  /* una fila no se parte entre páginas */
   tr:nth-child(even) td{background:#f9fbff!important}
   .footer{margin-top:16px;font-size:10px;color:#9ca3af;text-align:center}
   /* Tasa de supervivencia generacional (mismo aspecto que el modal) */
-  .gen-surv{margin:0 0 18px;padding:12px 14px;background:#f8fafc!important;border:1px solid #e5e7eb;border-radius:12px}
+  .gen-surv{margin:0 0 18px;padding:12px 14px;background:#f8fafc!important;border:1px solid #e5e7eb;border-radius:12px;break-inside:avoid;page-break-inside:avoid}
   .gen-surv-hdr{font-size:13px;font-weight:800;color:#0b2f6b;margin-bottom:8px}
   .gen-demo-sub{font-size:11px;font-weight:600;color:#94a3b8;margin-left:6px}
   .gen-surv-row{margin:10px 0}
