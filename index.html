@@ -16,7 +16,7 @@
      no expone global con <script>). -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="assets/css/styles.css?v=fase1c-laboratorio-caracteristicas-1">
+<link rel="stylesheet" href="assets/css/styles.css?v=fase2-3a-clustering-tipos-corredor-1">
 </head>
 <body>
 <div id="loadingOverlay" class="loading-overlay hidden"><div class="loader-card"><div class="spinner"></div><b id="loadingText">Procesando archivo…</b><div class="small" id="loadingDetail">Puede tardar unos segundos si el PDF es grande.</div></div></div>
@@ -2791,6 +2791,12 @@
           <div id="labRaceTags"></div>
         </details>
         <details class="lab-tag-wrap">
+          <summary>👥 Tipos de corredor (agrupación automática)</summary>
+          <div style="font-size:12.5px;color:#6b7280;margin:8px 0">Agrupa a los corredores de esta categoría por perfil de rendimiento (nivel, regularidad y techo). Es orientativo y se afina al añadir más carreras.</div>
+          <button class="lab-btn" onclick="_clRenderPanel()">👥 Calcular grupos</button>
+          <div id="clPanel" style="margin-top:12px"></div>
+        </details>
+        <details class="lab-tag-wrap">
           <summary>🧠 Modelo de predicción (GLM) — experimental</summary>
           <div style="font-size:12.5px;color:#6b7280;margin:8px 0">Entrena un modelo estadístico con las características de los corredores y lo valida de forma honesta (cada carrera se predice solo con las anteriores). Solo se activará si <b>supera</b> al método actual. No afecta a la predicción en uso.</div>
           <button class="lab-btn" onclick="_glmRenderPanel()">🧪 Entrenar y validar</button>
@@ -3533,6 +3539,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=fix-finishrate-laboratorio-1"></script>
+<script src="assets/js/app.js?v=fase2-3a-clustering-tipos-corredor-1"></script>
 </body>
 </html>

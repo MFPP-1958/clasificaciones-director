@@ -1644,3 +1644,13 @@ details.sim-help .sim-help-body .tip{
 .lab-tagname{flex:1;font-size:13px;color:#374151;font-weight:600;min-width:0}
 .lab-tagdate{display:block;font-size:11px;color:#94a3b8;font-weight:500}
 .lab-tagsel{padding:7px 10px;border:1px solid #d0d5dd;border-radius:8px;font-size:13px;background:#fff}
+
+/* ── Clustering: tipos de corredor (Fase 2.3.a) ── */
+.cl-group{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:10px}
+.cl-group-h{font-size:15px;font-weight:900;color:#0b2f6b}
+.cl-group-n{font-size:12px;font-weight:700;color:#64748b}
+.cl-group-s{font-size:11.5px;color:#94a3b8;margin:2px 0 8px}
+.cl-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cl-chip{background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:3px 10px;font-size:12px;color:#3730a3;font-weight:600}
+.cl-chip-mine{background:#1d4ed8;color:#fff;border-color:#1d4ed8;font-weight:800}
+.lab-disc{display:inline-block;background:#ecfeff;border:1px solid #a5f3fc;color:#155e75;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:800;margin-left:4px}

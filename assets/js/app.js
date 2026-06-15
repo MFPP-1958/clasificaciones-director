@@ -43308,6 +43308,9 @@ function _labShow(){
   const types=['montana','llana','cri','circuito'].filter(t=>o.byType[t]).map(t=>
     `<div class="lab-type"><span class="lab-type-ic">${_LAB_TYPE_ICON[t]}</span><span class="lab-type-n">${_LAB_TYPE_LABEL[t]}</span><span class="lab-type-v">${o.byType[t].mean}º</span><span class="lab-type-c">${o.byType[t].n} carr.</span></div>`).join('') || '<div class="lab-hint">Sin datos por tipo todavía.</div>';
   const adn = o.adn ? (typeof _adnBadgeHtml==='function'?_adnBadgeHtml(o.adn):escapeHtml(o.adn.label||'')) : '';
+  // Perfil de disciplina (escalador/rodador/…) derivado de los deltas por tipo
+  const disc=(typeof _clDiscipline==='function')?_clDiscipline(o):null;
+  const discHtml= disc ? `<span class="lab-disc" title="Según su rendimiento por tipo de prueba (confianza ${disc.confidence})">${disc.icon} ${disc.label}${disc.confidence!=='alta'?' · confianza '+disc.confidence:''}</span>` : '';
   // Selector de rival para head-to-head
   const others=[..._labFeatAll().values()].filter(x=>x.key!==o.key).sort((a,b)=>a.displayName.localeCompare(b.displayName));
   const rivalOpts='<option value="">— elige un rival —</option>'+others.map(x=>`<option value="${escapeAttr(x.displayName)}">${escapeHtml(x.displayName)}${x.team?' ('+escapeHtml(x.team)+')':''}</option>`).join('');
@@ -43315,7 +43318,7 @@ function _labShow(){
   card.innerHTML=`<div class="lab-card">
     <div class="lab-head">
       <div class="lab-name">${escapeHtml(_evolNormName?_evolNormName(o.displayName):o.displayName)}</div>
-      <div class="lab-sub">${escapeHtml(o.team||'—')}${o.cat?' · '+escapeHtml(o.cat):''}${genTxt} ${adn}</div>
+      <div class="lab-sub">${escapeHtml(o.team||'—')}${o.cat?' · '+escapeHtml(o.cat):''}${genTxt} ${adn} ${discHtml}</div>
     </div>
     <div class="lab-section-t">📏 Consistencia</div>
     <div class="lab-tiles">${tiles}</div>
@@ -43659,4 +43662,119 @@ function _glmClassBlock(hist){
       </div>
       <div style="font-size:11px;color:#94a3b8;margin-top:6px">Brier = error de probabilidad (0 perfecto). Comparamos la logística contra la frecuencia previa del propio corredor.</div>`;
   }catch(_){ return ''; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 👥 FASE 2.3.a · CLUSTERING (K-Means) — TIPOS DE CORREDOR  (no supervisado)
+// ----------------------------------------------------------------------------
+// Agrupa a los corredores por PERFIL DE RENDIMIENTO (nivel + regularidad + techo)
+// y deriva un perfil de DISCIPLINA (escalador/rodador/rematador) de los deltas por
+// tipo de prueba. Descriptivo, aditivo, respeta categoría. No toca la predicción.
+// ════════════════════════════════════════════════════════════════════════════
+function _kmStd(a){ if(a.length<2) return 0; const m=a.reduce((x,y)=>x+y,0)/a.length; return Math.sqrt(a.reduce((s,p)=>s+(p-m)**2,0)/a.length); }
+
+// K-Means con varias inicializaciones (la mejor por inercia). Z: filas estandarizadas.
+function _kmeans(Z, k, restarts){
+  restarts=restarts||8; const n=Z.length, d=Z[0].length;
+  let best=null, bestInertia=Infinity;
+  for(let rs=0; rs<restarts; rs++){
+    // init aleatorio de centroides
+    const idx=[...Array(n).keys()]; for(let i=idx.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [idx[i],idx[j]]=[idx[j],idx[i]]; }
+    let C=idx.slice(0,k).map(i=>Z[i].slice());
+    let assign=new Array(n).fill(0);
+    for(let it=0; it<60; it++){
+      let changed=false;
+      for(let i=0;i<n;i++){
+        let bd=Infinity, bj=0;
+        for(let j=0;j<k;j++){ let s=0; for(let f=0;f<d;f++){ const e=Z[i][f]-C[j][f]; s+=e*e; } if(s<bd){bd=s;bj=j;} }
+        if(assign[i]!==bj){ assign[i]=bj; changed=true; }
+      }
+      const sum=Array.from({length:k},()=>new Array(d).fill(0)); const cnt=new Array(k).fill(0);
+      for(let i=0;i<n;i++){ cnt[assign[i]]++; for(let f=0;f<d;f++) sum[assign[i]][f]+=Z[i][f]; }
+      for(let j=0;j<k;j++){ if(cnt[j]) for(let f=0;f<d;f++) C[j][f]=sum[j][f]/cnt[j]; }
+      if(!changed && it>0) break;
+    }
+    let inertia=0; for(let i=0;i<n;i++){ for(let f=0;f<d;f++){ const e=Z[i][f]-C[assign[i]][f]; inertia+=e*e; } }
+    if(inertia<bestInertia){ bestInertia=inertia; best={assign:assign.slice(), C:C.map(c=>c.slice())}; }
+  }
+  return best;
+}
+
+// Construye los clusters de corredores de la categoría activa.
+function _clRiderClusters(minRaces, k){
+  minRaces=minRaces||4; k=k||4;
+  const feats=(typeof _labFeatAll==='function')?_labFeatAll():_featAll();
+  const riders=[...feats.values()].filter(o=>o.races>=minRaces && o.mean!=null);
+  if(riders.length<k) return { ok:false, n:riders.length };
+  // Características para agrupar: nivel (percentil medio), regularidad (CV), techo (mejor percentil)
+  const raw=riders.map(o=>{
+    const bestPct = o.results && o.results.length ? Math.min(...o.results.map(r=>r.pct).filter(v=>v!=null)) : (o.pctMean!=null?o.pctMean/100:0.5);
+    return [ (o.pctMean!=null?o.pctMean/100:0.5), (o.cv!=null?o.cv:0), bestPct ];
+  });
+  const d=raw[0].length, mean=new Array(d).fill(0), sd=new Array(d).fill(0);
+  for(let f=0;f<d;f++){ mean[f]=raw.reduce((s,r)=>s+r[f],0)/raw.length; }
+  for(let f=0;f<d;f++){ const s=_kmStd(raw.map(r=>r[f])); sd[f]=s>1e-9?s:1; }
+  const Z=raw.map(r=>r.map((v,f)=>(v-mean[f])/sd[f]));
+  const km=_kmeans(Z,k,10);
+  // perfil de cada cluster (medias en unidades reales) + etiqueta automática
+  const groups=[];
+  for(let j=0;j<k;j++){
+    const idx=[...riders.keys()].filter(i=>km.assign[i]===j);
+    if(!idx.length) continue;
+    const mPct=idx.reduce((s,i)=>s+raw[i][0],0)/idx.length;
+    const mCv =idx.reduce((s,i)=>s+raw[i][1],0)/idx.length;
+    const mBest=idx.reduce((s,i)=>s+raw[i][2],0)/idx.length;
+    groups.push({ members:idx.map(i=>riders[i]), mPct, mCv, mBest, size:idx.length });
+  }
+  // ordenar de mejor (menor percentil) a peor y etiquetar
+  groups.sort((a,b)=>a.mPct-b.mPct);
+  const labels=['🎯 Punta de lanza','⚡ Medios con punta','🚲 Gregarios regulares','🛡️ Cola / participación','📋 Bloque'];
+  groups.forEach((g,i)=>{ g.label = labels[i]||('Grupo '+(i+1)); });
+  return { ok:true, n:riders.length, k:groups.length, groups };
+}
+
+// Perfil de DISCIPLINA de un corredor (de sus deltas por tipo). Confianza por nº de carreras.
+function _clDiscipline(o){
+  if(!o || !o.byType) return null;
+  const all=o.pctMean!=null?o.pctMean:50;   // 0..100, menor mejor
+  const bt={};
+  ['montana','cri','circuito','llana'].forEach(t=>{ if(o.byType[t]) bt[t]=o.byType[t].mean; });
+  // pasar a percentil aprox: ya o.byType[t].mean es puesto medio; comparamos relativo
+  // Usamos directamente las medias de puesto por tipo: menor = mejor en ese tipo.
+  const entries=Object.entries(bt);
+  if(entries.length<1) return null;
+  // mejor tipo (menor puesto medio) frente a su media general de puesto
+  entries.sort((a,b)=>a[1]-b[1]);
+  const bestType=entries[0][0];
+  const total=(o.results||[]).length;
+  const conf = total>=10?'alta':total>=6?'media':'baja';
+  const map={ montana:{ic:'⛰️',lbl:'Escalador'}, cri:{ic:'⏱️',lbl:'Contrarrelojista'}, circuito:{ic:'🔄',lbl:'Rematador/Circuito'}, llana:{ic:'💨',lbl:'Rodador'} };
+  const m=map[bestType]||{ic:'🚴',lbl:bestType};
+  return { type:bestType, icon:m.ic, label:m.lbl, confidence:conf, byType:bt };
+}
+
+// Panel "Tipos de corredor" en el Laboratorio (K-Means + miembros).
+function _clRenderPanel(){
+  const el=document.getElementById('clPanel'); if(!el) return;
+  el.innerHTML='<div class="lab-hint">⏳ Agrupando…</div>';
+  setTimeout(()=>{
+    try{
+      const k = Math.min(4, 5);
+      const res=_clRiderClusters(4, 4);
+      if(!res.ok){ el.innerHTML=`<div class="lab-notfound">Aún hay pocos corredores con ≥4 carreras en esta categoría para agrupar (${res.n||0}).<br><span style="font-size:12px">Madurará al añadir más clasificaciones.</span></div>`; return; }
+      const myCanon=(typeof myTeam!=='undefined')?getCanonicalTeam(myTeam||'').toLowerCase():'';
+      const html=res.groups.map(g=>{
+        const mine=g.members.filter(m=>String(m.team||'').toLowerCase()===myCanon);
+        const others=g.members.filter(m=>String(m.team||'').toLowerCase()!==myCanon);
+        const chip=m=>`<span class="cl-chip${String(m.team||'').toLowerCase()===myCanon?' cl-chip-mine':''}" title="${escapeHtml(m.team||'')} · media ${m.mean!=null?m.mean+'º':'—'}">${escapeHtml(_evolNormName?_evolNormName(m.displayName):m.displayName)}</span>`;
+        const list=mine.concat(others).slice(0,40).map(chip).join('');
+        return `<div class="cl-group">
+          <div class="cl-group-h">${g.label} <span class="cl-group-n">${g.size} corredores${mine.length?' · ⭐ '+mine.length+' míos':''}</span></div>
+          <div class="cl-group-s">percentil medio ${Math.round(g.mPct*100)}% · regularidad CV ${g.mCv.toFixed(2)} · techo ${Math.round(g.mBest*100)}%</div>
+          <div class="cl-chips">${list}</div>
+        </div>`;
+      }).join('');
+      el.innerHTML=`<div style="font-size:12px;color:#6b7280;margin-bottom:8px">${res.n} corredores agrupados (≥4 carreras). Orientativo.</div>${html}`;
+    }catch(e){ el.innerHTML=`<div class="lab-notfound">No se pudo agrupar: ${escapeHtml(e.message||String(e))}</div>`; }
+  },60);
 }
