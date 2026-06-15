@@ -2758,14 +2758,18 @@ async function _calRaceModalExport(){
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(race.raceName||'Carrera')}${filenameSuffix}</title>
   <style>
-  /* Margen DOBLE garantía: @page (para impresoras que lo respetan) + padding del
-     body (se respeta SIEMPRE, también con "Márgenes: Ninguno" en el diálogo).
-     El padding del body asegura los lados en todas las páginas; @page añade el
-     superior/inferior por página. */
-  @page{size:A4 portrait;margin:12mm}
+  /* MÁRGENES QUE SE RESPETAN EN TODAS LAS PÁGINAS sin depender del diálogo:
+     - Laterales: padding horizontal del body (se aplica en todas las hojas).
+     - Superior/inferior: una cabecera y un pie "espaciadores" dentro de .pagewrap
+       que el navegador REPITE en cada página impresa (thead/tfoot). */
+  @page{size:A4 portrait;margin:0}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   html,body{margin:0}
-  body{font-family:Arial,sans-serif;color:#111;padding:10mm 12mm;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;color:#111;padding:0 12mm;box-sizing:border-box}
+  .pagewrap{width:100%;border-collapse:collapse}
+  .pagewrap > thead > tr > td, .pagewrap > tfoot > tr > td, .pagewrap > tbody > tr > td{border:none!important;padding:0!important;background:transparent!important}
+  .page-space-top{height:12mm}
+  .page-space-bottom{height:12mm}
   .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:20px 24px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
   .hdr *{color:#fff!important}
   .hdr-title{font-size:22px;font-weight:900;margin:0 0 4px}
@@ -2794,21 +2798,27 @@ async function _calRaceModalExport(){
   .gen-surv-detail{font-size:11px;color:#6b7280;margin-top:3px}
   .gen-surv-foot{font-size:11px;color:#94a3b8;margin-top:8px;font-style:italic}
   </style></head><body>
-  <div class="hdr">
-    <div style="flex:1">
-      <div class="hdr-title">${titlePrefix} ${escapeHtml(race.raceName||'Carrera')}</div>
-      <div class="hdr-sub">${race.raceDate||''}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''}${race.km?' · 📏 '+escapeHtml(_fmtKm(race.km)):''} · Generado el ${dateStr}</div>
-      ${subtitle?`<div style="font-size:11px;opacity:.85;margin-top:4px;font-style:italic">${subtitle}</div>`:''}
-      <div class="kpis">${kpisHtml}</div>
+  <table class="pagewrap">
+   <thead><tr><td><div class="page-space-top"></div></td></tr></thead>
+   <tfoot><tr><td><div class="page-space-bottom"></div></td></tr></tfoot>
+   <tbody><tr><td>
+    <div class="hdr">
+      <div style="flex:1">
+        <div class="hdr-title">${titlePrefix} ${escapeHtml(race.raceName||'Carrera')}</div>
+        <div class="hdr-sub">${race.raceDate||''}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''}${race.km?' · 📏 '+escapeHtml(_fmtKm(race.km)):''} · Generado el ${dateStr}</div>
+        ${subtitle?`<div style="font-size:11px;opacity:.85;margin-top:4px;font-style:italic">${subtitle}</div>`:''}
+        <div class="kpis">${kpisHtml}</div>
+      </div>
+      ${_pdfLogoSrc ? `<img class="hdr-logo" src="${_pdfLogoSrc}" alt="MFPP">` : ''}
     </div>
-    ${_pdfLogoSrc ? `<img class="hdr-logo" src="${_pdfLogoSrc}" alt="MFPP">` : ''}
-  </div>
-  ${survivalHtml}
-  <table>
-    <thead>${tableHead}</thead>
-    <tbody>${rowsHtml}</tbody>
+    ${survivalHtml}
+    <table>
+      <thead>${tableHead}</thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="footer">Director Ciclismo MFPP · ${escapeHtml(race.raceName||'')}${showMine?' · '+escapeHtml(myTeam||''):''} · ${dateStr}</div>
+   </td></tr></tbody>
   </table>
-  <div class="footer">Director Ciclismo MFPP · ${escapeHtml(race.raceName||'')}${showMine?' · '+escapeHtml(myTeam||''):''} · ${dateStr}</div>
   <script>window.onload=()=>window.print();<\/script>
   </body></html>`);
   w.document.close();
