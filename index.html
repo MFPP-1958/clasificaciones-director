@@ -16,7 +16,7 @@
      no expone global con <script>). -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="assets/css/styles.css?v=panel-radio-vuelta-1">
+<link rel="stylesheet" href="assets/css/styles.css?v=fase1c-laboratorio-caracteristicas-1">
 </head>
 <body>
 <div id="loadingOverlay" class="loading-overlay hidden"><div class="loader-card"><div class="spinner"></div><b id="loadingText">Procesando archivo…</b><div class="small" id="loadingDetail">Puede tardar unos segundos si el PDF es grande.</div></div></div>
@@ -119,6 +119,7 @@
       <div class="nav-section-items">
         <button class="nav-btn" data-view="view-evolucion" data-label="Evolución" onclick="showView('view-evolucion')"><span class="nav-icon">📈</span><span class="nav-label"> Evolución</span></button>
         <button class="nav-btn" data-view="view-powerranking" data-label="Power Ranking" onclick="showView('view-powerranking')"><span class="nav-icon">🏆</span><span class="nav-label"> Power Ranking</span></button>
+        <button class="nav-btn" data-view="view-laboratorio" data-label="Laboratorio" onclick="showView('view-laboratorio')"><span class="nav-icon">🔬</span><span class="nav-label"> Laboratorio</span></button>
         <button class="nav-btn" data-view="view-tendencias" data-label="Tendencias" onclick="showView('view-tendencias')"><span class="nav-icon">📉</span><span class="nav-label"> Tendencias</span></button>
         <button class="nav-btn" data-view="view-seleccion" data-label="Convocatorias" onclick="showView('view-seleccion')"><span class="nav-icon">🏆</span><span class="nav-label"> Convocatorias</span></button>
         <button class="nav-btn" data-view="view-disponibilidad" data-label="Disponibilidad" onclick="showView('view-disponibilidad')"><span class="nav-icon">✅</span><span class="nav-label"> Disponibilidad</span></button>
@@ -2771,6 +2772,27 @@
       </section>
     </div>
 
+    <!-- ═══════════════ LABORATORIO DE CARACTERÍSTICAS (Fase 1.C) ═══════════════ -->
+    <div id="view-laboratorio" class="spa-view">
+      <section class="panel">
+        <div class="section-title">
+          <h2 style="margin:0">🔬 Laboratorio de características</h2>
+          <button class="help-btn" data-help="&lt;strong&gt;🔬 Laboratorio&lt;/strong&gt;Ficha completa de cada corredor a partir de su histórico: consistencia (media, desviación, % finalización), tendencia (forma actual y pendiente de los últimos resultados), especialización por tipo de prueba, fatiga y cara a cara con un rival. Abajo puedes ETIQUETAR el tipo de cada carrera (llano/montaña/CRI/circuito) para afinar la especialización.">?</button>
+          <button class="btn light" onclick="_labInit()" style="padding:6px 12px;font-size:12px;margin-left:auto">🔄 Recargar</button>
+        </div>
+        <div class="lab-search">
+          <input id="labRider" class="lab-input" list="labRiderList" type="text" placeholder="Escribe un corredor…" autocomplete="off" onchange="_labShow()">
+          <datalist id="labRiderList"></datalist>
+          <button class="lab-btn" onclick="_labShow()">🔍 Ver ficha</button>
+        </div>
+        <div id="labCard"></div>
+        <details class="lab-tag-wrap">
+          <summary>🏷️ Etiquetar tipo de cada carrera (afina la especialización)</summary>
+          <div id="labRaceTags"></div>
+        </details>
+      </section>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════════════════
          VISTA CALENDARIO — extraída de Resumen Temporada (Paso 3 UX)
          Mantiene los mismos IDs internos para no romper _calRender, _calPrint,
@@ -3505,6 +3527,6 @@
 </div>
 
 
-<script src="assets/js/app.js?v=fase1b-etiquetado-tipo-prueba-1"></script>
+<script src="assets/js/app.js?v=fase1c-laboratorio-caracteristicas-1"></script>
 </body>
 </html>

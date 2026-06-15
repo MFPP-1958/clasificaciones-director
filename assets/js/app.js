@@ -720,6 +720,7 @@ function showView(viewId){
       if(viewId==='view-ciclistas-cat') { if(typeof _riderCatInit==='function') _riderCatInit(); }
       if(viewId==='view-disponibilidad') { if(typeof _dispInit==='function') _dispInit(); }
       if(viewId==='view-radiovuelta') { if(typeof _rvInit==='function') _rvInit(); }
+      if(viewId==='view-laboratorio') { if(typeof _labInit==='function') _labInit(); }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -869,6 +870,7 @@ const ALL_VIEWS = [
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
   {id:'view-disponibilidad', icon:'✅', label:'Disponibilidad'},
   {id:'view-radiovuelta',    icon:'📻', label:'Radio Vuelta'},
+  {id:'view-laboratorio',    icon:'🔬', label:'Laboratorio'},
   {id:'view-validacion',         icon:'⚠️', label:'Validación'},
   {id:'view-equipos-ccaa',       icon:'🗺️', label:'Equipos y CCAA'},
   {id:'view-ciclistas-cat',      icon:'🎽', label:'Categorías ciclistas'},
@@ -1136,7 +1138,7 @@ async function _rbacLoadPerms(role){
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
   if(!data || data.length === 0){
     const defaults = {
-      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-disponibilidad','view-radiovuelta','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
+      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-disponibilidad','view-radiovuelta','view-laboratorio','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
       CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos','view-disponibilidad'],
       LECTOR:   ['view-carga','view-tabla']
     };
@@ -6225,6 +6227,7 @@ async function _sbLoadHistory(){
       avg: extra.avg || '',
       localidad: extra.localidad || '',
       circuitType: extra.circuitType || '',
+      raceTypeTag: extra.raceTypeTag || '',   // Fase 1.B: tipo de prueba manual (cri/montana/circuito/llana)
       challengeCV: !!extra.challengeCV,
       raceCat: extra.raceCat || '',   // categoría FORZADA de la prueba (override manual)
       ccaa: extra.ccaa || '',
@@ -43219,4 +43222,138 @@ function _featHeadToHead(history, nameA, nameB){
     if(ra&&rb){ together++; if(ra.pos<rb.pos) aAhead++; else if(rb.pos<ra.pos) bAhead++; }
   });
   return { together, aAhead, bAhead, pctA: together?Math.round(aAhead/together*100):null };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🔬 FASE 1.C · LABORATORIO DE CARACTERÍSTICAS — panel visible (solo lectura,
+// salvo el etiquetado de tipo de prueba, que guarda raceTypeTag en notes).
+// Consume el motor _feat* de la Fase 1.A/1.B. No toca la predicción.
+// ════════════════════════════════════════════════════════════════════════════
+const _LAB_TYPE_ICON = { cri:'⏱️', montana:'⛰️', circuito:'🔄', llana:'🛣️' };
+const _LAB_TYPE_LABEL = { cri:'CRI', montana:'Montaña', circuito:'Circuito', llana:'Llana' };
+
+async function _labInit(){
+  try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
+  // Poblar el datalist con todos los corredores del histórico
+  const dl=document.getElementById('labRiderList');
+  if(dl){
+    const all=[..._featAll().values()].sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    dl.innerHTML=all.map(o=>`<option value="${escapeAttr(o.displayName)}${o.team?' ('+escapeAttr(o.team)+')':''}">`).join('');
+  }
+  _labRenderRaceTags();
+  const card=document.getElementById('labCard'); if(card && !card.innerHTML.trim()){
+    card.innerHTML='<div class="lab-empty">🔬 Escribe el nombre de un corredor arriba para ver su ficha completa de características.</div>';
+  }
+}
+
+function _labArrow(slope){
+  if(slope==null) return '<span style="color:#9ca3af">— pocos datos</span>';
+  if(slope<=-1.0) return '<span style="color:#16a34a;font-weight:800">🔥 mejora fuerte</span>';
+  if(slope<=-0.3) return '<span style="color:#16a34a;font-weight:800">📈 mejorando</span>';
+  if(slope<0.3)   return '<span style="color:#64748b;font-weight:800">➡️ estable</span>';
+  return '<span style="color:#dc2626;font-weight:800">📉 a la baja</span>';
+}
+
+function _labShow(){
+  const raw=(document.getElementById('labRider')?.value||'').trim();
+  const card=document.getElementById('labCard'); if(!card) return;
+  if(!raw){ card.innerHTML='<div class="lab-empty">Escribe un corredor.</div>'; return; }
+  const name=raw.replace(/\s*\(.*\)\s*$/,'').trim();   // quitar "(Equipo)" del datalist
+  const o=_featGet(name);
+  if(!o){ card.innerHTML=`<div class="lab-notfound">No encuentro a “${escapeHtml(name)}” en el histórico. Prueba a escribir Apellido, Nombre.</div>`; return; }
+  const gen=(typeof _prGeneration==='function')?_prGeneration(o.cat):'';
+  const genTxt=gen==='1'?' · 1º año':gen==='2'?' · 2º año':'';
+  const tiles=[
+    ['Carreras', o.races, ''],
+    ['Media', o.mean!=null?o.mean+'º':'—', 'puesto medio'],
+    ['Regularidad (σ)', o.std!=null?o.std:'—', o.cv!=null?('CV '+o.cv):''],
+    ['% Finalización', o.finishRate!=null?o.finishRate+'%':'—', 'de las que salió'],
+    ['Percentil medio', o.pctMean!=null?o.pctMean+'%':'—', '0%=cabeza'],
+  ].map(t=>`<div class="lab-tile"><div class="lab-tile-l">${t[0]}</div><div class="lab-tile-v">${t[1]}</div><div class="lab-tile-s">${t[2]}</div></div>`).join('');
+  const types=['montana','llana','cri','circuito'].filter(t=>o.byType[t]).map(t=>
+    `<div class="lab-type"><span class="lab-type-ic">${_LAB_TYPE_ICON[t]}</span><span class="lab-type-n">${_LAB_TYPE_LABEL[t]}</span><span class="lab-type-v">${o.byType[t].mean}º</span><span class="lab-type-c">${o.byType[t].n} carr.</span></div>`).join('') || '<div class="lab-hint">Sin datos por tipo todavía.</div>';
+  const adn = o.adn ? (typeof _adnBadgeHtml==='function'?_adnBadgeHtml(o.adn):escapeHtml(o.adn.label||'')) : '';
+  // Selector de rival para head-to-head
+  const others=[..._featAll().values()].filter(x=>x.key!==o.key).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+  const rivalOpts='<option value="">— elige un rival —</option>'+others.map(x=>`<option value="${escapeAttr(x.displayName)}">${escapeHtml(x.displayName)}${x.team?' ('+escapeHtml(x.team)+')':''}</option>`).join('');
+
+  card.innerHTML=`<div class="lab-card">
+    <div class="lab-head">
+      <div class="lab-name">${escapeHtml(_evolNormName?_evolNormName(o.displayName):o.displayName)}</div>
+      <div class="lab-sub">${escapeHtml(o.team||'—')}${o.cat?' · '+escapeHtml(o.cat):''}${genTxt} ${adn}</div>
+    </div>
+    <div class="lab-section-t">📏 Consistencia</div>
+    <div class="lab-tiles">${tiles}</div>
+    <div class="lab-section-t">📈 Tendencia (menos puesto = mejor)</div>
+    <div class="lab-trend">
+      <div class="lab-tr"><b>Forma actual (EMA):</b> ${o.ema!=null?o.ema+'º':'—'}</div>
+      <div class="lab-tr"><b>Últimas 3:</b> ${_labArrow(o.slope3)}</div>
+      <div class="lab-tr"><b>Últimas 5:</b> ${_labArrow(o.slope5)}</div>
+      <div class="lab-tr"><b>Últimas 10:</b> ${_labArrow(o.slope10)}</div>
+    </div>
+    <div class="lab-section-t">🗺️ Especialización por tipo de prueba</div>
+    <div class="lab-types">${types}</div>
+    <div class="lab-section-t">🔋 Carga competitiva</div>
+    <div class="lab-trend">
+      <div class="lab-tr"><b>Últimos 7 días:</b> ${o.fatigue7} carrera(s)</div>
+      <div class="lab-tr"><b>Últimos 15:</b> ${o.fatigue15}</div>
+      <div class="lab-tr"><b>Últimos 30:</b> ${o.fatigue30}</div>
+      <div class="lab-tr"><b>Días de descanso:</b> ${o.daysRest!=null?o.daysRest:'—'}</div>
+    </div>
+    <div class="lab-section-t">⚔️ Cara a cara (rivalidad)</div>
+    <div class="lab-h2h">
+      <select id="labRival" class="lab-input" onchange="_labH2H('${escapeAttr(o.displayName)}')">${rivalOpts}</select>
+      <div id="labH2HOut" class="lab-h2h-out"></div>
+    </div>
+  </div>`;
+}
+
+function _labH2H(nameA){
+  const sel=document.getElementById('labRival'); const out=document.getElementById('labH2HOut');
+  if(!sel||!out) return;
+  const b=sel.value; if(!b){ out.innerHTML=''; return; }
+  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
+  const h=_featHeadToHead(hist, nameA, b);
+  if(!h.together){ out.innerHTML='<span style="color:#9ca3af">Nunca han coincidido en carrera.</span>'; return; }
+  const dom = h.aAhead>h.bAhead ? `${escapeHtml(_evolNormName?_evolNormName(nameA):nameA)} domina` : (h.bAhead>h.aAhead?`${escapeHtml(b)} domina`:'igualados');
+  out.innerHTML=`<b>${h.together}</b> carreras juntos · <b style="color:#16a34a">${escapeHtml(nameA)}: ${h.aAhead}</b> · <b style="color:#dc2626">${escapeHtml(b)}: ${h.bAhead}</b> &nbsp; <span class="lab-h2h-tag">${dom} (${h.pctA}%)</span>`;
+}
+
+// ── Etiquetado de tipo de prueba (guarda raceTypeTag en notes) ──
+function _labRenderRaceTags(){
+  const el=document.getElementById('labRaceTags'); if(!el) return;
+  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory.slice():[];
+  hist.sort((a,b)=>String(_parseSpanishDate?_parseSpanishDate(b.raceDate):b.raceDate).localeCompare(String(_parseSpanishDate?_parseSpanishDate(a.raceDate):a.raceDate)));
+  if(!hist.length){ el.innerHTML='<div class="lab-hint">No hay carreras en el historial.</div>'; return; }
+  el.innerHTML=hist.map(r=>{
+    const info=_featRaceTypeInfo(r);
+    const opts=['','cri','montana','circuito','llana'].map(t=>{
+      const sel=(r.raceTypeTag||'')===t?'selected':'';
+      const lbl=t===''?'Auto ('+_LAB_TYPE_LABEL[info.type]+')':_LAB_TYPE_ICON[t]+' '+_LAB_TYPE_LABEL[t];
+      return `<option value="${t}" ${sel}>${lbl}</option>`;
+    }).join('');
+    return `<div class="lab-tagrow">
+      <div class="lab-tagname">${_LAB_TYPE_ICON[info.type]} ${escapeHtml((r.raceName||'').slice(0,42))}<span class="lab-tagdate">${escapeHtml(r.raceDate||'')} · ${info.confidence}</span></div>
+      <select class="lab-tagsel" onchange="_labSetRaceType('${escapeAttr(String(r.id))}', this.value)">${opts}</select>
+    </div>`;
+  }).join('');
+}
+
+async function _labSetRaceType(raceId, type){
+  if(!raceId || !_sb) return;
+  try{
+    const {data,error}=await _sb.from('races').select('notes').eq('id',raceId).single();
+    if(error) throw error;
+    let ex={}; try{ ex=JSON.parse(data.notes||'{}'); }catch(_){}
+    if(type) ex.raceTypeTag=type; else delete ex.raceTypeTag;
+    const {error:upErr}=await _sb.from('races').update({notes:JSON.stringify(ex)}).eq('id',raceId);
+    if(upErr) throw upErr;
+    // reflejar en memoria + invalidar caché de features para recalcular byType
+    const h=(_cachedHistory||[]).find(x=>String(x.id)===String(raceId)); if(h) h.raceTypeTag=type||'';
+    _featCacheToken='';
+    if(typeof showToast==='function') showToast('Tipo de prueba guardado','ok',1800);
+    _labRenderRaceTags();
+  }catch(e){
+    if(typeof showToast==='function') showToast('No se pudo guardar ('+(e.message||e)+'). Entra por enlace mágico si has bloqueado la escritura.','warn',4000);
+  }
 }
