@@ -43038,17 +43038,45 @@ function _rvDelPaso(i){ _rvSt.passes.splice(i,1); _rvSave(); _rvRenderPasos(); }
 let _featCache = null;      // Map nameKey -> features
 let _featCacheToken = '';   // invalida cuando cambia el historial
 
-// Clasifica una carrera en un TIPO: 'cri' | 'montana' | 'circuito' | 'llana'.
-// Heurística por nombre + circuitType (1.B la refinará si hace falta).
-function _featRaceType(race){
-  const s = ((race && (race.circuitType||'')) + ' ' + (race && (race.raceName||''))).toLowerCase();
-  if(/\bcri\b|crono|contrarreloj|cronoescalada/.test(s)){
-    return /escalada|puerto|alto|montaña|montana/.test(s) ? 'montana' : 'cri';
+// FASE 1.B · Clasifica una carrera en un TIPO: 'cri' | 'montana' | 'circuito' | 'llana'
+// Prioridad de señales (de más fiable a menos):
+//   1) raceTypeTag  → etiqueta MANUAL del director (override; la pone en 1.C)
+//   2) circuitType  → etiqueta que el director ya rellena al cargar (autoritativa)
+//   3) km + velocidad media → heurística objetiva (CRI muy corta; ritmo)
+//   4) palabras del nombre → último recurso
+// Devuelve {type, source, confidence}. _featRaceType() devuelve solo el type.
+function _featRaceTypeInfo(race){
+  const notesCT = race && (race.circuitType||'');
+  const tag = (race && (race.raceTypeTag||'')).toString().toLowerCase().trim();
+  if(['cri','montana','montaña','circuito','llana'].includes(tag)){
+    return { type: tag==='montaña'?'montana':tag, source:'manual', confidence:'alta' };
   }
-  if(/monta|montaña|puerto|\balto\b|escalada|cima|coll|port\b/.test(s)) return 'montana';
-  if(/circuito|criterium|criterión|urbano/.test(s)) return 'circuito';
-  return 'llana';
+  const ct = (notesCT||'').toLowerCase();
+  if(ct){
+    if(/contrarreloj|crono(?!escalada)|\bcri\b/.test(ct)) return {type:'cri', source:'circuitType', confidence:'alta'};
+    if(/cronoescalada|escalada|monta/.test(ct))           return {type:'montana', source:'circuitType', confidence:'alta'};
+    if(/circuito|criterium/.test(ct))                     return {type:'circuito', source:'circuitType', confidence:'alta'};
+    if(/línea|linea|ruta|en line/.test(ct)){
+      // "En línea" no separa llano de montaña: usamos pistas del nombre/velocidad.
+      const nm=((race.raceName||'')).toLowerCase();
+      if(/monta|puerto|\balto\b|escalada|cima|coll|port\b/.test(nm)) return {type:'montana', source:'nombre+circuitType', confidence:'media'};
+      return {type:'llana', source:'circuitType', confidence:'media'};
+    }
+  }
+  // Heurística objetiva por distancia/velocidad
+  const km = parseFloat(String((race&&race.km)||'').replace(',','.').replace(/[^0-9.]/g,''));
+  if(Number.isFinite(km) && km>0 && km<15){
+    const nm=((race&&race.raceName)||'').toLowerCase();
+    return /escalada|monta|puerto|alto/.test(nm) ? {type:'montana',source:'km',confidence:'media'} : {type:'cri', source:'km', confidence:'media'};
+  }
+  // Palabras del nombre (último recurso)
+  const s=((race&&race.raceName)||'').toLowerCase();
+  if(/crono(?!escalada)|contrarreloj|\bcri\b/.test(s)) return {type:'cri', source:'nombre', confidence:'baja'};
+  if(/cronoescalada|monta|montaña|puerto|\balto\b|escalada|cima|coll|port\b/.test(s)) return {type:'montana', source:'nombre', confidence:'baja'};
+  if(/circuito|criterium|criterión|urbano/.test(s)) return {type:'circuito', source:'nombre', confidence:'baja'};
+  return {type:'llana', source:'defecto', confidence:'baja'};
 }
+function _featRaceType(race){ return _featRaceTypeInfo(race).type; }
 
 // Pendiente de regresión lineal de los puestos (orden cronológico antiguo→nuevo)
 // sobre los últimos N. Negativa = mejora (los puestos bajan). null si <3 datos.
