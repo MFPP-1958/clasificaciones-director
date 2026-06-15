@@ -915,13 +915,37 @@ const _AUTH_MAGIC_ENABLED = true;
       }
     }catch(e){}
   }
-  // ¿Venimos de un enlace mágico (o hay sesión Auth previa)? — solo si el
-  // interruptor está activo; cualquier fallo cae al login clásico sin romper.
-  try{ if(typeof _rbacResolveAuthSession==='function' && await _rbacResolveAuthSession()) return; }catch(_){}
-  // Mostrar overlay de login
+  // Mostrar overlay de login (lo dejamos visible ya; si el enlace valida, se
+  // ocultará solo). Así, además, podemos enseñar el estado del proceso.
   const ov = document.getElementById('rbacOverlay');
   if(ov) ov.classList.remove('hidden');
   if(typeof _rbacInitMagicUI==='function') _rbacInitMagicUI();
+
+  // ¿Venimos de un enlace mágico? La detección del token por supabase-js es
+  // asíncrona, así que REINTENTAMOS leer la sesión durante unos segundos en vez
+  // de comprobarla una sola vez. Mostramos estado visible para diagnosticar.
+  if(_hasMagicToken && _AUTH_MAGIC_ENABLED && _sb && _sb.auth){
+    const err=document.getElementById('rbacErrorMsg');
+    if(err){ err.style.color='#1d4ed8'; err.textContent='🔄 Verificando tu enlace de acceso…'; }
+    for(let i=0;i<12;i++){
+      try{
+        const r=await _sb.auth.getSession();
+        const s=r && r.data && r.data.session;
+        if(s && s.user && s.user.email){
+          if(await _rbacApplyAuthUser(s.user.email)) return;  // entró: overlay oculto
+          break; // hubo sesión pero el correo no validó → ya se mostró el motivo
+        }
+      }catch(_){}
+      await new Promise(res=>setTimeout(res,600));
+    }
+    if(err && err.textContent==='🔄 Verificando tu enlace de acceso…'){
+      err.style.color='#b45309';
+      err.textContent='No se pudo leer el enlace automáticamente. Entra con tu PIN o pide un enlace nuevo.';
+    }
+  } else {
+    // Sin token en la URL: ¿hay sesión Auth previa guardada?
+    try{ if(typeof _rbacResolveAuthSession==='function') await _rbacResolveAuthSession(); }catch(_){}
+  }
   // Enter key en el input
   const inp = document.getElementById('rbacEmailInput');
   if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') _rbacLogin(); });
@@ -1047,9 +1071,14 @@ async function _rbacApplyAuthUser(email){
     const e=String(email).toLowerCase();
     const {data:u,error}=await _sb.from('app_users').select('*').eq('email',e).eq('active',true).maybeSingle();
     if(error || !u){
-      try{ await _sb.auth.signOut(); }catch(_){}
       const err=document.getElementById('rbacErrorMsg');
-      if(err) err.textContent='Tu correo no está autorizado en el equipo. Contacta con el director.';
+      if(err){
+        err.style.color='#b45309';
+        err.textContent = error
+          ? ('No se pudo leer tu usuario ('+(error.message||error)+'). Entra con tu PIN.')
+          : ('Tu correo ('+e+') no está autorizado en el equipo. Contacta con el director.');
+      }
+      try{ await _sb.auth.signOut(); }catch(_){}
       return false;
     }
     await _rbacFinishLogin(u, 'magic');
