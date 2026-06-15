@@ -43393,3 +43393,183 @@ async function _labSetRaceType(raceId, type){
     if(typeof showToast==='function') showToast('No se pudo guardar ('+(e.message||e)+'). Entra por enlace mágico si has bloqueado la escritura.','warn',4000);
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🧠 FASE 2.1.a · MODELO GLM (regresión ridge) + BANCO DE PRUEBAS WALK-FORWARD
+// ----------------------------------------------------------------------------
+// ADITIVO y EXPERIMENTAL: entrena un modelo sencillo sobre las características de
+// la Fase 1 y mide, de forma HONESTA (walk-forward: cada carrera se predice solo
+// con las anteriores), si supera al método actual. NO toca la predicción en uso.
+// Respeta el filtro global de categoría. Todo en el cliente; sin dependencias.
+// ════════════════════════════════════════════════════════════════════════════
+const _GLM_FEATNAMES = ['percentil medio','forma (EMA)','tendencia','regularidad (σ)','experiencia (log)','percentil en este tipo','tamaño pelotón','fatiga 15d'];
+
+function _glmAvg(a){ return a.length? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+function _glmStd(a){ if(a.length<2) return 0; const m=_glmAvg(a); return Math.sqrt(a.reduce((s,p)=>s+(p-m)**2,0)/a.length); }
+function _glmSlope(a){ const n=a.length; if(n<3) return 0; let sx=0,sy=0,sxx=0,sxy=0; a.forEach((p,i)=>{sx+=i;sy+=p;sxx+=i*i;sxy+=i*p;}); const d=(n*sxx-sx*sx)||1; return (n*sxy-sx*sy)/d; }
+function _glmEma(a,al){ if(!a.length) return 0; al=al||0.4; let e=a[0]; for(let i=1;i<a.length;i++) e=al*a[i]+(1-al)*e; return e; }
+function _glmDays(aISO,bISO){ const a=new Date(aISO),b=new Date(bISO); if(isNaN(a)||isNaN(b)) return 1e9; return (b-a)/86400000; }
+
+// Vector de características de un corredor ANTES de una carrera (solo histórico previo)
+function _glmFeatures(prior, target){
+  if(!prior || prior.length<2) return null;
+  const pct=prior.map(r=>r.pct).filter(v=>v!=null);
+  if(pct.length<2) return null;
+  const mean=_glmAvg(pct), ema=_glmEma(pct,0.4), slope=_glmSlope(pct.slice(-5)), std=_glmStd(pct);
+  const typeR=prior.filter(r=>r.type===target.type).map(r=>r.pct).filter(v=>v!=null);
+  const typeMean=typeR.length?_glmAvg(typeR):mean;
+  const fat15=prior.filter(r=>{ const d=_glmDays(r.dateISO,target.dateISO); return d>=0&&d<=15; }).length;
+  return [mean, ema, slope, std, Math.log(1+prior.length), typeMean, target.field, fat15];
+}
+
+// Construye las observaciones (X, y) de una categoría, en orden cronológico.
+// y = percentil de llegada (pos/field); 0 = cabeza. raceIdx para el walk-forward.
+function _glmObservations(history){
+  const _nk=s=>(typeof normalizeRiderName==='function')?normalizeRiderName(s||'').trim():(s||'').trim().toLowerCase();
+  const _date=s=>{ try{ return (typeof _parseSpanishDate==='function'?_parseSpanishDate(s):'')||s||''; }catch(_){ return s||''; } };
+  // carreras con clasificación, ordenadas por fecha
+  const races=(history||[]).filter(r=>(r.riders||[]).some(x=>x&&x.pos>0))
+    .map(r=>({ id:r.id, dateISO:_date(r.raceDate), type:(typeof _featRaceType==='function')?_featRaceType(r):'llana',
+               fin:(r.riders||[]).filter(x=>x&&x.pos>0) }))
+    .sort((a,b)=>String(a.dateISO).localeCompare(String(b.dateISO)));
+  const histByRider=new Map();   // nk -> [{dateISO,pos,field,pct,type}]
+  const obs=[];
+  races.forEach((race,ri)=>{
+    const field=race.fin.length;
+    race.fin.forEach(x=>{
+      const k=_nk(x.name); if(!k) return;
+      const prior=histByRider.get(k)||[];
+      const feat=_glmFeatures(prior, {field, type:race.type, dateISO:race.dateISO});
+      if(feat){ obs.push({ raceIdx:ri, dateISO:race.dateISO, x:feat, y:field>0?x.pos/field:null, pos:x.pos, field, name:x.name }); }
+    });
+    // actualizar histórico DESPUÉS de generar las observaciones de esta carrera
+    race.fin.forEach(x=>{
+      const k=_nk(x.name); if(!k) return;
+      const arr=histByRider.get(k)||[]; arr.push({dateISO:race.dateISO, pos:x.pos, field, pct:field>0?x.pos/field:null, type:race.type}); histByRider.set(k,arr);
+    });
+  });
+  return { obs, nRaces:races.length };
+}
+
+// Resolver sistema lineal pequeño (Gauss). A: k×k, b: k → x
+function _glmSolve(A,b){
+  const n=A.length; const M=A.map((row,i)=>row.concat([b[i]]));
+  for(let col=0;col<n;col++){
+    let piv=col; for(let r=col+1;r<n;r++) if(Math.abs(M[r][col])>Math.abs(M[piv][col])) piv=r;
+    if(Math.abs(M[piv][col])<1e-12) continue;
+    [M[col],M[piv]]=[M[piv],M[col]];
+    const d=M[col][col];
+    for(let j=col;j<=n;j++) M[col][j]/=d;
+    for(let r=0;r<n;r++){ if(r===col) continue; const f=M[r][col]; for(let j=col;j<=n;j++) M[r][j]-=f*M[col][j]; }
+  }
+  return M.map(row=>row[n]);
+}
+
+// Ajuste ridge: estandariza X, resuelve (Z'Z + λI)β = Z'y. Devuelve modelo.
+function _glmFit(rows, lambda){
+  lambda=lambda==null?1.0:lambda;
+  const n=rows.length; if(!n) return null;
+  const k=rows[0].x.length;
+  const mean=new Array(k).fill(0), std=new Array(k).fill(0);
+  for(let j=0;j<k;j++){ mean[j]=_glmAvg(rows.map(r=>r.x[j])); }
+  for(let j=0;j<k;j++){ const s=_glmStd(rows.map(r=>r.x[j])); std[j]=s>1e-9?s:1; }
+  const ybar=_glmAvg(rows.map(r=>r.y));
+  // matriz Z (estandarizada) y target centrado
+  const Z=rows.map(r=>r.x.map((v,j)=>(v-mean[j])/std[j]));
+  const yc=rows.map(r=>r.y-ybar);
+  const A=Array.from({length:k},()=>new Array(k).fill(0)); const bb=new Array(k).fill(0);
+  for(let i=0;i<n;i++){ for(let a=0;a<k;a++){ bb[a]+=Z[i][a]*yc[i]; for(let b2=0;b2<k;b2++) A[a][b2]+=Z[i][a]*Z[i][b2]; } }
+  for(let a=0;a<k;a++) A[a][a]+=lambda;
+  const beta=_glmSolve(A,bb);
+  return { beta, mean, std, ybar, k, n };
+}
+function _glmPredict(m, x){
+  if(!m) return null;
+  let y=m.ybar; for(let j=0;j<m.k;j++) y+=m.beta[j]*((x[j]-m.mean[j])/m.std[j]);
+  return Math.max(0, Math.min(1, y));   // percentil 0..1
+}
+
+// Walk-forward: entrena con carreras < R y predice la carrera R. Compara con el
+// baseline ingenuo (percentil medio previo del corredor). Devuelve métricas.
+function _glmWalkForward(history, lambda){
+  const {obs, nRaces}=_glmObservations(history);
+  if(nRaces<6 || obs.length<30) return { ok:false, reason:'pocos datos', nRaces, nObs:obs.length };
+  const start=Math.max(5, Math.ceil(nRaces*0.4));   // primeras carreras = solo entrenamiento
+  let glmAbs=0, naiveAbs=0, cnt=0, glmTop10hit=0, top10tot=0;
+  for(let R=start; R<nRaces; R++){
+    const train=obs.filter(o=>o.raceIdx<R);
+    const test=obs.filter(o=>o.raceIdx===R);
+    if(train.length<20 || test.length<3) continue;
+    const m=_glmFit(train, lambda);
+    // predicciones de la carrera R
+    const preds=test.map(o=>({ name:o.name, pos:o.pos, field:o.field,
+      glmPos: _glmPredict(m,o.x)*o.field,
+      naivePos: o.x[0]*o.field }));   // x[0] = percentil medio previo
+    // ranquear por predicción para el Top-10
+    const realTop10=new Set(test.filter(o=>o.pos<=10).map(o=>o.name));
+    const glmRank=[...preds].sort((a,b)=>a.glmPos-b.glmPos).slice(0,10).map(p=>p.name);
+    glmRank.forEach(nm=>{ if(realTop10.has(nm)) glmTop10hit++; });
+    top10tot+=Math.min(10, realTop10.size);
+    preds.forEach(p=>{ glmAbs+=Math.abs(p.glmPos-p.pos); naiveAbs+=Math.abs(p.naivePos-p.pos); cnt++; });
+  }
+  if(!cnt) return { ok:false, reason:'sin folds válidos', nRaces, nObs:obs.length };
+  return { ok:true, nRaces, nObs:obs.length,
+    glmMAE:Math.round(glmAbs/cnt*10)/10, naiveMAE:Math.round(naiveAbs/cnt*10)/10,
+    glmTop10:top10tot?Math.round(glmTop10hit/top10tot*100):0, evals:cnt };
+}
+
+// Importancia de características = |coeficiente estandarizado| (modelo final).
+function _glmImportances(history, lambda){
+  const {obs}=_glmObservations(history);
+  if(obs.length<30) return null;
+  const m=_glmFit(obs, lambda);
+  const imp=m.beta.map((b,j)=>({ name:_GLM_FEATNAMES[j]||('f'+j), w:Math.abs(b), sign:b<0?'mejora':'empeora' }));
+  imp.sort((a,b)=>b.w-a.w);
+  const max=imp[0]?imp[0].w:1;
+  imp.forEach(o=>o.pct=max>0?Math.round(o.w/max*100):0);
+  return imp;
+}
+
+// Panel visible del GLM: entrena, valida walk-forward y compara con el método
+// actual (naive). Respeta el filtro global de categoría. Solo lectura.
+function _glmRenderPanel(){
+  const el=document.getElementById('glmPanel'); if(!el) return;
+  el.innerHTML='<div class="lab-hint">⏳ Entrenando y validando…</div>';
+  setTimeout(()=>{
+    try{
+      const hist=(typeof _labHistory==='function')?_labHistory():((typeof _cachedHistory!=='undefined'&&_cachedHistory)||[]);
+      const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+      const wf=_glmWalkForward(hist, 1.0);
+      if(!wf.ok){
+        el.innerHTML=`<div class="lab-notfound">Aún no hay datos suficientes${g?' en esta categoría':''} para entrenar y validar (carreras=${wf.nRaces||0}, observaciones=${wf.nObs||0}).<br><span style="font-size:12px">Se necesitan más carreras. El modelo madurará a lo largo de la temporada.</span></div>`;
+        return;
+      }
+      const gana = wf.glmMAE < wf.naiveMAE - 0.3;   // margen para considerar mejora real
+      const imp=_glmImportances(hist,1.0)||[];
+      const impHtml=imp.slice(0,8).map(o=>`<div class="lab-tr" style="display:flex;align-items:center;gap:8px">
+        <span style="flex:1">${escapeHtml(o.name)}</span>
+        <span style="width:90px;background:#e5e7eb;border-radius:6px;height:10px;overflow:hidden"><span style="display:block;height:100%;width:${o.pct}%;background:#6d28d9"></span></span>
+        <span style="font-size:11px;color:#94a3b8;width:64px;text-align:right">${o.sign}</span></div>`).join('');
+      el.innerHTML=`
+        <div class="lab-tiles">
+          <div class="lab-tile"><div class="lab-tile-l">GLM · error medio</div><div class="lab-tile-v">${wf.glmMAE}º</div><div class="lab-tile-s">menos = mejor</div></div>
+          <div class="lab-tile"><div class="lab-tile-l">Método actual · error</div><div class="lab-tile-v">${wf.naiveMAE}º</div><div class="lab-tile-s">baseline</div></div>
+          <div class="lab-tile"><div class="lab-tile-l">GLM · acierto Top‑10</div><div class="lab-tile-v">${wf.glmTop10}%</div><div class="lab-tile-s">${wf.evals} predicciones</div></div>
+        </div>
+        <div class="lab-tr" style="margin-top:10px;${gana?'background:#dcfce7;border-color:#86efac':'background:#fef3c7;border-color:#fcd34d'}">
+          ${gana
+            ? '✅ <b>El GLM supera al método actual.</b> Podemos plantear activarlo (siguiente paso).'
+            : '⏳ <b>El GLM todavía NO supera al método actual</b>, así que NO se activa (te protege de empeorar las predicciones). Es lo esperable con pocas carreras; mejorará al acumular datos esta temporada.'}
+        </div>
+        <div class="lab-section-t">🧩 Qué factores pesan más (importancia)</div>
+        ${impHtml||'<div class="lab-hint">—</div>'}
+        <label class="lab-tr" style="margin-top:10px;display:flex;align-items:center;gap:10px;${gana?'':'opacity:.55'}">
+          <input type="checkbox" disabled ${gana?'':''}> Usar el GLM en la predicción
+          <span style="font-size:11px;color:#94a3b8">(se habilitará automáticamente cuando el GLM gane en el banco de pruebas)</span>
+        </label>
+        <div style="font-size:11px;color:#94a3b8;margin-top:8px">Validación walk-forward sobre ${wf.nRaces} carreras · ${wf.nObs} observaciones${g?' · categoría: '+escapeHtml(g):''}. El error medio es alto porque en pelotones grandes (80‑150) un pequeño error de percentil son muchos puestos; lo que importa es la <b>comparación</b> GLM vs actual.</div>`;
+    }catch(e){
+      el.innerHTML=`<div class="lab-notfound">No se pudo entrenar: ${escapeHtml(e.message||String(e))}</div>`;
+    }
+  }, 60);
+}
