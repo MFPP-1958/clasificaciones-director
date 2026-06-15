@@ -2758,13 +2758,14 @@ async function _calRaceModalExport(){
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(race.raceName||'Carrera')}${filenameSuffix}</title>
   <style>
-  /* Márgenes los controla @page: así se respetan en TODAS las páginas (arriba y
-     abajo), no solo en la primera. El body NO lleva padding propio para no sumar
-     un margen extra solo en la página 1. */
-  @page{size:A4 portrait;margin:16mm 14mm}
+  /* Margen DOBLE garantía: @page (para impresoras que lo respetan) + padding del
+     body (se respeta SIEMPRE, también con "Márgenes: Ninguno" en el diálogo).
+     El padding del body asegura los lados en todas las páginas; @page añade el
+     superior/inferior por página. */
+  @page{size:A4 portrait;margin:12mm}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-  html,body{margin:0;padding:0}
-  body{font-family:Arial,sans-serif;color:#111;max-width:1100px;margin:0 auto}
+  html,body{margin:0}
+  body{font-family:Arial,sans-serif;color:#111;padding:10mm 12mm;box-sizing:border-box}
   .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:20px 24px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
   .hdr *{color:#fff!important}
   .hdr-title{font-size:22px;font-weight:900;margin:0 0 4px}
