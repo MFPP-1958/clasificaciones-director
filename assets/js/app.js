@@ -987,7 +987,7 @@ async function _rbacFinishLogin(data, via){
 // ════════════════════════════════════════════════════════════════════════════
 // INTERRUPTOR DE SEGURIDAD: con false, el botón de enlace mágico NO aparece y
 // todo funciona exactamente como siempre (rollback instantáneo = poner false).
-const _AUTH_MAGIC_ENABLED = false;
+const _AUTH_MAGIC_ENABLED = true;
 
 function _rbacInitMagicUI(){
   ['rbacMagicSep','rbacMagicBtn'].forEach(id=>{
