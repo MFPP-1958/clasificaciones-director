@@ -43440,7 +43440,12 @@ function _glmObservations(history){
       const k=_nk(x.name); if(!k) return;
       const prior=histByRider.get(k)||[];
       const feat=_glmFeatures(prior, {field, type:race.type, dateISO:race.dateISO});
-      if(feat){ obs.push({ raceIdx:ri, dateISO:race.dateISO, x:feat, y:field>0?x.pos/field:null, pos:x.pos, field, name:x.name }); }
+      if(feat){
+        const pTop=prior.filter(p=>p.pos<=10).length, pPod=prior.filter(p=>p.pos<=3).length;
+        obs.push({ raceIdx:ri, dateISO:race.dateISO, x:feat, y:field>0?x.pos/field:null, pos:x.pos, field, name:x.name,
+          top10:x.pos<=10?1:0, podium:x.pos<=3?1:0,
+          baseTop10:prior.length?pTop/prior.length:0, basePodium:prior.length?pPod/prior.length:0 });
+      }
     });
     // actualizar histórico DESPUÉS de generar las observaciones de esta carrera
     race.fin.forEach(x=>{
@@ -43563,6 +43568,7 @@ function _glmRenderPanel(){
         </div>
         <div class="lab-section-t">🧩 Qué factores pesan más (importancia)</div>
         ${impHtml||'<div class="lab-hint">—</div>'}
+        ${_glmClassBlock(hist)}
         <label class="lab-tr" style="margin-top:10px;display:flex;align-items:center;gap:10px;${gana?'':'opacity:.55'}">
           <input type="checkbox" disabled ${gana?'':''}> Usar el GLM en la predicción
           <span style="font-size:11px;color:#94a3b8">(se habilitará automáticamente cuando el GLM gane en el banco de pruebas)</span>
@@ -43572,4 +43578,83 @@ function _glmRenderPanel(){
       el.innerHTML=`<div class="lab-notfound">No se pudo entrenar: ${escapeHtml(e.message||String(e))}</div>`;
     }
   }, 60);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🧠 FASE 2.2 · REGRESIÓN LOGÍSTICA — P(Top-10) y P(Podio) (clasificación)
+// ----------------------------------------------------------------------------
+// Aprende probabilidades calibradas de Top-10 / Podio a partir de las mismas
+// características. Validación walk-forward por Brier score (menos = mejor) y
+// comparación HONESTA contra el baseline (frecuencia previa del propio corredor).
+// Aditivo, opt-in, respeta categoría. NO toca la predicción en uso.
+// ════════════════════════════════════════════════════════════════════════════
+function _sigmoid(z){ return 1/(1+Math.exp(-Math.max(-30,Math.min(30,z)))); }
+
+// Ajuste logístico por descenso de gradiente con L2. getY(row)->0/1.
+function _logitFit(rows, getY, lambda, iters, lr){
+  lambda=lambda==null?0.5:lambda; iters=iters||400; lr=lr||0.5;
+  const n=rows.length; if(!n) return null;
+  const k=rows[0].x.length;
+  const mean=new Array(k).fill(0), std=new Array(k).fill(0);
+  for(let j=0;j<k;j++) mean[j]=_glmAvg(rows.map(r=>r.x[j]));
+  for(let j=0;j<k;j++){ const s=_glmStd(rows.map(r=>r.x[j])); std[j]=s>1e-9?s:1; }
+  const Z=rows.map(r=>r.x.map((v,j)=>(v-mean[j])/std[j]));
+  const y=rows.map(getY);
+  let w=new Array(k).fill(0), b=0;
+  for(let it=0; it<iters; it++){
+    const gw=new Array(k).fill(0); let gb=0;
+    for(let i=0;i<n;i++){
+      const p=_sigmoid(b + Z[i].reduce((s,zv,j)=>s+w[j]*zv,0));
+      const e=p-y[i]; gb+=e; for(let j=0;j<k;j++) gw[j]+=e*Z[i][j];
+    }
+    b-=lr*gb/n; for(let j=0;j<k;j++) w[j]-=lr*(gw[j]/n + lambda*w[j]);
+  }
+  return { w, b, mean, std, k };
+}
+function _logitPredict(m, x){
+  if(!m) return null;
+  let z=m.b; for(let j=0;j<m.k;j++) z+=m.w[j]*((x[j]-m.mean[j])/m.std[j]);
+  return _sigmoid(z);
+}
+
+// Walk-forward de clasificación. which='top10'|'podium'. Brier logística vs baseline.
+function _logitWalkForward(history, which){
+  const {obs, nRaces}=_glmObservations(history);
+  if(nRaces<6 || obs.length<30) return { ok:false, nRaces, nObs:obs.length };
+  const getY = o => which==='podium' ? o.podium : o.top10;
+  const getBase = o => which==='podium' ? o.basePodium : o.baseTop10;
+  const start=Math.max(5, Math.ceil(nRaces*0.4));
+  let brierL=0, brierB=0, cnt=0, hitL=0, posTot=0;
+  for(let R=start; R<nRaces; R++){
+    const train=obs.filter(o=>o.raceIdx<R), test=obs.filter(o=>o.raceIdx===R);
+    if(train.length<20 || test.length<3) continue;
+    const m=_logitFit(train, getY, 0.5);
+    test.forEach(o=>{
+      const pL=_logitPredict(m,o.x), pB=getBase(o), yv=getY(o);
+      brierL+=(pL-yv)**2; brierB+=(pB-yv)**2; cnt++;
+      if(yv===1){ posTot++; if(pL>=0.5) hitL++; }
+    });
+  }
+  if(!cnt) return { ok:false, nRaces, nObs:obs.length };
+  return { ok:true, which, nRaces, nObs:obs.length, evals:cnt,
+    brierLogit:Math.round(brierL/cnt*1000)/1000, brierBase:Math.round(brierB/cnt*1000)/1000,
+    recall: posTot?Math.round(hitL/posTot*100):0, positives:posTot };
+}
+
+// Bloque del panel para la clasificación Top-10 / Podio (logística vs baseline).
+function _glmClassBlock(hist){
+  try{
+    const lt=_logitWalkForward(hist,'top10'), lp=_logitWalkForward(hist,'podium');
+    if(!lt.ok || !lp.ok) return '';
+    const mejora = (a)=> a.brierLogit < a.brierBase - 0.005;  // Brier menor = mejor
+    const win = mejora(lt) || mejora(lp);
+    const tile=(lbl,a)=>`<div class="lab-tile"><div class="lab-tile-l">${lbl} · Brier</div><div class="lab-tile-v">${a.brierLogit}</div><div class="lab-tile-s">actual ${a.brierBase} · ${mejora(a)?'✅ mejora':'≈ igual'}</div></div>`;
+    return `<div class="lab-section-t">🎯 Probabilidad de Top‑10 / Podio (logística)</div>
+      <div class="lab-tiles">${tile('Top‑10',lt)}${tile('Podio',lp)}</div>
+      <div class="lab-tr" style="margin-top:8px;${win?'background:#dcfce7;border-color:#86efac':'background:#fef3c7;border-color:#fcd34d'}">
+        ${win ? '✅ <b>La logística ya mejora</b> la probabilidad (Brier menor). Candidata a activarse.'
+              : '⏳ <b>La probabilidad de Top‑10/Podio aún no mejora</b> al método actual (Brier menor = mejor). No se activa. Mejorará con más carreras.'}
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:6px">Brier = error de probabilidad (0 perfecto). Comparamos la logística contra la frecuencia previa del propio corredor.</div>`;
+  }catch(_){ return ''; }
 }
