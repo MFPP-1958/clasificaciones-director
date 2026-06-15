@@ -43027,3 +43027,168 @@ function _rvRenderPasos(){
   }).join('');
 }
 function _rvDelPaso(i){ _rvSt.passes.splice(i,1); _rvSave(); _rvRenderPasos(); }
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🔬 FASE 1 · INGENIERÍA DE CARACTERÍSTICAS (Feature Engineering) — MOTOR PURO
+// ----------------------------------------------------------------------------
+// Lee el historial y devuelve, por corredor, un VECTOR de características
+// documentado y reutilizable. NO toca la predicción del simulador (solo lee).
+// Es el cimiento para futuros modelos (Fase 2). Cacheado por tamaño de historial.
+// ════════════════════════════════════════════════════════════════════════════
+let _featCache = null;      // Map nameKey -> features
+let _featCacheToken = '';   // invalida cuando cambia el historial
+
+// Clasifica una carrera en un TIPO: 'cri' | 'montana' | 'circuito' | 'llana'.
+// Heurística por nombre + circuitType (1.B la refinará si hace falta).
+function _featRaceType(race){
+  const s = ((race && (race.circuitType||'')) + ' ' + (race && (race.raceName||''))).toLowerCase();
+  if(/\bcri\b|crono|contrarreloj|cronoescalada/.test(s)){
+    return /escalada|puerto|alto|montaña|montana/.test(s) ? 'montana' : 'cri';
+  }
+  if(/monta|montaña|puerto|\balto\b|escalada|cima|coll|port\b/.test(s)) return 'montana';
+  if(/circuito|criterium|criterión|urbano/.test(s)) return 'circuito';
+  return 'llana';
+}
+
+// Pendiente de regresión lineal de los puestos (orden cronológico antiguo→nuevo)
+// sobre los últimos N. Negativa = mejora (los puestos bajan). null si <3 datos.
+function _featSlope(posArr, n){
+  const a = posArr.slice(-n);
+  if(a.length < 3) return null;
+  const k=a.length; let sx=0,sy=0,sxx=0,sxy=0;
+  a.forEach((p,i)=>{ sx+=i; sy+=p; sxx+=i*i; sxy+=i*p; });
+  const den=(k*sxx - sx*sx)||1;
+  return Math.round(((k*sxy - sx*sy)/den)*100)/100;
+}
+
+// Media móvil exponencial de los puestos (antiguo→nuevo). Menor = mejor forma.
+function _featEMA(posArr, alpha){
+  if(!posArr.length) return null;
+  alpha = alpha || 0.4;
+  let ema = posArr[0];
+  for(let i=1;i<posArr.length;i++) ema = alpha*posArr[i] + (1-alpha)*ema;
+  return Math.round(ema*10)/10;
+}
+
+function _featStats(positions){
+  const n=positions.length;
+  if(!n) return {mean:null,std:null,cv:null,best:null,worst:null};
+  const mean=positions.reduce((a,b)=>a+b,0)/n;
+  const variance=positions.reduce((s,p)=>s+(p-mean)**2,0)/n;
+  const std=Math.sqrt(variance);
+  return {
+    mean:Math.round(mean*10)/10,
+    std:Math.round(std*10)/10,
+    cv: mean>0 ? Math.round((std/mean)*100)/100 : null,  // coef. variación
+    best:Math.min(...positions),
+    worst:Math.max(...positions)
+  };
+}
+
+// Construye el mapa de características de TODOS los corredores del historial.
+function _featBuildRiderFeatures(history){
+  const _nk = s => (typeof normalizeRiderName==='function') ? normalizeRiderName(s||'').trim() : (s||'').trim().toLowerCase();
+  const _date = s => { try{ return (typeof _parseSpanishDate==='function' ? _parseSpanishDate(s) : '') || s || ''; }catch(_){ return s||''; } };
+  const today = new Date();
+  const dayMs = 86400000;
+  const map = new Map();
+
+  // Recolectar, por corredor, sus participaciones (inicio) y finalizaciones.
+  (history||[]).forEach(race=>{
+    const rt = _featRaceType(race);
+    const dateISO = _date(race.raceDate);
+    const finishers = (race.riders||[]).filter(r=>r && r.pos>0);
+    const field = finishers.length || (race.riders||[]).length || 0;
+    const startSet = new Set();
+    (race.inscritos||[]).forEach(i=>{ const k=_nk(i&&i.name); if(k) startSet.add(k); });
+    const hadStartlist = startSet.size>0;
+
+    // marcar a TODOS los que sabemos que tomaron la salida
+    const seen = new Set();
+    const touch = (name, team, cat)=>{
+      const k=_nk(name); if(!k) return null;
+      if(!map.has(k)) map.set(k,{ key:k, displayName:name, team:team||'', cat:cat||'', results:[], startedCount:0, finishedCount:0 });
+      const o=map.get(k);
+      if(name && name.length>=o.displayName.length) o.displayName=name; // mejor nombre visible
+      if(team) o.team=team; if(cat) o.cat=cat;
+      return o;
+    };
+    // finalizadores
+    finishers.forEach(r=>{
+      const o=touch(r.name, r.team, r.cat); if(!o) return;
+      o.results.push({ dateISO, pos:r.pos, field, pct: field>0 ? r.pos/field : null, type:rt });
+      o.finishedCount++; seen.add(o.key);
+      if(hadStartlist){ /* started se cuenta abajo desde startSet */ }
+    });
+    // salidas (startlist): cuenta de "started" para finishRate honesto
+    if(hadStartlist){
+      startSet.forEach(k=>{
+        // localizar nombre original del inscrito
+        const ins=(race.inscritos||[]).find(i=>_nk(i&&i.name)===k);
+        const o=touch(ins?ins.name:k, ins?ins.team:'', ins?ins.cat:'');
+        if(o) o.startedCount++;
+      });
+    }
+  });
+
+  // Calcular features por corredor
+  map.forEach(o=>{
+    o.results.sort((a,b)=>String(a.dateISO).localeCompare(String(b.dateISO)));
+    const pos = o.results.map(r=>r.pos);
+    const st = _featStats(pos);
+    o.races = o.finishedCount;
+    o.finishRate = o.startedCount>0 ? Math.round(o.finishedCount/o.startedCount*100) : null; // % solo si conocemos salidas
+    o.mean=st.mean; o.std=st.std; o.cv=st.cv; o.best=st.best; o.worst=st.worst;
+    // percentil medio (0=mejor) — comparable entre carreras de distinto tamaño
+    const pcts=o.results.map(r=>r.pct).filter(v=>v!=null);
+    o.pctMean = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length*100) : null;
+    o.slope3=_featSlope(pos,3); o.slope5=_featSlope(pos,5); o.slope10=_featSlope(pos,10);
+    o.ema=_featEMA(pos,0.4);
+    // por tipo de prueba
+    o.byType={};
+    ['montana','cri','circuito','llana'].forEach(t=>{
+      const ps=o.results.filter(r=>r.type===t).map(r=>r.pos);
+      if(ps.length) o.byType[t]={ n:ps.length, mean:Math.round(ps.reduce((a,b)=>a+b,0)/ps.length*10)/10 };
+    });
+    // fatiga / descanso (relativo a HOY)
+    const days = o.results.map(r=>{ const d=new Date(r.dateISO); return isNaN(d)?null:(today-d)/dayMs; }).filter(v=>v!=null);
+    o.fatigue7  = days.filter(d=>d>=0 && d<=7).length;
+    o.fatigue15 = days.filter(d=>d>=0 && d<=15).length;
+    o.fatigue30 = days.filter(d=>d>=0 && d<=30).length;
+    o.daysRest  = days.length ? Math.round(Math.min(...days.filter(d=>d>=0).concat([1e9]))) : null;
+    if(o.daysRest===1e9) o.daysRest=null;
+    // ADN (reutiliza la lógica existente)
+    try{ if(typeof _computeADN==='function') o.adn=_computeADN(pos, o.results.map(r=>({pos:r.pos, raceDate:r.dateISO}))); }catch(_){ o.adn=null; }
+  });
+  return map;
+}
+
+// Acceso cacheado a todas las features (rebuild si cambió el historial)
+function _featAll(){
+  const hist = (typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory)) ? _cachedHistory : [];
+  const token = hist.length + '|' + (hist[0] && (hist[0].id||hist[0].raceName) || '');
+  if(!_featCache || _featCacheToken!==token){
+    _featCache = _featBuildRiderFeatures(hist);
+    _featCacheToken = token;
+  }
+  return _featCache;
+}
+// Features de un corredor por nombre
+function _featGet(name){
+  const _nk = s => (typeof normalizeRiderName==='function') ? normalizeRiderName(s||'').trim() : (s||'').trim().toLowerCase();
+  return _featAll().get(_nk(name)) || null;
+}
+
+// Cara a cara (head-to-head) entre dos corredores: nº de carreras juntos y
+// cuántas veces quedó cada uno por delante. Base de la "rivalidad".
+function _featHeadToHead(history, nameA, nameB){
+  const _nk = s => (typeof normalizeRiderName==='function') ? normalizeRiderName(s||'').trim() : (s||'').trim().toLowerCase();
+  const a=_nk(nameA), b=_nk(nameB);
+  let together=0, aAhead=0, bAhead=0;
+  (history||[]).forEach(race=>{
+    const fin=(race.riders||[]).filter(r=>r&&r.pos>0);
+    const ra=fin.find(r=>_nk(r.name)===a), rb=fin.find(r=>_nk(r.name)===b);
+    if(ra&&rb){ together++; if(ra.pos<rb.pos) aAhead++; else if(rb.pos<ra.pos) bAhead++; }
+  });
+  return { together, aAhead, bAhead, pctA: together?Math.round(aAhead/together*100):null };
+}
