@@ -43150,7 +43150,7 @@ function _featBuildRiderFeatures(history){
     const seen = new Set();
     const touch = (name, team, cat)=>{
       const k=_nk(name); if(!k) return null;
-      if(!map.has(k)) map.set(k,{ key:k, displayName:name, team:team||'', cat:cat||'', results:[], startedCount:0, finishedCount:0 });
+      if(!map.has(k)) map.set(k,{ key:k, displayName:name, team:team||'', cat:cat||'', results:[], startedCount:0, finishedCount:0, finishedInStarted:0 });
       const o=map.get(k);
       if(name && name.length>=o.displayName.length) o.displayName=name; // mejor nombre visible
       if(team) o.team=team; if(cat) o.cat=cat;
@@ -43169,7 +43169,7 @@ function _featBuildRiderFeatures(history){
         // localizar nombre original del inscrito
         const ins=(race.inscritos||[]).find(i=>_nk(i&&i.name)===k);
         const o=touch(ins?ins.name:k, ins?ins.team:'', ins?ins.cat:'');
-        if(o) o.startedCount++;
+        if(o){ o.startedCount++; if(seen.has(k)) o.finishedInStarted++; }  // ¿salió Y acabó?
       });
     }
   });
@@ -43180,7 +43180,9 @@ function _featBuildRiderFeatures(history){
     const pos = o.results.map(r=>r.pos);
     const st = _featStats(pos);
     o.races = o.finishedCount;
-    o.finishRate = o.startedCount>0 ? Math.round(o.finishedCount/o.startedCount*100) : null; // % solo si conocemos salidas
+    // % finalización = de las carreras que SALIÓ (estaba en la parrilla), cuántas
+    // acabó. Antes dividía finishedCount/startedCount y podía pasar de 100%.
+    o.finishRate = o.startedCount>0 ? Math.min(100, Math.round(o.finishedInStarted/o.startedCount*100)) : null;
     o.mean=st.mean; o.std=st.std; o.cv=st.cv; o.best=st.best; o.worst=st.worst;
     // percentil medio (0=mejor) — comparable entre carreras de distinto tamaño
     const pcts=o.results.map(r=>r.pct).filter(v=>v!=null);
