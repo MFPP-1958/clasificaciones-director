@@ -12866,6 +12866,19 @@ async function saveHistory(){
   if(!hasValidData||!riders.length){alert('Carga primero una clasificación válida.');return;}
   if(!_sb){alert('Supabase no disponible. Verifica la conexión y las políticas RLS.');return;}
 
+  // GUARD (Paso 4): guardar una clasificación escribe en race_results/team_rankings,
+  // ya protegidas (solo staff AUTENTICADO). Si no hay sesión de enlace mágico, la
+  // escritura fallaría a medias. Avisamos y abortamos ANTES de tocar nada.
+  if(_AUTH_MAGIC_ENABLED && _sb.auth){
+    try{
+      const _s = await _sb.auth.getSession();
+      if(!(_s && _s.data && _s.data.session)){
+        alert('🔒 Para GUARDAR clasificaciones ahora hay que entrar con el ENLACE MÁGICO (no con PIN).\n\n1) Pulsa "Salir".\n2) En el login pulsa "✉️ Recibir enlace de acceso por email".\n3) Abre el enlace del correo y entra.\n4) Vuelve a pulsar Guardar.\n\n(Es por la nueva seguridad: el acceso anónimo ya no puede modificar datos.)');
+        return;
+      }
+    }catch(_){ /* si falla la comprobación, dejamos seguir; manda la RLS */ }
+  }
+
   const raceName=$('raceName').value||'Carrera sin nombre';
   const raceDateStr=$('raceDate').value||'';
   const km=_stripUnit($('raceKm').value||'');     // guardar SOLO el número (sin unidad)
