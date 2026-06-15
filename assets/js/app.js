@@ -131,7 +131,7 @@ if(document.readyState==='loading'){
 // ═══════════════════════════════════════════════════════════════════════════
 const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
 const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
-const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-challenge','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica','view-simulador'];
+const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-laboratorio','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-challenge','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica','view-simulador'];
 
 let _globalFilters = {
   year:     localStorage.getItem('gf_year')     || '',
@@ -569,6 +569,7 @@ function _gfTriggerCurrentViewRerender(){
     if(id==='view-tendencias'  && typeof renderTendencias==='function')  renderTendencias();
     if(id==='view-seleccion'   && typeof renderSeleccion==='function')   renderSeleccion();
     if(id==='view-disponibilidad' && typeof _dispInit==='function')      _dispInit();
+    if(id==='view-laboratorio' && typeof _labInit==='function')          _labInit();
     if(id==='view-resumen'     && typeof renderResumen==='function'){    renderResumen();
       // Si está abierta la pestaña "Seguimiento", refrescarla con el nuevo filtro
       const _sp=document.getElementById('resPanelScout');
@@ -43232,12 +43233,33 @@ function _featHeadToHead(history, nameA, nameB){
 const _LAB_TYPE_ICON = { cri:'⏱️', montana:'⛰️', circuito:'🔄', llana:'🛣️' };
 const _LAB_TYPE_LABEL = { cri:'CRI', montana:'Montaña', circuito:'Circuito', llana:'Llana' };
 
+// El Laboratorio RESPETA el filtro global de categoría: con "Cadete" solo cadetes,
+// con "Juvenil" solo juveniles. Construimos las features a partir del historial ya
+// filtrado por categoría (carreras Y corredores del grupo activo).
+let _labMap=null, _labMapToken='';
+function _labHistory(){
+  const h=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
+  return (typeof _historyForGlobalCat==='function') ? _historyForGlobalCat(h) : h;
+}
+function _labFeatAll(){
+  const g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+  const h=_labHistory();
+  const token=g+'|'+h.length+'|'+(h[0]&&(h[0].id||h[0].raceName)||'');
+  if(!_labMap || _labMapToken!==token){ _labMap=_featBuildRiderFeatures(h); _labMapToken=token; }
+  return _labMap;
+}
+function _labGet(name){
+  const _nk = s => (typeof normalizeRiderName==='function') ? normalizeRiderName(s||'').trim() : (s||'').trim().toLowerCase();
+  return _labFeatAll().get(_nk(name)) || null;
+}
+
 async function _labInit(){
   try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
-  // Poblar el datalist con todos los corredores del histórico
+  _labMapToken='';  // forzar reconstrucción por si cambió el filtro global
+  // Poblar el datalist SOLO con corredores de la categoría activa
   const dl=document.getElementById('labRiderList');
   if(dl){
-    const all=[..._featAll().values()].sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    const all=[..._labFeatAll().values()].sort((a,b)=>a.displayName.localeCompare(b.displayName));
     dl.innerHTML=all.map(o=>`<option value="${escapeAttr(o.displayName)}${o.team?' ('+escapeAttr(o.team)+')':''}">`).join('');
   }
   _labRenderRaceTags();
@@ -43259,7 +43281,7 @@ function _labShow(){
   const card=document.getElementById('labCard'); if(!card) return;
   if(!raw){ card.innerHTML='<div class="lab-empty">Escribe un corredor.</div>'; return; }
   const name=raw.replace(/\s*\(.*\)\s*$/,'').trim();   // quitar "(Equipo)" del datalist
-  const o=_featGet(name);
+  const o=_labGet(name);
   if(!o){ card.innerHTML=`<div class="lab-notfound">No encuentro a “${escapeHtml(name)}” en el histórico. Prueba a escribir Apellido, Nombre.</div>`; return; }
   const gen=(typeof _prGeneration==='function')?_prGeneration(o.cat):'';
   const genTxt=gen==='1'?' · 1º año':gen==='2'?' · 2º año':'';
@@ -43274,7 +43296,7 @@ function _labShow(){
     `<div class="lab-type"><span class="lab-type-ic">${_LAB_TYPE_ICON[t]}</span><span class="lab-type-n">${_LAB_TYPE_LABEL[t]}</span><span class="lab-type-v">${o.byType[t].mean}º</span><span class="lab-type-c">${o.byType[t].n} carr.</span></div>`).join('') || '<div class="lab-hint">Sin datos por tipo todavía.</div>';
   const adn = o.adn ? (typeof _adnBadgeHtml==='function'?_adnBadgeHtml(o.adn):escapeHtml(o.adn.label||'')) : '';
   // Selector de rival para head-to-head
-  const others=[..._featAll().values()].filter(x=>x.key!==o.key).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+  const others=[..._labFeatAll().values()].filter(x=>x.key!==o.key).sort((a,b)=>a.displayName.localeCompare(b.displayName));
   const rivalOpts='<option value="">— elige un rival —</option>'+others.map(x=>`<option value="${escapeAttr(x.displayName)}">${escapeHtml(x.displayName)}${x.team?' ('+escapeHtml(x.team)+')':''}</option>`).join('');
 
   card.innerHTML=`<div class="lab-card">
@@ -43312,8 +43334,7 @@ function _labH2H(nameA){
   const sel=document.getElementById('labRival'); const out=document.getElementById('labH2HOut');
   if(!sel||!out) return;
   const b=sel.value; if(!b){ out.innerHTML=''; return; }
-  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
-  const h=_featHeadToHead(hist, nameA, b);
+  const h=_featHeadToHead(_labHistory(), nameA, b);
   if(!h.together){ out.innerHTML='<span style="color:#9ca3af">Nunca han coincidido en carrera.</span>'; return; }
   const dom = h.aAhead>h.bAhead ? `${escapeHtml(_evolNormName?_evolNormName(nameA):nameA)} domina` : (h.bAhead>h.aAhead?`${escapeHtml(b)} domina`:'igualados');
   out.innerHTML=`<b>${h.together}</b> carreras juntos · <b style="color:#16a34a">${escapeHtml(nameA)}: ${h.aAhead}</b> · <b style="color:#dc2626">${escapeHtml(b)}: ${h.bAhead}</b> &nbsp; <span class="lab-h2h-tag">${dom} (${h.pctA}%)</span>`;
@@ -43322,9 +43343,13 @@ function _labH2H(nameA){
 // ── Etiquetado de tipo de prueba (guarda raceTypeTag en notes) ──
 function _labRenderRaceTags(){
   const el=document.getElementById('labRaceTags'); if(!el) return;
-  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory.slice():[];
+  // SOLO carreras de la categoría activa (filtro global). Un director de cadetes
+  // no ve ni etiqueta las pruebas de los juveniles, y viceversa.
+  const base=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
+  const hist=((typeof _raceMatchesGlobalCatGroup==='function')?base.filter(_raceMatchesGlobalCatGroup):base.slice());
   hist.sort((a,b)=>String(_parseSpanishDate?_parseSpanishDate(b.raceDate):b.raceDate).localeCompare(String(_parseSpanishDate?_parseSpanishDate(a.raceDate):a.raceDate)));
-  if(!hist.length){ el.innerHTML='<div class="lab-hint">No hay carreras en el historial.</div>'; return; }
+  const _g=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+  if(!hist.length){ el.innerHTML=`<div class="lab-hint">No hay carreras${_g?' de esta categoría':''} en el historial.</div>`; return; }
   el.innerHTML=hist.map(r=>{
     const info=_featRaceTypeInfo(r);
     const opts=['','cri','montana','circuito','llana'].map(t=>{
