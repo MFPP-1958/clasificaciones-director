@@ -39613,8 +39613,18 @@ async function _routePersistMetrics(raceId, summary){
 }
 
 // — Persiste un esfuerzo individual en rider_efforts_fccv —
+// Guard reutilizable: tras el Paso 4 (RLS), escribir requiere sesión de enlace
+// mágico. Si no la hay, avisa claro y devuelve false (en vez de un error técnico).
+async function _requireAuthWrite(){
+  if(!(typeof _AUTH_MAGIC_ENABLED!=='undefined' && _AUTH_MAGIC_ENABLED && _sb && _sb.auth)) return true;
+  try{ const r=await _sb.auth.getSession(); if(r && r.data && r.data.session) return true; }catch(_){ return true; }
+  alert('🔒 Para guardar o modificar datos ahora hay que entrar con el ENLACE MÁGICO (no con PIN).\n\n1) Pulsa "Salir".\n2) En el login pulsa "✉️ Recibir enlace de acceso por email".\n3) Abre el enlace del correo y entra.\n4) Repite la acción.\n\n(Es por la nueva seguridad: el acceso anónimo ya no puede modificar datos.)');
+  return false;
+}
+
 async function _routeSaveEffort(raceId, effort, sourceFile, sourceKind, deviceStr, riderHint){
   if(!_sb || !effort) return { ok:false };
+  if(!(await _requireAuthWrite())) return { ok:false, auth:false };
   const row = {
     race_id:        raceId,
     rider_dni:      null,
@@ -40034,6 +40044,7 @@ async function _routeDeleteRoute(){
 
 async function _routeDeleteEffort(effortId){
   if(!confirm('¿Eliminar este esfuerzo?')) return;
+  if(!(await _requireAuthWrite())) return;
   const { error } = await _sb.from('rider_efforts_fccv').delete().eq('id', effortId);
   if(error){ alert('Error: '+error.message); return; }
   await _routeRenderContent();
