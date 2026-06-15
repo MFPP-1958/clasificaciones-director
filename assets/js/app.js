@@ -12917,13 +12917,20 @@ async function saveHistory(){
   // ── Grupo(s) de categoría: dos pruebas del MISMO día pero de CATEGORÍA
   // distinta (p.ej. Etapa Cadete y Trofeo Juvenil) NO son duplicados. Por eso,
   // además de fecha + nombre, exigimos que el grupo de categoría se solape.
-  const _catGrpKeys = arr => { const s=new Set(); (arr||[]).forEach(c=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(c):null; if(g) s.add(g.key); }); return s; };
-  const newCatGroups = _catGrpKeys((riders||[]).map(r=>r&&r.cat));
+  // Grupos de categoría SIGNIFICATIVOS (umbral ≥3 corredores y ≥15%), con la
+  // MISMA lógica que el resto de la app (_raceCatGroupKeys). CLAVE: así UN
+  // corredor "colado" de otra categoría (p.ej. 1 cadete en un archivo juvenil)
+  // NO crea un falso solape que borraría la carrera de la otra categoría.
+  const _grpKeys = (catArr, raceCatOverride) => {
+    if(typeof _raceCatGroupKeys==='function'){
+      return _raceCatGroupKeys({ raceCat: raceCatOverride||'', riders:(catArr||[]).map(c=>({cat:c})) });
+    }
+    const s=new Set(); (catArr||[]).forEach(c=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(c):null; if(g) s.add(g.key); }); return s;
+  };
+  const newCatGroups = _grpKeys((riders||[]).map(r=>r&&r.cat));
   const _rowCatGroups = e => {
-    let s=new Set();
-    try{ const ex=JSON.parse(e.notes||'{}'); if(ex.raceCat){ const g=_calCatGroup(ex.raceCat); if(g) s.add(g.key); } }catch(_){}
-    if(!s.size) s=_catGrpKeys((e.race_results||[]).map(rr=>rr&&rr.cat));
-    return s;
+    let raceCat=''; try{ const ex=JSON.parse(e.notes||'{}'); raceCat=ex.raceCat||''; }catch(_){}
+    return _grpKeys((e.race_results||[]).map(rr=>rr&&rr.cat), raceCat);
   };
   const existing = (existingAll||[]).filter(e => {
     if(!_sameRaceName(e.name, raceName)) return false;
