@@ -719,6 +719,7 @@ function showView(viewId){
       if(viewId==='view-equipos-ccaa') { if(typeof _eqCcaaInit==='function') _eqCcaaInit(); }
       if(viewId==='view-ciclistas-cat') { if(typeof _riderCatInit==='function') _riderCatInit(); }
       if(viewId==='view-disponibilidad') { if(typeof _dispInit==='function') _dispInit(); }
+      if(viewId==='view-radiovuelta') { if(typeof _rvInit==='function') _rvInit(); }
       if(viewId==='view-historial') renderHistory();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
@@ -867,6 +868,7 @@ const ALL_VIEWS = [
   {id:'view-tendencias',  icon:'📉', label:'Tendencias'},
   {id:'view-seleccion',   icon:'🏆', label:'Convocatorias'},
   {id:'view-disponibilidad', icon:'✅', label:'Disponibilidad'},
+  {id:'view-radiovuelta',    icon:'📻', label:'Radio Vuelta'},
   {id:'view-validacion',         icon:'⚠️', label:'Validación'},
   {id:'view-equipos-ccaa',       icon:'🗺️', label:'Equipos y CCAA'},
   {id:'view-ciclistas-cat',      icon:'🎽', label:'Categorías ciclistas'},
@@ -1134,7 +1136,7 @@ async function _rbacLoadPerms(role){
   // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
   if(!data || data.length === 0){
     const defaults = {
-      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-disponibilidad','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
+      DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-disponibilidad','view-radiovuelta','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
       CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos','view-disponibilidad'],
       LECTOR:   ['view-carga','view-tabla']
     };
@@ -42854,3 +42856,174 @@ function _csOpenSVGWindow(svg, filename){
   </body></html>`);
   w.document.close();
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// 📻 PANEL DE RADIO VUELTA — táctica en el coche (iPad). Reutiliza el grid de
+// predicción del simulador (_simCurrentData) de la prueba ACTIVA. Estado (fuga,
+// ataques, pasos) persistido en localStorage por carrera para sobrevivir a un
+// refresco sin cobertura.
+// ════════════════════════════════════════════════════════════════════════════
+let _rvBibMap = null;     // bib(string) -> grid item
+let _rvSt = { breakaway:null, attacks:[], passes:[] };
+let _rvPassDraft = null;  // {type, bibs:[]}
+
+function _rvRaceId(){ return (_simCurrentData && _simCurrentData.race && _simCurrentData.race.id)
+  || (typeof _activeRace!=='undefined' && _activeRace && _activeRace.id) || (typeof _simSelectedRaceId!=='undefined' && _simSelectedRaceId) || ''; }
+function _rvKey(){ return 'rv_'+_rvRaceId(); }
+function _rvLoad(){ try{ const s=localStorage.getItem(_rvKey()); _rvSt = s?JSON.parse(s):{breakaway:null,attacks:[],passes:[]}; }catch(_){ _rvSt={breakaway:null,attacks:[],passes:[]}; } if(!_rvSt.attacks)_rvSt.attacks=[]; if(!_rvSt.passes)_rvSt.passes=[]; }
+function _rvSave(){ try{ localStorage.setItem(_rvKey(), JSON.stringify(_rvSt)); }catch(_){} }
+
+async function _rvInit(){
+  const body=document.getElementById('rvBody'); if(!body) return;
+  const nameEl=document.getElementById('rvRaceName');
+  // Asegurar historial y el grid de predicción de la prueba activa
+  try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
+  const id=_rvRaceId();
+  if(id && (!_simCurrentData || !_simCurrentData.race || _simCurrentData.race.id!==id) && typeof _simBuildData==='function'){
+    try{ _simBuildData(id); }catch(_){}
+  }
+  const grid=(_simCurrentData && Array.isArray(_simCurrentData.grid))?_simCurrentData.grid:[];
+  if(nameEl) nameEl.textContent = (_simCurrentData && _simCurrentData.race)
+    ? ('· '+(_simCurrentData.race.raceName||_simCurrentData.race.name||'')) : '';
+  if(!grid.length){
+    body.querySelectorAll('.rv-search,.rv-block').forEach(el=>el.style.display='none');
+    document.getElementById('rvCard').innerHTML = `<div class="rv-empty">
+      <div style="font-size:46px">📻</div>
+      <p style="font-weight:800;color:#374151;margin-top:8px">No hay ninguna prueba con parrilla cargada.</p>
+      <p style="font-size:13px;color:#6b7280">Ve al <b>Simulador</b>, elige la prueba de hoy (con su lista de inscritos) y vuelve aquí. Quedará lista para el coche.</p>
+      <button class="rv-btn-find" style="margin-top:14px;max-width:260px" onclick="showView('view-simulador')">Ir al Simulador →</button>
+    </div>`;
+    return;
+  }
+  body.querySelectorAll('.rv-search,.rv-block').forEach(el=>el.style.display='');
+  // Mapa de dorsales
+  _rvBibMap={};
+  grid.forEach(g=>{ const b=String(g.bib||'').trim(); if(b) _rvBibMap[b]=g; });
+  _rvLoad();
+  _rvRenderFuga(); _rvRenderAtaques(); _rvRenderPasos();
+  const bib=document.getElementById('rvBib'); if(bib){ bib.value=''; setTimeout(()=>bib.focus(),150); }
+  document.getElementById('rvCard').innerHTML='';
+}
+
+function _rvRelPct(g){ const r=g&&g.reliability; if(r==null) return null; return Math.round(r<=1?r*100:r); }
+function _rvGenLabel(cat){ const g=(typeof _prGeneration==='function')?_prGeneration(cat):''; return g==='1'?'1º año':g==='2'?'2º año':''; }
+function _rvPerfil(g){
+  // "Especialidad": usamos el ADN si está, y el motivo de especialidad/terreno.
+  let label='', icon='🚴';
+  if(typeof _computeADN==='function' && g.raceCount>=2){
+    // No tenemos positions aquí; usamos specialtyReason/terrainReason como perfil.
+  }
+  const reason = g.terrainReason || g.specialtyReason || '';
+  if(/escal|monta|puerto|cuesta/i.test(reason)){ icon='⛰️'; label='Escalador'; }
+  else if(/llano|rodad|crono|cri/i.test(reason)){ icon='💨'; label='Rodador'; }
+  else if(/sprint|remat|llegada/i.test(reason)){ icon='⚡'; label='Rematador'; }
+  return { icon, label, reason };
+}
+
+function _rvCardHtml(g, opts){
+  opts=opts||{};
+  const gen=_rvGenLabel(g.cat);
+  const rel=_rvRelPct(g);
+  const perf=_rvPerfil(g);
+  const pred=(g.predictedPos!=null)?Math.round(g.predictedPos):null;
+  const lo=(g.predLower!=null)?Math.round(g.predLower):null;
+  const hi=(g.predUpper!=null)?Math.round(g.predUpper):null;
+  const mine=g.isMyTeam;
+  const relColor = rel==null?'#9ca3af':(rel>=70?'#16a34a':rel>=40?'#f59e0b':'#dc2626');
+  return `<div class="rv-card${mine?' rv-card-mine':''}${opts.small?' rv-card-sm':''}">
+    <div class="rv-card-top">
+      <span class="rv-card-bib">${escapeHtml(String(g.bib||'—'))}</span>
+      <div class="rv-card-id">
+        <div class="rv-card-name">${escapeHtml(_evolNormName?_evolNormName(g.name):g.name)}${mine?' <span class="rv-mine-tag">⭐ MI EQUIPO</span>':''}</div>
+        <div class="rv-card-team">${escapeHtml(g.team||'—')}${g.cat?' · '+escapeHtml(g.cat):''}${gen?' · '+gen:''}</div>
+      </div>
+    </div>
+    <div class="rv-card-stats">
+      <div class="rv-stat"><div class="rv-stat-l">Puesto IA</div><div class="rv-stat-v">${pred!=null?pred+'º':'—'}</div><div class="rv-stat-s">${(lo!=null&&hi!=null)?('entre '+lo+'º y '+hi+'º'):(g.hasHistory?'':'sin histórico')}</div></div>
+      <div class="rv-stat"><div class="rv-stat-l">Fiabilidad</div><div class="rv-stat-v" style="color:${relColor}">${rel!=null?rel+'%':'—'}</div><div class="rv-stat-s">${g.raceCount||0} carrera${g.raceCount===1?'':'s'}</div></div>
+      <div class="rv-stat"><div class="rv-stat-l">Perfil</div><div class="rv-stat-v" style="font-size:24px">${perf.icon}</div><div class="rv-stat-s">${perf.label||(g.hasHistory?'—':'incógnita')}</div></div>
+    </div>
+    ${perf.reason?`<div class="rv-card-reason">🎯 ${escapeHtml(perf.reason)}</div>`:''}
+  </div>`;
+}
+
+function _rvFind(){
+  const inp=document.getElementById('rvBib'); const card=document.getElementById('rvCard');
+  const b=(inp?.value||'').trim();
+  if(!b){ if(card) card.innerHTML=''; return; }
+  const g=_rvBibMap?_rvBibMap[b]:null;
+  if(!g){ card.innerHTML=`<div class="rv-notfound">🔎 No hay ningún corredor con el dorsal <b>${escapeHtml(b)}</b> en la parrilla de esta prueba.</div>`; return; }
+  card.innerHTML=_rvCardHtml(g);
+}
+function _rvClear(){ const inp=document.getElementById('rvBib'); if(inp){ inp.value=''; inp.focus(); } const c=document.getElementById('rvCard'); if(c) c.innerHTML=''; }
+
+function _rvSaveFuga(){
+  const bibsRaw=(document.getElementById('rvFugaBibs')?.value||'');
+  const gap=(document.getElementById('rvFugaGap')?.value||'').trim();
+  const bibs=bibsRaw.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
+  if(!bibs.length){ if(typeof showToast==='function') showToast('Escribe al menos un dorsal','warn'); return; }
+  _rvSt.breakaway={ bibs, gap, at:Date.now() };
+  _rvSave(); _rvRenderFuga();
+  const bi=document.getElementById('rvFugaBibs'); if(bi) bi.value=''; const gi=document.getElementById('rvFugaGap'); if(gi) gi.value='';
+}
+function _rvRenderFuga(){
+  const el=document.getElementById('rvFugaActiva'); if(!el) return;
+  const bk=_rvSt.breakaway;
+  if(!bk || !bk.bibs || !bk.bibs.length){ el.innerHTML='<div class="rv-hint">Sin fuga activa. Mete los dorsales y la diferencia, y pulsa FIJAR FUGA.</div>'; return; }
+  const cards=bk.bibs.map(b=>{ const g=_rvBibMap&&_rvBibMap[b]; return g?_rvCardHtml(g,{small:true}):`<div class="rv-card rv-card-sm"><div class="rv-card-top"><span class="rv-card-bib">${escapeHtml(b)}</span><div class="rv-card-id"><div class="rv-card-name">Dorsal ${escapeHtml(b)}</div><div class="rv-card-team">no está en la parrilla</div></div></div></div>`; }).join('');
+  el.innerHTML=`<div class="rv-fuga-head"><span class="rv-fuga-tag">🚀 FUGA ACTIVA · ${bk.bibs.length} corredores</span>${bk.gap?`<span class="rv-fuga-gap">⏱ ${escapeHtml(bk.gap)}</span>`:''}<button class="rv-btn-caught" onclick="_rvCatchFuga()">✅ Fuga cazada</button></div>
+    <div class="rv-cards-row">${cards}</div>`;
+}
+function _rvCatchFuga(){
+  const bk=_rvSt.breakaway; if(!bk) return;
+  const names=(bk.bibs||[]).map(b=>{ const g=_rvBibMap&&_rvBibMap[b]; return g?{bib:b,name:g.name,team:g.team}:{bib:b,name:'Dorsal '+b,team:''}; });
+  _rvSt.attacks.unshift({ bibs:bk.bibs, gap:bk.gap||'', names, at:Date.now() });
+  _rvSt.breakaway=null; _rvSave(); _rvRenderFuga(); _rvRenderAtaques();
+}
+function _rvRenderAtaques(){
+  const el=document.getElementById('rvAtaques'); if(!el) return;
+  if(!_rvSt.attacks.length){ el.innerHTML='<div class="rv-hint">Aún no se ha cazado ninguna fuga hoy.</div>'; return; }
+  el.innerHTML=_rvSt.attacks.map((a,i)=>{
+    const t=new Date(a.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const who=a.names.map(n=>`<b>${escapeHtml(String(n.bib))}</b> ${escapeHtml(_evolNormName?_evolNormName(n.name):n.name)}${n.team?` <span style="color:#94a3b8">(${escapeHtml(n.team)})</span>`:''}`).join(' · ');
+    return `<div class="rv-atk"><div class="rv-atk-h">🕐 ${t}${a.gap?` · llegó a tener ⏱ ${escapeHtml(a.gap)}`:''}<button class="rv-atk-del" title="Borrar" onclick="_rvDelAtaque(${i})">✕</button></div><div class="rv-atk-who">${who}</div></div>`;
+  }).join('');
+}
+function _rvDelAtaque(i){ _rvSt.attacks.splice(i,1); _rvSave(); _rvRenderAtaques(); }
+
+function _rvPassMode(type){
+  _rvPassDraft={ type, bibs:['','',''] };
+  const tlabel = type==='volante'?'🏁 Meta volante':'⛰️ Premio montaña';
+  const form=document.getElementById('rvPassForm'); if(!form) return;
+  form.innerHTML=`<div class="rv-pass-card">
+    <div class="rv-pass-title">${tlabel} — dorsales por orden de paso</div>
+    <div class="rv-pass-inputs">
+      ${[0,1,2].map(i=>`<div class="rv-pass-pos"><span>${i+1}º</span><input class="rv-input rv-pass-inp" type="text" inputmode="numeric" pattern="[0-9]*" id="rvPass${i}" placeholder="Dorsal" autocomplete="off"></div>`).join('')}
+    </div>
+    <div class="rv-pass-actions">
+      <button class="rv-btn-save" onclick="_rvLogPass()">Registrar paso</button>
+      <button class="rv-btn-clear" onclick="_rvPassCancel()">Cancelar</button>
+    </div>
+  </div>`;
+  setTimeout(()=>{ const f=document.getElementById('rvPass0'); if(f) f.focus(); },120);
+}
+function _rvPassCancel(){ _rvPassDraft=null; const f=document.getElementById('rvPassForm'); if(f) f.innerHTML=''; }
+function _rvLogPass(){
+  if(!_rvPassDraft) return;
+  const bibs=[0,1,2].map(i=>(document.getElementById('rvPass'+i)?.value||'').trim());
+  if(!bibs.some(Boolean)){ if(typeof showToast==='function') showToast('Mete al menos el 1º','warn'); return; }
+  const top=bibs.map(b=>{ if(!b) return null; const g=_rvBibMap&&_rvBibMap[b]; return { bib:b, name:g?g.name:'Dorsal '+b, team:g?g.team:'' }; });
+  _rvSt.passes.unshift({ type:_rvPassDraft.type, top, at:Date.now() });
+  _rvSave(); _rvPassCancel(); _rvRenderPasos();
+}
+function _rvRenderPasos(){
+  const el=document.getElementById('rvPasos'); if(!el) return;
+  if(!_rvSt.passes.length){ el.innerHTML='<div class="rv-hint">Aún no hay pasos registrados.</div>'; return; }
+  el.innerHTML=_rvSt.passes.map((p,i)=>{
+    const t=new Date(p.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const ic=p.type==='volante'?'🏁':'⛰️'; const tl=p.type==='volante'?'Meta volante':'Premio montaña';
+    const ord=p.top.filter(Boolean).map((n,j)=>`<span class="rv-pass-row"><b>${j+1}º</b> <b>${escapeHtml(String(n.bib))}</b> ${escapeHtml(_evolNormName?_evolNormName(n.name):n.name)}</span>`).join('');
+    return `<div class="rv-paso"><div class="rv-paso-h">${ic} ${tl} · ${t}<button class="rv-atk-del" onclick="_rvDelPaso(${i})">✕</button></div><div class="rv-paso-ord">${ord}</div></div>`;
+  }).join('');
+}
+function _rvDelPaso(i){ _rvSt.passes.splice(i,1); _rvSave(); _rvRenderPasos(); }

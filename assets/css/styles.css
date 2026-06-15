@@ -1540,3 +1540,71 @@ details.sim-help .sim-help-body .tip{
   text-align:center;
   line-height:1.4;
 }
+
+/* ════════════ 📻 PANEL DE RADIO VUELTA (uso en coche / iPad) ════════════ */
+.rv-panel{max-width:1000px;margin:0 auto}
+.rv-racename{font-size:15px;font-weight:800;color:#3730a3}
+.rv-empty{text-align:center;padding:40px 16px;color:#6b7280}
+/* Buscador exprés */
+.rv-search{display:flex;gap:10px;align-items:stretch;margin:6px 0 14px;flex-wrap:wrap}
+.rv-bibinput{flex:1;min-width:140px;font-size:40px;font-weight:900;text-align:center;letter-spacing:2px;padding:14px 16px;border:3px solid #c7d2fe;border-radius:16px;color:#0b2f6b;outline:none}
+.rv-bibinput:focus{border-color:#1d4ed8;background:#f0f9ff}
+.rv-btn-find{font-size:22px;font-weight:900;background:#1d4ed8;color:#fff;border:none;border-radius:16px;padding:14px 26px;cursor:pointer;white-space:nowrap}
+.rv-btn-find:active{transform:scale(.97)}
+.rv-btn-clear{font-size:16px;font-weight:800;background:#fff;color:#475467;border:2px solid #d0d5dd;border-radius:16px;padding:14px 18px;cursor:pointer}
+/* Ficha táctica */
+.rv-card{background:#fff;border:2px solid #e5e7eb;border-radius:18px;padding:16px 18px;margin:8px 0;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+.rv-card-mine{border-color:#1d4ed8;background:#eff6ff}
+.rv-card-sm{padding:10px 12px;border-radius:14px}
+.rv-card-top{display:flex;align-items:center;gap:14px}
+.rv-card-bib{font-size:44px;font-weight:900;color:#0b2f6b;background:#eef2ff;border-radius:14px;padding:4px 16px;min-width:84px;text-align:center;line-height:1.1}
+.rv-card-sm .rv-card-bib{font-size:30px;min-width:60px;padding:2px 10px}
+.rv-card-name{font-size:24px;font-weight:900;color:#111827;line-height:1.15}
+.rv-card-sm .rv-card-name{font-size:18px}
+.rv-card-team{font-size:14px;color:#64748b;font-weight:600;margin-top:2px}
+.rv-mine-tag{font-size:12px;color:#1d4ed8;font-weight:900;vertical-align:middle}
+.rv-card-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.rv-card-sm .rv-card-stats{margin-top:10px;gap:6px}
+.rv-stat{background:#f8fafc;border:1px solid #eef2f7;border-radius:12px;padding:10px;text-align:center}
+.rv-stat-l{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#64748b;font-weight:800}
+.rv-stat-v{font-size:30px;font-weight:900;color:#0b2f6b;line-height:1.1}
+.rv-card-sm .rv-stat-v{font-size:22px}
+.rv-stat-s{font-size:11px;color:#94a3b8;margin-top:2px}
+.rv-card-reason{margin-top:10px;font-size:13px;color:#3730a3;background:#eef2ff;border-radius:10px;padding:7px 11px;font-weight:700}
+.rv-notfound,.rv-hint{padding:16px;text-align:center;color:#6b7280;font-size:15px;background:#f8fafc;border:1px dashed #d0d5dd;border-radius:12px}
+.rv-hint{font-size:13px}
+/* Bloques */
+.rv-block{margin-top:18px;border-top:2px solid #eef2f7;padding-top:14px}
+.rv-block-h{font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:10px}
+.rv-fuga-form{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.rv-input{font-size:20px;font-weight:800;padding:12px 14px;border:2px solid #d0d5dd;border-radius:14px;outline:none;color:#0b2f6b}
+.rv-input:focus{border-color:#1d4ed8}
+#rvFugaBibs{flex:1;min-width:160px;letter-spacing:1px}
+.rv-input-gap{width:150px}
+.rv-btn-save{font-size:18px;font-weight:900;background:#16a34a;color:#fff;border:none;border-radius:14px;padding:12px 22px;cursor:pointer;white-space:nowrap}
+.rv-btn-save:active{transform:scale(.97)}
+.rv-fuga-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 10px}
+.rv-fuga-tag{font-size:16px;font-weight:900;color:#b91c1c;background:#fee2e2;border-radius:999px;padding:6px 14px}
+.rv-fuga-gap{font-size:18px;font-weight:900;color:#0b2f6b}
+.rv-btn-caught{margin-left:auto;font-size:16px;font-weight:900;background:#0b2f6b;color:#fff;border:none;border-radius:12px;padding:10px 18px;cursor:pointer}
+.rv-cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+/* Ataques del día */
+.rv-atk{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 14px;margin-bottom:8px}
+.rv-atk-h{font-size:13px;color:#64748b;font-weight:800;display:flex;align-items:center}
+.rv-atk-del{margin-left:auto;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;width:26px;height:26px;font-weight:900;cursor:pointer}
+.rv-atk-who{font-size:15px;color:#111827;margin-top:4px;line-height:1.5}
+/* Pasos */
+.rv-pass-tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.rv-passbtn{flex:1;min-width:150px;font-size:18px;font-weight:900;background:#fff;border:2px solid #c7d2fe;color:#1d4ed8;border-radius:14px;padding:14px;cursor:pointer}
+.rv-passbtn:active{background:#eef2ff}
+.rv-pass-card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:10px}
+.rv-pass-title{font-size:16px;font-weight:900;color:#0b2f6b;margin-bottom:10px}
+.rv-pass-inputs{display:flex;gap:10px;flex-wrap:wrap}
+.rv-pass-pos{display:flex;align-items:center;gap:6px;font-weight:900;color:#3730a3;font-size:18px}
+.rv-pass-inp{width:110px;text-align:center}
+.rv-pass-actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.rv-paso{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 14px;margin-bottom:8px}
+.rv-paso-h{font-size:13px;font-weight:800;color:#64748b;display:flex;align-items:center}
+.rv-paso-ord{margin-top:5px;display:flex;gap:16px;flex-wrap:wrap;font-size:16px;color:#111827}
+.rv-pass-row b{color:#0b2f6b}
+@media(max-width:560px){.rv-card-stats{grid-template-columns:1fr 1fr}.rv-bibinput{font-size:32px}}
