@@ -882,6 +882,10 @@ const ROLES = ['SUPERADMIN','ADMIN','DIRECTOR','CICLISTA','LECTOR'];
 let _rbacUser = null;       // {email, role, name}
 let _rbacPerms = new Set(); // set of allowed view-ids for current user
 let _rbacAllPerms = {};     // {role: {viewId: bool}} — for admin panel
+// INTERRUPTOR del enlace mágico (Supabase Auth) conviviendo con el PIN. Debe
+// estar ANTES de _rbacInit, que lo usa al arrancar (evita el error de TDZ que
+// dejaba el login antiguo sin el botón del enlace). Rollback = poner false.
+const _AUTH_MAGIC_ENABLED = true;
 
 // ── Inicialización ────────────────────────────────────────────
 (async function _rbacInit(){
@@ -993,9 +997,9 @@ async function _rbacFinishLogin(data, via){
 // ════════════════════════════════════════════════════════════════════════════
 // MIGRACIÓN AUTH · PASO 2 — Enlace mágico (Supabase Auth) CONVIVIENDO con el PIN
 // ════════════════════════════════════════════════════════════════════════════
-// INTERRUPTOR DE SEGURIDAD: con false, el botón de enlace mágico NO aparece y
-// todo funciona exactamente como siempre (rollback instantáneo = poner false).
-const _AUTH_MAGIC_ENABLED = true;
+// INTERRUPTOR DE SEGURIDAD del enlace mágico → definido ARRIBA (antes de
+// _rbacInit) para que no haya error de "uso antes de definir" (TDZ). Buscar
+// "const _AUTH_MAGIC_ENABLED" cerca de las variables RBAC.
 
 function _rbacInitMagicUI(){
   ['rbacMagicSep','rbacMagicBtn'].forEach(id=>{
