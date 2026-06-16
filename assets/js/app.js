@@ -43879,15 +43879,22 @@ function _btFit(racesFin, iters){
 }
 
 // Ranking de fuerza (categoría activa). Devuelve lista ordenada con rating relativo.
+let _btRegionFilter = null;   // null = aún sin inicializar; '' = todas
+function _btSetRegion(v){ _btRegionFilter = v||''; if(typeof _btRenderPanel==='function') _btRenderPanel(); }
 function _btRanking(history){
-  const races=_btRacesChrono(history||((typeof _labHistory==='function')?_labHistory():_cachedHistory)||[]);
+  const hist=history||((typeof _labHistory==='function')?_labHistory():_cachedHistory)||[];
+  const races=_btRacesChrono(hist);
   if(races.length<3) return { ok:false, n:races.length };
   const m=_btFit(races.map(r=>r.fin));
   const feats=(typeof _labFeatAll==='function')?_labFeatAll():(typeof _featAll==='function'?_featAll():new Map());
+  // Región por equipo (para poder filtrar por CCAA)
+  let teamRegion={}; try{ teamRegion=(typeof _prBuildTeamMeta==='function'?_prBuildTeamMeta(hist).teamRegion:{})||{}; }catch(_){}
   const maxP=Math.max(...m.p);
   const list=m.riders.map((k,i)=>{
     const o=feats.get(k);
-    return { key:k, name:o?o.displayName:k, team:o?o.team:'', rating:m.p[i], rel:maxP>0?Math.round(m.p[i]/maxP*100):0, games:m.games[i] };
+    const team=o?o.team:'';
+    const reg=team?(teamRegion[getCanonicalTeam(team)]||teamRegion[team]||''):'';
+    return { key:k, name:o?o.displayName:k, team, region:reg, rating:m.p[i], rel:maxP>0?Math.round(m.p[i]/maxP*100):0, games:m.games[i] };
   }).filter(r=>r.games>=3).sort((a,b)=>b.rating-a.rating);
   return { ok:true, list, n:races.length };
 }
@@ -43931,7 +43938,18 @@ function _btRenderPanel(){
       const rk=_btRanking(hist);
       if(!rk.ok){ el.innerHTML=`<div class="lab-notfound">Aún hay pocas carreras en esta categoría (${rk.n||0}) para calcular fuerza.</div>`; return; }
       const myCanon=(typeof myTeam!=='undefined')?getCanonicalTeam(myTeam||'').toLowerCase():'';
-      let cmp='';
+      // Filtro de CCAA: por defecto, la del filtro global (si está puesta).
+      if(_btRegionFilter===null){ _btRegionFilter = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) ? _globalFilters.region : ''; }
+      const regionsPresent=[...new Set(rk.list.map(r=>r.region).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+      const regSel=`<div class="lab-tr" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-weight:800;color:#0b2f6b">🗺️ CCAA:</span>
+        <select class="lab-input" onchange="_btSetRegion(this.value)" style="padding:7px 10px">
+          <option value=""${_btRegionFilter===''?' selected':''}>Todas (nacional)</option>
+          ${regionsPresent.map(rg=>`<option value="${escapeAttr(rg)}"${_btRegionFilter===rg?' selected':''}>${escapeHtml(rg)}</option>`).join('')}
+        </select>
+        <span style="font-size:11px;color:#94a3b8">El rating se calcula contra TODOS; el filtro solo elige a quién mostrar.</span>
+      </div>`;
+      let cmp=regSel;
       if(wf.ok){
         const gana = wf.btMAE < wf.naiveMAE - 0.3;
         cmp=`<div class="lab-tiles">
@@ -43943,20 +43961,25 @@ function _btRenderPanel(){
           ${gana?'✅ <b>Bradley‑Terry supera al método actual.</b> Es candidato a activarse en la predicción (siguiente paso, cuando tú quieras).':'⏳ De momento no supera al método actual; mejorará con más carreras.'}
         </div>`;
       }
-      const top=rk.list.slice(0,20).map((r,i)=>{
+      // Aplicar filtro de CCAA (el rating se mantiene global; solo se filtra la vista)
+      const filtered = _btRegionFilter ? rk.list.filter(r=>r.region===_btRegionFilter) : rk.list;
+      const scopeTxt = _btRegionFilter ? `${escapeHtml(_btRegionFilter)} · ${filtered.length} corredores` : `nacional · ${filtered.length} corredores`;
+      const top=filtered.slice(0,30).map((r)=>{
         const mine=String(r.team||'').toLowerCase()===myCanon;
+        // posición ABSOLUTA (en el ranking global), para que veas su nivel real
+        const absPos=rk.list.indexOf(r)+1;
         return `<div class="bt-row${mine?' bt-row-mine':''}">
-          <span class="bt-pos">${i+1}</span>
+          <span class="bt-pos">${absPos}</span>
           <span class="bt-name">${escapeHtml(_evolNormName?_evolNormName(r.name):r.name)}${mine?' ⭐':''}</span>
           <span class="bt-team">${escapeHtml(r.team||'')}</span>
           <span class="bt-bar"><span style="display:block;height:100%;width:${r.rel}%;background:#0b2f6b"></span></span>
           <span class="bt-rel">${r.rel}</span>
         </div>`;
-      }).join('');
+      }).join('') || '<div class="lab-hint">No hay corredores de esa CCAA con ≥3 enfrentamientos.</div>';
       el.innerHTML=`${cmp}
-        <div class="lab-section-t">🏅 Ranking de fuerza (Top 20)</div>
+        <div class="lab-section-t">🏅 Ranking de fuerza · ${scopeTxt}</div>
         <div class="bt-list">${top}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:8px">Fuerza relativa al nº1 (=100). Calculado sobre ${rk.n} carreras y miles de duelos. Corredores con ≥3 enfrentamientos.</div>`;
+        <div style="font-size:11px;color:#94a3b8;margin-top:8px">El número es la posición en el ranking <b>nacional</b> (su nivel real vs todos). Fuerza relativa al nº1 (=100), sobre ${rk.n} carreras y miles de duelos. Corredores con ≥3 enfrentamientos.</div>`;
     }catch(e){ el.innerHTML=`<div class="lab-notfound">No se pudo calcular: ${escapeHtml(e.message||String(e))}</div>`; }
   },60);
 }
