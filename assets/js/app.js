@@ -27979,6 +27979,35 @@ if(_origSimShowEmpty){
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── A) GUARDAR PREDICCIÓN EN SUPABASE ────────────────────────────────────
+// PUNTO 4 — "Versionado" ligero: foto de los ajustes activos en el momento
+// de predecir, para poder comparar configuraciones en el Dashboard de Precisión.
+// No reentrena nada; solo deja constancia de CON QUÉ se hizo cada predicción.
+function _simActiveConfig(){
+  const cfg = {
+    bt:        (typeof _btBlendEnabled==='function' ? !!_btBlendEnabled() : null),
+    btWeight:  (typeof _btBlendEnabled==='function' && _btBlendEnabled() && typeof _btBlendWeight==='function') ? _btBlendWeight() : null,
+    shrink:    (typeof _shrinkEnabled==='function' ? !!_shrinkEnabled() : null),
+    intervalK: (typeof _simIntervalK==='function' ? _simIntervalK() : null),
+    intervalConf:(typeof _simIntervalConf==='function' ? _simIntervalConf() : null),
+    formBoost: (typeof _simFormBoost!=='undefined' ? !!_simFormBoost : null),
+    histAgeDays: (typeof _simHistAgeDays!=='undefined' ? (_simHistAgeDays||0) : null)
+  };
+  return cfg;
+}
+
+// Etiquetas legibles de una config sellada (para el panel de precisión).
+function _simConfigBadges(cfg){
+  if(!cfg) return '';
+  const b = [];
+  if(cfg.bt) b.push(`🏆 BT${cfg.btWeight?` ${Math.round(cfg.btWeight*100)}%`:''}`);
+  if(cfg.shrink) b.push('🧲 Encogimiento');
+  if(cfg.intervalK) b.push(`📐 Rango calibrado${cfg.intervalConf?` ${cfg.intervalConf}%`:''}`);
+  if(cfg.formBoost) b.push('🔥 Forma reciente');
+  if(cfg.histAgeDays) b.push(`🗓️ Histórico ≤${cfg.histAgeDays}d`);
+  if(!b.length) return '<span style="color:#9ca3af">ajustes básicos</span>';
+  return b.map(t=>`<span style="display:inline-block;background:#eef2ff;color:#3730a3;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;margin:1px 3px 1px 0">${escapeHtml(t)}</span>`).join('');
+}
+
 async function _simSavePrediction(silent){
   if(!_simCurrentData){ if(!silent) alert('Selecciona una prueba primero.'); return; }
   if(!_sb){ if(!silent) alert('Supabase no disponible.'); return; }
@@ -28004,6 +28033,7 @@ async function _simSavePrediction(silent){
     savedAt: new Date().toISOString(),
     savedBy: (_rbacUser?.email || ''),
     kpis: {difficulty:kpis.difficulty, predictability:kpis.predictability, coverage:kpis.coverage, totalIns:kpis.totalIns},
+    config: _simActiveConfig(),   // PUNTO 4: sello de los ajustes activos al predecir
     top10,
     myTeamPred,
     teamsPred
@@ -29299,6 +29329,7 @@ function _simRenderModelAccuracy(){
     const mae = compare.length ? compare.reduce((s,c)=>s+Math.abs(c.diff),0)/compare.length : null;
     return {
       raceId:h.id, raceName:h.raceName, raceDate:h.raceDate, localidad:h.localidad||'',
+      config: (h.prediction.config || null),
       total: top10.length, hitsTop10, hitsTop3, mae, accuracyTop10: top10.length? Math.round(hitsTop10/top10.length*100):0
     };
   });
@@ -29316,7 +29347,48 @@ function _simRenderModelAccuracy(){
   const podiumPct = Math.round(totalHitsPodium/totalPodiumPossible*100);
   const maes = evals.filter(e=>e.mae!=null).map(e=>e.mae);
   const avgMae = maes.length ? Math.round(maes.reduce((s,v)=>s+v,0)/maes.length*10)/10 : null;
+
+  // ── PUNTO 5 · Deriva (drift): precisión reciente vs media de la temporada ──
+  // evals está ordenado desc por fecha, así que las más recientes van primero.
+  let driftHtml = '';
+  if(totalEvals >= 4){
+    const recentN = Math.min(3, totalEvals - 1);
+    const recent  = evals.slice(0, recentN);
+    const recentAcc = Math.round(recent.reduce((s,e)=>s+e.accuracyTop10,0)/recent.length);
+    const recentMaes = recent.filter(e=>e.mae!=null).map(e=>e.mae);
+    const recentMae  = recentMaes.length ? Math.round(recentMaes.reduce((s,v)=>s+v,0)/recentMaes.length*10)/10 : null;
+    const deltaAcc = recentAcc - avgAccTop10;
+    let verdict, vColor, vBg, vIcon;
+    if(deltaAcc <= -12){ verdict='La precisión está cayendo en las últimas carreras — conviene revisar (¿corredores nuevos fuertes?, ¿cambió el nivel?)'; vColor='#b91c1c'; vBg='#fef2f2'; vIcon='📉'; }
+    else if(deltaAcc >= 12){ verdict='El modelo está afinando últimamente'; vColor='#15803d'; vBg='#f0fdf4'; vIcon='📈'; }
+    else { verdict='Precisión estable respecto a la media de la temporada'; vColor='#1e3a8a'; vBg='#eff6ff'; vIcon='➖'; }
+    driftHtml = `
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;background:${vBg};border:1px solid ${vColor}33;border-radius:10px;margin-bottom:14px">
+        <div style="font-size:22px">${vIcon}</div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-weight:800;color:${vColor};font-size:13px">Tendencia reciente · ${verdict}</div>
+          <div class="small" style="color:#475569;margin-top:2px">
+            Últimas <b>${recentN}</b> carreras: <b style="color:${vColor}">${recentAcc}%</b> Top‑10${recentMae!=null?` · MAE ±${recentMae}`:''}
+            &nbsp;vs&nbsp; media temporada: <b>${avgAccTop10}%</b>${avgMae!=null?` · MAE ±${avgMae}`:''}
+            &nbsp;(Δ ${deltaAcc>=0?'+':''}${deltaAcc} pts)
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // ── PUNTO 4 · Config sellada: ¿todas las predicciones usaron lo mismo? ──
+  const cfgKey = (c)=> c ? JSON.stringify([!!c.bt, c.btWeight, !!c.shrink, c.intervalK, c.intervalConf, !!c.formBoost, c.histAgeDays||0]) : 'none';
+  const cfgKeys = new Set(evals.map(e=>cfgKey(e.config)));
+  const lastCfg = evals.find(e=>e.config)?.config || null;
+  const cfgHtml = lastCfg ? `
+      <div style="padding:8px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:14px;font-size:12px">
+        <b style="color:#0b2f6b">🔧 Ajustes de la predicción más reciente:</b> ${_simConfigBadges(lastCfg)}
+        ${cfgKeys.size>1?`<div class="small" style="color:#b45309;margin-top:4px">⚠️ No todas las predicciones se guardaron con los mismos ajustes — compáralas en la columna <b>Ajustes</b> para que la comparación sea justa.</div>`:''}
+      </div>` : '';
+
   body.innerHTML = `
+    ${driftHtml}
+    ${cfgHtml}
     <div class="sim-model-summary">
       <div class="sim-model-card">
         <div class="m-l">🎯 Precisión Top 10 (media)</div>
@@ -29336,7 +29408,7 @@ function _simRenderModelAccuracy(){
     </div>
     <div class="table-wrap" style="max-height:380px;overflow:auto">
       <table class="sim-acc-table">
-        <thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th><th style="text-align:center">Top 10</th><th style="text-align:center">Podio</th><th style="text-align:center">MAE</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Prueba</th><th>Localidad</th><th style="text-align:center">Top 10</th><th style="text-align:center">Podio</th><th style="text-align:center">MAE</th><th>Ajustes</th></tr></thead>
         <tbody>${evals.map(e=>{
           const accCls = e.accuracyTop10>=70?'good':e.accuracyTop10>=40?'ok':'bad';
           return `<tr>
@@ -29346,10 +29418,12 @@ function _simRenderModelAccuracy(){
             <td style="text-align:center"><span class="sim-diff-badge ${e.accuracyTop10>=70?'perfect':e.accuracyTop10>=40?'close':'far'}">${e.accuracyTop10}% (${e.hitsTop10}/${e.total})</span></td>
             <td style="text-align:center;font-weight:800;color:${e.hitsTop3===3?'#16a34a':e.hitsTop3>=2?'#f59e0b':'#dc2626'}">${e.hitsTop3}/3</td>
             <td style="text-align:center;color:#475569">${e.mae!=null?'±'+e.mae.toFixed(1):'—'}</td>
+            <td style="font-size:10px;line-height:1.6">${e.config?_simConfigBadges(e.config):'<span style="color:#cbd5e1">—</span>'}</td>
           </tr>`;
         }).join('')}</tbody>
       </table>
-    </div>`;
+    </div>
+    <p class="small" style="margin-top:10px;color:#6b7280">💡 La columna <b>Ajustes</b> muestra con qué configuración se guardó cada predicción. Predicciones antiguas (guardadas antes de esta actualización) saldrán sin ajustes — es normal. La <b>tendencia reciente</b> es orientativa: con pocas carreras es sensible al azar.</p>`;
 }
 
 // Dispara el backtest retroactivo y pinta los resultados en el panel.
