@@ -1684,3 +1684,5 @@ details.sim-help .sim-help-body .tip{
 .why-dir{font-size:12.5px;font-weight:800;margin-top:2px}
 .why-reason{font-size:12.5px;color:#475569;margin-top:3px;line-height:1.45}
 .why-foot{font-size:11px;color:#94a3b8;margin-top:12px;font-style:italic;line-height:1.4}
+
+.sim-fewdata{display:inline-block;font-size:10px;font-weight:800;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:1px 6px;margin-left:6px}

@@ -26390,6 +26390,10 @@ function _simBuildData(raceId){
   // Blend con el modelo de fuerza Bradley-Terry (opt-in). Ajusta predictedPos
   // mezclando con el rango de fuerza; no sustituye, complementa.
   try{ _simApplyBTBlend(grid, race); }catch(_){}
+  // Encogimiento por pocos datos (shrinkage): a los corredores con muy pocas
+  // carreras los acerca al centro del pelotón, para que 1 resultado no les
+  // sobrevalore. Es parte del modelo (corre también durante la calibración).
+  try{ _simApplyShrinkage(grid); }catch(_){}
   // Calibración del intervalo de confianza (Fase 4 #2): ajusta el ANCHO del
   // rango a la cobertura real medida en el backtest. No se aplica mientras se
   // está calibrando (para medir el rango crudo).
@@ -26509,8 +26513,9 @@ function _simRenderCurrent(){
   try{ if(race) _setActiveRace(race, 'simulador'); }catch(_){}
   // Demografía de la parrilla (1º vs 2º año)
   try{ _simRenderDemografia(inscritos); }catch(_){}
-  // Reflejar estado del blend Bradley-Terry
+  // Reflejar estado del blend Bradley-Terry y de la prudencia (encogimiento)
   try{ const _btc=document.getElementById('simBTChk'); if(_btc) _btc.checked=_btBlendEnabled(); }catch(_){}
+  try{ const _shc=document.getElementById('simShrinkChk'); if(_shc) _shc.checked=_shrinkEnabled(); }catch(_){}
   // Mostrar paneles
   document.getElementById('simEmptyPanel').style.display = 'none';
   document.getElementById('simKpiPanel').style.display = '';
@@ -26760,7 +26765,7 @@ function _simRenderTop10(grid, catFilter){
     return `<div class="sim-top-row ${g.isMyTeam?'sim-my-team':''}">
       <div class="sim-top-rank ${rankCls}">${rank}º</div>
       <div class="sim-top-info">
-        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge} <button class="sim-why-btn" onclick="_simWhy('${escapeAttr(g.name)}')" title="¿Por qué este puesto?">🔍 ¿por qué?</button></div>
+        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge}${g._shrunk?`<span class="sim-fewdata" title="Predicción prudente: solo ${g._shrunkN} carrera(s). Muy poca información, tómala con cautela.">⚠️ pocos datos</span>`:''} <button class="sim-why-btn" onclick="_simWhy('${escapeAttr(g.name)}')" title="¿Por qué este puesto?">🔍 ¿por qué?</button></div>
         <div class="sim-top-team">${escapeHtml(g.team||'(sin equipo)')}${g.cat?' · '+escapeHtml(g.cat):''}${g.bib?' · #'+escapeHtml(g.bib):''}${g.status==='team-fb'?' · <span style="color:#3730a3;font-weight:700">[fallback equipo]</span>':''}</div>
       </div>
       <div class="sim-top-metrics">
@@ -44057,6 +44062,7 @@ function _simWhy(name){
       </div>`).join('')
     : '<div class="why-reason">No hay ajustes especiales en esta prueba: la predicción sale casi solo de su nivel histórico y forma reciente.</div>';
   const btHtml = g._btBlended ? '<div class="why-row"><div class="why-top"><span class="why-ic">🕸️</span><b>Fuerza en duelos directos (Bradley‑Terry)</b></div><div class="why-reason">La predicción se ha mezclado con su rating de fuerza (quién suele acabar por delante de quién).</div></div>' : '';
+  const shHtml = g._shrunk ? `<div class="why-row" style="background:#fffbeb;border-color:#fcd34d"><div class="why-top"><span class="why-ic">🛡️</span><b>Prudencia por pocos datos</b></div><div class="why-reason">Solo tiene <b>${g._shrunkN} carrera(s)</b>. Su predicción se ha acercado al centro del pelotón porque un único resultado no es fiable. Tómala con cautela.</div></div>` : '';
   const html=`
     <div class="why-head">
       <div class="why-name">${escapeHtml(_evolNormName?_evolNormName(g.name):g.name)}</div>
@@ -44067,7 +44073,7 @@ function _simWhy(name){
       <div>Su <b>nivel histórico</b> (media ${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}, mejor ${g.bestPos!=null?g.bestPos+'º':'—'}) y su <b>forma reciente</b> ${trendTxt}. Fiabilidad ${g.reliability??'—'}% (consistencia) · ${g.raceCount||0} carreras.</div>
     </div>
     <div class="why-base-t" style="margin-top:12px">⚙️ Ajustes que mueven la predicción</div>
-    ${adjHtml}${btHtml}
+    ${shHtml}${adjHtml}${btHtml}
     <div class="why-foot">Explicación exacta del modelo (no es una aproximación). Los % son el peso relativo de cada ajuste sobre el punto de partida.</div>`;
   let ov=document.getElementById('simWhyOverlay');
   if(!ov){ ov=document.createElement('div'); ov.id='simWhyOverlay'; ov.onclick=e=>{ if(e.target===ov) _simWhyClose(); }; document.body.appendChild(ov); }
@@ -44161,4 +44167,36 @@ function _simCalibrateUI(){
       if(_simSelectedRaceId){ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }
     }catch(e){ alert('Error calibrando: '+(e.message||e)); }
   },60);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🛡️ ENCOGIMIENTO POR POCOS DATOS (shrinkage bayesiano sencillo)
+// ----------------------------------------------------------------------------
+// Acerca el puesto previsto de los corredores con pocas carreras al centro del
+// pelotón, proporcionalmente a su falta de datos. Así un único resultado no
+// sobrevalora ni infravalora. Opt-in (por defecto ON), reversible, aditivo.
+// Fórmula: shrunk = w·pred + (1-w)·centro,  w = n/(n+K)  (K=3 pseudo-carreras)
+// ════════════════════════════════════════════════════════════════════════════
+function _shrinkEnabled(){ try{ const v=localStorage.getItem('_simShrink'); return v===null?true:v==='1'; }catch(_){ return true; } }
+function _shrinkSet(on){
+  try{ localStorage.setItem('_simShrink', on?'1':'0'); }catch(_){}
+  if(typeof showToast==='function') showToast(on?'🛡️ Prudencia con pocos datos: ACTIVADA':'Prudencia con pocos datos: desactivada','ok',2000);
+  if(_simSelectedRaceId){ try{ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }catch(_){} }
+}
+function _simApplyShrinkage(grid){
+  if(!_shrinkEnabled() || !Array.isArray(grid) || !grid.length) return;
+  const N=grid.length, neutral=(N+1)/2, K=3;
+  grid.forEach(g=>{
+    if(g.predictedPos==null) return;
+    const n=g.raceCount||0;
+    if(n>=6) { g._shrunk=false; return; }   // con historial suficiente, no se toca
+    const w=n/(n+K);
+    const shrunk=w*g.predictedPos + (1-w)*neutral;
+    const delta=shrunk-g.predictedPos;
+    g.predictedPos=Math.round(Math.max(1,Math.min(N,shrunk))*10)/10;
+    if(g.predLower!=null) g.predLower=Math.max(1, Math.round(g.predLower+delta));
+    if(g.predUpper!=null) g.predUpper=Math.min(N, Math.round(g.predUpper+delta));
+    g._shrunk = n<=2;   // marca visible solo para 1-2 carreras (lo más débil)
+    g._shrunkN = n;
+  });
 }
