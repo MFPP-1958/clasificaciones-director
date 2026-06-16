@@ -26387,6 +26387,10 @@ function _simBuildData(raceId){
   const myTeamCount = grid.filter(g=>g.isMyTeam).length;
   const myTeamWithHist = grid.filter(g=>g.isMyTeam && g.hasHistory).length;
 
+  // Blend con el modelo de fuerza Bradley-Terry (opt-in). Ajusta predictedPos
+  // mezclando con el rango de fuerza; no sustituye, complementa.
+  try{ _simApplyBTBlend(grid, race); }catch(_){}
+
   _simCurrentData = {
     race, inscritos, grid,
     kpis:{ totalIns, strongRivals, difficulty, avgReliability, coverage, predictability, myTeamCount, myTeamWithHist },
@@ -26501,6 +26505,8 @@ function _simRenderCurrent(){
   try{ if(race) _setActiveRace(race, 'simulador'); }catch(_){}
   // Demografía de la parrilla (1º vs 2º año)
   try{ _simRenderDemografia(inscritos); }catch(_){}
+  // Reflejar estado del blend Bradley-Terry
+  try{ const _btc=document.getElementById('simBTChk'); if(_btc) _btc.checked=_btBlendEnabled(); }catch(_){}
   // Mostrar paneles
   document.getElementById('simEmptyPanel').style.display = 'none';
   document.getElementById('simKpiPanel').style.display = '';
@@ -43913,4 +43919,44 @@ function _btRenderPanel(){
         <div style="font-size:11px;color:#94a3b8;margin-top:8px">Fuerza relativa al nº1 (=100). Calculado sobre ${rk.n} carreras y miles de duelos. Corredores con ≥3 enfrentamientos.</div>`;
     }catch(e){ el.innerHTML=`<div class="lab-notfound">No se pudo calcular: ${escapeHtml(e.message||String(e))}</div>`; }
   },60);
+}
+
+// ── Activación de Bradley-Terry en la predicción (blend opt-in) ──
+function _btBlendEnabled(){ try{ const v=localStorage.getItem('_btBlend'); return v===null?true:v==='1'; }catch(_){ return true; } }
+function _btBlendWeight(){ try{ const w=parseFloat(localStorage.getItem('_btBlendW')); return Number.isFinite(w)?w:0.35; }catch(_){ return 0.35; } }
+function _btSetBlend(on){
+  try{ localStorage.setItem('_btBlend', on?'1':'0'); }catch(_){}
+  if(typeof showToast==='function') showToast(on?'🕸️ Fuerza BT activada en la predicción':'Fuerza BT desactivada','ok',2200);
+  if(_simSelectedRaceId && typeof _simBuildData==='function'){ try{ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }catch(_){} }
+}
+
+// Aplica el blend Bradley-Terry sobre el grid (ajusta predictedPos y su intervalo).
+function _simApplyBTBlend(grid, race){
+  if(!_btBlendEnabled() || !Array.isArray(grid) || !grid.length) return;
+  const _nk=s=>(typeof normalizeRiderName==='function')?normalizeRiderName(s||'').trim():(s||'').trim().toLowerCase();
+  const histAll=(typeof _historyForGlobalCat==='function')?_historyForGlobalCat(_cachedHistory||[]):(_cachedHistory||[]);
+  // excluir la propia carrera (evita fuga si ya está disputada)
+  const hist=histAll.filter(r=>String(r.id)!==String(race&&race.id));
+  const chrono=(typeof _btRacesChrono==='function')?_btRacesChrono(hist):[];
+  if(chrono.length<5) return;             // pocos datos → no tocar la predicción
+  const m=_btFit(chrono.map(r=>r.fin));
+  const rated=grid.map(g=>{ const k=_nk(g.name); return { g, r: m.idx.has(k)? m.p[m.idx.get(k)] : null }; });
+  const vals=rated.filter(x=>x.r!=null).map(x=>x.r).sort((a,b)=>a-b);
+  if(vals.length<3) return;
+  const lowDefault=(vals[Math.floor(vals.length*0.25)]||vals[0])*0.8;   // sin rating → cuartil bajo
+  rated.forEach(x=>{ if(x.r==null) x.r=lowDefault; });
+  const order=rated.slice().sort((a,b)=>b.r-a.r);
+  const N=order.length;
+  order.forEach((x,i)=>{ x.btPos=i+1; });
+  const w=_btBlendWeight();
+  rated.forEach(x=>{
+    const g=x.g; if(g.predictedPos==null) return;
+    const old=g.predictedPos;
+    const blended=(1-w)*old + w*x.btPos;
+    const delta=blended-old;
+    g.predictedPos=Math.max(1, Math.min(N, blended));
+    if(g.predLower!=null) g.predLower=Math.max(1, g.predLower+delta);
+    if(g.predUpper!=null) g.predUpper=Math.min(N, g.predUpper+delta);
+    g._btBlended=true;
+  });
 }
