@@ -1686,3 +1686,11 @@ details.sim-help .sim-help-body .tip{
 .why-foot{font-size:11px;color:#94a3b8;margin-top:12px;font-style:italic;line-height:1.4}
 
 .sim-fewdata{display:inline-block;font-size:10px;font-weight:800;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:1px 6px;margin-left:6px}
+
+/* ── Mapa de calor del pelotón (simulador) ── */
+.pel-table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}
+.pel-table th{background:#0b2f6b;color:#fff;font-size:11px;font-weight:800;padding:7px 8px;text-align:center;white-space:nowrap}
+.pel-table th:first-child{text-align:left}
+.pel-table td{padding:7px 8px;border-bottom:1px solid #eef2f7}
+.pel-table tr.pel-mine td{outline:2px solid #1d4ed8;outline-offset:-2px}
+.pel-table tr.pel-tot td{border-top:2px solid #cbd5e1;background:#f8fafc}

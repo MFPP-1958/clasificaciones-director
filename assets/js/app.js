@@ -25381,6 +25381,7 @@ function _simShowEmpty(customMsg){
   document.getElementById('simKpiPanel').style.display = 'none';
   document.getElementById('simTopPanel').style.display = 'none';
   document.getElementById('simGridPanel').style.display = 'none';
+  try{ const _pp=document.getElementById('simPelotonPanel'); if(_pp) _pp.style.display='none'; }catch(_){}
   document.getElementById('simRaceMeta').style.display = 'none';
   document.getElementById('simCatPickerWrap').style.display = 'none';
   document.getElementById('simExportBtn').style.display = 'none';
@@ -26571,6 +26572,7 @@ function _simRenderCurrent(){
   document.getElementById('simKpiPanel').style.display = '';
   document.getElementById('simTopPanel').style.display = '';
   document.getElementById('simGridPanel').style.display = '';
+  try{ const _pp=document.getElementById('simPelotonPanel'); if(_pp){ _pp.style.display=''; if(typeof _simRenderPeloton==='function') _simRenderPeloton(grid); } }catch(_){}
   document.getElementById('simRaceMeta').style.display = 'flex';
   document.getElementById('simExportBtn').style.display = 'inline-block';
   // Mostrar botón "Predicho vs Real" solo si la carrera ya se ha disputado (riders cargados)
@@ -44331,4 +44333,59 @@ function _simProbMeter(g){
     <span style="flex:1;max-width:160px;height:8px;background:#eef2f7;border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:${t10}%;background:${col}"></span></span>
     ${pod!=null?`<span style="font-size:10px;font-weight:800;color:#b45309" title="Probabilidad de podio">🥉 ${pod}%</span>`:''}
   </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🗺️ SIMULADOR 4.2 (#3): MAPA DE CALOR DEL PELOTÓN (equipos × rangos de posición)
+// ----------------------------------------------------------------------------
+// Cuántos corredores de cada equipo se prevé en cada franja (1-3, 4-10, 11-20,
+// >20), según predictedPos. Muestra dónde se concentra la batalla. Solo lectura.
+// ════════════════════════════════════════════════════════════════════════════
+function _simRenderPeloton(grid){
+  const body=document.getElementById('simPelotonBody'); if(!body) return;
+  const rated=(grid||[]).filter(g=>g.predictedPos!=null);
+  if(rated.length<4){ body.innerHTML='<div style="color:#9ca3af;font-size:13px;padding:8px 0">Aún no hay predicción suficiente para el mapa de calor.</div>'; return; }
+  const RANGES=[ {k:'p',lbl:'🥇 1‑3',lo:1,hi:3}, {k:'t',lbl:'🔝 4‑10',lo:4,hi:10}, {k:'m',lbl:'11‑20',lo:11,hi:20}, {k:'r',lbl:'>20',lo:21,hi:1e9} ];
+  const myCanon=(typeof myTeam!=='undefined')?getCanonicalTeam(myTeam||'').toLowerCase():'';
+  // Agregar por equipo
+  const teams=new Map();
+  rated.forEach(g=>{
+    const team=g.team||'(sin equipo)';
+    if(!teams.has(team)) teams.set(team,{team, counts:{p:0,t:0,m:0,r:0}, total:0, front:0});
+    const o=teams.get(team); const p=Math.round(g.predictedPos);
+    const rg=RANGES.find(r=>p>=r.lo&&p<=r.hi)||RANGES[3];
+    o.counts[rg.k]++; o.total++;
+    o.front += (rg.k==='p'?3:rg.k==='t'?1.5:rg.k==='m'?0.4:0);   // peso para ordenar por presencia arriba
+  });
+  // Ordenar: mi equipo primero, luego por presencia en cabeza
+  let list=[...teams.values()].sort((a,b)=> b.front-a.front || b.total-a.total);
+  const mine=list.filter(t=>t.team.toLowerCase()===myCanon);
+  const others=list.filter(t=>t.team.toLowerCase()!==myCanon);
+  // Mostrar mi equipo + hasta 11 rivales con más presencia arriba
+  list=[...mine, ...others].slice(0, mine.length?12:12);
+  const maxCell=Math.max(1,...list.flatMap(t=>RANGES.map(r=>t.counts[r.k])));
+  const cellColor=(n,k)=>{
+    if(!n) return '#f8fafc';
+    const inten=Math.min(1, n/maxCell);
+    // escala de calor por franja: podio/top10 en azul intenso; cola en gris
+    const base = k==='p'?[11,47,107] : k==='t'?[18,134,199] : k==='m'?[100,116,139] : [148,163,184];
+    const a=0.18+inten*0.72;
+    return `rgba(${base[0]},${base[1]},${base[2]},${a.toFixed(2)})`;
+  };
+  const head=`<tr><th style="text-align:left">Equipo</th>${RANGES.map(r=>`<th>${r.lbl}</th>`).join('')}<th>Total</th></tr>`;
+  const rows=list.map(t=>{
+    const isMine=t.team.toLowerCase()===myCanon;
+    const cells=RANGES.map(r=>{ const n=t.counts[r.k]; const c=cellColor(n,r.k); const fg=(n&&(r.k==='p'||r.k==='t'))?'#fff':'#0b2f6b';
+      return `<td style="background:${c};color:${fg};text-align:center;font-weight:800">${n||''}</td>`; }).join('');
+    return `<tr class="${isMine?'pel-mine':''}"><td style="text-align:left;font-weight:${isMine?'900':'700'};color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${isMine?'⭐ ':''}${escapeHtml(t.team)}</td>${cells}<td style="text-align:center;color:#64748b;font-weight:700">${t.total}</td></tr>`;
+  }).join('');
+  // Totales por franja (¿dónde está la batalla?)
+  const colTot=RANGES.map(r=>list.reduce((s,t)=>s+t.counts[r.k],0));
+  const battleIdx=colTot.indexOf(Math.max(...colTot));
+  body.innerHTML=`
+    <div style="font-size:12.5px;color:#475569;margin-bottom:8px">Corredores previstos de cada equipo por franja de posición. Casilla más oscura = más corredores. ${list.length<teams.size?`(Mostrando ${list.length} de ${teams.size} equipos, los de más presencia arriba.)`:''}</div>
+    <div style="overflow-x:auto"><table class="pel-table">${head}${rows}
+      <tr class="pel-tot"><td style="text-align:left;font-weight:800;color:#475569">Σ pelotón</td>${RANGES.map((r,i)=>`<td style="text-align:center;font-weight:800;color:${i===battleIdx?'#b91c1c':'#64748b'}">${colTot[i]}</td>`).join('')}<td></td></tr>
+    </table></div>
+    <div style="font-size:12px;color:#0b2f6b;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:7px 11px;margin-top:10px">⚔️ La batalla se concentra en la franja <b>${RANGES[battleIdx].lbl}</b> (${colTot[battleIdx]} corredores). ${mine.length?`Tu equipo: ${mine[0].counts.p} en podio · ${mine[0].counts.t} en 4‑10.`:''}</div>`;
 }
