@@ -26754,7 +26754,7 @@ function _simRenderTop10(grid, catFilter){
     return `<div class="sim-top-row ${g.isMyTeam?'sim-my-team':''}">
       <div class="sim-top-rank ${rankCls}">${rank}º</div>
       <div class="sim-top-info">
-        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge}</div>
+        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge} <button class="sim-why-btn" onclick="_simWhy('${escapeAttr(g.name)}')" title="¿Por qué este puesto?">🔍 ¿por qué?</button></div>
         <div class="sim-top-team">${escapeHtml(g.team||'(sin equipo)')}${g.cat?' · '+escapeHtml(g.cat):''}${g.bib?' · #'+escapeHtml(g.bib):''}${g.status==='team-fb'?' · <span style="color:#3730a3;font-weight:700">[fallback equipo]</span>':''}</div>
       </div>
       <div class="sim-top-metrics">
@@ -44003,3 +44003,59 @@ function _btCompareUI(){
     }catch(e){ alert('Error comparando: '+(e.message||e)); }
   },60);
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🔍 FASE 4 (#1) · EXPLICABILIDAD: "¿Por qué este puesto?" (XAI honesto)
+// ----------------------------------------------------------------------------
+// Descompone la predicción del corredor en los factores que el simulador YA
+// calcula (nivel/forma, especialización, terreno, fatiga, año, fuerza BT). Sin
+// SHAP/LIME: explicación EXACTA de nuestro modelo, en lenguaje de director.
+// ════════════════════════════════════════════════════════════════════════════
+function _simWhy(name){
+  const grid=(_simCurrentData&&_simCurrentData.grid)||[];
+  const g=grid.find(x=>x.name===name); if(!g){ return; }
+  const pred = g.predictedPos!=null?Math.round(g.predictedPos):null;
+  const interval = (g.predLower!=null&&g.predUpper!=null)?`${g.predLower}º–${g.predUpper}º`:(pred!=null?pred+'º':'—');
+  // Factores multiplicativos (≠1 = mueven la predicción)
+  const raw=[
+    { k:'Especialización en el tipo de prueba', f:g.specialtyFactor, why:g.specialtyReason },
+    { k:'Afinidad al terreno / recorrido',      f:g.terrainFactor,   why:g.terrainReason },
+    { k:'Fatiga / carga reciente',              f:g.fatigueFactor,   why:g.fatigueReason },
+    { k:'Año en la categoría',                  f:g.cadetFactor,     why:(g.cadetFactor&&g.cadetFactor>1?'Ajuste por ser de 1er año / con poco histórico':'') },
+  ].map(x=>({ ...x, f:(x.f==null?1:x.f), mag:Math.abs(Math.log((x.f==null||x.f<=0)?1:x.f)) }))
+   .filter(x=>x.mag>0.005)
+   .sort((a,b)=>b.mag-a.mag);
+  const tot=raw.reduce((s,x)=>s+x.mag,0)||1;
+  const adj=raw.map(x=>{
+    const fav = x.f<1;
+    return { k:x.k, why:x.why||'', pct:Math.round(x.mag/tot*100),
+      dir: fav?'le favorece (mejora el puesto)':'le penaliza (sube el puesto)',
+      color: fav?'#15803d':'#b91c1c', icon: fav?'⬇️':'⬆️' };
+  });
+  const trendTxt = g.trend==='up'?'📈 en mejora':g.trend==='down'?'📉 a la baja':'➡️ estable';
+  const adjHtml = adj.length
+    ? adj.map(a=>`<div class="why-row">
+        <div class="why-top"><span class="why-ic">${a.icon}</span><b>${escapeHtml(a.k)}</b><span class="why-pct">${a.pct}%</span></div>
+        <div class="why-dir" style="color:${a.color}">${a.dir}</div>
+        ${a.why?`<div class="why-reason">${escapeHtml(a.why)}</div>`:''}
+      </div>`).join('')
+    : '<div class="why-reason">No hay ajustes especiales en esta prueba: la predicción sale casi solo de su nivel histórico y forma reciente.</div>';
+  const btHtml = g._btBlended ? '<div class="why-row"><div class="why-top"><span class="why-ic">🕸️</span><b>Fuerza en duelos directos (Bradley‑Terry)</b></div><div class="why-reason">La predicción se ha mezclado con su rating de fuerza (quién suele acabar por delante de quién).</div></div>' : '';
+  const html=`
+    <div class="why-head">
+      <div class="why-name">${escapeHtml(_evolNormName?_evolNormName(g.name):g.name)}</div>
+      <div class="why-sub">${escapeHtml(g.team||'')}${g.cat?' · '+escapeHtml(g.cat):''} · Puesto IA: <b>${interval}</b></div>
+    </div>
+    <div class="why-base">
+      <div class="why-base-t">🎯 Punto de partida (lo que más pesa)</div>
+      <div>Su <b>nivel histórico</b> (media ${g.avgPos!=null?g.avgPos.toFixed(1)+'º':'—'}, mejor ${g.bestPos!=null?g.bestPos+'º':'—'}) y su <b>forma reciente</b> ${trendTxt}. Fiabilidad ${g.reliability??'—'}% (consistencia) · ${g.raceCount||0} carreras.</div>
+    </div>
+    <div class="why-base-t" style="margin-top:12px">⚙️ Ajustes que mueven la predicción</div>
+    ${adjHtml}${btHtml}
+    <div class="why-foot">Explicación exacta del modelo (no es una aproximación). Los % son el peso relativo de cada ajuste sobre el punto de partida.</div>`;
+  let ov=document.getElementById('simWhyOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='simWhyOverlay'; ov.onclick=e=>{ if(e.target===ov) _simWhyClose(); }; document.body.appendChild(ov); }
+  ov.innerHTML=`<div class="why-card"><button class="why-close" onclick="_simWhyClose()">✕</button>${html}</div>`;
+  ov.style.display='flex';
+}
+function _simWhyClose(){ const ov=document.getElementById('simWhyOverlay'); if(ov) ov.style.display='none'; }

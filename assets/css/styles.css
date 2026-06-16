@@ -1665,3 +1665,22 @@ details.sim-help .sim-help-body .tip{
 .bt-bar{width:120px;height:10px;background:#e5e7eb;border-radius:6px;overflow:hidden;flex-shrink:0}
 .bt-rel{font-weight:800;color:#0b2f6b;width:34px;text-align:right}
 @media(max-width:680px){.bt-team{display:none}}
+
+/* ── "¿Por qué este puesto?" (explicabilidad simulador) ── */
+.sim-why-btn{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;border-radius:999px;font-size:10.5px;font-weight:800;padding:1px 8px;cursor:pointer;margin-left:4px;white-space:nowrap}
+.sim-why-btn:hover{background:#c7d2fe}
+#simWhyOverlay{position:fixed;inset:0;background:rgba(11,47,107,.45);display:none;align-items:center;justify-content:center;z-index:99999;padding:16px}
+.why-card{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:88vh;overflow:auto;padding:20px 22px;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.why-close{position:absolute;top:12px;right:12px;background:#f1f5f9;border:none;border-radius:8px;width:30px;height:30px;font-weight:900;cursor:pointer;color:#475569}
+.why-head{border-bottom:2px solid #eef2f7;padding-bottom:10px;margin-bottom:12px}
+.why-name{font-size:22px;font-weight:900;color:#0b2f6b}
+.why-sub{font-size:13px;color:#64748b;margin-top:2px}
+.why-base{background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:11px 13px;font-size:13.5px;color:#0c4a6e;line-height:1.5}
+.why-base-t{font-size:13px;font-weight:900;color:#3730a3}
+.why-row{background:#f8fafc;border:1px solid #eef2f7;border-radius:10px;padding:9px 12px;margin-top:8px}
+.why-top{display:flex;align-items:center;gap:8px;font-size:14px;color:#111827}
+.why-ic{font-size:16px}
+.why-pct{margin-left:auto;font-weight:900;color:#3730a3;background:#eef2ff;border-radius:999px;padding:1px 9px;font-size:12px}
+.why-dir{font-size:12.5px;font-weight:800;margin-top:2px}
+.why-reason{font-size:12.5px;color:#475569;margin-top:3px;line-height:1.45}
+.why-foot{font-size:11px;color:#94a3b8;margin-top:12px;font-style:italic;line-height:1.4}
