@@ -26390,6 +26390,10 @@ function _simBuildData(raceId){
   // Blend con el modelo de fuerza Bradley-Terry (opt-in). Ajusta predictedPos
   // mezclando con el rango de fuerza; no sustituye, complementa.
   try{ _simApplyBTBlend(grid, race); }catch(_){}
+  // Calibración del intervalo de confianza (Fase 4 #2): ajusta el ANCHO del
+  // rango a la cobertura real medida en el backtest. No se aplica mientras se
+  // está calibrando (para medir el rango crudo).
+  try{ if(!_simCalibrating) _simCalibrateIntervals(grid); }catch(_){}
 
   _simCurrentData = {
     race, inscritos, grid,
@@ -26725,7 +26729,9 @@ function _simRenderTop10(grid, catFilter){
       ⚠️ <b>Predicción poco fiable.</b> Solo ${_withHist} de ${top.length} corredores tienen histórico compatible con <b>${escapeHtml(tt)}</b>; el resto son <b>estimación por equipo</b> (📊 fallback). Suele pasar cuando no hay pruebas previas del mismo tipo/categoría. El Top 10 es <b>orientativo</b>; mejorará cuando cargues más pruebas similares.
     </div>`;
   }
-  body.innerHTML = _warnHtml + `<div class="sim-top-list">${top.map((g,i)=>{
+  const _ivalConf=(typeof _simIntervalConf==='function')?_simIntervalConf():null;
+  const _confNote = _ivalConf ? `<div style="font-size:11.5px;color:#0e7490;background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:6px 10px;margin-bottom:10px">📐 El rango <b>Pos. IA</b> es un intervalo de <b>≈${_ivalConf}% de confianza</b> (calibrado con tus carreras): el puesto real cae dentro ~${_ivalConf} de cada 100 veces.</div>` : '';
+  body.innerHTML = _warnHtml + _confNote + `<div class="sim-top-list">${top.map((g,i)=>{
     const rank = i+1;
     const rankCls = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'def';
     const confDot = `<span class="sim-conf ${g.confidence}" title="Confianza ${g.confidence}"></span>`;
@@ -44059,3 +44065,90 @@ function _simWhy(name){
   ov.style.display='flex';
 }
 function _simWhyClose(){ const ov=document.getElementById('simWhyOverlay'); if(ov) ov.style.display='none'; }
+
+// ════════════════════════════════════════════════════════════════════════════
+// 📐 FASE 4 (#2) · INTERVALOS DE CONFIANZA CALIBRADOS Y ETIQUETADOS
+// ----------------------------------------------------------------------------
+// Mide en el backtest qué % de puestos reales caen dentro del rango previsto y
+// ajusta el ANCHO (factor k) para alcanzar un objetivo (~80%). Etiqueta el rango
+// con su confianza real. Aditivo; no cambia el puesto previsto, solo el rango.
+// ════════════════════════════════════════════════════════════════════════════
+let _simCalibrating=false;
+function _simIntervalK(){ try{ const v=parseFloat(localStorage.getItem('_simIvalK')); return Number.isFinite(v)&&v>0?v:null; }catch(_){ return null; } }
+function _simIntervalConf(){ try{ const v=parseInt(localStorage.getItem('_simIvalConf')); return Number.isFinite(v)?v:null; }catch(_){ return null; } }
+
+function _simCalibrateIntervals(grid){
+  const k=_simIntervalK(); if(!k) return;
+  grid.forEach(g=>{
+    if(g.predictedPos==null||g.predLower==null||g.predUpper==null) return;
+    const c=g.predictedPos;
+    const lo=c-(c-g.predLower)*k, hi=c+(g.predUpper-c)*k;
+    g.predLower=Math.max(1, Math.round(lo));
+    g.predUpper=Math.max(g.predLower, Math.round(hi));
+  });
+}
+
+// Muestras {pred,lo,hi,real} del backtest retro (rango CRUDO, sin calibrar).
+function _simIntervalSamples(){
+  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
+  if(!hist.length) return [];
+  const prevRaceId=_simSelectedRaceId, prevData=_simCurrentData, origHist=_cachedHistory;
+  const samples=[];
+  _simCalibrating=true;   // medir el rango crudo
+  try{
+    const candidates=hist.filter(h=>Array.isArray(h.riders)&&h.riders.filter(r=>r.pos>0).length>=3&&h.raceDate);
+    candidates.forEach(race=>{
+      try{
+        const raceIso=_parseSpanishDate(race.raceDate); if(!raceIso) return;
+        const previous=hist.filter(h=>{ if(h.id===race.id) return false; const iso=_parseSpanishDate(h.raceDate); return iso&&iso<raceIso; });
+        if(previous.length<2) return;
+        const needSyn=!Array.isArray(race.inscritos)||race.inscritos.length<3; let restored=null;
+        if(needSyn){ restored=race.inscritos; race.inscritos=(race.riders||[]).filter(r=>r.pos>0).map(r=>({name:r.name,bib:r.bib||'',team:r.team||'',cat:r.cat||''})); }
+        _cachedHistory=[race,...previous];
+        try{ _simBuildData(race.id); } finally { if(needSyn) race.inscritos=restored; }
+        const grid=(_simCurrentData&&_simCurrentData.grid)||[];
+        const realByName=new Map(); (race.riders||[]).forEach(r=>{ if(r&&r.pos>0&&r.name) realByName.set(normalizeForMatching(r.name), parseInt(r.pos)||0); });
+        grid.forEach(g=>{
+          if(g.predictedPos==null||g.predLower==null||g.predUpper==null) return;
+          const real=realByName.get(normalizeForMatching(g.name)); if(!real) return;
+          samples.push({ pred:g.predictedPos, lo:g.predLower, hi:g.predUpper, real });
+        });
+      }catch(_){}
+    });
+  } finally {
+    _simCalibrating=false;
+    _cachedHistory=origHist;
+    try{ if(prevRaceId) _simBuildData(prevRaceId); else _simCurrentData=prevData; }catch(_){ _simCurrentData=prevData; }
+  }
+  return samples;
+}
+
+function _simCoverageAt(samples, k){
+  let inside=0;
+  samples.forEach(s=>{ const lo=Math.max(1,Math.round(s.pred-(s.pred-s.lo)*k)); const hi=Math.max(lo,Math.round(s.pred+(s.hi-s.pred)*k)); if(s.real>=lo&&s.real<=hi) inside++; });
+  return samples.length?inside/samples.length:0;
+}
+
+function _simCalibrateUI(){
+  if(!(typeof _cachedHistory!=='undefined'&&_cachedHistory&&_cachedHistory.length)){ alert('Primero entra en el Simulador con una prueba (para cargar el histórico).'); return; }
+  if(typeof showToast==='function') showToast('📐 Midiendo cobertura del intervalo… (unos segundos)','info',2500);
+  setTimeout(()=>{
+    try{
+      const samples=_simIntervalSamples();
+      if(samples.length<30){ alert('Aún hay pocas predicciones evaluables para calibrar ('+samples.length+'). Vuelve a probar con más carreras.'); if(_simSelectedRaceId){_simBuildData(_simSelectedRaceId);_simRenderCurrent();} return; }
+      const TARGET=0.80;
+      const base=Math.round(_simCoverageAt(samples,1.0)*100);
+      // buscar k que acerque la cobertura al 80% (el más ajustado que llegue)
+      let bestK=1.0, bestDiff=Infinity, bestCov=base/100;
+      for(let k=0.4;k<=3.01;k+=0.1){ const cov=_simCoverageAt(samples,k); const diff=Math.abs(cov-TARGET); if(diff<bestDiff-1e-9){ bestDiff=diff; bestK=Math.round(k*10)/10; bestCov=cov; } }
+      const conf=Math.round(bestCov*100);
+      try{ localStorage.setItem('_simIvalK', String(bestK)); localStorage.setItem('_simIvalConf', String(conf)); }catch(_){}
+      const msg=`📐 Calibración del intervalo (sobre ${samples.length} predicciones del backtest):\n\n`
+        +`• Antes (rango actual): el puesto real caía dentro el ${base}% de las veces.\n`
+        +`• Ahora (ajustado ×${bestK}): ${conf}% de cobertura.\n\n`
+        +`A partir de ahora el rango "Pos. IA" se mostrará como un intervalo de ≈${conf}% de confianza.`;
+      alert(msg);
+      if(_simSelectedRaceId){ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }
+    }catch(e){ alert('Error calibrando: '+(e.message||e)); }
+  },60);
+}
