@@ -25334,7 +25334,9 @@ function _simFillSelect(sel, list){
     const insN = (h.inscritos||[]).length;
     const cuenta = insN ? `${insN} inscritos` : `${ridersN} clasificados`;
     const ex = h._planned ? ' · planificada' : (insN && ridersN>=3?` · ${ridersN} clasif.`:'');
-    return `<option value="${escapeAttr(h.id)}">${tag} ${escapeHtml(dt)} · ${escapeHtml(h.raceName||'')} · ${cuenta}${ex}</option>`;
+    // Tipo de prueba (contexto): ⏱️ CRI · ⛰️ Montaña · 🔄 Circuito · 🛣️ Llana
+    let tipo=''; try{ const ti=(typeof _featRaceTypeInfo==='function')?_featRaceTypeInfo(h):null; if(ti){ const ic={cri:'⏱️',montana:'⛰️',circuito:'🔄',llana:'🛣️'}[ti.type]||''; const lb={cri:'CRI',montana:'Montaña',circuito:'Circuito',llana:'Llana'}[ti.type]||''; if(lb) tipo=` · ${ic} ${lb}`; } }catch(_){}
+    return `<option value="${escapeAttr(h.id)}">${tag} ${escapeHtml(dt)} · ${escapeHtml(h.raceName||'')} · ${cuenta}${tipo}${ex}</option>`;
   }).join('');
   sel.innerHTML = '<option value="">— Selecciona una prueba —</option>' + opts;
   // Aviso de planificadas sin inscritos
@@ -26082,7 +26084,14 @@ function _simBuildData(raceId){
     const nk = normalizeForMatching(ins.name||'');
     // Resolver categoría específica desde el histórico si la del inscrito es genérica
     const resolvedCat = _simResolveSpecificCat(ins.name||'', ins.cat) || ins.cat || '';
-    const hits = nk ? (byRider.get(nk)||[]) : [];
+    let hits = nk ? (byRider.get(nk)||[]) : [];
+    // INTUICIÓN DEL DIRECTOR: filtrar el histórico por antigüedad
+    // ("ignorar historial de más de X"). _simHistAgeDays=0 → usar todo.
+    if(typeof _simHistAgeDays!=='undefined' && _simHistAgeDays>0 && hits.length){
+      const _now=Date.now();
+      const _recent=hits.filter(h=>{ const d=new Date(_parseSpanishDate(h.raceDate)||h.raceDate); return isNaN(d)?true:((_now-d.getTime())/86400000)<=_simHistAgeDays; });
+      if(_recent.length>=1) hits=_recent;   // si el filtro lo deja vacío, no lo aplicamos
+    }
     const tkey = (ins.team||'').toLowerCase().trim();
     const isMyTeam = myTeamLower && tkey === myTeamLower;
     let avgPos=null, bestPos=null, reliability=null, status='known', source='rider', confidence='nula';
@@ -26179,8 +26188,11 @@ function _simBuildData(raceId){
         // recent: decay {0.50, 0.30, 0.20} COMBINADO con pesos de calidad de carrera
         // avgPos: ahora usa la versión ajustada por calidad (avgPosAdjusted)
         // Resultado: un 5º en carrera fuerte vale más que un 5º en carrera floja.
-        const decayW = recent3Q.length === 3 ? [0.50, 0.30, 0.20]
-                     : recent3Q.length === 2 ? [0.60, 0.40]
+        // Si el director prioriza la forma reciente, el decay es más pronunciado
+        // (la última carrera pesa más).
+        const _fb = (typeof _simFormBoost!=='undefined' && _simFormBoost);
+        const decayW = recent3Q.length === 3 ? (_fb?[0.65,0.25,0.10]:[0.50, 0.30, 0.20])
+                     : recent3Q.length === 2 ? (_fb?[0.72,0.28]:[0.60, 0.40])
                      : [1.00];
         let recSum = 0, recTotW = 0;
         for(let i = 0; i < recent3Q.length; i++){
@@ -26551,6 +26563,9 @@ function _simRenderCurrent(){
   // Reflejar estado del blend Bradley-Terry y de la prudencia (encogimiento)
   try{ const _btc=document.getElementById('simBTChk'); if(_btc) _btc.checked=_btBlendEnabled(); }catch(_){}
   try{ const _shc=document.getElementById('simShrinkChk'); if(_shc) _shc.checked=_shrinkEnabled(); }catch(_){}
+  // Reflejar controles de intuición (antigüedad del histórico + forma reciente)
+  try{ const _ha=document.getElementById('simHistAge'); if(_ha) _ha.value=String(_simHistAgeDays||0); }catch(_){}
+  try{ const _fb=document.getElementById('simFormBoostChk'); if(_fb) _fb.checked=!!_simFormBoost; }catch(_){}
   // Mostrar paneles
   document.getElementById('simEmptyPanel').style.display = 'none';
   document.getElementById('simKpiPanel').style.display = '';
@@ -44268,4 +44283,20 @@ function _selSetBT(on){
   if(typeof showToast==='function') showToast(on?'🕸️ Fuerza BT activada en la convocatoria':'Fuerza BT desactivada','ok',2000);
   // recalcular la propuesta IA si está activa
   if(typeof _selIAPropose==='function'){ try{ _selIAPropose(); }catch(_){} }
+}
+
+// ── Controles de intuición del Simulador (antigüedad del histórico + forma reciente) ──
+let _simHistAgeDays = (()=>{ try{ return parseInt(localStorage.getItem('_simHistAge'))||0; }catch(_){ return 0; } })();
+let _simFormBoost   = (()=>{ try{ return localStorage.getItem('_simFormBoost')==='1'; }catch(_){ return false; } })();
+function _simSetHistAge(v){
+  _simHistAgeDays=parseInt(v)||0;
+  try{ localStorage.setItem('_simHistAge', String(_simHistAgeDays)); }catch(_){}
+  if(typeof showToast==='function') showToast(_simHistAgeDays?('🗓️ Usando solo los últimos '+(_simHistAgeDays===365?'12 meses':_simHistAgeDays===180?'6 meses':'3 meses')):'🗓️ Usando todo el histórico','ok',2200);
+  if(_simSelectedRaceId){ try{ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }catch(_){} }
+}
+function _simSetFormBoost(on){
+  _simFormBoost=!!on;
+  try{ localStorage.setItem('_simFormBoost', on?'1':'0'); }catch(_){}
+  if(typeof showToast==='function') showToast(on?'⚡ Priorizando la forma reciente':'Forma reciente: peso normal','ok',2000);
+  if(_simSelectedRaceId){ try{ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }catch(_){} }
 }
