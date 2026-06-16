@@ -1468,6 +1468,7 @@
             <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
               <button class="btn" style="font-size:12px;padding:8px 16px;background:#fff;color:#374151;border:1.5px solid #d1d5db" onclick="_selAutoPropose()" title="Selección automática estricta">⚡ Automática</button>
               <button class="btn" style="font-size:12px;padding:8px 16px;background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff" onclick="_selIAPropose()" title="IA: ordena por composite priorizando consistencia (>50% fiabilidad), Top 10 y forma reciente">🤖 Propuesta IA</button>
+              <label class="sel-bt-toggle" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#0b2f6b;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:6px 10px;cursor:pointer" title="Añade la Fuerza Bradley-Terry (duelos directos) como medida de nivel real, más justa entre corredores de pelotones distintos."><input type="checkbox" id="selBTChk" onchange="_selSetBT(this.checked)"> 🕸️ Fuerza BT</label>
               <button class="btn" style="font-size:14px;padding:6px 10px;background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;font-weight:700;border-radius:50%;line-height:1" onclick="_selShowAlgoHelp()" title="¿Cómo se calcula la selección?">?</button>
             </div>
           </div>
@@ -1501,6 +1502,7 @@
             <div style="display:flex;gap:6px;flex-shrink:0">
               <button class="btn" style="font-size:12px;padding:8px 16px;background:#fff;color:#374151;border:1.5px solid #d1d5db" onclick="_selAutoPropose()">⚡ Automática</button>
               <button class="btn" style="font-size:12px;padding:8px 16px;background:linear-gradient(135deg,#059669,#10b981);color:#fff" onclick="_selIAPropose()" title="Estado de Forma + Fiabilidad (6+2)">🤖 Propuesta IA 6+2</button>
+              <label class="sel-bt-toggle" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#0b2f6b;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:6px 10px;cursor:pointer" title="Añade la Fuerza Bradley-Terry (duelos directos) como medida de nivel real, más justa entre corredores de pelotones distintos."><input type="checkbox" id="selBTChk2" onchange="_selSetBT(this.checked)"> 🕸️ Fuerza BT</label>
             </div>
           </div>
 

@@ -20760,6 +20760,8 @@ function _selToggleCat(cat){
 
 async function renderSeleccion(){
   const history = _historyForGlobalCat(await _ensureHistory());
+  // Reflejar el estado del interruptor Fuerza BT en ambos checkboxes
+  try{ const _on=(typeof _selBTEnabled==='function')?_selBTEnabled():true; ['selBTChk','selBTChk2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=_on; }); }catch(_){}
   if(!_selFiltersReady){
     _initSelFilters(history);
     _selFiltersReady = true;
@@ -21312,6 +21314,18 @@ function _selIAPropose(){
   // forma reciente (25% vs 15%) y techo de rendimiento (15% vs 10%).
   // Pensada para detectar "ciclistas en racha" o "talentos con techo alto"
   // que merecen una oportunidad aunque su media no sea la mejor.
+  // Fuerza Bradley-Terry por corredor (opt-in): rel 0-100 (100 = más fuerte).
+  // Mide el NIVEL REAL por duelos directos, más justo que la media de puesto
+  // entre corredores que corren en pelotones de distinta dureza.
+  const btRel = {};
+  if(typeof _selBTEnabled==='function' && _selBTEnabled() && typeof _btRanking==='function'){
+    try{
+      const rk=_btRanking((typeof _labHistory==='function')?_labHistory():_cachedHistory);
+      if(rk && rk.ok) rk.list.forEach(r=>{ btRel[r.key]=r.rel; });
+    }catch(_){}
+  }
+  const _nk = s => (typeof normalizeRiderName==='function') ? normalizeRiderName(s||'').trim() : (s||'').trim().toLowerCase();
+
   const scored = _selPickerAllRiders.map(c=>{
     const stats = c._stats || _computeSelectionStats(c);
     const positions = c.positions || [];
@@ -21324,9 +21338,14 @@ function _selIAPropose(){
     const winBonus = -Math.min((c.wins||positions.filter(p=>p===1).length) * 14, 60);
     const podiumBonus = -Math.min(c.podiums * 4, 30);
     const ceilingBonus = -Math.min((stats.ceilingHits||0) * 10, 50);
+    // Bonus por fuerza BT: hasta -40 al más fuerte (rel=100), 0 al más flojo /
+    // sin rating. Solo si la opción está activa. Requiere ≥3 carreras para no
+    // premiar a quien tiene muy pocos duelos.
+    const rel = btRel[_nk(c.displayName||c.name)];
+    const btBonus = (rel!=null && n>=3) ? -(rel/100)*40 : 0;
 
     // IA: 40% calidad / 25% forma reciente / 10% consistencia / 15% techo /
-    // 15% wins / 5% podios + penalización volumen
+    // 15% wins / 5% podios + penalización volumen + fuerza BT (opt-in)
     const iaScore = (
       stats.adjustedQuality * 0.40 +
       recentAvg             * 0.25 +
@@ -21334,8 +21353,8 @@ function _selIAPropose(){
       ceilingBonus          * 0.15 +
       winBonus              * 0.15 +
       podiumBonus           * 0.05
-    ) + volumePenalty;
-    return {...c, _iaBase: iaScore, _stats: stats};
+    ) + volumePenalty + btBonus;
+    return {...c, _iaBase: iaScore, _stats: stats, _btRel: rel};
   });
 
   // VLC: filtro estricto de elegibilidad (Campeonato — no concesiones)
@@ -44199,4 +44218,15 @@ function _simApplyShrinkage(grid){
     g._shrunk = n<=2;   // marca visible solo para 1-2 carreras (lo más débil)
     g._shrunkN = n;
   });
+}
+
+// ── Fuerza BT en la Convocatoria (opt-in) ──
+function _selBTEnabled(){ try{ const v=localStorage.getItem('_selBT'); return v===null?true:v==='1'; }catch(_){ return true; } }
+function _selSetBT(on){
+  try{ localStorage.setItem('_selBT', on?'1':'0'); }catch(_){}
+  // sincronizar ambos checkboxes (VLC y mi equipo)
+  ['selBTChk','selBTChk2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=on; });
+  if(typeof showToast==='function') showToast(on?'🕸️ Fuerza BT activada en la convocatoria':'Fuerza BT desactivada','ok',2000);
+  // recalcular la propuesta IA si está activa
+  if(typeof _selIAPropose==='function'){ try{ _selIAPropose(); }catch(_){} }
 }
