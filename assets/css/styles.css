@@ -1654,3 +1654,14 @@ details.sim-help .sim-help-body .tip{
 .cl-chip{background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:3px 10px;font-size:12px;color:#3730a3;font-weight:600}
 .cl-chip-mine{background:#1d4ed8;color:#fff;border-color:#1d4ed8;font-weight:800}
 .lab-disc{display:inline-block;background:#ecfeff;border:1px solid #a5f3fc;color:#155e75;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:800;margin-left:4px}
+
+/* ── Ranking de fuerza Bradley-Terry ── */
+.bt-list{display:flex;flex-direction:column;gap:4px}
+.bt-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;background:#f8fafc;border:1px solid #eef2f7}
+.bt-row-mine{background:#eff6ff;border-color:#bfdbfe}
+.bt-pos{font-weight:900;color:#0b2f6b;width:26px;text-align:center}
+.bt-name{font-weight:700;color:#111827;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-team{font-size:11px;color:#94a3b8;width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-bar{width:120px;height:10px;background:#e5e7eb;border-radius:6px;overflow:hidden;flex-shrink:0}
+.bt-rel{font-weight:800;color:#0b2f6b;width:34px;text-align:right}
+@media(max-width:680px){.bt-team{display:none}}

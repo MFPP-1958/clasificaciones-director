@@ -43788,3 +43788,129 @@ function _clRenderPanel(){
     }catch(e){ el.innerHTML=`<div class="lab-notfound">No se pudo agrupar: ${escapeHtml(e.message||String(e))}</div>`; }
   },60);
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🕸️ FASE 3 (pragmática) · MODELO DE FUERZA BRADLEY-TERRY  ("GNN sin red")
+// ----------------------------------------------------------------------------
+// Rating de fuerza de cada corredor a partir del GRAFO de duelos (quién acabó
+// por delante de quién). Exprime miles de comparaciones por pares aunque haya
+// pocas carreras. Aditivo, walk-forward, opt-in, respeta categoría. No toca la
+// predicción en uso (hasta que se active viéndolo ganar).
+// ════════════════════════════════════════════════════════════════════════════
+function _btRacesChrono(history){
+  const _nk=s=>(typeof normalizeRiderName==='function')?normalizeRiderName(s||'').trim():(s||'').trim().toLowerCase();
+  const _date=s=>{ try{ return (typeof _parseSpanishDate==='function'?_parseSpanishDate(s):'')||s||''; }catch(_){ return s||''; } };
+  return (history||[])
+    .map(r=>({ dateISO:_date(r.raceDate), fin:(r.riders||[]).filter(x=>x&&x.pos>0).sort((a,b)=>a.pos-b.pos).map(x=>_nk(x.name)) }))
+    .filter(r=>r.fin.length>=3)
+    .sort((a,b)=>String(a.dateISO).localeCompare(String(b.dateISO)));
+}
+
+// Ajuste Bradley-Terry por MM (Zermelo). racesFin: arrays de claves ordenadas mejor→peor.
+function _btFit(racesFin, iters){
+  iters=iters||40;
+  const riders=[...new Set(racesFin.flat())];
+  const idx=new Map(riders.map((n,i)=>[n,i]));
+  const N=riders.length;
+  const wins=new Array(N).fill(0);
+  const met=Array.from({length:N},()=>new Map());
+  racesFin.forEach(f=>{
+    for(let a=0;a<f.length;a++){ const ia=idx.get(f[a]);
+      for(let b=a+1;b<f.length;b++){ const ib=idx.get(f[b]);
+        wins[ia]++; met[ia].set(ib,(met[ia].get(ib)||0)+1); met[ib].set(ia,(met[ib].get(ia)||0)+1);
+      }
+    }
+  });
+  let p=new Array(N).fill(1);
+  for(let it=0; it<iters; it++){
+    const np=p.slice();
+    for(let i=0;i<N;i++){ let den=0; met[i].forEach((c,j)=>{ den+=c/(p[i]+p[j]); }); np[i]= den>0 ? wins[i]/den : p[i]; }
+    const mean=(np.reduce((a,b)=>a+b,0)/N)||1;
+    p=np.map(v=>v/mean);
+  }
+  const games=new Array(N).fill(0); met.forEach((m,i)=>m.forEach(c=>games[i]+=c));
+  return { idx, p, riders, games };
+}
+
+// Ranking de fuerza (categoría activa). Devuelve lista ordenada con rating relativo.
+function _btRanking(history){
+  const races=_btRacesChrono(history||((typeof _labHistory==='function')?_labHistory():_cachedHistory)||[]);
+  if(races.length<3) return { ok:false, n:races.length };
+  const m=_btFit(races.map(r=>r.fin));
+  const feats=(typeof _labFeatAll==='function')?_labFeatAll():(typeof _featAll==='function'?_featAll():new Map());
+  const maxP=Math.max(...m.p);
+  const list=m.riders.map((k,i)=>{
+    const o=feats.get(k);
+    return { key:k, name:o?o.displayName:k, team:o?o.team:'', rating:m.p[i], rel:maxP>0?Math.round(m.p[i]/maxP*100):0, games:m.games[i] };
+  }).filter(r=>r.games>=3).sort((a,b)=>b.rating-a.rating);
+  return { ok:true, list, n:races.length };
+}
+
+// Walk-forward del rating BT vs baseline naive (percentil medio previo).
+function _btWalkForward(history){
+  const _nk=s=>(typeof normalizeRiderName==='function')?normalizeRiderName(s||'').trim():(s||'').trim().toLowerCase();
+  const races=_btRacesChrono(history||((typeof _labHistory==='function')?_labHistory():_cachedHistory)||[]);
+  const nR=races.length; if(nR<6) return { ok:false, nRaces:nR };
+  const start=Math.max(5, Math.ceil(nR*0.4));
+  const priorPct={}; let btAbs=0, nvAbs=0, cnt=0, hit=0, tot=0;
+  for(let R=0; R<nR; R++){
+    const race=races[R]; const field=race.fin.length;
+    if(R>=start){
+      const m=_btFit(races.slice(0,R).map(r=>r.fin));
+      const rated=race.fin.map(k=>({ k, idx:m.idx.has(k)?m.idx.get(k):-1, p:m.idx.has(k)?m.p[m.idx.get(k)]:0 }));
+      const order=rated.slice().sort((a,b)=>b.p-a.p);
+      const predPos={}; order.forEach((o,i)=>predPos[o.k]=i+1);
+      const realTop10=new Set(race.fin.slice(0,10));
+      order.slice(0,10).forEach(o=>{ if(realTop10.has(o.k)) hit++; }); tot+=Math.min(10,realTop10.size);
+      race.fin.forEach((k,realIdx)=>{
+        const realPos=realIdx+1;
+        const ph=priorPct[k]; const nv= (ph&&ph.length)?(ph.reduce((a,b)=>a+b,0)/ph.length*field):field/2;
+        btAbs+=Math.abs((predPos[k]||field)-realPos); nvAbs+=Math.abs(nv-realPos); cnt++;
+      });
+    }
+    race.fin.forEach((k,i)=>{ (priorPct[k]=priorPct[k]||[]).push((i+1)/field); });
+  }
+  if(!cnt) return { ok:false, nRaces:nR };
+  return { ok:true, nRaces:nR, evals:cnt, btMAE:Math.round(btAbs/cnt*10)/10, naiveMAE:Math.round(nvAbs/cnt*10)/10, top10:tot?Math.round(hit/tot*100):0 };
+}
+
+// Panel del ranking de fuerza Bradley-Terry en el Laboratorio.
+function _btRenderPanel(){
+  const el=document.getElementById('btPanel'); if(!el) return;
+  el.innerHTML='<div class="lab-hint">⏳ Calculando ratings de fuerza…</div>';
+  setTimeout(()=>{
+    try{
+      const hist=(typeof _labHistory==='function')?_labHistory():((typeof _cachedHistory!=='undefined'&&_cachedHistory)||[]);
+      const wf=_btWalkForward(hist);
+      const rk=_btRanking(hist);
+      if(!rk.ok){ el.innerHTML=`<div class="lab-notfound">Aún hay pocas carreras en esta categoría (${rk.n||0}) para calcular fuerza.</div>`; return; }
+      const myCanon=(typeof myTeam!=='undefined')?getCanonicalTeam(myTeam||'').toLowerCase():'';
+      let cmp='';
+      if(wf.ok){
+        const gana = wf.btMAE < wf.naiveMAE - 0.3;
+        cmp=`<div class="lab-tiles">
+          <div class="lab-tile"><div class="lab-tile-l">Bradley‑Terry · error</div><div class="lab-tile-v">${wf.btMAE}º</div><div class="lab-tile-s">menos = mejor</div></div>
+          <div class="lab-tile"><div class="lab-tile-l">Método actual · error</div><div class="lab-tile-v">${wf.naiveMAE}º</div><div class="lab-tile-s">baseline</div></div>
+          <div class="lab-tile"><div class="lab-tile-l">Acierto Top‑10</div><div class="lab-tile-v">${wf.top10}%</div><div class="lab-tile-s">${wf.evals} predicciones</div></div>
+        </div>
+        <div class="lab-tr" style="margin-top:8px;${gana?'background:#dcfce7;border-color:#86efac':'background:#fef3c7;border-color:#fcd34d'}">
+          ${gana?'✅ <b>Bradley‑Terry supera al método actual.</b> Es candidato a activarse en la predicción (siguiente paso, cuando tú quieras).':'⏳ De momento no supera al método actual; mejorará con más carreras.'}
+        </div>`;
+      }
+      const top=rk.list.slice(0,20).map((r,i)=>{
+        const mine=String(r.team||'').toLowerCase()===myCanon;
+        return `<div class="bt-row${mine?' bt-row-mine':''}">
+          <span class="bt-pos">${i+1}</span>
+          <span class="bt-name">${escapeHtml(_evolNormName?_evolNormName(r.name):r.name)}${mine?' ⭐':''}</span>
+          <span class="bt-team">${escapeHtml(r.team||'')}</span>
+          <span class="bt-bar"><span style="display:block;height:100%;width:${r.rel}%;background:#0b2f6b"></span></span>
+          <span class="bt-rel">${r.rel}</span>
+        </div>`;
+      }).join('');
+      el.innerHTML=`${cmp}
+        <div class="lab-section-t">🏅 Ranking de fuerza (Top 20)</div>
+        <div class="bt-list">${top}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:8px">Fuerza relativa al nº1 (=100). Calculado sobre ${rk.n} carreras y miles de duelos. Corredores con ≥3 enfrentamientos.</div>`;
+    }catch(e){ el.innerHTML=`<div class="lab-notfound">No se pudo calcular: ${escapeHtml(e.message||String(e))}</div>`; }
+  },60);
+}
