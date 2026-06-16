@@ -8764,6 +8764,8 @@ async function saveTableRowEdit(key){
 // ─── Propagación global de CATEGORÍA del rider ────────────────────────────
 async function propagateCategoryChange(riderName, year, newCat){
   if(!_sb){ alert('Supabase no disponible — el cambio está guardado solo localmente.'); return; }
+  // Escribe en race_results (protegida): requiere sesión de enlace mágico.
+  if(typeof _requireAuthWrite==='function' && !(await _requireAuthWrite())) return;
   if(typeof showLoading==='function') showLoading('Actualizando historial…',`Aplicando categoría "${newCat}" a "${riderName}" (${year}).`);
   try{
     const {data:races,error}=await _sb
@@ -8773,7 +8775,7 @@ async function propagateCategoryChange(riderName, year, newCat){
     if(error) throw error;
 
     const normTarget = normalizeForMatching(riderName);
-    let updated = 0;
+    let updated = 0, failed = 0, lastErr = '';
     for(const race of (races||[])){
       const raceYear = (race.date||'').slice(0,4);
       if(year && String(raceYear) !== String(year)) continue;
@@ -8781,13 +8783,21 @@ async function propagateCategoryChange(riderName, year, newCat){
         if(normalizeForMatching(rr.name) !== normTarget) continue;
         if((rr.cat||'') === newCat) continue;
         const {error:updErr} = await _sb.from('race_results').update({cat:newCat}).eq('id', rr.id);
-        if(!updErr) updated++;
+        if(!updErr) updated++; else { failed++; lastErr = updErr.message||String(updErr); }
       }
     }
     _cachedHistory = null;
     if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB();
     if(typeof hideLoading==='function') hideLoading();
-    alert(`✅ Categoría "${newCat}" aplicada a "${riderName}" en ${updated} resultado(s) del historial (${year}).`);
+    if(failed>0){
+      // No ocultar los fallos: si la seguridad bloqueó, decirlo claro.
+      const rls = /row-level security|42501|permission/i.test(lastErr);
+      alert(rls
+        ? `🔒 No se pudo cambiar la categoría: la escritura está protegida.\n\nEntra con el ENLACE MÁGICO (no con PIN) y vuelve a intentarlo.\n\n(${updated} cambiados · ${failed} bloqueados)`
+        : `⚠️ Categoría aplicada parcialmente: ${updated} cambiados · ${failed} con error.\nÚltimo error: ${lastErr}`);
+    } else {
+      alert(`✅ Categoría "${newCat}" aplicada a "${riderName}" en ${updated} resultado(s) del historial (${year}).`);
+    }
   }catch(e){
     if(typeof hideLoading==='function') hideLoading();
     alert('Error al actualizar la categoría en el historial: '+(e.message||e));
