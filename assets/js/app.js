@@ -41273,6 +41273,18 @@ function _infIsCVProv(prov){
   return /ALICANTE|ALACANT|CASTELL|VALENCIA|VAL[ÈE]NCIA/.test(p);
 }
 // Clasifica una prueba en una de las 3 categorías visuales
+// ¿La prueba es de la categoría seleccionada? ESTRICTO: mira las categorías de
+// los corredores del equipo en esa prueba (r.cats) y, como respaldo, el nombre.
+// Si no hay ninguna pista de categoría, NO pasa el filtro (estricto).
+function _infRaceMatchesCat(r, catSel){
+  if(!catSel) return true;
+  const re = catSel==='cadete' ? /cadet|\bcad\b|cad-?\d/i : /juv|junior|j[uú]nior|\bjun\b/i;
+  const cats = Array.isArray(r.cats) ? r.cats : [];
+  if(cats.some(c=>re.test(String(c||'')))) return true;
+  if(re.test(String(r.name||''))) return true;   // respaldo por el nombre de la prueba
+  return false;
+}
+
 function _infRaceCategoria(r){
   // Challenge CV = SOLO las pruebas con el checkbox "Challenge CV" activado al introducirlas
   if(r.challengeCV) return {cat:3, label:'Challenge CV', color:_INF_CAL_COLORS.challenge};
@@ -41322,7 +41334,7 @@ function _infBuildAnnualSVG(year, teamName, races, catLabel){
   svg+=`<rect x="0" y="0" width="${W}" height="92" fill="#0e4d73"/>`;
   svg+=`<rect x="0" y="92" width="${W}" height="6" fill="#f5c518"/>`;
   svg+=`<text x="40" y="44" font-family="Segoe UI,Arial,sans-serif" font-size="30" font-weight="900" fill="#ffffff">CALENDARIO DE COMPETICIONES</text>`;
-  svg+=`<text x="40" y="76" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#cde8f7">TEMPORADA ${year} · ${_infEsc(teamName)}${catLabel?' · '+_infEsc(catLabel):''}</text>`;
+  svg+=`<text x="40" y="76" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#cde8f7">TEMPORADA ${year} · ${_infEsc(teamName)}${catLabel?' · CATEGORÍA '+_infEsc(String(catLabel).toUpperCase()):' · GLOBAL'}</text>`;
   // Logo arriba derecha
   if(esTBG){ svg+=`<g transform="translate(${W-104},10)"><rect x="-6" y="-2" width="84" height="84" rx="12" fill="#ffffff"/><svg x="2" y="6" width="64" height="64" viewBox="0 0 310 310">${_infLogoInner()}</svg></g>`; }
   else { svg+=`<circle cx="${W-58}" cy="46" r="34" fill="#ffffff"/><text x="${W-58}" y="56" font-family="Segoe UI,Arial" font-size="26" font-weight="900" fill="#0e4d73" text-anchor="middle">${_infEsc((teamName||'').slice(0,2).toUpperCase())}</text>`; }
@@ -41414,8 +41426,17 @@ async function _infGenerateAnnual(){
   // Para el calendario anual incluimos realizadas + planificadas si procede
   const D=_infBuildDataByKey(history, Object.assign(_infFilters(opts, team), {includePlanned:true}));
   let races=[...D.realizadas, ...D.planificadas].filter(r=>r.iso);
+  // FILTRO ESTRICTO por la categoría seleccionada (Cadete / Juvenil): el
+  // calendario anual SOLO pinta y lista las pruebas de esa categoría. Con
+  // "Ambas" (catSel vacío) pasan todas.
+  if(opts.catSel){ races = races.filter(r=>_infRaceMatchesCat(r, opts.catSel)); }
   races.sort((a,b)=>(a.iso||'').localeCompare(b.iso||''));
-  if(!races.length){ if(st) st.innerHTML=_infDiagNoData(history, opts.year, team.key); return; }
+  if(!races.length){
+    if(st) st.innerHTML = opts.catSel
+      ? `<span style="color:#b45309">⚠️ No hay pruebas de <b>${_infEsc(_infCatLabel(opts.catSel))}</b> para ${_infEsc(team.name)} en ${opts.year}. Cambia la categoría a "Ambas" o revisa los datos.</span>`
+      : _infDiagNoData(history, opts.year, team.key);
+    return;
+  }
   races.forEach(r=>{ r._catInfo=_infRaceCategoria(r); });
 
   const catLabel = opts.catSel ? _infCatLabel(opts.catSel) : '';
