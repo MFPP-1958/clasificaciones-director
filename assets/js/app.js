@@ -26815,8 +26815,9 @@ function _simRenderTop10(grid, catFilter){
     return `<div class="sim-top-row ${g.isMyTeam?'sim-my-team':''}">
       <div class="sim-top-rank ${rankCls}">${rank}º</div>
       <div class="sim-top-info">
-        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge}${g._shrunk?`<span class="sim-fewdata" title="Predicción prudente: solo ${g._shrunkN} carrera(s). Muy poca información, tómala con cautela.">⚠️ pocos datos</span>`:''} <button class="sim-why-btn" onclick="_simWhy('${escapeAttr(g.name)}')" title="¿Por qué este puesto?">🔍 ¿por qué?</button></div>
+        <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge}${g._shrunk?`<span class="sim-fewdata" title="Predicción prudente: solo ${g._shrunkN} carrera(s). Muy poca información, tómala con cautela.">⚠️ pocos datos</span>`:''}${(typeof _simAlertBadges==='function')?_simAlertBadges(g):''} <button class="sim-why-btn" onclick="_simWhy('${escapeAttr(g.name)}')" title="¿Por qué este puesto?">🔍 ¿por qué?</button></div>
         <div class="sim-top-team">${escapeHtml(g.team||'(sin equipo)')}${g.cat?' · '+escapeHtml(g.cat):''}${g.bib?' · #'+escapeHtml(g.bib):''}${g.status==='team-fb'?' · <span style="color:#3730a3;font-weight:700">[fallback equipo]</span>':''}</div>
+        ${(typeof _simProbMeter==='function')?_simProbMeter(g):''}
       </div>
       <div class="sim-top-metrics">
         <div class="sim-top-metric sim-predicted-metric"><div class="sim-top-metric-v" style="color:#7c3aed">${rangeStr}</div><div class="sim-top-metric-l">🤖 Pos. IA</div></div>
@@ -44299,4 +44300,35 @@ function _simSetFormBoost(on){
   try{ localStorage.setItem('_simFormBoost', on?'1':'0'); }catch(_){}
   if(typeof showToast==='function') showToast(on?'⚡ Priorizando la forma reciente':'Forma reciente: peso normal','ok',2000);
   if(_simSelectedRaceId){ try{ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }catch(_){} }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🔔 SIMULADOR 4.2 (#1 y #2): alertas tácticas + medidor de probabilidad
+// ════════════════════════════════════════════════════════════════════════════
+// Alertas compactas por corredor, leídas de los factores que ya calcula el grid.
+function _simAlertBadges(g){
+  if(!g) return '';
+  const out=[];
+  const bdg=(ic,txt,fg,bg)=>`<span title="${txt}" style="display:inline-block;font-size:10px;font-weight:800;color:${fg};background:${bg};border-radius:8px;padding:1px 6px;margin-left:5px;cursor:help">${ic}</span>`;
+  // 🔥 En forma (tendencia al alza)
+  if(g.trend==='up') out.push(bdg('🔥','En forma: viene mejorando sus puestos.','#15803d','#dcfce7'));
+  // 😴 Fatiga (varias carreras recientes / factor de fatiga penaliza)
+  if((g.fatigueFactor&&g.fatigueFactor>1.001) || (g.racesIn7||0)>=2) out.push(bdg('😴','Carga alta: '+(g.fatigueReason||((g.racesIn7||0)+' carreras en 7 días'))+'.','#92400e','#fef3c7'));
+  // ⚠️ Rival a vigilar (NO es mi equipo y se prevé arriba)
+  if(!g.isMyTeam && g.predictedPos!=null && g.predictedPos<=8) out.push(bdg('⚠️','Rival a vigilar: se prevé entre los mejores.','#b91c1c','#fee2e2'));
+  // 🎯 Oportunidad (mi equipo con opción real de Top-10)
+  if(g.isMyTeam && g.predictedPos!=null && g.predictedPos<=10) out.push(bdg('🎯','Oportunidad: tu corredor tiene opción de Top‑10.','#1d4ed8','#dbeafe'));
+  return out.slice(0,3).join('');
+}
+// Medidor visual de probabilidad de Top-10 (y podio) bajo el nombre.
+function _simProbMeter(g){
+  if(!g || g.probTop10Poisson==null) return '';
+  const t10=Math.max(0,Math.min(100,g.probTop10Poisson));
+  const pod=(g.probPodiumPoisson!=null)?Math.max(0,Math.min(100,g.probPodiumPoisson)):null;
+  const col=t10>=66?'#16a34a':t10>=33?'#f59e0b':'#94a3b8';
+  return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+    <span style="font-size:10px;font-weight:800;color:#475569;min-width:54px">Top‑10 ${t10}%</span>
+    <span style="flex:1;max-width:160px;height:8px;background:#eef2f7;border-radius:5px;overflow:hidden"><span style="display:block;height:100%;width:${t10}%;background:${col}"></span></span>
+    ${pod!=null?`<span style="font-size:10px;font-weight:800;color:#b45309" title="Probabilidad de podio">🥉 ${pod}%</span>`:''}
+  </div>`;
 }
