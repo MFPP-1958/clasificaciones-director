@@ -43960,3 +43960,45 @@ function _simApplyBTBlend(grid, race){
     g._btBlended=true;
   });
 }
+
+// ── ¿Conviene la Fuerza BT? Compara la media de aciertos ON vs OFF (walk-forward
+//    honesto con el heurístico real, sobre TODAS las carreras) y recomienda. ──
+function _btCompareBacktest(){
+  let prev=null; try{ prev=localStorage.getItem('_btBlend'); }catch(_){}
+  const run=()=>{
+    const {evals}=_simRetroactiveBacktest();
+    if(!evals||!evals.length) return null;
+    const hits=evals.reduce((s,e)=>s+e.hitsTop10,0);
+    const tot=evals.reduce((s,e)=>s+Math.min(10,e.total),0);
+    const mae=evals.reduce((s,e)=>s+e.mae,0)/evals.length;
+    return { races:evals.length, top10pct: tot?Math.round(hits/tot*100):0, mae:Math.round(mae*10)/10 };
+  };
+  try{ localStorage.setItem('_btBlend','0'); }catch(_){}
+  const off=run();
+  try{ localStorage.setItem('_btBlend','1'); }catch(_){}
+  const on=run();
+  try{ if(prev===null) localStorage.removeItem('_btBlend'); else localStorage.setItem('_btBlend',prev); }catch(_){}
+  return { off, on };
+}
+function _btCompareUI(){
+  if(!(typeof _cachedHistory!=='undefined' && _cachedHistory && _cachedHistory.length)){ alert('Primero carga el historial (entra en el Simulador con una prueba).'); return; }
+  if(typeof showToast==='function') showToast('📊 Comparando BT ON vs OFF sobre todas las carreras… (unos segundos)','info',2500);
+  setTimeout(()=>{
+    try{
+      const r=_btCompareBacktest();
+      if(!r.off||!r.on){ alert('Aún no hay suficientes carreras para comparar. Vuelve a probar cuando tengas más.'); if(_simSelectedRaceId){_simBuildData(_simSelectedRaceId);_simRenderCurrent();} return; }
+      let better;
+      if(r.on.top10pct!==r.off.top10pct) better = r.on.top10pct>r.off.top10pct?'ON':'OFF';
+      else better = r.on.mae<=r.off.mae?'ON':'OFF';
+      const msg=`📊 Media HONESTA sobre ${r.off.races} carreras (cada una predicha solo con las anteriores):\n\n`
+        +`🔵 SIN Fuerza BT:  ${r.off.top10pct}% aciertos Top-10  ·  error medio ${r.off.mae}º\n`
+        +`🕸️ CON Fuerza BT:  ${r.on.top10pct}% aciertos Top-10  ·  error medio ${r.on.mae}º\n\n`
+        +(better==='ON'
+            ? '✅ De media, la Fuerza BT MEJORA. Recomendado: ACTIVADA.'
+            : '⏳ De media, NO mejora (o empata). Recomendado: DESACTIVADA por ahora; revísalo al añadir más carreras.')
+        +`\n\n¿Aplicar la recomendación (${better})?`;
+      if(confirm(msg)){ _btSetBlend(better==='ON'); }
+      else if(_simSelectedRaceId){ _simBuildData(_simSelectedRaceId); _simRenderCurrent(); }
+    }catch(e){ alert('Error comparando: '+(e.message||e)); }
+  },60);
+}

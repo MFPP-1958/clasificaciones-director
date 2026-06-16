@@ -1698,6 +1698,7 @@
             <span class="small">Pondera puesto medio + fiabilidad</span>
             <label id="simBTToggle" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#0b2f6b;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:3px 10px;cursor:pointer" title="Mezcla el modelo de fuerza Bradley-Terry (grafo de duelos) con la predicción. Demostrado que mejora la precisión.">
               <input type="checkbox" id="simBTChk" onchange="_btSetBlend(this.checked)"> 🕸️ Fuerza BT</label>
+            <button class="btn light" onclick="_btCompareUI()" style="background:#0b2f6b;color:#fff;border:0;font-weight:800;font-size:12px;padding:7px 12px" title="Compara la media de aciertos CON vs SIN Fuerza BT sobre todas tus carreras y te recomienda cuál dejar">📊 ¿Conviene?</button>
             <span id="simTop10SavedHint" style="display:none;font-size:11.5px;font-weight:800;color:#15803d;background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:3px 10px">✅ Predicción guardada</span>
             <button class="btn light" onclick="_simSavePrediction()" id="simTop10SaveBtn"
               style="background:#3730a3;color:#fff;border:0;font-weight:800;font-size:12px;padding:7px 13px"
