@@ -35475,6 +35475,20 @@ function _simOpenPredVsReal(){
             <tbody>${rowsHtml.join('')}</tbody>
           </table>
         </div>
+        <div class="pvr-note">
+          <div class="pvr-note-head">
+            <span style="font-weight:800;color:#0b2f6b;font-size:14px">📝 Nota de contexto</span>
+            <span id="pvrNoteStatus" class="small" style="color:#6b7280">Sin nota guardada todavía.</span>
+          </div>
+          <p class="small" style="color:#6b7280;margin:2px 0 8px">¿Por qué acertó o falló la predicción? Apunta el contexto. <b>No cambia el modelo</b> — queda como registro para entender los resultados.</p>
+          <div class="pvr-note-chips no-print">
+            ${['🚫 El favorito no vino','🌧️ Llovió / mal tiempo','🤕 Lesión o caída clave','💨 Carrera muy rápida','🐢 Carrera de bloqueo','😮 Sorpresa de un debutante','🎯 Salió como esperado'].map(c=>`<button type="button" class="pvr-chip" onclick="_simAddNoteChip(this.textContent)">${c}</button>`).join('')}
+          </div>
+          <textarea id="pvrNoteText" class="pvr-note-ta" rows="3" placeholder="Ej.: El favorito (Pérez) no se presentó · lluvia desde el km 20 · ataque sorpresa de un debutante sin histórico."></textarea>
+          <div class="pvr-note-actions no-print">
+            <button class="btn" id="pvrNoteSaveBtn" onclick="_simSaveContextNote()" style="background:#0b2f6b;color:#fff;font-weight:800">💾 Guardar nota</button>
+          </div>
+        </div>
         <div class="pvr-footer">
           <div style="font-size:11px;color:#6b7280;text-align:center">
             Informe generado por <b>Dashboard Director · MFPP Cycling Specialist</b> · ${new Date().toLocaleString('es-ES')}
@@ -35483,6 +35497,7 @@ function _simOpenPredVsReal(){
       </div>`;
 
     _simInjectPVRStyles();
+    _simLoadContextNote();
     document.body.style.overflow = 'hidden';
   }catch(e){
     console.warn('_simOpenPredVsReal', e);
@@ -35494,6 +35509,81 @@ function _simClosePredVsReal(){
   const overlay = document.getElementById('pvrModalOverlay');
   if(overlay) overlay.remove();
   document.body.style.overflow = '';
+}
+
+// ── Nota de contexto (registro, NO reentrena el modelo) ──────────────────
+// Se guarda en races.notes -> predictionNote {text, savedAt, savedBy}.
+// Permite al director apuntar POR QUÉ una predicción acertó o falló
+// (el favorito no vino, llovió, una caída…), como contexto histórico.
+function _simAddNoteChip(txt){
+  const ta = document.getElementById('pvrNoteText');
+  if(!ta || !txt) return;
+  txt = txt.trim();
+  const cur = ta.value.trim();
+  ta.value = cur ? (cur.replace(/[.;\s]*$/,'') + ' · ' + txt) : txt;
+  ta.focus();
+}
+
+function _simRenderContextNoteStatus(note){
+  const el = document.getElementById('pvrNoteStatus');
+  if(!el) return;
+  if(note && note.text){
+    const d = note.savedAt ? new Date(note.savedAt).toLocaleString('es-ES') : '';
+    el.innerHTML = `✅ Nota guardada${d?' · '+escapeHtml(d):''}${note.savedBy?' · '+escapeHtml(note.savedBy):''}`;
+    el.style.color = '#15803d';
+  } else {
+    el.innerHTML = 'Sin nota guardada todavía.';
+    el.style.color = '#6b7280';
+  }
+}
+
+async function _simLoadContextNote(){
+  const race = _simCurrentData && _simCurrentData.race;
+  if(!race) return;
+  let note = race.predictionNote || null;
+  // Si no la tenemos en memoria, intentamos leerla fresca de Supabase
+  if(!note && _sb && race.id){
+    try{
+      const {data} = await _sb.from('races').select('notes').eq('id', race.id).single();
+      if(data && data.notes){ const ex = JSON.parse(data.notes); note = ex.predictionNote || null; }
+    }catch(_){}
+  }
+  const ta = document.getElementById('pvrNoteText');
+  if(ta && note && note.text) ta.value = note.text;
+  _simRenderContextNoteStatus(note);
+}
+
+async function _simSaveContextNote(){
+  if(typeof _requireAuthWrite==='function' && !_requireAuthWrite()) return;
+  if(!_simCurrentData || !_simCurrentData.race){ alert('Selecciona una prueba primero.'); return; }
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const race = _simCurrentData.race;
+  const ta = document.getElementById('pvrNoteText');
+  const txt = (ta ? ta.value : '').trim();
+  const btn = document.getElementById('pvrNoteSaveBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Guardando…'; }
+  try{
+    const {data:current, error:fe} = await _sb.from('races').select('notes').eq('id', race.id).single();
+    if(fe) throw fe;
+    let extra = {}; try{ extra = JSON.parse(current?.notes||'{}'); }catch(_){}
+    if(txt){
+      extra.predictionNote = { text: txt, savedAt: new Date().toISOString(), savedBy: (_rbacUser?.email || '') };
+    } else {
+      delete extra.predictionNote;
+    }
+    const {error:ue} = await _sb.from('races').update({notes: JSON.stringify(extra)}).eq('id', race.id);
+    if(ue) throw ue;
+    // Refrescar caché para no tener que releer
+    const newNote = extra.predictionNote || null;
+    if(_cachedHistory){ const h = _cachedHistory.find(x=>x.id===race.id); if(h) h.predictionNote = newNote; }
+    if(_simCurrentData.race) _simCurrentData.race.predictionNote = newNote;
+    _simRenderContextNoteStatus(newNote);
+    if(typeof showToast==='function') showToast(txt?'✅ Nota guardada':'🗑️ Nota eliminada','ok',2200);
+  }catch(e){
+    alert('Error guardando la nota: '+(e.message||e));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '💾 Guardar nota'; }
+  }
 }
 
 function _simPrintPredVsReal(){
@@ -36321,6 +36411,14 @@ function _simInjectPVRStyles(){
     .pvr-tag-miss{background:#9ca3af;color:#fff}
     .pvr-tag-bad{background:#dc2626;color:#fff}
     .pvr-rng{font-size:10px;color:#9ca3af;font-weight:600;margin-left:4px}
+    .pvr-note{padding:14px 20px;border-top:1px solid #e5e7eb;background:#fffdf6}
+    .pvr-note-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:2px}
+    .pvr-note-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px}
+    .pvr-chip{background:#fff;border:1px solid #e5d9b6;color:#7a5b00;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:14px;cursor:pointer;transition:background .12s}
+    .pvr-chip:hover{background:#fef3c7}
+    .pvr-note-ta{width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;resize:vertical;min-height:62px}
+    .pvr-note-ta:focus{outline:none;border-color:#0b2f6b;box-shadow:0 0 0 2px rgba(11,47,107,.12)}
+    .pvr-note-actions{margin-top:8px}
     .pvr-footer{padding:10px 20px 16px;border-top:1px solid #e5e7eb}
     @media print {
       /* Saca de la maquetación TODO lo que NO sea el modal. display:none
