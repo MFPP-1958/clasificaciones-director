@@ -40593,7 +40593,7 @@ async function _infOpenModal(){
       <!-- CATEGORÍA -->
       <label style="display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#0e4d73;margin-bottom:5px">Categoría</label>
       <div id="_infCat" style="display:flex;gap:8px;margin-bottom:14px">
-        ${[['','Ambas'],['cadete','Cadete'],['juvenil','Juvenil']].map((c,i)=>`<button data-v="${c[0]}" onclick="_infPickCat(this)" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid ${i===0?'#2B91C8':'#cbd5e1'};background:${i===0?'#2B91C8':'#fff'};color:${i===0?'#fff':'#475569'};font-weight:800;font-size:13px;cursor:pointer">${c[1]}</button>`).join('')}
+        ${[['','Ambas'],['cadete','Cadete'],['juvenil','Juvenil']].map((c,i)=>`<button data-v="${c[0]}" class="${i===0?'_inf-cat-on':''}" onclick="_infPickCat(this)" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid ${i===0?'#2B91C8':'#cbd5e1'};background:${i===0?'#2B91C8':'#fff'};color:${i===0?'#fff':'#475569'};font-weight:800;font-size:13px;cursor:pointer">${c[1]}</button>`).join('')}
       </div>
 
       <!-- ESTADO -->
@@ -40706,8 +40706,9 @@ function _infSetMode(m){
 
 function _infPickCat(btn){
   const wrap=document.getElementById('_infCat'); if(!wrap) return;
-  [...wrap.children].forEach(b=>{ b.style.background='#fff'; b.style.color='#475569'; b.style.borderColor='#cbd5e1'; });
+  [...wrap.children].forEach(b=>{ b.style.background='#fff'; b.style.color='#475569'; b.style.borderColor='#cbd5e1'; b.classList.remove('_inf-cat-on'); });
   btn.style.background='#2B91C8'; btn.style.color='#fff'; btn.style.borderColor='#2B91C8';
+  btn.classList.add('_inf-cat-on');   // marca el botón activo (fuente de verdad)
   const ov=document.getElementById('_infModal'); if(ov) ov._catSel=btn.getAttribute('data-v')||'';
 }
 
@@ -40729,10 +40730,17 @@ function _infReadOpts(){
       teamSel.push({key:sel.value, name:(opt? opt.textContent.replace(/\s*\(\d+\)\s*$/,''):sel.value)});
     }
   }
+  // Categoría: lo más fiable es leer el BOTÓN ACTIVO del selector visual (lo que
+  // el usuario ve marcado); como respaldo, la propiedad guardada en el modal.
+  let _catSel = (ov&&ov._catSel)||'';
+  try{
+    const _activeCat=document.querySelector('#_infCat ._inf-cat-on');
+    if(_activeCat) _catSel=_activeCat.getAttribute('data-v')||'';
+  }catch(_){}
   return {
     mode: ov?ov._mode:'individual',
     year: document.getElementById('_infYear')?.value || String(new Date().getFullYear()),
-    catSel: (ov&&ov._catSel)||'',
+    catSel: _catSel,
     estado, includePlanned, onlyPlanned,
     tipo: document.getElementById('_infTipo')?.value||'',
     prov: document.getElementById('_infProv')?.value||'',
