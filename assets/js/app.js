@@ -43954,9 +43954,10 @@ function _simApplyBTBlend(grid, race){
     const old=g.predictedPos;
     const blended=(1-w)*old + w*x.btPos;
     const delta=blended-old;
-    g.predictedPos=Math.max(1, Math.min(N, blended));
-    if(g.predLower!=null) g.predLower=Math.max(1, g.predLower+delta);
-    if(g.predUpper!=null) g.predUpper=Math.min(N, g.predUpper+delta);
+    // Redondear: los puestos son enteros (el intervalo se muestra tal cual).
+    g.predictedPos=Math.round(Math.max(1, Math.min(N, blended))*10)/10;  // máx. 1 decimal
+    if(g.predLower!=null) g.predLower=Math.max(1, Math.round(g.predLower+delta));
+    if(g.predUpper!=null) g.predUpper=Math.min(N, Math.round(g.predUpper+delta));
     g._btBlended=true;
   });
 }
