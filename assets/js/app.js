@@ -43527,7 +43527,7 @@ function _glmWalkForward(history, lambda){
   const {obs, nRaces}=_glmObservations(history);
   if(nRaces<6 || obs.length<30) return { ok:false, reason:'pocos datos', nRaces, nObs:obs.length };
   const start=Math.max(5, Math.ceil(nRaces*0.4));   // primeras carreras = solo entrenamiento
-  let glmAbs=0, naiveAbs=0, cnt=0, glmTop10hit=0, top10tot=0;
+  let glmAbs=0, naiveAbs=0, cnt=0, glmTop10hit=0, top10tot=0, glmSq=0, naiveSq=0;
   for(let R=start; R<nRaces; R++){
     const train=obs.filter(o=>o.raceIdx<R);
     const test=obs.filter(o=>o.raceIdx===R);
@@ -43542,11 +43542,12 @@ function _glmWalkForward(history, lambda){
     const glmRank=[...preds].sort((a,b)=>a.glmPos-b.glmPos).slice(0,10).map(p=>p.name);
     glmRank.forEach(nm=>{ if(realTop10.has(nm)) glmTop10hit++; });
     top10tot+=Math.min(10, realTop10.size);
-    preds.forEach(p=>{ glmAbs+=Math.abs(p.glmPos-p.pos); naiveAbs+=Math.abs(p.naivePos-p.pos); cnt++; });
+    preds.forEach(p=>{ const eg=p.glmPos-p.pos, en=p.naivePos-p.pos; glmAbs+=Math.abs(eg); naiveAbs+=Math.abs(en); glmSq+=eg*eg; naiveSq+=en*en; cnt++; });
   }
   if(!cnt) return { ok:false, reason:'sin folds válidos', nRaces, nObs:obs.length };
   return { ok:true, nRaces, nObs:obs.length,
     glmMAE:Math.round(glmAbs/cnt*10)/10, naiveMAE:Math.round(naiveAbs/cnt*10)/10,
+    glmRMSE:Math.round(Math.sqrt(glmSq/cnt)*10)/10, naiveRMSE:Math.round(Math.sqrt(naiveSq/cnt)*10)/10,
     glmTop10:top10tot?Math.round(glmTop10hit/top10tot*100):0, evals:cnt };
 }
 
@@ -43584,8 +43585,8 @@ function _glmRenderPanel(){
         <span style="font-size:11px;color:#94a3b8;width:64px;text-align:right">${o.sign}</span></div>`).join('');
       el.innerHTML=`
         <div class="lab-tiles">
-          <div class="lab-tile"><div class="lab-tile-l">GLM · error medio</div><div class="lab-tile-v">${wf.glmMAE}º</div><div class="lab-tile-s">menos = mejor</div></div>
-          <div class="lab-tile"><div class="lab-tile-l">Método actual · error</div><div class="lab-tile-v">${wf.naiveMAE}º</div><div class="lab-tile-s">baseline</div></div>
+          <div class="lab-tile"><div class="lab-tile-l">GLM · error medio (MAE)</div><div class="lab-tile-v">${wf.glmMAE}º</div><div class="lab-tile-s">RMSE ${wf.glmRMSE}º · menos = mejor</div></div>
+          <div class="lab-tile"><div class="lab-tile-l">Método actual · error</div><div class="lab-tile-v">${wf.naiveMAE}º</div><div class="lab-tile-s">RMSE ${wf.naiveRMSE}º · baseline</div></div>
           <div class="lab-tile"><div class="lab-tile-l">GLM · acierto Top‑10</div><div class="lab-tile-v">${wf.glmTop10}%</div><div class="lab-tile-s">${wf.evals} predicciones</div></div>
         </div>
         <div class="lab-tr" style="margin-top:10px;${gana?'background:#dcfce7;border-color:#86efac':'background:#fef3c7;border-color:#fcd34d'}">
@@ -43652,6 +43653,7 @@ function _logitWalkForward(history, which){
   const getBase = o => which==='podium' ? o.basePodium : o.baseTop10;
   const start=Math.max(5, Math.ceil(nRaces*0.4));
   let brierL=0, brierB=0, cnt=0, hitL=0, posTot=0;
+  const roc=[];   // {p, y} para el AUC
   for(let R=start; R<nRaces; R++){
     const train=obs.filter(o=>o.raceIdx<R), test=obs.filter(o=>o.raceIdx===R);
     if(train.length<20 || test.length<3) continue;
@@ -43659,13 +43661,21 @@ function _logitWalkForward(history, which){
     test.forEach(o=>{
       const pL=_logitPredict(m,o.x), pB=getBase(o), yv=getY(o);
       brierL+=(pL-yv)**2; brierB+=(pB-yv)**2; cnt++;
+      roc.push({p:pL, y:yv});
       if(yv===1){ posTot++; if(pL>=0.5) hitL++; }
     });
   }
   if(!cnt) return { ok:false, nRaces, nObs:obs.length };
+  // AUC por Mann-Whitney: prob. de que un positivo tenga mayor score que un negativo
+  let auc=null;
+  const pos=roc.filter(r=>r.y===1), neg=roc.filter(r=>r.y===0);
+  if(pos.length && neg.length){
+    let wins=0; pos.forEach(a=>neg.forEach(b=>{ wins += a.p>b.p?1:(a.p===b.p?0.5:0); }));
+    auc=Math.round(wins/(pos.length*neg.length)*100)/100;
+  }
   return { ok:true, which, nRaces, nObs:obs.length, evals:cnt,
     brierLogit:Math.round(brierL/cnt*1000)/1000, brierBase:Math.round(brierB/cnt*1000)/1000,
-    recall: posTot?Math.round(hitL/posTot*100):0, positives:posTot };
+    auc, recall: posTot?Math.round(hitL/posTot*100):0, positives:posTot };
 }
 
 // Bloque del panel para la clasificación Top-10 / Podio (logística vs baseline).
@@ -43675,7 +43685,7 @@ function _glmClassBlock(hist){
     if(!lt.ok || !lp.ok) return '';
     const mejora = (a)=> a.brierLogit < a.brierBase - 0.005;  // Brier menor = mejor
     const win = mejora(lt) || mejora(lp);
-    const tile=(lbl,a)=>`<div class="lab-tile"><div class="lab-tile-l">${lbl} · Brier</div><div class="lab-tile-v">${a.brierLogit}</div><div class="lab-tile-s">actual ${a.brierBase} · ${mejora(a)?'✅ mejora':'≈ igual'}</div></div>`;
+    const tile=(lbl,a)=>`<div class="lab-tile"><div class="lab-tile-l">${lbl} · Brier</div><div class="lab-tile-v">${a.brierLogit}</div><div class="lab-tile-s">actual ${a.brierBase}${a.auc!=null?' · AUC '+a.auc:''} · ${mejora(a)?'✅ mejora':'≈ igual'}</div></div>`;
     return `<div class="lab-section-t">🎯 Probabilidad de Top‑10 / Podio (logística)</div>
       <div class="lab-tiles">${tile('Top‑10',lt)}${tile('Podio',lp)}</div>
       <div class="lab-tr" style="margin-top:8px;${win?'background:#dcfce7;border-color:#86efac':'background:#fef3c7;border-color:#fcd34d'}">
