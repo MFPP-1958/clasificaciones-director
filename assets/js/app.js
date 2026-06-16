@@ -1706,6 +1706,7 @@ function _dispSubscribe(raceId){
           const extra=JSON.parse(notes||'{}'); const av=extra.availability||{};
           if(_dispState && _dispState.raceId===raceId){
             _dispState.confirmed=Array.isArray(av.confirmed)?av.confirmed:[];
+            _dispState.declined=Array.isArray(av.declined)?av.declined:[];
             _dispState.extraRoster=Array.isArray(av.roster)?av.roster:[];
             _dispRender();
           }
@@ -1810,6 +1811,7 @@ async function _dispSelectRace(raceId){
   try{ if(_sb){ const {data}=await _sb.from('races').select('notes').eq('id',raceId).single(); if(data&&data.notes){ const ex=JSON.parse(data.notes); r.extra=ex; av=ex.availability||{}; } } }catch(_){}
   _dispState={ raceId:r.id, raceName:r.name||'', raceDate:r.date||'', localidad:r.localidad||'',
                confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
+               declined:Array.isArray(av.declined)?av.declined.slice():[],
                extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
   // Prueba activa global → banner superior coherente en todas las pantallas
   try{ _setActiveRace({id:r.id, name:r.name, date:r.date, localidad:r.localidad}, 'disponibilidad'); }catch(_){}
@@ -1864,34 +1866,47 @@ async function _dispRender(){
   const body=document.getElementById('dispBody'); if(!body||!_dispState) return;
   const roster=await _dispRoster();
   _dispBibs = await _dispBibMap();
-  const confSet=new Set(_dispState.confirmed.map(n=>normalizeForMatching(n)));
-  const pending=roster.filter(n=>!confSet.has(normalizeForMatching(n)));
+  const confSet=new Set((_dispState.confirmed||[]).map(n=>normalizeForMatching(n)));
+  const decSet =new Set((_dispState.declined||[]).map(n=>normalizeForMatching(n)));
+  // Pendientes = en el roster pero sin haber dicho ni Sí ni No.
+  const pending=roster.filter(n=>{ const k=normalizeForMatching(n); return !confSet.has(k) && !decSet.has(k); });
   // Solo director/admin (o sin login = director en su PC) ven copiar/exportar.
   const isAdmin = !(typeof _rbacUser!=='undefined' && _rbacUser) || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
   const isCiclista = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA');
   const meNk = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.riderName) ? normalizeForMatching(_rbacUser.riderName) : '';
-  // Mi tarjeta primero en "sin confirmar"
-  pending.sort((a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); });
-  const confirmed=_dispState.confirmed.slice().sort((a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); });
+  const meFirst=(a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); };
+  pending.sort(meFirst);
+  const confirmed=(_dispState.confirmed||[]).slice().sort(meFirst);
+  const declined=(_dispState.declined||[]).slice().sort(meFirst);
   const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
-  const card=(name,side)=>{
+  // Botón de acción (cambia el estado de un corredor)
+  const actBtn=(name,status,txt,fg,bg)=>`<button onclick="_dispSetStatus(${JSON.stringify(name).replace(/"/g,'&quot;')},'${status}')" style="background:${bg};color:${fg};border:0;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap">${txt}</button>`;
+  // Tarjeta por estado: 'pending' | 'asiste' | 'no_asiste'. Un CICLISTA solo
+  // puede cambiar SU propio estado; las demás tarjetas se ven pero sin botones.
+  const card=(name,state)=>{
     const isMe = meNk && normalizeForMatching(name)===meNk;
-    // Un CICLISTA SOLO puede tocar su propia tarjeta. Las demás se ven pero están
-    // bloqueadas (no puede apuntar/quitar a compañeros por error).
-    const locked = isCiclista && meNk && !isMe;
-    const border = isMe ? '#1d4ed8' : (side==='in'?'#86efac':'#e5e7eb');
-    const bg = isMe ? '#eff6ff' : (locked?'#f8fafc':'#fff');
-    const lbl = locked ? '🔒' : (side==='in' ? (isMe?'Quitarme ✕':'ASISTE ✕') : (isMe?'👋 ¡SOY YO! Apuntarme':'Apuntarme ▸'));
-    const lblColor = side==='in' ? '#15803d' : (isMe?'#1d4ed8':'#94a3b8');
+    const canAct = !isCiclista || isMe;
     const bib=_dispBibs.get(normalizeForMatching(name));
     const bibTag = bib?`<span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;background:#0b2f6b;color:#fff;border-radius:6px;font-size:11px;font-weight:900;padding:0 5px">${escapeHtml(bib)}</span>`:'';
-    const click = locked ? '' : `onclick="_dispToggle(${JSON.stringify(name).replace(/"/g,'&quot;')})"`;
-    return `<button ${click} ${locked?'disabled':''} style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${bg};border:${isMe?'2.5px':'1.5px'} solid ${border};border-radius:11px;padding:${isMe?'13px':'11px'} 13px;margin-bottom:8px;cursor:${locked?'not-allowed':'pointer'};opacity:${locked?'.55':'1'};transition:box-shadow .12s;font-size:14px;font-weight:${isMe?'900':'700'};color:#0b2f6b" ${locked?'':"onmouseover=\"this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'\" onmouseout=\"this.style.boxShadow='none'\""}>
-      <span style="font-size:18px">${isMe?'⭐':(side==='in'?'✅':'⚪')}</span>
+    const meTag = isMe?' <span style="font-size:10px;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 6px;vertical-align:middle">TÚ</span>':'';
+    let icon, bg, border, actions;
+    if(state==='asiste'){
+      icon='✅'; bg=isMe?'#eff6ff':'#f0fdf4'; border=isMe?'#1d4ed8':'#86efac';
+      actions = canAct ? actBtn(name,'pendiente','✕ Quitar','#b45309','#fff7ed') : '<span style="font-size:11px;color:#15803d;font-weight:800">ASISTE</span>';
+    } else if(state==='no_asiste'){
+      icon='❌'; bg=isMe?'#eff6ff':'#fef2f2'; border=isMe?'#1d4ed8':'#fecaca';
+      actions = canAct ? actBtn(name,'asiste','✅ Sí voy','#15803d','#dcfce7') : '<span style="font-size:11px;color:#b91c1c;font-weight:800">NO VA</span>';
+    } else {
+      icon=isMe?'⭐':'⚪'; bg=isMe?'#eff6ff':(canAct?'#fff':'#f8fafc'); border=isMe?'#1d4ed8':'#fed7aa';
+      actions = canAct ? (actBtn(name,'asiste','✅ Sí, voy','#fff','#16a34a')+' '+actBtn(name,'no_asiste','❌ No voy','#fff','#dc2626')) : '<span style="font-size:11px;color:#94a3b8;font-weight:800">🔒</span>';
+    }
+    const compact = state==='no_asiste';
+    return `<div style="display:flex;align-items:center;gap:10px;width:100%;background:${bg};border:${isMe?'2.5px':'1.5px'} solid ${border};border-radius:11px;padding:${compact?'8px 11px':((isMe?'12px':'10px')+' 13px')};margin-bottom:8px;font-size:14px;font-weight:${isMe?'900':'700'};color:#0b2f6b">
+      <span style="font-size:${compact?'15px':'18px'}">${icon}</span>
       ${bibTag}
-      <span style="flex:1">${escapeHtml(name)}${isMe?' <span style="font-size:10px;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 6px;vertical-align:middle">TÚ</span>':''}</span>
-      <span style="font-size:11px;color:${lblColor};font-weight:800">${lbl}</span>
-    </button>`;
+      <span style="flex:1;min-width:0">${escapeHtml(name)}${meTag}</span>
+      ${actions}
+    </div>`;
   };
   // Selector de prueba (sábado/domingo/etapas): nombre + localidad + fecha
   const raceOpts=(_dispRaces||[]).map(r=>{
@@ -1904,15 +1919,11 @@ async function _dispRender(){
       <select onchange="_dispSelectRace(this.value)" style="width:100%;border:0;border-radius:9px;padding:11px 12px;font-size:14px;font-weight:800;color:#0b2f6b;box-sizing:border-box">${raceOpts}</select>
       <div style="font-size:13px;opacity:.95;margin-top:8px">${escapeHtml(_dispState.raceName)}<br>📅 ${escapeHtml(fdate||'')}${_dispState.localidad?' · 📍 <b>'+escapeHtml(_dispState.localidad)+'</b>':''}</div>
     </div>
-    ${isCiclista ? `<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:#1e3a8a">👉 Toca <b>solo TU nombre</b> (el de la estrella ⭐) para apuntarte o quitarte. Los demás aparecen para que veas el grupo, pero <b>no puedes cambiarlos</b>.${!meNk?'<br><span style="color:#b45309">⚠️ No hemos podido identificarte. Pide al director que revise tu nombre.</span>':''}</div>`:''}
-    <div class="disp-tabs" style="display:none;gap:8px;margin-bottom:12px">
-      <button onclick="_dispShowTab('out')" id="dispTabOut" class="disp-tab" style="flex:1;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;background:#0b2f6b;color:#fff;font-weight:800;font-size:13px;cursor:pointer">⚪ Sin confirmar (${pending.length})</button>
-      <button onclick="_dispShowTab('in')" id="dispTabIn" class="disp-tab" style="flex:1;padding:11px;border:1.5px solid #cbd5e1;border-radius:10px;background:#fff;color:#475569;font-weight:800;font-size:13px;cursor:pointer">✅ Asisten (${confirmed.length})</button>
-    </div>
+    ${isCiclista ? `<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:#1e3a8a">👉 En <b>tu tarjeta</b> (la de la estrella ⭐) pulsa <b>✅ Sí, voy</b> o <b>❌ No voy</b>. Los demás aparecen para que veas el grupo, pero <b>no puedes cambiarlos</b>.${!meNk?'<br><span style="color:#b45309">⚠️ No hemos podido identificarte. Pide al director que revise tu nombre.</span>':''}</div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="disp-grid">
-      <div class="disp-col" data-col="out">
-        <h3 style="margin:0 0 10px;font-size:15px;color:#64748b">⚪ Sin confirmar (${pending.length})</h3>
-        ${pending.length?pending.map(n=>card(n,'out')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Todos confirmados 🎉</div>'}
+      <div class="disp-col">
+        <h3 style="margin:0 0 10px;font-size:15px;color:#b45309">🟠 Pendientes (${pending.length})</h3>
+        ${pending.length?pending.map(n=>card(n,'pending')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Nadie pendiente — todos han respondido 🎉</div>'}
         <div style="margin-top:14px;border-top:1px dashed #cbd5e1;padding-top:12px">
           <div style="font-size:12.5px;color:#475569;font-weight:700;margin-bottom:6px">¿No estás en la lista? Regístrate:</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1922,7 +1933,7 @@ async function _dispRender(){
           <div style="font-size:11px;color:#94a3b8;margin-top:4px">Formato obligatorio: <b>Apellido, Nombre</b> (con la coma). Ej: <i>Gómez, Carlos</i>.</div>
         </div>
       </div>
-      <div class="disp-col" data-col="in">
+      <div class="disp-col">
         <div style="background:#dcfce7;border:1px solid #86efac;border-radius:11px;padding:10px 13px;margin-bottom:12px;text-align:center;font-weight:900;color:#15803d;font-size:15px">🚴 ¡Ya somos ${confirmed.length} apuntado${confirmed.length!==1?'s':''}!</div>
         ${isAdmin && confirmed.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
           <button onclick="_dispCopyNames()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Copiar la lista de nombres (con dorsal) al portapapeles">📋 Copiar nombres</button>
@@ -1930,32 +1941,37 @@ async function _dispRender(){
           <button onclick="_dispExportPNG()" style="background:#0369a1;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Imagen para Instagram (cuadrada)">🖼️ PNG (Instagram)</button>
           <button onclick="_dispExportPDF()" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer">📄 PDF</button>
         </div>`:''}
-        ${confirmed.length?confirmed.map(n=>card(n,'in')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Aún no se ha apuntado nadie. ¡Sé el primero! 👈</div>'}
+        ${confirmed.length?confirmed.map(n=>card(n,'asiste')).join(''):'<div style="color:#9ca3af;font-size:13px;padding:8px 0">Aún no se ha apuntado nadie. ¡Sé el primero! 👈</div>'}
       </div>
     </div>
-    <style>@media(max-width:760px){
-      .disp-tabs{display:flex!important}
-      .disp-grid{grid-template-columns:1fr!important}
-      .disp-col[data-col="in"]{display:none}
-      .disp-grid.show-in .disp-col[data-col="out"]{display:none}
-      .disp-grid.show-in .disp-col[data-col="in"]{display:block}
-    }</style>`;
-  // Restaurar pestaña activa en móvil
-  if(_dispTab==='in') _dispShowTab('in');
+    <div style="margin-top:16px">
+      <h3 style="margin:0 0 10px;font-size:15px;color:#64748b">🚫 No asistirán (${declined.length})</h3>
+      ${declined.length
+        ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">${declined.map(n=>card(n,'no_asiste')).join('')}</div>
+           <div style="font-size:11px;color:#94a3b8;margin-top:6px">No se incluyen en la lista de Instagram ni en el PDF.</div>`
+        : '<div style="color:#9ca3af;font-size:13px;padding:6px 0">Nadie ha dicho que no (de momento).</div>'}
+    </div>
+    <style>@media(max-width:760px){ .disp-grid{grid-template-columns:1fr!important} }</style>`;
 }
 
-async function _dispToggle(name){
+// Fija el estado de asistencia de un corredor: 'asiste' | 'no_asiste' | 'pendiente'.
+async function _dispSetStatus(name, status){
   if(!_dispState) return;
-  // Seguridad: un CICLISTA solo puede cambiar SU propio nombre.
+  // Seguridad: un CICLISTA solo puede cambiar SU propio estado.
   if(typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA'){
     const me=_rbacUser.riderName?normalizeForMatching(_rbacUser.riderName):'';
     if(!me){ if(typeof showToast==='function') showToast('No podemos identificarte. Avisa al director.','warn',3000); return; }
-    if(normalizeForMatching(name)!==me){ if(typeof showToast==='function') showToast('🔒 Solo puedes apuntarte a TI mismo','warn',2800); return; }
+    if(normalizeForMatching(name)!==me){ if(typeof showToast==='function') showToast('🔒 Solo puedes cambiar TU estado','warn',2800); return; }
   }
   const nk=normalizeForMatching(name);
-  const i=_dispState.confirmed.findIndex(n=>normalizeForMatching(n)===nk);
-  if(i>=0) _dispState.confirmed.splice(i,1);
-  else _dispState.confirmed.push(name);
+  if(!Array.isArray(_dispState.confirmed)) _dispState.confirmed=[];
+  if(!Array.isArray(_dispState.declined))  _dispState.declined=[];
+  // Quitar de ambas listas y volver a colocar según el estado nuevo.
+  _dispState.confirmed=_dispState.confirmed.filter(n=>normalizeForMatching(n)!==nk);
+  _dispState.declined =_dispState.declined.filter(n=>normalizeForMatching(n)!==nk);
+  if(status==='asiste') _dispState.confirmed.push(name);
+  else if(status==='no_asiste') _dispState.declined.push(name);
+  // 'pendiente' = no está en ninguna de las dos.
   await _dispSave();
   await _dispRender();
 }
@@ -1980,7 +1996,7 @@ async function _dispSave(){
     const {data,error}=await _sb.from('races').select('notes').eq('id',_dispState.raceId).single();
     if(error) throw error;
     let extra={}; try{ extra=JSON.parse(data?.notes||'{}'); }catch(_){}
-    extra.availability={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, roster:_dispState.extraRoster };
+    extra.availability={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster };
     await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',_dispState.raceId);
   }catch(e){ console.warn('[disp] save', e); }
 }
