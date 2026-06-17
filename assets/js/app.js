@@ -40847,7 +40847,7 @@ async function _routeRenderContent(){
         <div class="route-metric"><div class="rm-v" style="font-size:14px">${altRange}</div><div class="rm-l">altitud</div></div>
         <div class="route-metric"><div class="rm-v" style="font-size:13px">${escapeHtml(r.source||'')}</div><div class="rm-l">fuente</div></div>
       </div>
-      <div class="route-actions">
+      <div class="route-actions admin-only">
         <label class="route-upload-btn route-upload-btn-sm" style="background:#0369a1" title="Sube un .fit de otro corredor y guarda solo su esfuerzo (potencia/FC). NO toca el recorrido actual.">
           📎 Añadir solo esfuerzo
           <input type="file" accept=".fit,.FIT" onchange="_routeOnEffortOnlySelected(event)" style="display:none">
@@ -40872,7 +40872,7 @@ async function _routeRenderContent(){
             ${e.power_avg_w ? `<span class="re-stat">${e.power_avg_w}W avg</span>` : ''}
             ${e.power_norm_w ? `<span class="re-stat">${e.power_norm_w}W NP</span>` : ''}
             ${e.hr_avg_bpm ? `<span class="re-stat">${e.hr_avg_bpm} bpm</span>` : ''}
-            <button class="re-rm" onclick="_routeDeleteEffort('${e.id}')" title="Eliminar este esfuerzo">×</button>
+            <button class="re-rm admin-only" onclick="_routeDeleteEffort('${e.id}')" title="Eliminar este esfuerzo">×</button>
           </div>
         `).join('') : '<div class="route-empty-sub" style="text-align:center;padding:8px">Aún no hay esfuerzos individuales. Sube un .fit para añadir uno.</div>'}
       </div>
