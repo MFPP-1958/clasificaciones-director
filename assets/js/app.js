@@ -1048,6 +1048,17 @@ async function _rbacFinishLogin(data, via){
       // La BD no tiene equipo pero ESTE dispositivo sí (p.ej. el PC del director):
       // lo subimos para que se sincronice al móvil y demás dispositivos.
       try{ await _sb.from('app_users').update({my_team: myTeam}).eq('email', data.email); }catch(_){}
+    } else if(!data.my_team && !(typeof myTeam!=='undefined' && myTeam)){
+      // Ni la BD ni el dispositivo tienen equipo (típico: ciclista nuevo). Usamos
+      // el equipo del CLUB, deducido de las láminas, para que NUNCA vea datos
+      // globales por defecto. Y lo guardamos en su perfil para la próxima.
+      try{
+        const club = (typeof _inferClubTeam==='function') ? await _inferClubTeam() : '';
+        if(club){
+          if(typeof setMyTeam==='function') setMyTeam(club);
+          if(_sb) { try{ await _sb.from('app_users').update({my_team: club}).eq('email', data.email); }catch(_){} }
+        }
+      }catch(_){}
     }
     // Restaurar también filtros globales por usuario (cat/modality/gender) si existen
     if(data.my_cat !== undefined && data.my_cat !== null){
@@ -1972,6 +1983,22 @@ async function _dispSelectRace(raceId){
   try{ _setActiveRace({id:r.id, name:r.name, date:r.date, localidad:r.localidad}, 'disponibilidad'); }catch(_){}
   _dispRender();
   _dispSubscribe(r.id);
+}
+
+// Equipo del CLUB (nombre para mostrar): el más frecuente en las láminas
+// guardadas (team_sheets, legibles por todos). Sirve para que cualquier usuario
+// —incluido un ciclista nuevo— arranque con el equipo del club por defecto.
+async function _inferClubTeam(){
+  try{
+    if(_sb){
+      const {data}=await _sb.from('team_sheets').select('team');
+      const counts={};
+      (data||[]).forEach(x=>{ const t=(x.team||'').trim(); if(t) counts[t]=(counts[t]||0)+1; });
+      let best='', bn=0; for(const k in counts){ if(counts[k]>bn){ bn=counts[k]; best=k; } }
+      if(best) return best;
+    }
+  }catch(_){}
+  return '';
 }
 
 // Infiere el equipo del director cuando no hay myTeam (típico en el móvil):
@@ -6374,7 +6401,7 @@ async function _gAddUser(){
   const waBtn = `<button onclick="_gCopyWelcomeText(this)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar para WhatsApp</button>`;
   // Try Supabase first
   if(_sb){
-    const {error} = await _sb.from('app_users').upsert({email, role, name, active:true},{onConflict:'email'});
+    const {error} = await _sb.from('app_users').upsert({email, role, name, active:true, my_team:(typeof myTeam!=='undefined'?myTeam:'')||''},{onConflict:'email'});
     if(!error){
       // Enviar correo de bienvenida (sin PIN: explica cómo entrar) + copia al admin
       if(msg){ msg.textContent='✉️ Enviando correo de bienvenida...'; msg.style.color='#6b7280'; }
@@ -6394,7 +6421,7 @@ async function _gAddUser(){
     // Creamos el usuario IGUAL en la nube (sin pin) para que aparezca y pueda entrar,
     // y avisamos del SQL exacto a ejecutar una sola vez.
     if(error && /pin/i.test(error.message||'') && /(column|schema cache)/i.test(error.message||'')){
-      const {error:e2}=await _sb.from('app_users').upsert({email, role, name, active:true},{onConflict:'email'});
+      const {error:e2}=await _sb.from('app_users').upsert({email, role, name, active:true, my_team:(typeof myTeam!=='undefined'?myTeam:'')||''},{onConflict:'email'});
       if(!e2){
         emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
         if(msg){
