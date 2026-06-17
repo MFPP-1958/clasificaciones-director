@@ -496,6 +496,14 @@
       <span id="inscritosCounter" class="inscritos-counter">0 inscritos cargados</span>
     </div>
     <div id="inscritosBody" class="inscritos-body" style="display:none">
+      <!-- Selector de PRÓXIMA prueba: autoselecciona la siguiente por fecha y rellena los datos -->
+      <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:10px 12px;margin:0 0 12px">
+        <label for="inscritosRaceSelect" style="display:block;font-size:12.5px;font-weight:800;color:#0b2f6b;margin-bottom:6px">🏁 ¿Para qué prueba son estos inscritos?</label>
+        <select id="inscritosRaceSelect" onchange="_inscPickRace()" style="width:100%;box-sizing:border-box;border:1.5px solid #c7d2fe;border-radius:8px;padding:9px 11px;font-size:13px;font-weight:700;color:#0b2f6b">
+          <option value="">— Elige la prueba (la siguiente por fecha sale la primera) —</option>
+        </select>
+        <div class="small" style="color:#6b7280;margin-top:6px">Se rellenan solos el nombre y la fecha, y queda como prueba activa. Puedes cambiarla cuando quieras.</div>
+      </div>
       <p class="help" style="margin:0 0 10px">
         Sube la lista de <b>inscritos</b> (startlist) para detectar automáticamente quién terminó (Acabó) y quién no (DNF).
         Acepta PDF, CSV, XLS, XLSX o texto pegado. Necesita al menos <b>dorsal + nombre</b>.

@@ -14121,10 +14121,53 @@ function _inicioGoInscritos(){
     try{
       const body=document.getElementById('inscritosBody');
       if(body && getComputedStyle(body).display==='none' && typeof toggleInscritosPanel==='function') toggleInscritosPanel();
-      const ta=document.getElementById('pastedInscritos');
-      if(ta){ ta.scrollIntoView({behavior:'smooth',block:'center'}); ta.focus(); }
+      if(typeof _inscPopulateRaces==='function') _inscPopulateRaces();
+      const card=document.getElementById('inscritosCard');
+      if(card) card.scrollIntoView({behavior:'smooth',block:'start'});
     }catch(_){}
   }, 250);
+}
+
+// Selector de PRÓXIMAS pruebas en el panel de inscritos: planificadas con fecha
+// futura, ordenadas por fecha (la siguiente primero) y respetando el filtro de
+// categoría. Autoselecciona la primera y rellena los datos de la carrera.
+async function _inscPopulateRaces(){
+  const sel=document.getElementById('inscritosRaceSelect');
+  if(!sel || !_sb) return;
+  let opts='<option value="">— Elige la prueba (la siguiente por fecha sale la primera) —</option>';
+  try{
+    const today=new Date().toISOString().slice(0,10);
+    const {data}=await _sb.from('races').select('id,name,date,notes').eq('race_type','planificada').gte('date',today).order('date',{ascending:true});
+    (data||[]).forEach(r=>{
+      let extra={}; try{ extra=JSON.parse(r.notes||'{}'); }catch(_){}
+      if(typeof _fccvRaceMatchesGlobalCat==='function' && !_fccvRaceMatchesGlobalCat(extra, r.name)) return;
+      const d=r.date||''; const dd=d?d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4):'';
+      const loc=extra.localidad?(' · '+extra.localidad):'';
+      opts+=`<option value="${escapeAttr(r.id)}" data-notes="${escapeAttr(r.notes||'{}')}" data-name="${escapeAttr(r.name||'')}" data-date="${escapeAttr(d)}">${escapeHtml(dd+' · '+(r.name||'')+loc)}</option>`;
+    });
+  }catch(_){}
+  sel.innerHTML=opts;
+  // Autoseleccionar la SIGUIENTE prueba (la primera real) y aplicar sus datos.
+  if(sel.options.length>1){ sel.selectedIndex=1; _inscPickRace(); }
+}
+
+// Aplica la prueba elegida: rellena nombre/fecha/etc del formulario de Carga y
+// la fija como prueba activa, para que guardar inscritos no pida "carga una prueba".
+function _inscPickRace(){
+  const sel=document.getElementById('inscritosRaceSelect'); if(!sel) return;
+  const opt=sel.options[sel.selectedIndex]; if(!opt || !opt.value) return;
+  let extra={}; try{ extra=JSON.parse(opt.dataset.notes||'{}'); }catch(_){}
+  const setV=(id,v)=>{ const el=document.getElementById(id); if(el && v!=null) el.value=v; };
+  const dRaw=opt.dataset.date||'';
+  const dateStr = dRaw ? ((typeof formatDateDisplay==='function' ? formatDateDisplay(_parseSpanishDate(dRaw)) : '') || dRaw) : '';
+  setV('raceName', opt.dataset.name||'');
+  setV('raceDate', dateStr);
+  setV('raceLocalidad', extra.localidad||'');
+  setV('raceCircuitType', extra.circuitType||extra.modality||'');
+  setV('raceCCAA', extra.ccaa||'');
+  setV('raceStartTime', extra.hora_inicio||'');
+  const chk=document.getElementById('raceChallengeCV'); if(chk) chk.checked=!!extra.challengeCV;
+  try{ if(typeof _setActiveRace==='function') _setActiveRace({id:opt.value, name:opt.dataset.name||'', date:dRaw, localidad:extra.localidad||''}, 'inscritos'); }catch(_){}
 }
 
 // B · Onboarding de primer uso (se muestra una vez; solo a staff/director)
@@ -22955,6 +22998,11 @@ function toggleInscritosPanel(){
   const open = body.style.display !== 'none';
   body.style.display = open ? 'none' : 'block';
   if(chev) chev.textContent = open ? '▶' : '▼';
+  // Al ABRIR el panel, poblar el selector de próximas pruebas (si está vacío).
+  if(!open){
+    const sel=document.getElementById('inscritosRaceSelect');
+    if(sel && sel.options.length<=1 && typeof _inscPopulateRaces==='function') _inscPopulateRaces();
+  }
 }
 
 // Parser específico para listas de inscritos.
