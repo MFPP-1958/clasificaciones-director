@@ -5902,6 +5902,7 @@ async function _scoutRender(){
 }
 
 // ── Ficha individual de ciclista ─────────────────────────────
+let _resPosChart=null; // gráfica de evolución de posiciones del análisis individual
 function _resRenderRiderProfile(body, history, riderName){
   const riderQ = riderName.toLowerCase();
   // Recoger todas las participaciones del ciclista
@@ -5945,11 +5946,22 @@ function _resRenderRiderProfile(body, history, riderName){
   const top10     = positions.filter(p=>p<=10).length;
   const teams     = [...new Set(sorted.map(r=>r.team))].filter(t=>t&&t!=='—').join(', ');
 
-  // Tendencia: comparar primera mitad vs segunda mitad
-  const mid = Math.floor(sorted.length/2);
-  const avgFirst = sorted.slice(0,mid||1).reduce((a,b)=>a+b.pos,0)/(mid||1);
-  const avgLast  = sorted.slice(mid).reduce((a,b)=>a+b.pos,0)/(sorted.length-mid||1);
-  const tendencia = avgLast < avgFirst ? '📈 Mejorando' : avgLast > avgFirst ? '📉 Empeorando' : '➡️ Estable';
+  // ── FORMA RECIENTE (#5): últimas 3 carreras vs las anteriores ──
+  // Puesto más BAJO = mejor, así que "mejora" si el puesto medio reciente baja.
+  const recientes = sorted.slice(-3);
+  const avgRecent = recientes.reduce((a,b)=>a+b.pos,0)/recientes.length;
+  const prior     = sorted.slice(0, Math.max(0, sorted.length-3));
+  const avgPrior  = prior.length ? prior.reduce((a,b)=>a+b.pos,0)/prior.length : null;
+  let formIcon='➡️', formLabel='Estable', formColor='#6b7280';
+  if(avgPrior!=null){
+    const delta = avgPrior - avgRecent;       // >0 mejora · <0 empeora
+    if(delta>=1){ formIcon='📈'; formLabel='Mejorando'; formColor='#16a34a'; }
+    else if(delta<=-1){ formIcon='📉'; formLabel='Empeorando'; formColor='#dc2626'; }
+  } else {
+    formLabel='Pocas carreras';
+  }
+  const tendencia = `${formIcon} ${formLabel}`;
+  const recientesStr = recientes.map(r=>r.pos+'º').join('  ·  ');
 
   body.innerHTML = `
   <!-- Cabecera del ciclista -->
@@ -5970,6 +5982,18 @@ function _resRenderRiderProfile(body, history, riderName){
     ${_resKpi('🏆','Top 3',top3||'—','podios')}
     ${_resKpi('🎯','Top 10',top10||'—','resultados')}
   </div>
+
+  <!-- #5 · Forma reciente (últimas 3) -->
+  <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="font-size:13px;font-weight:800;color:#0b2f6b">🔥 Forma reciente <span style="font-weight:600;color:#6b7280">(últimas ${recientes.length})</span></div>
+    <div style="font-size:16px;font-weight:900;color:#0b2f6b">${recientesStr}</div>
+    <div style="margin-left:auto;font-size:14px;font-weight:800;color:${formColor}">${formIcon} ${formLabel}</div>
+    ${avgPrior!=null?`<div style="width:100%;font-size:11.5px;color:#6b7280;margin-top:2px">Puesto medio últimas ${recientes.length}: <b style="color:${formColor}">${avgRecent.toFixed(1)}</b> &nbsp;·&nbsp; antes: <b>${avgPrior.toFixed(1)}</b></div>`:'<div style="width:100%;font-size:11.5px;color:#9ca3af;margin-top:2px">Hacen falta más de 3 carreras para valorar la tendencia.</div>'}
+  </div>
+
+  <!-- #1 · Gráfica de evolución de posiciones -->
+  <div style="font-weight:800;font-size:15px;color:#0b2f6b;margin-bottom:8px">📈 Evolución de posiciones</div>
+  <div style="position:relative;height:280px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;margin-bottom:20px"><canvas id="_resPosCanvas"></canvas></div>
 
   <!-- Historial completo de carreras -->
   <div style="font-weight:800;font-size:15px;color:#0b2f6b;margin-bottom:12px">📋 Historial completo de carreras</div>
@@ -6004,6 +6028,33 @@ function _resRenderRiderProfile(body, history, riderName){
       </tbody>
     </table>
   </div>`;
+
+  // #1 · Gráfica de evolución de posiciones (Chart.js ya está cargado en la app).
+  // Eje Y invertido para que el 1º quede arriba (mejor = más alto).
+  try{
+    if(_resPosChart){ try{ _resPosChart.destroy(); }catch(_){} _resPosChart=null; }
+    const cv=document.getElementById('_resPosCanvas');
+    if(cv && typeof Chart!=='undefined'){
+      const labels=sorted.map(r=>{
+        const d=r.raceDate||'';
+        if(/^\d{2}\/\d{2}/.test(d)) return d.slice(0,5);
+        if(/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(8,10)+'/'+d.slice(5,7);
+        return (r.raceName||'').slice(0,8);
+      });
+      const data=sorted.map(r=>r.pos);
+      const names=sorted.map(r=>r.raceName||'');
+      const ptColor=data.map(p=>p===1?'#fbbf24':p<=3?'#16a34a':p<=10?'#1a56db':'#9ca3af');
+      _resPosChart=new Chart(cv.getContext('2d'),{
+        type:'line',
+        data:{labels,datasets:[{label:'Puesto',data,borderColor:'#1a56db',backgroundColor:'rgba(26,86,219,.12)',fill:true,tension:.25,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:ptColor}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          scales:{ y:{ reverse:true, min:1, title:{display:true,text:'Puesto (1 = mejor)'}, ticks:{precision:0} } },
+          plugins:{ legend:{display:false},
+            tooltip:{ callbacks:{ title:(items)=> names[items[0].dataIndex]||'', label:(it)=>'Puesto '+it.parsed.y } } }
+        }
+      });
+    }
+  }catch(_){}
 }
 
 function _resKpi(icon, label, value, sub){
