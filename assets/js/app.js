@@ -1833,6 +1833,7 @@ function _dispSubscribe(raceId){
             _dispState.declined=Array.isArray(av.declined)?av.declined:[];
             _dispState.extraRoster=Array.isArray(av.roster)?av.roster:[];
             if(typeof av.deadline==='string') _dispState.deadline=av.deadline;
+            if(Array.isArray(av.inscritos)) _dispState.inscritos=av.inscritos;
             _dispRender();
           }
         }catch(_){}
@@ -1955,6 +1956,7 @@ async function _dispSelectRace(raceId){
                confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
                declined:Array.isArray(av.declined)?av.declined.slice():[],
                extraRoster:Array.isArray(av.roster)?av.roster.slice():[],
+               inscritos:Array.isArray(av.inscritos)?av.inscritos.slice():[],
                deadline: (typeof av.deadline==='string'?av.deadline:''),
                fccvUrl: (r.extra && r.extra.fccvDetailUrl) || '',
                fccvId:  (r.extra && r.extra.fccvId) || '' };
@@ -2051,6 +2053,7 @@ function _dispDeadlineInfo(){
 // Panel de control del director: resumen + cierre + recordatorio.
 function _dispControlPanel(nConf,nDec,pending){
   const nPend=pending.length;
+  const nInsc=((_dispState&&_dispState.inscritos)||[]).length;
   const dlVal=(_dispState&&_dispState.deadline)||_dispDeadlineSuggested();
   const info=_dispDeadlineInfo();
   const chip=(emoji,lbl,n,c)=>`<div style="flex:1;min-width:90px;background:#fff;border:1.5px solid ${c}33;border-radius:10px;padding:8px 6px;text-align:center"><div style="font-size:20px;font-weight:900;color:${c};line-height:1">${n}</div><div style="font-size:10.5px;color:#475569;font-weight:700;margin-top:2px">${emoji} ${lbl}</div></div>`;
@@ -2080,6 +2083,11 @@ function _dispControlPanel(nConf,nDec,pending){
       <div style="margin-top:10px">
         <button onclick="_dispRemindPending()" ${nPend?'':'disabled'} style="width:100%;background:${nPend?'#f59e0b':'#e5e7eb'};color:${nPend?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:800;cursor:${nPend?'pointer':'default'}">🔔 Recordar a los ${nPend} pendiente${nPend!==1?'s':''} (copia un texto para WhatsApp)</button>
       </div>
+      <div style="margin-top:10px;border-top:1px dashed #cbd5e1;padding-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12.5px;font-weight:800;color:#0b2f6b">🏷️ Inscritos en la FCCV: ${nInsc}/${nConf}</span>
+        ${nConf>0?`<button onclick="_dispMarkAllInscritos()" style="margin-left:auto;background:#15803d;color:#fff;border:0;border-radius:9px;padding:8px 13px;font-size:12.5px;font-weight:800;cursor:pointer" title="Marca a todos los confirmados como ya inscritos (cuando hayas terminado en la web de la FCCV)">✅ Marcar TODOS como inscritos</button>`:''}
+        ${nInsc>0?`<button onclick="_dispClearInscritos()" title="Quitar todas las marcas de inscrito" style="background:#fff;color:#b45309;border:1.5px solid #fed7aa;border-radius:9px;padding:8px 11px;font-size:12px;font-weight:700;cursor:pointer">↩️ Quitar marcas</button>`:''}
+      </div>
     </div>`;
 }
 
@@ -2096,6 +2104,31 @@ async function _dispSetDeadline(val){
   await _dispSave();
   _dispRender();
   if(typeof showToast==='function') showToast(_dispState.deadline?'✅ Cierre guardado':'Cierre quitado','ok',1800);
+}
+
+// ── Marca de "inscrito en la FCCV" (compartida vía Supabase, la ven todos) ──
+async function _dispMarkAllInscritos(){
+  if(!_dispState) return;
+  _dispState.inscritos = (_dispState.confirmed||[]).slice();
+  await _dispSave();
+  _dispRender();
+  if(typeof showToast==='function') showToast('🏷️ Todos los confirmados marcados como inscritos','ok',2600);
+}
+async function _dispClearInscritos(){
+  if(!_dispState) return;
+  if(!confirm('¿Quitar todas las marcas de "inscrito"?')) return;
+  _dispState.inscritos = [];
+  await _dispSave();
+  _dispRender();
+}
+async function _dispToggleInscrito(name){
+  if(!_dispState) return;
+  if(!Array.isArray(_dispState.inscritos)) _dispState.inscritos = [];
+  const nk = normalizeForMatching(name);
+  const i = _dispState.inscritos.findIndex(n=>normalizeForMatching(n)===nk);
+  if(i>=0) _dispState.inscritos.splice(i,1); else _dispState.inscritos.push(name);
+  await _dispSave();
+  _dispRender();
 }
 
 // Genera un recordatorio (nombres pendientes + cierre + enlace) y lo deja en el
@@ -2249,6 +2282,7 @@ async function _dispRender(){
   _dispBibs = await _dispBibMap();
   const confSet=new Set((_dispState.confirmed||[]).map(n=>normalizeForMatching(n)));
   const decSet =new Set((_dispState.declined||[]).map(n=>normalizeForMatching(n)));
+  const inscSet=new Set((_dispState.inscritos||[]).map(n=>normalizeForMatching(n)));
   // Pendientes = en el roster pero sin haber dicho ni Sí ni No.
   const pending=roster.filter(n=>{ const k=normalizeForMatching(n); return !confSet.has(k) && !decSet.has(k); });
   // Solo director/admin (o sin login = director en su PC) ven copiar/exportar.
@@ -2271,6 +2305,16 @@ async function _dispRender(){
     const bib=_dispBibs.get(normalizeForMatching(name));
     const bibTag = bib?`<span style="display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;background:#0b2f6b;color:#fff;border-radius:6px;font-size:11px;font-weight:900;padding:0 5px">${escapeHtml(bib)}</span>`:'';
     const meTag = isMe?' <span style="font-size:10px;background:#1d4ed8;color:#fff;border-radius:6px;padding:1px 6px;vertical-align:middle">TÚ</span>':'';
+    // Marca de "inscrito en la FCCV" (solo confirmados). Badge para todos; botón para staff.
+    let inscTag='';
+    if(state==='asiste'){
+      const isInsc = inscSet.has(normalizeForMatching(name));
+      if(isAdmin){
+        inscTag = `<button onclick="_dispToggleInscrito(${JSON.stringify(name).replace(/"/g,'&quot;')})" title="${isInsc?'Quitar la marca de inscrito':'Marcar como inscrito en la FCCV'}" style="background:${isInsc?'#15803d':'#ecfdf3'};color:${isInsc?'#fff':'#15803d'};border:1px solid #86efac;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">${isInsc?'🏷️ Inscrito ✓':'🏷️ Inscrito'}</button>`;
+      } else if(isInsc){
+        inscTag = `<span style="font-size:10px;background:#15803d;color:#fff;border-radius:6px;padding:2px 7px;font-weight:800;white-space:nowrap">🏷️ Inscrito</span>`;
+      }
+    }
     let icon, bg, border, actions;
     if(state==='asiste'){
       icon='✅'; bg=isMe?'#eff6ff':'#f0fdf4'; border=isMe?'#1d4ed8':'#86efac';
@@ -2287,6 +2331,7 @@ async function _dispRender(){
       <span style="font-size:${compact?'15px':'18px'}">${icon}</span>
       ${bibTag}
       <span style="flex:1;min-width:0">${escapeHtml(name)}${meTag}</span>
+      ${inscTag}
       ${actions}
     </div>`;
   };
@@ -2377,7 +2422,7 @@ function _dispRegister(){
 async function _dispSave(){
   if(!_dispState || !_sb) return;
   try{
-    const data={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster, deadline:(_dispState.deadline||'') };
+    const data={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster, inscritos:(_dispState.inscritos||[]), deadline:(_dispState.deadline||'') };
     // Escritura en la tabla propia race_availability (no en races → races queda
     // protegida a solo-staff). upsert por race_id.
     const {error}=await _sb.from('race_availability').upsert({
