@@ -1281,6 +1281,34 @@ async function _rbacLoadPerms(role){
   data.forEach(p=>{ if(p.allowed) _rbacPerms.add(p.view_id); });
 }
 
+// ── Botón TEMPORAL "Ver como ciclista" (solo staff) ─────────────────────
+// Quita la marca rbac-staff → se ocultan los elementos .admin-only, igual que
+// los vería un ciclista. Útil para validar la usabilidad sin cerrar sesión.
+// (Nota: afecta a lo etiquetado con .admin-only; algún panel cerrado por rol
+//  en JS puede no cambiar — lo iremos cubriendo.)
+function _previewEnsureBtn(){
+  if(document.getElementById('previewCyclistBtn')) return;
+  const b=document.createElement('button');
+  b.id='previewCyclistBtn'; b.type='button';
+  b.onclick=_togglePreviewCyclist;
+  b.style.cssText='position:fixed;left:14px;bottom:14px;z-index:2147483000;background:#0b2f6b;color:#fff;border:0;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.3)';
+  b.textContent='👁️ Ver como ciclista';
+  document.body.appendChild(b);
+}
+function _togglePreviewCyclist(){
+  const b=document.getElementById('previewCyclistBtn');
+  const previewing=document.body.classList.contains('preview-ciclista');
+  if(previewing){
+    document.body.classList.remove('preview-ciclista');
+    document.body.classList.add('rbac-staff');
+    if(b){ b.textContent='👁️ Ver como ciclista'; b.style.background='#0b2f6b'; }
+  } else {
+    document.body.classList.add('preview-ciclista');
+    document.body.classList.remove('rbac-staff');
+    if(b){ b.textContent='↩️ Volver a vista director'; b.style.background='#b45309'; }
+  }
+}
+
 function _rbacApplySession(){
   // Ocultar overlay
   const ov = document.getElementById('rbacOverlay');
@@ -1298,6 +1326,8 @@ function _rbacApplySession(){
     const staff = ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
     document.body.classList.toggle('rbac-staff', staff);
     document.body.dataset.role = _rbacUser.role || '';
+    document.body.classList.remove('preview-ciclista');
+    if(staff && typeof _previewEnsureBtn==='function') _previewEnsureBtn();
   }catch(_){}
   // Renderizar menú según permisos
   _rbacRenderMenu();
@@ -1328,7 +1358,7 @@ function _rbacLogout(){
   try{ if(_sb && _sb.auth) _sb.auth.signOut(); }catch(_){}
   _rbacUser = null;
   _rbacPerms = new Set();
-  try{ document.body.classList.remove('rbac-staff'); document.body.dataset.role=''; }catch(_){}
+  try{ document.body.classList.remove('rbac-staff','preview-ciclista'); document.body.dataset.role=''; const pb=document.getElementById('previewCyclistBtn'); if(pb) pb.remove(); }catch(_){}
   // Ocultar todo y mostrar overlay
   const bar = document.getElementById('rbacUserBar');
   if(bar) bar.style.display='none';
