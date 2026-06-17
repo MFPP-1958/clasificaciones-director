@@ -1843,7 +1843,9 @@ async function _dispSelectRace(raceId){
                confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
                declined:Array.isArray(av.declined)?av.declined.slice():[],
                extraRoster:Array.isArray(av.roster)?av.roster.slice():[],
-               deadline: (typeof av.deadline==='string'?av.deadline:'') };
+               deadline: (typeof av.deadline==='string'?av.deadline:''),
+               fccvUrl: (r.extra && r.extra.fccvDetailUrl) || '',
+               fccvId:  (r.extra && r.extra.fccvId) || '' };
   // Prueba activa global → banner superior coherente en todas las pantallas
   try{ _setActiveRace({id:r.id, name:r.name, date:r.date, localidad:r.localidad}, 'disponibilidad'); }catch(_){}
   _dispRender();
@@ -1974,6 +1976,105 @@ function _dispRemindPending(){
   try{ window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank'); }catch(_){}
 }
 
+// ── PIEZA B · Inscripción FCCV (confirmados + DNI listos) ────────────────
+// Clave de nombre por conjunto de palabras (robusta al orden y a la coma):
+// "Alcon, Manuel" y "Manuel Alcon" producen la misma clave.
+function _fccvNameTokenKey(name){
+  let n=(typeof normalizeForMatching==='function')?normalizeForMatching(name):String(name||'').toLowerCase();
+  n=String(n).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ');
+  return n.split(/\s+/).filter(Boolean).sort().join(' ');
+}
+
+// Índice de licencias FCCV por clave de nombre → {dni, full}
+function _fccvLicIndex(){
+  const idx=new Map();
+  let lics=[]; try{ lics=(typeof _fccvGetLicencias==='function')?_fccvGetLicencias():[]; }catch(_){}
+  (lics||[]).forEach(l=>{
+    const full=(((l.apellidos||'')+' '+(l.nombre||'')).trim())||(l.nombre||'');
+    const key=_fccvNameTokenKey(full);
+    if(key && !idx.has(key)) idx.set(key,{dni:String(l.dni||'').trim().toUpperCase(), full});
+  });
+  return idx;
+}
+
+// Empareja un nombre del roster con su licencia (DNI). Devuelve {dni, full} o null.
+function _dispMatchDni(name, idx){
+  const key=_fccvNameTokenKey(name);
+  return (key && idx.has(key)) ? idx.get(key) : null;
+}
+
+function _dispCloseInscripcion(){
+  const ov=document.getElementById('dispInscOverlay'); if(ov) ov.remove();
+  document.body.style.overflow='';
+}
+
+function _dispCopyAllDni(){
+  const dnis=(_dispState&&_dispState._inscDni)||[];
+  if(!dnis.length){ if(typeof showToast==='function') showToast('No hay DNI para copiar','warn',2200); return; }
+  try{ navigator.clipboard.writeText(dnis.join('\n')); }catch(_){}
+  if(typeof showToast==='function') showToast('📋 '+dnis.length+' DNI copiados','ok',2200);
+}
+
+function _dispCopyOneDni(dni){
+  try{ navigator.clipboard.writeText(dni); }catch(_){}
+  if(typeof showToast==='function') showToast('📋 DNI copiado: '+dni,'ok',1800);
+}
+
+function _dispOpenInscripcion(){
+  if(!_dispState){ return; }
+  const confirmed=(_dispState.confirmed||[]).slice().sort((a,b)=>a.localeCompare(b));
+  if(!confirmed.length){ alert('No hay confirmados todavía.'); return; }
+  const idx=_fccvLicIndex();
+  const noLicDb = idx.size===0;
+  const rows=confirmed.map(name=>{
+    const m=_dispMatchDni(name, idx);
+    return {name, dni:(m&&m.dni)?m.dni:'', found:!!(m&&m.dni)};
+  });
+  const matched=rows.filter(r=>r.found);
+  const missing=rows.filter(r=>!r.found);
+  _dispState._inscDni = matched.map(r=>r.dni);
+
+  const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
+  const fccvLink = _dispState.fccvUrl ? `<a href="${escapeAttr(_dispState.fccvUrl)}" target="_blank" rel="noopener" style="color:#15803d;font-weight:800;text-decoration:none">🔗 Abrir la prueba en la FCCV</a>` : '';
+
+  const rowHtml=(r)=>`
+    <div style="display:flex;align-items:center;gap:10px;background:${r.found?'#f0fdf4':'#fef2f2'};border:1.5px solid ${r.found?'#86efac':'#fecaca'};border-radius:10px;padding:9px 12px;margin-bottom:7px">
+      <span style="flex:1;min-width:0;font-weight:700;color:#0b2f6b">${escapeHtml(r.name)}</span>
+      ${r.found
+        ? `<span style="font-family:monospace;font-size:14px;font-weight:800;color:#166534;letter-spacing:1px">${escapeHtml(r.dni)}</span>
+           <button onclick="_dispCopyOneDni('${escapeAttr(r.dni)}')" style="background:#15803d;color:#fff;border:0;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer">Copiar</button>`
+        : `<span style="font-size:12px;font-weight:800;color:#b91c1c">⚠️ Sin DNI (no está en licencias)</span>`}
+    </div>`;
+
+  let ov=document.getElementById('dispInscOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='dispInscOverlay'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.addEventListener('click',e=>{ if(e.target===ov) _dispCloseInscripcion(); });
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:14px;max-width:620px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 20px;border-bottom:1px solid #e5e7eb">
+        <div>
+          <h2 style="margin:0;font-size:19px;color:#15803d">🏷️ Inscripción FCCV</h2>
+          <div style="font-size:12.5px;color:#475569;margin-top:3px">${escapeHtml(_dispState.raceName||'')}${fdate?' · 📅 '+escapeHtml(fdate):''}</div>
+        </div>
+        <button onclick="_dispCloseInscripcion()" style="background:#f1f5f9;border:0;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer;color:#475569">✕</button>
+      </div>
+      <div style="padding:14px 20px">
+        ${noLicDb ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e">⚠️ No hay ninguna base de licencias cargada. Ve a <b>Documentos FCCV</b> e importa el Excel oficial de licencias para que aparezcan los DNI.</div>`:''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+          <span style="font-size:13px;color:#0b2f6b;font-weight:800">🟢 ${matched.length} con DNI${missing.length?` · <span style="color:#b91c1c">⚠️ ${missing.length} sin DNI</span>`:''}</span>
+          <button onclick="_dispCopyAllDni()" ${matched.length?'':'disabled'} style="margin-left:auto;background:${matched.length?'#15803d':'#e5e7eb'};color:${matched.length?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:800;cursor:${matched.length?'pointer':'default'}">📋 Copiar todos los DNI</button>
+        </div>
+        ${rows.map(rowHtml).join('')}
+        <div style="margin-top:14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:11px 13px;font-size:12px;color:#475569;line-height:1.6">
+          <b style="color:#0b2f6b">Cómo inscribir:</b> ${fccvLink||'entra en la web de la FCCV, abre la prueba'} → <b>Deportista → Inscribir</b> → pega cada <b>DNI</b> → comprueba en <b>Preinscritos</b>.<br>
+          ${missing.length?`<span style="color:#b91c1c">Los que salen "sin DNI" no están en tu base de licencias (revisa que el nombre coincida o impórtalos en Documentos FCCV).</span>`:''}
+        </div>
+      </div>
+    </div>`;
+  document.body.style.overflow='hidden';
+}
+
 async function _dispRender(){
   const body=document.getElementById('dispBody'); if(!body||!_dispState) return;
   const roster=await _dispRoster();
@@ -2050,6 +2151,7 @@ async function _dispRender(){
       <div class="disp-col">
         <div style="background:#dcfce7;border:1px solid #86efac;border-radius:11px;padding:10px 13px;margin-bottom:12px;text-align:center;font-weight:900;color:#15803d;font-size:15px">🚴 ¡Ya somos ${confirmed.length} apuntado${confirmed.length!==1?'s':''}!</div>
         ${isAdmin && confirmed.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+          <button onclick="_dispOpenInscripcion()" style="background:#15803d;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Lista de confirmados con su DNI lista para inscribir en la FCCV">🏷️ Inscripción FCCV</button>
           <button onclick="_dispCopyNames()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Copiar la lista de nombres (con dorsal) al portapapeles">📋 Copiar nombres</button>
           <button onclick="_dispCopyCaption()" style="background:#db2777;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Copiar el texto del post de Instagram con hashtags">📝 Texto Instagram</button>
           <button onclick="_dispExportPNG()" style="background:#0369a1;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer" title="Imagen para Instagram (cuadrada)">🖼️ PNG (Instagram)</button>
