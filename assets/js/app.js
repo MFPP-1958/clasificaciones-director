@@ -1763,6 +1763,7 @@ let _dispState = null; // {raceId, raceName, raceDate, confirmed:[], extraRoster
 let _dispRaces = [];   // todas las próximas carreras (para elegir sábado/domingo…)
 let _dispTeamCanon = ''; // equipo efectivo (canónico) para filtrar la plantilla
 let _dispCatGroup = '';  // grupo de categoría efectivo para filtrar la plantilla
+let _dispCatOverride = null; // staff: categoría elegida a mano en la pantalla (null=auto, ''=todos, 'cadete'/'juvenil')
 let _dispTab = 'out';  // pestaña activa en móvil
 let _dispChannel = null; // suscripción realtime
 
@@ -1844,6 +1845,8 @@ async function _dispInit(){
       const rg=await _dispRiderCatGroup(_rbacUser.riderName);
       if(rg) g=rg;
     }
+    // Staff: si ha elegido categoría en el selector de la pantalla, mandar esa.
+    if(!isCiclista && _dispCatOverride!==null) g = _dispCatOverride;
     // Equipo y categoría EFECTIVOS para filtrar la plantilla (la lista de nombres):
     //  - Director: su equipo (myTeam) + categoría del filtro global.
     //  - Ciclista: equipo y categoría derivados de SU historial (no tiene filtros).
@@ -1994,8 +1997,17 @@ function _dispControlPanel(nConf,nDec,pending){
   const dlVal=(_dispState&&_dispState.deadline)||_dispDeadlineSuggested();
   const info=_dispDeadlineInfo();
   const chip=(emoji,lbl,n,c)=>`<div style="flex:1;min-width:90px;background:#fff;border:1.5px solid ${c}33;border-radius:10px;padding:8px 6px;text-align:center"><div style="font-size:20px;font-weight:900;color:${c};line-height:1">${n}</div><div style="font-size:10.5px;color:#475569;font-weight:700;margin-top:2px">${emoji} ${lbl}</div></div>`;
+  // Selector de categoría (solo staff): Cadetes / Juveniles / Todos.
+  const curCat=_dispCatGroup||'';
+  const catBtn=(val,label)=>`<button onclick="_dispSetCatGroup('${val}')" style="border:1.5px solid ${curCat===val?'#0b2f6b':'#e5e7eb'};border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;background:${curCat===val?'#0b2f6b':'#fff'};color:${curCat===val?'#fff':'#475569'}">${label}</button>`;
   return `
     <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:12.5px;font-weight:800;color:#0b2f6b">🏷️ Ver categoría:</span>
+        ${catBtn('cadete','Cadetes')}
+        ${catBtn('juvenil','Juveniles')}
+        ${catBtn('','Todos')}
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         ${chip('🟢','Confirmados',nConf,'#15803d')}
         ${chip('🚫','No van',nDec,'#b91c1c')}
@@ -2012,6 +2024,13 @@ function _dispControlPanel(nConf,nDec,pending){
         <button onclick="_dispRemindPending()" ${nPend?'':'disabled'} style="width:100%;background:${nPend?'#f59e0b':'#e5e7eb'};color:${nPend?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:800;cursor:${nPend?'pointer':'default'}">🔔 Recordar a los ${nPend} pendiente${nPend!==1?'s':''} (copia un texto para WhatsApp)</button>
       </div>
     </div>`;
+}
+
+// Staff: cambiar la categoría que se muestra (Cadetes / Juveniles / Todos).
+// Re-filtra tanto las pruebas como la plantilla de convocados.
+function _dispSetCatGroup(g){
+  _dispCatOverride = (g==null ? null : g);   // '' = todos
+  _dispInit();
 }
 
 async function _dispSetDeadline(val){
