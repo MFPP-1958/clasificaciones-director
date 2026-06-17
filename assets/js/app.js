@@ -916,6 +916,10 @@ const _AUTH_MAGIC_ENABLED = true;
 // Debe ir ANTES de _rbacInit (que llama a _rbacInitMagicUI al arrancar) para
 // evitar el error de TDZ. Reversible: poner true para volver al login por PIN.
 const _PIN_LOGIN_ENABLED = false;
+// Vía Google (OAuth). Aditiva: convive con el enlace mágico. Se mantiene en
+// false hasta tener configurado el proveedor Google en Supabase; entonces
+// poner true. Reversible: poner false y se oculta el botón.
+const _GOOGLE_LOGIN_ENABLED = false;
 
 // ── Inicialización ────────────────────────────────────────────
 (async function _rbacInit(){
@@ -931,9 +935,12 @@ const _PIN_LOGIN_ENABLED = false;
   // Si la URL trae un token de enlace mágico, NO restauramos la sesión guardada:
   // damos prioridad a entrar con ese enlace (y a su validación por email).
   const _hasMagicToken = (typeof location!=='undefined') && /access_token=/.test(location.hash||'');
+  // Vuelta de Google (OAuth PKCE): el código viene en la query (?code=...).
+  // También damos prioridad a procesarlo en vez de restaurar sesión antigua.
+  const _hasOAuthCode = (typeof location!=='undefined') && /[?&]code=/.test(location.search||'');
 
   // Restaurar sesión desde localStorage
-  const saved = !_hasMagicToken && localStorage.getItem('_rbacSession');
+  const saved = !_hasMagicToken && !_hasOAuthCode && localStorage.getItem('_rbacSession');
   if(saved){
     try{
       const s = JSON.parse(saved);
@@ -1071,9 +1078,31 @@ function _rbacInitMagicUI(){
     mb.style.display = magicOn ? '' : 'none';
     if(magicOn && !pinOn){ mb.style.background='#1a56db'; mb.style.color='#fff'; mb.style.border='2px solid #1a56db'; }
   }
+  // Botón de Google (vía cómoda). Usa display:flex por el icono+texto.
+  const gb=document.getElementById('rbacGoogleBtn');
+  if(gb) gb.style.display = _GOOGLE_LOGIN_ENABLED ? 'flex' : 'none';
   // Subtítulo coherente cuando el enlace es la única vía
   const sub=document.querySelector('#rbacOverlay .rbac-sub');
-  if(sub && magicOn && !pinOn) sub.textContent='Introduce tu correo y te enviaremos un enlace de acceso';
+  if(sub && magicOn && !pinOn) sub.textContent = _GOOGLE_LOGIN_ENABLED
+    ? 'Entra con Google o recibe un enlace por correo'
+    : 'Introduce tu correo y te enviaremos un enlace de acceso';
+}
+
+// Iniciar sesión con Google (OAuth). Tras volver del consentimiento, el listener
+// onAuthStateChange detecta la sesión y _rbacApplyAuthUser valida el correo
+// contra app_users (igual que el enlace mágico → misma exclusividad).
+async function _rbacSignInGoogle(){
+  const err=document.getElementById('rbacErrorMsg');
+  if(!_GOOGLE_LOGIN_ENABLED){ return; }
+  if(!_sb || !_sb.auth || !_sb.auth.signInWithOAuth){ if(err) err.textContent='Google no disponible ahora mismo.'; return; }
+  if(err){ err.style.color='#1d4ed8'; err.textContent='Abriendo Google…'; }
+  try{
+    const {error}=await _sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo:_APP_URL } });
+    if(error) throw error;
+    // El navegador redirige a Google; al volver, lo gestiona onAuthStateChange.
+  }catch(e){
+    if(err){ err.style.color='#b45309'; err.textContent='No se pudo abrir Google: '+((e&&e.message)||e); }
+  }
 }
 
 // Enviar enlace mágico al correo escrito en el campo de email.
@@ -1127,7 +1156,11 @@ async function _rbacApplyAuthUser(email){
     }
     await _rbacFinishLogin(u, 'magic');
     // Quitar el token de la URL (estética y seguridad); no recarga la página.
-    try{ if(location.hash && location.hash.includes('access_token')) history.replaceState(null,'',location.pathname+location.search); }catch(_){}
+    try{
+      const hadHash = location.hash && location.hash.includes('access_token');
+      const hadCode = /[?&]code=/.test(location.search||'');
+      if(hadHash || hadCode) history.replaceState(null,'',location.pathname);
+    }catch(_){}
     return true;
   }catch(_){ return false; }
 }
