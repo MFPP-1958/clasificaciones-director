@@ -1105,7 +1105,7 @@ function _rbacInitMagicUI(){
 // club y contacto editables aquí abajo.
 const _PRIVACY = {
   club:    'TBG-WIXUM',
-  contacto:'mfppmfpp@gmail.com'
+  contacto:'ccestructura10@gmail.com'
 };
 function _privacyShow(){
   let ov=document.getElementById('privacyOverlay');
