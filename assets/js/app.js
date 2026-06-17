@@ -14143,7 +14143,8 @@ async function _inscPopulateRaces(){
       if(typeof _fccvRaceMatchesGlobalCat==='function' && !_fccvRaceMatchesGlobalCat(extra, r.name)) return;
       const d=r.date||''; const dd=d?d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4):'';
       const loc=extra.localidad?(' · '+extra.localidad):'';
-      opts+=`<option value="${escapeAttr(r.id)}" data-notes="${escapeAttr(r.notes||'{}')}" data-name="${escapeAttr(r.name||'')}" data-date="${escapeAttr(d)}">${escapeHtml(dd+' · '+(r.name||'')+loc)}</option>`;
+      const url=_fccvRaceUrl(extra);
+      opts+=`<option value="${escapeAttr(r.id)}" data-notes="${escapeAttr(r.notes||'{}')}" data-name="${escapeAttr(r.name||'')}" data-date="${escapeAttr(d)}" data-fccvurl="${escapeAttr(url)}">${escapeHtml(dd+' · '+(r.name||'')+loc)}</option>`;
     });
   }catch(_){}
   sel.innerHTML=opts;
@@ -14167,7 +14168,29 @@ function _inscPickRace(){
   setV('raceCCAA', extra.ccaa||'');
   setV('raceStartTime', extra.hora_inicio||'');
   const chk=document.getElementById('raceChallengeCV'); if(chk) chk.checked=!!extra.challengeCV;
+  // Botón "Ver en FCCV": mostrar solo si la prueba tiene URL/identificador FCCV.
+  const btn=document.getElementById('inscritosFccvBtn');
+  if(btn){ const url=opt.dataset.fccvurl||''; btn.style.display = url ? '' : 'none'; }
   try{ if(typeof _setActiveRace==='function') _setActiveRace({id:opt.value, name:opt.dataset.name||'', date:dRaw, localidad:extra.localidad||''}, 'inscritos'); }catch(_){}
+}
+
+// URL de la prueba en la web de la FCCV (preferimos la guardada; si no, la
+// construimos desde el identificador fccvId).
+function _fccvRaceUrl(extra){
+  if(!extra) return '';
+  if(extra.fccvDetailUrl) return extra.fccvDetailUrl;
+  if(extra.fccvId) return 'https://www.fccv.es/index.php/es/smartweb/prueba/'+encodeURIComponent(extra.fccvId);
+  return '';
+}
+
+// Abre la prueba seleccionada en la web de la FCCV (nueva pestaña) para copiar
+// allí los pre-inscritos y pegarlos aquí.
+function _inscOpenFccv(){
+  const sel=document.getElementById('inscritosRaceSelect'); if(!sel) return;
+  const opt=sel.options[sel.selectedIndex];
+  const url=opt && opt.dataset ? (opt.dataset.fccvurl||'') : '';
+  if(!url){ if(typeof showToast==='function') showToast('Esta prueba no tiene enlace a la FCCV guardado.','warn',3000); return; }
+  try{ window.open(url,'_blank','noopener'); }catch(_){}
 }
 
 // B · Onboarding de primer uso (se muestra una vez; solo a staff/director)
