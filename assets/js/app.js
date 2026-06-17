@@ -11414,9 +11414,14 @@ function _teamContrib(A,B){
       const counted=top3ids.has(r.pos+'|'+r.name);
       const bg=r.pos<=3?'#12b76a':r.pos<=10?'#1d4ed8':r.pos<=20?'#f59e0b':'#9ca3af';
       const timeStr=r.totalSeconds?formatTeamTotalSeconds(r.totalSeconds):(r.time||'');
+      // Fiabilidad + forma reciente (histórico) junto al nombre
+      const hs=_teamContribHistStats(r.name);
+      let histChip='';
+      if(hs && hs.few){ histChip=` <span style="font-size:10px;color:#cbd5e1;font-weight:600">· pocos datos</span>`; }
+      else if(hs){ histChip=` <span style="font-size:10px;font-weight:700">· <span style="color:${hs.relColor}">fiab ${hs.rel}%</span> <span style="color:${hs.trendColor}" title="forma reciente">${hs.trendIcon}</span></span>`; }
       return `<div class="team-contrib-row">
         <div class="team-contrib-pos" style="background:${bg}">${r.pos}º</div>
-        <div class="team-contrib-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</div>
+        <div class="team-contrib-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}${histChip}</div>
         ${counted?'<span class="team-contrib-counted" style="background:#ecfdf3;color:#067647">✓ Conta</span>':'<span class="team-contrib-counted" style="background:#f3f4f6;color:#6b7280">—</span>'}
         <div class="team-contrib-time">${escapeHtml(timeStr)}</div>
       </div>`;
@@ -11431,7 +11436,34 @@ function _teamContrib(A,B){
     </div>`;
   };
 
-  grid.innerHTML=renderCard(A,'#1f6feb','Equipo A')+renderCard(B,'#12b76a','Equipo B');
+  grid.innerHTML=renderCard(A,'#1f6feb','Equipo A')+renderCard(B,'#12b76a','Equipo B')
+    +`<div style="grid-column:1/-1;font-size:10.5px;color:#6b7280;margin-top:4px;line-height:1.5"><b>fiab</b> = fiabilidad histórica (% de carreras cerca de su media) · <b>📈/📉/➡️</b> = forma reciente (últimas 3 vs anteriores). Se calcula con todo el histórico del corredor.</div>`;
+}
+
+// Fiabilidad histórica + forma reciente de un corredor (para la contribución
+// individual de equipos). Reutiliza el histórico cacheado. <3 carreras → "pocos datos".
+function _teamContribHistStats(name){
+  const nk=(typeof normalizeForMatching==='function')?normalizeForMatching(name):(name||'').toLowerCase();
+  if(!nk) return null;
+  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
+  const entries=[];
+  hist.forEach(race=>{
+    const m=(race.riders||[]).find(r=>normalizeForMatching(r.name)===nk);
+    const p=m?parseInt(m.pos)||0:0;
+    if(p>0) entries.push({pos:p, date:String(_parseSpanishDate(race.raceDate)||'')});
+  });
+  if(entries.length<3) return {few:true, n:entries.length};
+  entries.sort((a,b)=>a.date.localeCompare(b.date));
+  const pos=entries.map(e=>e.pos);
+  const avg=pos.reduce((s,v)=>s+v,0)/pos.length;
+  const margin=Math.max(3,Math.round(avg*0.3));
+  const rel=Math.round(pos.filter(p=>Math.abs(p-avg)<=margin).length/pos.length*100);
+  const last3=pos.slice(-3), prior=pos.slice(0,-3);
+  const avgR=last3.reduce((s,v)=>s+v,0)/last3.length;
+  const avgP=prior.length?prior.reduce((s,v)=>s+v,0)/prior.length:null;
+  let icon='➡️', col='#6b7280';
+  if(avgP!=null){ const d=avgP-avgR; if(d>=1){icon='📈';col='#16a34a';} else if(d<=-1){icon='📉';col='#dc2626';} }
+  return { n:pos.length, rel, relColor: rel>=75?'#12b76a':rel>=50?'#f59e0b':'#dc2626', trendIcon:icon, trendColor:col };
 }
 
 /* ── Equipos: exportar ranking ──────────────────────── */
