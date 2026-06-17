@@ -14044,6 +14044,36 @@ function _inicioRenderQuickActions(){
   wrap.innerHTML=actions.map(a=>`<button onclick="showView('${a.id}')" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border:1.5px solid #dbeafe;border-radius:12px;padding:16px 10px;cursor:pointer;font-weight:800;color:#0b2f6b;font-size:13px;transition:background .12s" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'"><span style="font-size:26px">${a.ic}</span>${a.lbl}</button>`).join('');
 }
 
+// Accesos directos COMPLETOS en Inicio: se generan desde ALL_VIEWS, agrupados
+// como el menú lateral y filtrados por permisos. Así están siempre al día
+// (cualquier sección nueva aparece sola) — útil con el menú lateral cerrado (iPad).
+const _INICIO_ACCESO_GROUPS = [
+  { t:'📥 Datos y Calendario',        ids:['view-carga','view-historial','view-calendario'] },
+  { t:'📊 Análisis',                  ids:['view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10'] },
+  { t:'📈 Rendimiento y Tendencias',  ids:['view-evolucion','view-powerranking','view-tendencias'] },
+  { t:'🔮 Predicción y Estrategia',   ids:['view-simulador','view-tactica','view-seleccion'] },
+  { t:'🚴 Equipo y Carrera',          ids:['view-disponibilidad','view-radiovuelta','view-laboratorio','view-validacion'] },
+  { t:'🗺️ Federación y Categorías',  ids:['view-fccv-docs','view-equipos-ccaa','view-ciclistas-cat'] },
+  { t:'📄 Informes y Temporada',      ids:['view-informe-plantilla','view-resumen','view-challenge'] }
+];
+function _inicioRenderAccesos(){
+  const wrap=document.getElementById('inicioAccesos'); if(!wrap) return;
+  const perms=(typeof _rbacPerms!=='undefined' && _rbacPerms && _rbacPerms.size) ? _rbacPerms : null;
+  const can=(id)=> !perms || perms.has(id);
+  const meta={}; (typeof ALL_VIEWS!=='undefined'?ALL_VIEWS:[]).forEach(v=>{ meta[v.id]=v; });
+  const used=new Set();
+  const btnHtml=(v)=>{ const hl = v.id==='view-simulador' ? ' acceso-highlight' : ''; return `<button class="acceso-btn${hl}" onclick="showView('${v.id}')"><span class="acceso-ic">${v.icon||'•'}</span>${escapeHtml(v.label||'')}</button>`; };
+  let html='';
+  _INICIO_ACCESO_GROUPS.forEach(g=>{
+    const btns=g.ids.filter(id=>meta[id] && can(id)).map(id=>{ used.add(id); return btnHtml(meta[id]); });
+    if(btns.length) html+=`<div class="acceso-group"><div class="acceso-group-title">${g.t}</div><div class="acceso-group-btns">${btns.join('')}</div></div>`;
+  });
+  // Secciones futuras no agrupadas → "Más" (nunca se pierde nada). Excluye Inicio y Gestión.
+  const others=(typeof ALL_VIEWS!=='undefined'?ALL_VIEWS:[]).filter(v=>!used.has(v.id) && v.id!=='view-inicio' && v.id!=='view-gestion' && can(v.id));
+  if(others.length) html+=`<div class="acceso-group"><div class="acceso-group-title">🔧 Más</div><div class="acceso-group-btns">${others.map(btnHtml).join('')}</div></div>`;
+  wrap.innerHTML=html;
+}
+
 // B · Onboarding de primer uso (se muestra una vez; solo a staff/director)
 function _inicioDismissOnboarding(){
   try{ localStorage.setItem('inicio_onboarded','1'); }catch(_){}
@@ -14101,6 +14131,8 @@ async function renderInicio(){
   // ─── A · Acciones rápidas + B · Onboarding de primer uso ───
   try{ _inicioRenderQuickActions(); }catch(_){}
   try{ _inicioRenderOnboarding(); }catch(_){}
+  // Accesos directos completos (generados desde el menú, según permisos)
+  try{ _inicioRenderAccesos(); }catch(_){}
 
   // ─── 2. KPIs principales ────────────────────────────────────────────
   // Esperar al historial si todavía está cargando
