@@ -1694,3 +1694,11 @@ details.sim-help .sim-help-body .tip{
 .pel-table td{padding:7px 8px;border-bottom:1px solid #eef2f7}
 .pel-table tr.pel-mine td{outline:2px solid #1d4ed8;outline-offset:-2px}
 .pel-table tr.pel-tot td{border-top:2px solid #cbd5e1;background:#f8fafc}
+
+/* ── Renderizado condicional por rol (.admin-only) ───────────────────────
+   Oculta botones/paneles de uso exclusivo de la dirección a quien NO sea
+   staff (ciclistas, lectores). OJO: esto es solo VISUAL; la seguridad real
+   la da el RLS de Supabase (un ciclista no puede escribir/borrar aunque
+   desoculte un botón). Se etiqueta cada elemento admin con class="admin-only".
+   El flag body.rbac-staff lo pone _rbacApplySession según el rol. */
+body:not(.rbac-staff) .admin-only { display: none !important; }

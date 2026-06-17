@@ -1281,6 +1281,13 @@ function _rbacApplySession(){
   if(bar) bar.style.display='';
   if(emailEl) emailEl.textContent = _rbacUser.email;
   if(roleEl)  roleEl.textContent  = _rbacUser.role;
+  // Marca de rol para el renderizado condicional (.admin-only). STAFF = dirección.
+  // OJO: esto solo OCULTA en pantalla; el candado real es el RLS de Supabase.
+  try{
+    const staff = ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
+    document.body.classList.toggle('rbac-staff', staff);
+    document.body.dataset.role = _rbacUser.role || '';
+  }catch(_){}
   // Renderizar menú según permisos
   _rbacRenderMenu();
   // Navegar a primera vista permitida
@@ -1310,6 +1317,7 @@ function _rbacLogout(){
   try{ if(_sb && _sb.auth) _sb.auth.signOut(); }catch(_){}
   _rbacUser = null;
   _rbacPerms = new Set();
+  try{ document.body.classList.remove('rbac-staff'); document.body.dataset.role=''; }catch(_){}
   // Ocultar todo y mostrar overlay
   const bar = document.getElementById('rbacUserBar');
   if(bar) bar.style.display='none';
