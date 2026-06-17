@@ -1100,6 +1100,43 @@ function _rbacInitMagicUI(){
     : 'Introduce tu correo y te enviaremos un enlace de acceso';
 }
 
+// ── Aviso de privacidad / protección de datos ───────────────────────────
+// Texto ORIENTATIVO (borrador): el club debe revisarlo/adaptarlo. Datos del
+// club y contacto editables aquí abajo.
+const _PRIVACY = {
+  club:    'TBG-WIXUM',
+  contacto:'mfppmfpp@gmail.com'
+};
+function _privacyShow(){
+  let ov=document.getElementById('privacyOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='privacyOverlay'; document.body.appendChild(ov); }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.addEventListener('click',e=>{ if(e.target===ov) _privacyClose(); });
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #e5e7eb">
+        <h2 style="margin:0;font-size:18px;color:#0b2f6b">🔒 Aviso de privacidad y protección de datos</h2>
+        <button onclick="_privacyClose()" style="background:#f1f5f9;border:0;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer;color:#475569">✕</button>
+      </div>
+      <div style="padding:16px 20px;font-size:13px;line-height:1.65;color:#334155">
+        <p><b>Responsable del tratamiento:</b> ${escapeHtml(_PRIVACY.club)}. Contacto: ${escapeHtml(_PRIVACY.contacto)}.</p>
+        <p><b>Finalidad:</b> gestión deportiva del equipo (resultados, disponibilidad, convocatorias y análisis) y la <b>inscripción de los corredores en la Federación de Ciclismo de la Comunidad Valenciana (FCCV)</b>.</p>
+        <p><b>Base legal:</b> el <b>consentimiento de los padres o tutores</b> (firmado al inscribirse en la escuela) y la ejecución de la actividad deportiva del club.</p>
+        <p><b>Datos tratados:</b> nombre y apellidos, DNI, fecha de nacimiento, correo electrónico, categoría, equipo y resultados deportivos. En el caso de menores, facilitados con el consentimiento de sus progenitores o tutores.</p>
+        <p><b>Destinatarios:</b> la FCCV (para tramitar las inscripciones) y los proveedores tecnológicos que dan soporte a la aplicación (alojamiento y base de datos), que actúan como encargados del tratamiento. No se ceden datos a terceros con fines comerciales.</p>
+        <p><b>Conservación:</b> mientras dure la vinculación del corredor con el club y durante los plazos legales aplicables; después se suprimen o anonimizan.</p>
+        <p><b>Derechos:</b> los interesados (o sus padres/tutores) pueden ejercer los derechos de <b>acceso, rectificación, supresión, oposición y limitación</b> escribiendo a ${escapeHtml(_PRIVACY.contacto)}.</p>
+        <p><b>Seguridad:</b> el acceso está restringido a personas autorizadas mediante inicio de sesión, y los datos viajan cifrados.</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:14px;border-top:1px solid #eef2f7;padding-top:10px">Este texto es informativo y orientativo. El club, como responsable, debe revisarlo y adaptarlo a su política de protección de datos.</p>
+      </div>
+    </div>`;
+  document.body.style.overflow='hidden';
+}
+function _privacyClose(){
+  const ov=document.getElementById('privacyOverlay'); if(ov) ov.remove();
+  document.body.style.overflow='';
+}
+
 // Iniciar sesión con Google (OAuth). Tras volver del consentimiento, el listener
 // onAuthStateChange detecta la sesión y _rbacApplyAuthUser valida el correo
 // contra app_users (igual que el enlace mágico → misma exclusividad).
