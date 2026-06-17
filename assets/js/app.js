@@ -1725,6 +1725,7 @@ function _dispSubscribe(raceId){
             _dispState.confirmed=Array.isArray(av.confirmed)?av.confirmed:[];
             _dispState.declined=Array.isArray(av.declined)?av.declined:[];
             _dispState.extraRoster=Array.isArray(av.roster)?av.roster:[];
+            if(typeof av.deadline==='string') _dispState.deadline=av.deadline;
             _dispRender();
           }
         }catch(_){}
@@ -1841,7 +1842,8 @@ async function _dispSelectRace(raceId){
   _dispState={ raceId:r.id, raceName:r.name||'', raceDate:r.date||'', localidad:r.localidad||'',
                confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
                declined:Array.isArray(av.declined)?av.declined.slice():[],
-               extraRoster:Array.isArray(av.roster)?av.roster.slice():[] };
+               extraRoster:Array.isArray(av.roster)?av.roster.slice():[],
+               deadline: (typeof av.deadline==='string'?av.deadline:'') };
   // Prueba activa global → banner superior coherente en todas las pantallas
   try{ _setActiveRace({id:r.id, name:r.name, date:r.date, localidad:r.localidad}, 'disponibilidad'); }catch(_){}
   _dispRender();
@@ -1891,6 +1893,87 @@ async function _dispBibMap(){
   return m;
 }
 
+// ── PIEZA A · cierre de inscripción + recordatorio a pendientes ──────────
+// Jueves inmediatamente anterior a la carrera (cierre típico de la FCCV).
+function _dispDeadlineSuggested(){
+  const rd=_dispState&&_dispState.raceDate; if(!rd) return '';
+  const d=new Date(rd+'T12:00:00'); if(isNaN(d.getTime())) return '';
+  const day=d.getDay();            // 0 dom .. 6 sáb
+  let back=(day-4+7)%7;            // días hasta el jueves anterior
+  if(back===0) back=7;            // si la carrera es jueves → jueves previo
+  d.setDate(d.getDate()-back);
+  return d.toISOString().slice(0,10);
+}
+
+// Info legible del cierre: texto, color y si ya está cerrado.
+function _dispDeadlineInfo(){
+  const dl=_dispState&&_dispState.deadline; if(!dl) return null;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(dl)) return null;
+  const dd=dl.slice(8,10)+'/'+dl.slice(5,7);
+  const today=new Date(); today.setHours(0,0,0,0);
+  const target=new Date(dl+'T00:00:00'); target.setHours(0,0,0,0);
+  const diff=Math.round((target.getTime()-today.getTime())/86400000);
+  let text,color,closed=false;
+  if(diff<0){ text='Inscripción cerrada ('+dd+')'; color='#b91c1c'; closed=true; }
+  else if(diff===0){ text='⏰ Cierra HOY ('+dd+')'; color='#b45309'; }
+  else if(diff===1){ text='⏰ Cierra mañana ('+dd+')'; color='#b45309'; }
+  else { text='Cierre en '+diff+' días ('+dd+')'; color=diff<=2?'#b45309':'#15803d'; }
+  return {text,color,closed,dd};
+}
+
+// Panel de control del director: resumen + cierre + recordatorio.
+function _dispControlPanel(nConf,nDec,pending){
+  const nPend=pending.length;
+  const dlVal=(_dispState&&_dispState.deadline)||_dispDeadlineSuggested();
+  const info=_dispDeadlineInfo();
+  const chip=(emoji,lbl,n,c)=>`<div style="flex:1;min-width:90px;background:#fff;border:1.5px solid ${c}33;border-radius:10px;padding:8px 6px;text-align:center"><div style="font-size:20px;font-weight:900;color:${c};line-height:1">${n}</div><div style="font-size:10.5px;color:#475569;font-weight:700;margin-top:2px">${emoji} ${lbl}</div></div>`;
+  return `
+    <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        ${chip('🟢','Confirmados',nConf,'#15803d')}
+        ${chip('🚫','No van',nDec,'#b91c1c')}
+        ${chip('🟠','Pendientes',nPend,'#b45309')}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px dashed #cbd5e1;padding-top:10px">
+        <span style="font-size:12.5px;font-weight:800;color:#0b2f6b">📅 Cierre inscripción:</span>
+        <input id="dispDeadlineInput" type="date" value="${escapeAttr(dlVal)}" style="border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 9px;font-size:13px">
+        <button onclick="_dispSetDeadline(document.getElementById('dispDeadlineInput').value)" style="background:#0b2f6b;color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:800;cursor:pointer">Guardar</button>
+        ${_dispState.deadline?`<button onclick="_dispSetDeadline('')" title="Quitar el cierre" style="background:#fff;color:#64748b;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer">✕</button>`:''}
+        ${info?`<span style="font-size:12.5px;font-weight:800;color:${info.color};margin-left:auto">${escapeHtml(info.text)}</span>`:'<span style="font-size:11.5px;color:#94a3b8;margin-left:auto">sin fecha de cierre</span>'}
+      </div>
+      <div style="margin-top:10px">
+        <button onclick="_dispRemindPending()" ${nPend?'':'disabled'} style="width:100%;background:${nPend?'#f59e0b':'#e5e7eb'};color:${nPend?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:10px;font-size:13px;font-weight:800;cursor:${nPend?'pointer':'default'}">🔔 Recordar a los ${nPend} pendiente${nPend!==1?'s':''} (copia un texto para WhatsApp)</button>
+      </div>
+    </div>`;
+}
+
+async function _dispSetDeadline(val){
+  if(!_dispState) return;
+  _dispState.deadline = (typeof val==='string'?val:'') ;
+  await _dispSave();
+  _dispRender();
+  if(typeof showToast==='function') showToast(_dispState.deadline?'✅ Cierre guardado':'Cierre quitado','ok',1800);
+}
+
+// Genera un recordatorio (nombres pendientes + cierre + enlace) y lo deja en el
+// portapapeles, además de abrir WhatsApp para que el director elija el grupo.
+function _dispRemindPending(){
+  const pend=(_dispState&&_dispState._lastPending)||[];
+  if(!pend.length){ if(typeof showToast==='function') showToast('No hay pendientes 🎉','ok',2000); return; }
+  const info=_dispDeadlineInfo();
+  const link=(typeof _APP_URL!=='undefined' && _APP_URL) ? _APP_URL : location.origin;
+  const fecha=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
+  const txt=[
+    '🚴 ¡Faltáis por confirmar para '+(_dispState.raceName||'la prueba')+(fecha?' ('+fecha+')':'')+'!',
+    'Pendientes: '+pend.join(', ')+'.',
+    (info && !info.closed) ? ('⏰ Confirma SÍ o NO antes del '+info.dd+'.') : 'Confirma SÍ o NO cuanto antes.',
+    '👉 '+link
+  ].join('\n');
+  try{ navigator.clipboard.writeText(txt); }catch(_){}
+  if(typeof showToast==='function') showToast('📋 Recordatorio copiado. Pégalo en el grupo de WhatsApp.','ok',3800);
+  try{ window.open('https://wa.me/?text='+encodeURIComponent(txt),'_blank'); }catch(_){}
+}
+
 async function _dispRender(){
   const body=document.getElementById('dispBody'); if(!body||!_dispState) return;
   const roster=await _dispRoster();
@@ -1905,6 +1988,7 @@ async function _dispRender(){
   const meNk = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.riderName) ? normalizeForMatching(_rbacUser.riderName) : '';
   const meFirst=(a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); };
   pending.sort(meFirst);
+  _dispState._lastPending = pending.slice();  // para el botón de recordatorio
   const confirmed=(_dispState.confirmed||[]).slice().sort(meFirst);
   const declined=(_dispState.declined||[]).slice().sort(meFirst);
   const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
@@ -1948,6 +2032,7 @@ async function _dispRender(){
       <select onchange="_dispSelectRace(this.value)" style="width:100%;border:0;border-radius:9px;padding:11px 12px;font-size:14px;font-weight:800;color:#0b2f6b;box-sizing:border-box">${raceOpts}</select>
       <div style="font-size:13px;opacity:.95;margin-top:8px">${escapeHtml(_dispState.raceName)}<br>📅 ${escapeHtml(fdate||'')}${_dispState.localidad?' · 📍 <b>'+escapeHtml(_dispState.localidad)+'</b>':''}</div>
     </div>
+    ${isAdmin ? _dispControlPanel(confirmed.length, declined.length, pending) : ''}
     ${isCiclista ? `<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:#1e3a8a">👉 En <b>tu tarjeta</b> (la de la estrella ⭐) pulsa <b>✅ Sí, voy</b> o <b>❌ No voy</b>. Los demás aparecen para que veas el grupo, pero <b>no puedes cambiarlos</b>.${!meNk?'<br><span style="color:#b45309">⚠️ No hemos podido identificarte. Pide al director que revise tu nombre.</span>':''}</div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="disp-grid">
       <div class="disp-col">
@@ -2022,7 +2107,7 @@ function _dispRegister(){
 async function _dispSave(){
   if(!_dispState || !_sb) return;
   try{
-    const data={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster };
+    const data={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster, deadline:(_dispState.deadline||'') };
     // Escritura en la tabla propia race_availability (no en races → races queda
     // protegida a solo-staff). upsert por race_id.
     const {error}=await _sb.from('race_availability').upsert({
