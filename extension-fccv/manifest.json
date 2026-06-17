@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Inscripción FCCV · Asistente TBG-WIXUM",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Asistente para rellenar los DNI en el formulario de inscripción de fccv.es uno a uno, sin teclear. Tú das el clic de Comprobar.",
   "permissions": ["storage"],
   "content_scripts": [

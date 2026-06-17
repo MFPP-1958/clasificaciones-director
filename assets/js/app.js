@@ -2176,6 +2176,15 @@ function _dispCopyOneDni(dni){
   if(typeof showToast==='function') showToast('📋 DNI copiado: '+dni,'ok',1800);
 }
 
+// Copia "Nombre | DNI" por línea — para el asistente de Chrome (muestra el nombre).
+function _dispCopyAllNameDni(){
+  const list=(_dispState&&_dispState._inscList)||[];
+  if(!list.length){ if(typeof showToast==='function') showToast('No hay corredores para copiar','warn',2200); return; }
+  const txt=list.map(r=>`${r.name} | ${r.dni}`).join('\n');
+  try{ navigator.clipboard.writeText(txt); }catch(_){}
+  if(typeof showToast==='function') showToast('📋 '+list.length+' corredores copiados (nombre + DNI)','ok',2400);
+}
+
 function _dispOpenInscripcion(){
   if(!_dispState){ return; }
   const confirmed=(_dispState.confirmed||[]).slice().sort((a,b)=>a.localeCompare(b));
@@ -2189,6 +2198,7 @@ function _dispOpenInscripcion(){
   const matched=rows.filter(r=>r.found);
   const missing=rows.filter(r=>!r.found);
   _dispState._inscDni = matched.map(r=>r.dni);
+  _dispState._inscList = matched.map(r=>({name:r.name, dni:r.dni}));
 
   const fdate=(typeof formatDateDisplay==='function')?formatDateDisplay(_dispState.raceDate):_dispState.raceDate;
   const fccvLink = _dispState.fccvUrl ? `<a href="${escapeAttr(_dispState.fccvUrl)}" target="_blank" rel="noopener" style="color:#15803d;font-weight:800;text-decoration:none">🔗 Abrir la prueba en la FCCV</a>` : '';
@@ -2220,7 +2230,8 @@ function _dispOpenInscripcion(){
         <div style="font-size:11.5px;color:#94a3b8;margin-bottom:8px">Base de licencias cargada: <b>${licList.length}</b> corredores${licList.length?'':' — impórtala en Documentos FCCV'}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
           <span style="font-size:13px;color:#0b2f6b;font-weight:800">🟢 ${matched.length} con DNI${missing.length?` · <span style="color:#b91c1c">⚠️ ${missing.length} sin DNI</span>`:''}</span>
-          <button onclick="_dispCopyAllDni()" ${matched.length?'':'disabled'} style="margin-left:auto;background:${matched.length?'#15803d':'#e5e7eb'};color:${matched.length?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:800;cursor:${matched.length?'pointer':'default'}">📋 Copiar todos los DNI</button>
+          <button onclick="_dispCopyAllNameDni()" ${matched.length?'':'disabled'} style="margin-left:auto;background:${matched.length?'#0b2f6b':'#e5e7eb'};color:${matched.length?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:800;cursor:${matched.length?'pointer':'default'}" title="Para el asistente de Chrome: copia nombre + DNI">📋 Copiar para el asistente (nombre + DNI)</button>
+          <button onclick="_dispCopyAllDni()" ${matched.length?'':'disabled'} style="background:${matched.length?'#15803d':'#e5e7eb'};color:${matched.length?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:800;cursor:${matched.length?'pointer':'default'}">📋 Solo DNI</button>
         </div>
         ${rows.map(rowHtml).join('')}
         <div style="margin-top:14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:11px 13px;font-size:12px;color:#475569;line-height:1.6">
