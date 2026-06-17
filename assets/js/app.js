@@ -1977,30 +1977,45 @@ function _dispRemindPending(){
 }
 
 // ── PIEZA B · Inscripción FCCV (confirmados + DNI listos) ────────────────
-// Clave de nombre por conjunto de palabras (robusta al orden y a la coma):
-// "Alcon, Manuel" y "Manuel Alcon" producen la misma clave.
-function _fccvNameTokenKey(name){
-  let n=(typeof normalizeForMatching==='function')?normalizeForMatching(name):String(name||'').toLowerCase();
-  n=String(n).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ');
-  return n.split(/\s+/).filter(Boolean).sort().join(' ');
+// Tokens significativos de un nombre: minúsculas, sin acentos, sin partículas
+// ("de","la"…) ni iniciales. NO usa normalizeForMatching (que recorta a un solo
+// apellido y asume orden Nombre-Apellido, lo que rompía el cruce).
+function _dispNameTokens(name){
+  return String(name||'')
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t=> t.length>=2 && !['de','la','el','del','los','las','y','i','da','do'].includes(t));
 }
 
-// Índice de licencias FCCV por clave de nombre → {dni, full}
-function _fccvLicIndex(){
-  const idx=new Map();
+// Lista de licencias con sus tokens preparados para emparejar.
+function _fccvLicList(){
   let lics=[]; try{ lics=(typeof _fccvGetLicencias==='function')?_fccvGetLicencias():[]; }catch(_){}
-  (lics||[]).forEach(l=>{
+  return (lics||[]).map(l=>{
     const full=(((l.apellidos||'')+' '+(l.nombre||'')).trim())||(l.nombre||'');
-    const key=_fccvNameTokenKey(full);
-    if(key && !idx.has(key)) idx.set(key,{dni:String(l.dni||'').trim().toUpperCase(), full});
+    return { dni:String(l.dni||'').trim().toUpperCase(), full, toks:_dispNameTokens(full) };
   });
-  return idx;
 }
 
-// Empareja un nombre del roster con su licencia (DNI). Devuelve {dni, full} o null.
-function _dispMatchDni(name, idx){
-  const key=_fccvNameTokenKey(name);
-  return (key && idx.has(key)) ? idx.get(key) : null;
+// Empareja un nombre del roster con su licencia. Tolerante a:
+//  • dos apellidos (el roster suele traer uno): basta que TODOS los tokens del
+//    roster estén en la licencia.
+//  • diminutivos (Dani→Daniel): casa por prefijo (≥3 letras) en ambos sentidos.
+// Devuelve {dni, full} o null. Requiere ≥2 tokens para evitar falsos positivos.
+function _dispMatchDni(name, licList){
+  const rt=_dispNameTokens(name);
+  if(rt.length<2) return null;
+  let best=null, bestExtra=Infinity;
+  for(const l of licList){
+    if(!l.dni || /^SIN-DNI-/.test(l.dni)) continue;
+    const lt=l.toks; if(lt.length<2) continue;
+    const allHit = rt.every(t => lt.some(u => u===t || (t.length>=3 && u.length>=3 && (u.startsWith(t)||t.startsWith(u)))));
+    if(allHit){
+      const extra = Math.abs(lt.length - rt.length); // mejor ajuste = menos tokens sobrantes
+      if(extra < bestExtra){ bestExtra=extra; best=l; }
+    }
+  }
+  return best ? {dni:best.dni, full:best.full} : null;
 }
 
 function _dispCloseInscripcion(){
@@ -2024,10 +2039,10 @@ function _dispOpenInscripcion(){
   if(!_dispState){ return; }
   const confirmed=(_dispState.confirmed||[]).slice().sort((a,b)=>a.localeCompare(b));
   if(!confirmed.length){ alert('No hay confirmados todavía.'); return; }
-  const idx=_fccvLicIndex();
-  const noLicDb = idx.size===0;
+  const licList=_fccvLicList();
+  const noLicDb = licList.length===0;
   const rows=confirmed.map(name=>{
-    const m=_dispMatchDni(name, idx);
+    const m=_dispMatchDni(name, licList);
     return {name, dni:(m&&m.dni)?m.dni:'', found:!!(m&&m.dni)};
   });
   const matched=rows.filter(r=>r.found);
@@ -2061,6 +2076,7 @@ function _dispOpenInscripcion(){
       </div>
       <div style="padding:14px 20px">
         ${noLicDb ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;color:#92400e">⚠️ No hay ninguna base de licencias cargada. Ve a <b>Documentos FCCV</b> e importa el Excel oficial de licencias para que aparezcan los DNI.</div>`:''}
+        <div style="font-size:11.5px;color:#94a3b8;margin-bottom:8px">Base de licencias cargada: <b>${licList.length}</b> corredores${licList.length?'':' — impórtala en Documentos FCCV'}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
           <span style="font-size:13px;color:#0b2f6b;font-weight:800">🟢 ${matched.length} con DNI${missing.length?` · <span style="color:#b91c1c">⚠️ ${missing.length} sin DNI</span>`:''}</span>
           <button onclick="_dispCopyAllDni()" ${matched.length?'':'disabled'} style="margin-left:auto;background:${matched.length?'#15803d':'#e5e7eb'};color:${matched.length?'#fff':'#9ca3af'};border:0;border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:800;cursor:${matched.length?'pointer':'default'}">📋 Copiar todos los DNI</button>
