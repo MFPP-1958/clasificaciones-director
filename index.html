@@ -252,6 +252,15 @@
         </div>
       </section>
 
+      <!-- B · Onboarding de primer uso (se rellena/oculta desde renderInicio) -->
+      <section class="panel" id="inicioOnboarding" style="display:none;border-left:4px solid #16a34a;background:linear-gradient(135deg,#f0fdf4,#fff)"></section>
+
+      <!-- A · Acciones rápidas principales (se rellena desde renderInicio según permisos) -->
+      <section class="panel" id="inicioQuickPanel" style="display:none;padding:14px 18px">
+        <div style="font-size:13px;font-weight:800;color:#0b2f6b;margin-bottom:10px">⚡ ¿Qué quieres hacer?</div>
+        <div id="inicioQuickActions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px"></div>
+      </section>
+
       <!-- KPIs principales (ancho completo) -->
       <section class="panel">
         <div class="section-title" style="margin-bottom:14px">

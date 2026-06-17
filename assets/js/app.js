@@ -13970,6 +13970,48 @@ function _inicioOpenRider(displayName){
   }catch(e){ console.warn(e); }
 }
 
+// A · Acciones rápidas principales en Inicio (filtradas por permisos del usuario)
+function _inicioRenderQuickActions(){
+  const wrap=document.getElementById('inicioQuickActions');
+  const panel=document.getElementById('inicioQuickPanel');
+  if(!wrap||!panel) return;
+  const perms=(typeof _rbacPerms!=='undefined' && _rbacPerms && _rbacPerms.size) ? _rbacPerms : null;
+  const can=(id)=> !perms || perms.has(id);
+  const actions=[
+    {id:'view-carga',          ic:'📥', lbl:'Cargar clasificación'},
+    {id:'view-disponibilidad', ic:'🚴', lbl:'Disponibilidad'},
+    {id:'view-fccv-docs',      ic:'🏷️', lbl:'Inscribir FCCV'},
+    {id:'view-simulador',      ic:'🔮', lbl:'Simulador'}
+  ].filter(a=>can(a.id));
+  if(!actions.length){ panel.style.display='none'; return; }
+  panel.style.display='';
+  wrap.innerHTML=actions.map(a=>`<button onclick="showView('${a.id}')" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border:1.5px solid #dbeafe;border-radius:12px;padding:16px 10px;cursor:pointer;font-weight:800;color:#0b2f6b;font-size:13px;transition:background .12s" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'"><span style="font-size:26px">${a.ic}</span>${a.lbl}</button>`).join('');
+}
+
+// B · Onboarding de primer uso (se muestra una vez; solo a staff/director)
+function _inicioDismissOnboarding(){
+  try{ localStorage.setItem('inicio_onboarded','1'); }catch(_){}
+  const el=document.getElementById('inicioOnboarding'); if(el) el.style.display='none';
+}
+function _inicioRenderOnboarding(){
+  const el=document.getElementById('inicioOnboarding'); if(!el) return;
+  const isCiclista=(typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA');
+  let done=false; try{ done=localStorage.getItem('inicio_onboarded')==='1'; }catch(_){}
+  if(done || isCiclista){ el.style.display='none'; return; }
+  el.style.display='';
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="font-size:16px;font-weight:900;color:#15803d">👋 ¡Bienvenido! Primeros pasos</div>
+      <button onclick="_inicioDismissOnboarding()" style="background:#dcfce7;border:0;border-radius:8px;padding:5px 10px;font-weight:800;cursor:pointer;color:#15803d;font-size:12px">Entendido ✓</button>
+    </div>
+    <p class="small" style="color:#475569;margin:8px 0 12px">En 3 pasos tienes el equipo en marcha:</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+      <div style="background:#fff;border:1px solid #d1fae5;border-radius:10px;padding:12px"><div style="font-weight:800;color:#0b2f6b">1️⃣ Carga una clasificación</div><div class="small" style="color:#6b7280;margin-top:3px">Sube el PDF/Excel de una carrera para empezar a tener datos.</div><button class="btn light" style="margin-top:8px;font-size:12px" onclick="showView('view-carga')">Ir a Cargar</button></div>
+      <div style="background:#fff;border:1px solid #d1fae5;border-radius:10px;padding:12px"><div style="font-weight:800;color:#0b2f6b">2️⃣ Mira la disponibilidad</div><div class="small" style="color:#6b7280;margin-top:3px">Quién va y quién no a la próxima prueba.</div><button class="btn light" style="margin-top:8px;font-size:12px" onclick="showView('view-disponibilidad')">Ir a Disponibilidad</button></div>
+      <div style="background:#fff;border:1px solid #d1fae5;border-radius:10px;padding:12px"><div style="font-weight:800;color:#0b2f6b">3️⃣ Inscribe en la FCCV</div><div class="small" style="color:#6b7280;margin-top:3px">Genera la lista con los DNI listos para la federación.</div><button class="btn light" style="margin-top:8px;font-size:12px" onclick="showView('view-fccv-docs')">Ir a Documentos FCCV</button></div>
+    </div>`;
+}
+
 async function renderInicio(){
   // ─── 1. HERO (bienvenida) ──────────────────────────────────────────
   const user = (typeof _rbacUser !== 'undefined' && _rbacUser) ? _rbacUser : null;
@@ -13999,6 +14041,10 @@ async function renderInicio(){
     ];
     elHC.innerHTML = chips.join('');
   }
+
+  // ─── A · Acciones rápidas + B · Onboarding de primer uso ───
+  try{ _inicioRenderQuickActions(); }catch(_){}
+  try{ _inicioRenderOnboarding(); }catch(_){}
 
   // ─── 2. KPIs principales ────────────────────────────────────────────
   // Esperar al historial si todavía está cargando
