@@ -1263,22 +1263,27 @@ async function _rbacLoadPerms(role){
     ALL_VIEWS.forEach(v => _rbacPerms.add(v.id));
     return;
   }
-  // CICLISTA: de momento SOLO ve "Disponibilidad" (la app aún no está acabada;
-  // en el futuro se le darán más secciones cambiando esta línea o por BD).
-  if(role === 'CICLISTA'){ _rbacPerms = new Set(['view-disponibilidad']); return; }
-  if(!_sb) return;
+  // CICLISTA / LECTOR / DIRECTOR: permisos desde app_permissions (configurables
+  // en ⚙️ Gestión → Permisos). Así se les puede ir abriendo acceso poco a poco.
+  if(!_sb){
+    // Sin conexión: mínimos seguros para que el ciclista al menos vea su Disponibilidad.
+    if(role === 'CICLISTA') _rbacPerms = new Set(['view-disponibilidad']);
+    return;
+  }
   const {data} = await _sb.from('app_permissions').select('view_id, allowed').eq('role', role);
-  // Si la tabla no existe o está vacía, dar permisos básicos por defecto según rol
+  // Si no hay filas configuradas para ese rol, defaults CONSERVADORES.
   if(!data || data.length === 0){
     const defaults = {
       DIRECTOR: ['view-historial','view-carga','view-tabla','view-analisis','view-comparativo','view-equipos','view-tactica','view-simulador','view-graficos','view-top10','view-evolucion','view-powerranking','view-tendencias','view-seleccion','view-disponibilidad','view-radiovuelta','view-laboratorio','view-validacion','view-equipos-ccaa','view-ciclistas-cat','view-fccv-docs'],
-      CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos','view-disponibilidad'],
+      CICLISTA: ['view-disponibilidad'],   // por defecto, solo Disponibilidad (se amplía desde Permisos)
       LECTOR:   ['view-carga','view-tabla']
     };
     (defaults[role]||[]).forEach(id => _rbacPerms.add(id));
-    return;
+  } else {
+    data.forEach(p=>{ if(p.allowed) _rbacPerms.add(p.view_id); });
   }
-  data.forEach(p=>{ if(p.allowed) _rbacPerms.add(p.view_id); });
+  // Salvaguarda: un CICLISTA siempre debe poder ver su Disponibilidad.
+  if(role === 'CICLISTA') _rbacPerms.add('view-disponibilidad');
 }
 
 // ── Botón TEMPORAL "Ver como ciclista" (solo staff) ─────────────────────
