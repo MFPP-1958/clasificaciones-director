@@ -1271,6 +1271,9 @@ function _rbacLogout(){
   document.querySelectorAll('.spa-view').forEach(v=>v.classList.remove('active'));
   const ov = document.getElementById('rbacOverlay');
   if(ov){ ov.classList.remove('hidden'); const inp=document.getElementById('rbacEmailInput'); if(inp) inp.value=''; }
+  // Reaplicar el estado del login (ocultar PIN, mostrar enlace mágico + Google)
+  // para que al cerrar sesión NO asome la pantalla antigua del PIN.
+  if(typeof _rbacInitMagicUI==='function') _rbacInitMagicUI();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
