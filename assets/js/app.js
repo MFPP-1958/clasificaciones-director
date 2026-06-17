@@ -1295,17 +1295,28 @@ function _previewEnsureBtn(){
   b.textContent='👁️ Ver como ciclista';
   document.body.appendChild(b);
 }
-function _togglePreviewCyclist(){
+async function _togglePreviewCyclist(){
   const b=document.getElementById('previewCyclistBtn');
   const previewing=document.body.classList.contains('preview-ciclista');
   if(previewing){
+    // VOLVER a director: restaurar permisos reales + marca staff + menú.
     document.body.classList.remove('preview-ciclista');
     document.body.classList.add('rbac-staff');
     if(b){ b.textContent='👁️ Ver como ciclista'; b.style.background='#0b2f6b'; }
+    try{ await _rbacLoadPerms((_rbacUser&&_rbacUser.role)||'DIRECTOR'); }catch(_){}
+    try{ _rbacRenderMenu(); }catch(_){}
+    try{ showView('view-inicio'); }catch(_){}
   } else {
+    // VER COMO CICLISTA: aplicar permisos de CICLISTA (menú + acciones rápidas +
+    // accesos se filtran de verdad) y ocultar lo .admin-only.
     document.body.classList.add('preview-ciclista');
     document.body.classList.remove('rbac-staff');
     if(b){ b.textContent='↩️ Volver a vista director'; b.style.background='#b45309'; }
+    try{ await _rbacLoadPerms('CICLISTA'); }catch(_){}
+    try{ _rbacRenderMenu(); }catch(_){}
+    // Ir a la primera vista que un ciclista puede ver (no se queda en una bloqueada)
+    try{ const first=(typeof ALL_VIEWS!=='undefined')?ALL_VIEWS.find(v=>_rbacPerms.has(v.id)):null; if(first) showView(first.id); }catch(_){}
+    if(typeof showToast==='function') showToast('👁️ Vista de CICLISTA. Solo ves lo que ellos ven. Pulsa "Volver a vista director" para salir.','info',4500);
   }
 }
 
