@@ -11994,6 +11994,10 @@ function analyseSelectedRider(){
     <div class="small" style="margin-top:6px">Podio: ${podiumRef.podium.map(p=>`${p.pos}º ${escapeHtml(p.name)}`).join(' · ')}</div>`:
     `<div class="small">No hay suficientes datos de tiempo en ${escapeHtml(r.cat)}.</div>`;
 
+  // #3 · Notas privadas del director: clave estable por nombre + visibilidad staff
+  const _noteKey = (typeof normalizeForMatching==='function') ? normalizeForMatching(r.name) : (r.name||'').toLowerCase();
+  const _notesStaff = !(typeof _rbacUser!=='undefined' && _rbacUser) || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
+
   $('individualResult').innerHTML=`
   <div class="rider-card-header">
     <div>
@@ -12098,6 +12102,21 @@ function analyseSelectedRider(){
     </div>
   </div>
 
+  ${_notesStaff ? `
+  <!-- #3 · Notas privadas del director -->
+  <div class="rider-history-block" style="margin-top:14px">
+    <div class="rider-history-title">🗒️ Notas privadas del director <span style="font-weight:600;color:#94a3b8;font-size:12px">(solo las ve el staff)</span></div>
+    <div id="riderNotesBox" data-key="${escapeAttr(_noteKey)}" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#0b2f6b">Valoración:</span>
+        <span id="riderNotesStars">${[1,2,3,4,5].map(i=>`<span class="rn-star" data-v="${i}" onclick="_riderNotesSetRating(${i})" style="cursor:pointer;font-size:22px;color:#d1d5db">★</span>`).join('')}</span>
+        <span id="riderNotesStatus" class="small" style="margin-left:auto;color:#94a3b8"></span>
+      </div>
+      <textarea id="riderNotesText" rows="4" placeholder="Observaciones tácticas, rol en carrera, puntos fuertes/débiles… Ej.: 12/06 cumplió el plan, tiró fuerte en el km 20." style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      <div style="margin-top:8px"><button class="btn" onclick="_riderNotesSave()" style="background:#0b2f6b;color:#fff;font-weight:800">💾 Guardar nota</button></div>
+    </div>
+  </div>` : ''}
+
   ${histHtml}`;
 
   // Análisis Individual · Opción A #1: pintar el gráfico de evolución
@@ -12107,6 +12126,8 @@ function analyseSelectedRider(){
       catch(e){ console.warn('[ai] chart render error:', e); }
     }, 50);
   }
+  // #3 · cargar la nota privada guardada de este corredor
+  if(_notesStaff){ setTimeout(()=>{ try{ _riderNotesLoad(_noteKey); }catch(_){} }, 30); }
 }
 
 function simulateObjective(key){
@@ -33272,6 +33293,56 @@ function _aiBuildExtraStats(r, histEntries){
   }
 
   return cards.join('');
+}
+
+// ── #3 · Notas privadas del director por corredor ───────────────────────
+// Guardadas en la tabla rider_notes (solo staff, por RLS). Clave = nombre
+// normalizado (identidad estable del corredor entre carreras).
+let _riderNotesRating = 0;
+function _riderNotesPaintStars(n){
+  document.querySelectorAll('#riderNotesStars .rn-star').forEach(el=>{
+    el.style.color = (parseInt(el.dataset.v)<=n) ? '#f59e0b' : '#d1d5db';
+  });
+}
+function _riderNotesSetRating(n){
+  _riderNotesRating = (_riderNotesRating===n ? 0 : n); // clic en la misma → quitar
+  _riderNotesPaintStars(_riderNotesRating);
+}
+async function _riderNotesLoad(key){
+  _riderNotesRating = 0;
+  const ta=document.getElementById('riderNotesText'); if(ta) ta.value='';
+  _riderNotesPaintStars(0);
+  if(!_sb || !key) return;
+  try{
+    const {data}=await _sb.from('rider_notes').select('note,rating,updated_at').eq('rider_key',key).maybeSingle();
+    if(data){
+      if(ta) ta.value=data.note||'';
+      _riderNotesRating=data.rating||0; _riderNotesPaintStars(_riderNotesRating);
+      const st=document.getElementById('riderNotesStatus');
+      if(st && data.updated_at){ st.textContent='Guardada el '+new Date(data.updated_at).toLocaleDateString('es-ES'); st.style.color='#16a34a'; }
+    }
+  }catch(_){}
+}
+async function _riderNotesSave(){
+  if(typeof _requireAuthWrite==='function' && !_requireAuthWrite()) return;
+  const box=document.getElementById('riderNotesBox'); if(!box) return;
+  const key=box.dataset.key; if(!key){ alert('No se pudo identificar al corredor.'); return; }
+  if(!_sb){ alert('Supabase no disponible.'); return; }
+  const ta=document.getElementById('riderNotesText');
+  const note=(ta?ta.value:'').trim();
+  const st=document.getElementById('riderNotesStatus');
+  if(st){ st.textContent='Guardando…'; st.style.color='#1d4ed8'; }
+  try{
+    const {error}=await _sb.from('rider_notes').upsert({
+      rider_key:key, note, rating:_riderNotesRating||null,
+      updated_at:new Date().toISOString(), updated_by:(typeof _rbacUser!=='undefined'&&_rbacUser?_rbacUser.email:'')||''
+    },{onConflict:'rider_key'});
+    if(error) throw error;
+    if(st){ st.textContent='✅ Guardada'; st.style.color='#16a34a'; }
+    if(typeof showToast==='function') showToast('🗒️ Nota guardada','ok',1800);
+  }catch(e){
+    if(st){ st.textContent='⚠️ '+(e.message||'error'); st.style.color='#b45309'; }
+  }
 }
 
 // — Genera el gráfico de evolución temporal con Chart.js —
