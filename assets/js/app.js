@@ -919,7 +919,7 @@ const _PIN_LOGIN_ENABLED = false;
 // Vía Google (OAuth). Aditiva: convive con el enlace mágico. Se mantiene en
 // false hasta tener configurado el proveedor Google en Supabase; entonces
 // poner true. Reversible: poner false y se oculta el botón.
-const _GOOGLE_LOGIN_ENABLED = false;
+const _GOOGLE_LOGIN_ENABLED = true;
 
 // ── Inicialización ────────────────────────────────────────────
 (async function _rbacInit(){
