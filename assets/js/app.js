@@ -6246,11 +6246,21 @@ async function _gLoadUsers(){
   const tbody = document.getElementById('gUsersTbody');
   if(!tbody) return;
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#9ca3af">Cargando...</td></tr>';
+  let remoteRows = null, loadErr = null;
   if(_sb){
     const {data, error} = await _sb.from('app_users').select('*').order('created_at');
-    if(!error && data){
-      _localUsers = data;
-    }
+    if(error) loadErr = error;
+    else if(Array.isArray(data)) remoteRows = data;
+  }
+  if(remoteRows && remoteRows.length){ _localUsers = remoteRows; }
+  // Aviso honesto: si estás logueado como staff pero la nube no devuelve la lista
+  // (sesión no activa en este dispositivo / RLS), avisamos en vez de mostrar una
+  // sola fila que parezca pérdida de datos.
+  const isStaff = _rbacUser && ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
+  const msg = document.getElementById('gAddUserMsg');
+  if(_sb && isStaff && (loadErr || !remoteRows || remoteRows.length <= 1) && msg){
+    msg.innerHTML = '⚠️ No se ha podido cargar la lista completa de usuarios (tu sesión puede no estar activa en este dispositivo). <b>Cierra sesión y vuelve a entrar</b> y reaparecerán. No se ha borrado nada.';
+    msg.style.color = '#b45309';
   }
   if(_localUsers.length === 0 && _rbacUser){
     // Ensure current user is always visible
