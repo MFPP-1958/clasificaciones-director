@@ -1700,10 +1700,9 @@ function _dispSubscribe(raceId){
     if(_dispChannel && _sb){ _sb.removeChannel(_dispChannel); _dispChannel=null; }
     if(!_sb || !raceId) return;
     _dispChannel=_sb.channel('disp-'+raceId)
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'races',filter:'id=eq.'+raceId}, payload=>{
+      .on('postgres_changes',{event:'*',schema:'public',table:'race_availability',filter:'race_id=eq.'+raceId}, payload=>{
         try{
-          const notes=payload && payload.new && payload.new.notes; if(!notes) return;
-          const extra=JSON.parse(notes||'{}'); const av=extra.availability||{};
+          const av=payload && payload.new && payload.new.data; if(!av) return;
           if(_dispState && _dispState.raceId===raceId){
             _dispState.confirmed=Array.isArray(av.confirmed)?av.confirmed:[];
             _dispState.declined=Array.isArray(av.declined)?av.declined:[];
@@ -1808,7 +1807,19 @@ async function _dispSelectRace(raceId){
   // dispositivo después de cargar la pantalla). Así al cambiar de prueba o al
   // pulsar "Actualizar" siempre se ve lo último, sin perder a nadie.
   let av=r.extra.availability||{};
-  try{ if(_sb){ const {data}=await _sb.from('races').select('notes').eq('id',raceId).single(); if(data&&data.notes){ const ex=JSON.parse(data.notes); r.extra=ex; av=ex.availability||{}; } } }catch(_){}
+  try{
+    if(_sb){
+      // 1) Tabla nueva race_availability (fuente principal tras el refactor)
+      const {data:avRow}=await _sb.from('race_availability').select('data').eq('race_id',raceId).maybeSingle();
+      if(avRow && avRow.data && (Array.isArray(avRow.data.confirmed)||Array.isArray(avRow.data.declined)||Array.isArray(avRow.data.roster))){
+        av=avRow.data;
+      } else {
+        // 2) Fallback legado: races.notes.availability (datos previos al refactor)
+        const {data}=await _sb.from('races').select('notes').eq('id',raceId).single();
+        if(data&&data.notes){ const ex=JSON.parse(data.notes); r.extra=ex; av=ex.availability||{}; }
+      }
+    }
+  }catch(_){}
   _dispState={ raceId:r.id, raceName:r.name||'', raceDate:r.date||'', localidad:r.localidad||'',
                confirmed:Array.isArray(av.confirmed)?av.confirmed.slice():[],
                declined:Array.isArray(av.declined)?av.declined.slice():[],
@@ -1993,12 +2004,23 @@ function _dispRegister(){
 async function _dispSave(){
   if(!_dispState || !_sb) return;
   try{
-    const {data,error}=await _sb.from('races').select('notes').eq('id',_dispState.raceId).single();
+    const data={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster };
+    // Escritura en la tabla propia race_availability (no en races → races queda
+    // protegida a solo-staff). upsert por race_id.
+    const {error}=await _sb.from('race_availability').upsert({
+      race_id:_dispState.raceId,
+      data,
+      updated_at:data.updatedAt,
+      updated_by:(typeof _rbacUser!=='undefined' && _rbacUser ? (_rbacUser.email||_rbacUser.riderName||'') : '')
+    }, {onConflict:'race_id'});
     if(error) throw error;
-    let extra={}; try{ extra=JSON.parse(data?.notes||'{}'); }catch(_){}
-    extra.availability={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster };
-    await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',_dispState.raceId);
-  }catch(e){ console.warn('[disp] save', e); }
+  }catch(e){
+    console.warn('[disp] save', e);
+    // Aviso amable solo si es un fallo real de permisos (sin login)
+    if(/row-level security|permission|JWT|not authorized/i.test(e.message||'') && typeof showToast==='function'){
+      showToast('⚠️ Para marcar disponibilidad hay que iniciar sesión con el enlace mágico.','warn',4000);
+    }
+  }
 }
 
 function _dispBibOf(name){ return _dispBibs.get(normalizeForMatching(name))||''; }
