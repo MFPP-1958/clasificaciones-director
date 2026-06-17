@@ -33201,6 +33201,23 @@ function _aiBuildExtraStats(r, histEntries){
 
   const cards = [];
 
+  // Forma reciente (#5): versión CLARA y explícita de los últimos 3 resultados,
+  // complementa al EWMA-3 (que es más técnico). Reusa la tendencia del EWMA.
+  const last3 = sortedAsc.slice(-3).map(h=>h.pos).filter(p=>p>0);
+  if(last3.length){
+    const recStr = last3.map(p=>p+'º').join('  ·  ');
+    let rc='#64748b', ri='➡️', rt='estable';
+    if(ewmaInfo){
+      if(ewmaInfo.delta > 1.5){ rc='#16a34a'; ri='📈'; rt='mejorando'; }
+      else if(ewmaInfo.delta < -1.5){ rc='#dc2626'; ri='📉'; rt='empeorando'; }
+    }
+    cards.unshift(`<div class="rider-stat">
+      <div class="stat-label" style="display:flex;align-items:center;gap:5px">🔥 Forma reciente <button class="help-btn" data-help="&lt;strong&gt;🔥 Forma reciente&lt;/strong&gt;Los resultados de sus últimas 3 carreras (de más antigua a más reciente) y si va mejorando o empeorando respecto a su media. Es la versión sencilla de la &quot;Tendencia EWMA-3&quot;.">?</button></div>
+      <div class="stat-value" style="font-size:20px;color:${rc}">${recStr} <span style="font-size:14px">${ri}</span></div>
+      <div class="stat-sub" style="color:${rc}">últimas ${last3.length} · ${rt}</div>
+    </div>`);
+  }
+
   // EWMA-3
   if(ewmaInfo){
     const trendCol = ewmaInfo.delta > 1.5 ? '#16a34a'
