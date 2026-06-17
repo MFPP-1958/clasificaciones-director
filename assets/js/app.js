@@ -891,6 +891,10 @@ let _rbacAllPerms = {};     // {role: {viewId: bool}} — for admin panel
 // estar ANTES de _rbacInit, que lo usa al arrancar (evita el error de TDZ que
 // dejaba el login antiguo sin el botón del enlace). Rollback = poner false.
 const _AUTH_MAGIC_ENABLED = true;
+// Paso 4 (final): el PIN queda DESACTIVADO; se entra solo por enlace mágico.
+// Debe ir ANTES de _rbacInit (que llama a _rbacInitMagicUI al arrancar) para
+// evitar el error de TDZ. Reversible: poner true para volver al login por PIN.
+const _PIN_LOGIN_ENABLED = false;
 
 // ── Inicialización ────────────────────────────────────────────
 (async function _rbacInit(){
@@ -945,7 +949,7 @@ const _AUTH_MAGIC_ENABLED = true;
     }
     if(err && err.textContent==='🔄 Verificando tu enlace de acceso…'){
       err.style.color='#b45309';
-      err.textContent='No se pudo leer el enlace automáticamente. Entra con tu PIN o pide un enlace nuevo.';
+      err.textContent='No se pudo leer el enlace automáticamente. Pide un enlace nuevo con el botón de abajo.';
     }
   } else {
     // Sin token en la URL: ¿hay sesión Auth previa guardada?
@@ -953,7 +957,7 @@ const _AUTH_MAGIC_ENABLED = true;
   }
   // Enter key en el input
   const inp = document.getElementById('rbacEmailInput');
-  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') _rbacLogin(); });
+  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ if(_PIN_LOGIN_ENABLED) _rbacLogin(); else _rbacSendMagicLink(); } });
 })();
 
 async function _rbacLogin(){
@@ -1031,10 +1035,24 @@ async function _rbacFinishLogin(data, via){
 // "const _AUTH_MAGIC_ENABLED" cerca de las variables RBAC.
 
 function _rbacInitMagicUI(){
-  ['rbacMagicSep','rbacMagicBtn'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.style.display = _AUTH_MAGIC_ENABLED ? '' : 'none';
+  const magicOn = _AUTH_MAGIC_ENABLED;
+  const pinOn   = _PIN_LOGIN_ENABLED;
+  // Vía PIN (campo, etiqueta y botón "Entrar →"): solo visible si está activa
+  ['rbacPinInput','rbacPinLabel','rbacLoginBtn'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display = pinOn ? '' : 'none';
   });
+  // Separador "o, si lo prefieres": solo tiene sentido si conviven las dos vías
+  const sep=document.getElementById('rbacMagicSep');
+  if(sep) sep.style.display = (magicOn && pinOn) ? '' : 'none';
+  // Botón del enlace mágico
+  const mb=document.getElementById('rbacMagicBtn');
+  if(mb){
+    mb.style.display = magicOn ? '' : 'none';
+    if(magicOn && !pinOn){ mb.style.background='#1a56db'; mb.style.color='#fff'; mb.style.border='2px solid #1a56db'; }
+  }
+  // Subtítulo coherente cuando el enlace es la única vía
+  const sub=document.querySelector('#rbacOverlay .rbac-sub');
+  if(sub && magicOn && !pinOn) sub.textContent='Introduce tu correo y te enviaremos un enlace de acceso';
 }
 
 // Enviar enlace mágico al correo escrito en el campo de email.
@@ -1046,7 +1064,7 @@ async function _rbacSendMagicLink(){
   const email=(document.getElementById('rbacEmailInput')?.value||'').trim().toLowerCase();
   if(err){ err.style.color=''; err.textContent=''; }
   if(!email || !email.includes('@')){ if(err) err.textContent='Escribe tu correo arriba y vuelve a pulsar.'; return; }
-  if(!_sb){ if(err) err.textContent='Sin conexión a la base de datos. Prueba con tu PIN.'; return; }
+  if(!_sb){ if(err) err.textContent='Sin conexión a la base de datos. Inténtalo de nuevo en un momento.'; return; }
   if(btn){ btn.disabled=true; btn.textContent='Enviando enlace…'; }
   try{
     const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('_timeout_')),12000));
@@ -1059,8 +1077,8 @@ async function _rbacSendMagicLink(){
   }catch(e){
     if(err){
       err.textContent = (e && e.message==='_timeout_')
-        ? 'El servidor tarda en responder (¿poca cobertura?). Entra con tu PIN como siempre.'
-        : 'No se pudo enviar el enlace ('+((e&&e.message)||e)+'). Entra con tu PIN como siempre.';
+        ? 'El servidor tarda en responder (¿poca cobertura?). Inténtalo de nuevo en un momento.'
+        : 'No se pudo enviar el enlace ('+((e&&e.message)||e)+'). Inténtalo de nuevo en un momento.';
     }
   }finally{
     if(btn){ btn.disabled=false; btn.textContent='✉️ Recibir enlace de acceso por email'; }
@@ -1080,7 +1098,7 @@ async function _rbacApplyAuthUser(email){
       if(err){
         err.style.color='#b45309';
         err.textContent = error
-          ? ('No se pudo leer tu usuario ('+(error.message||error)+'). Entra con tu PIN.')
+          ? ('No se pudo leer tu usuario ('+(error.message||error)+'). Pide un enlace nuevo.')
           : ('Tu correo ('+e+') no está autorizado en el equipo. Contacta con el director.');
       }
       try{ await _sb.auth.signOut(); }catch(_){}
