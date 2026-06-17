@@ -14069,6 +14069,7 @@ function _inicioRenderQuickActions(){
   const perms=(typeof _rbacPerms!=='undefined' && _rbacPerms && _rbacPerms.size) ? _rbacPerms : null;
   const can=(id)=> !perms || perms.has(id);
   const actions=[
+    {id:'view-carga',          ic:'📋', lbl:'Añadir lista de inscritos', handler:'_inicioGoInscritos()'},
     {id:'view-carga',          ic:'📥', lbl:'Cargar clasificación'},
     {id:'view-disponibilidad', ic:'🚴', lbl:'Disponibilidad'},
     {id:'view-fccv-docs',      ic:'🏷️', lbl:'Inscribir FCCV'},
@@ -14076,7 +14077,10 @@ function _inicioRenderQuickActions(){
   ].filter(a=>can(a.id));
   if(!actions.length){ panel.style.display='none'; return; }
   panel.style.display='';
-  wrap.innerHTML=actions.map(a=>`<button onclick="showView('${a.id}')" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border:1.5px solid #dbeafe;border-radius:12px;padding:16px 10px;cursor:pointer;font-weight:800;color:#0b2f6b;font-size:13px;transition:background .12s" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'"><span style="font-size:26px">${a.ic}</span>${a.lbl}</button>`).join('');
+  wrap.innerHTML=actions.map(a=>{
+    const onclick = a.handler ? a.handler : `showView('${a.id}')`;
+    return `<button onclick="${onclick}" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border:1.5px solid #dbeafe;border-radius:12px;padding:16px 10px;cursor:pointer;font-weight:800;color:#0b2f6b;font-size:13px;transition:background .12s" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'"><span style="font-size:26px">${a.ic}</span>${a.lbl}</button>`;
+  }).join('');
 }
 
 // Accesos directos COMPLETOS en Inicio: se generan desde ALL_VIEWS, agrupados
@@ -14107,6 +14111,20 @@ function _inicioRenderAccesos(){
   const others=(typeof ALL_VIEWS!=='undefined'?ALL_VIEWS:[]).filter(v=>!used.has(v.id) && v.id!=='view-inicio' && v.id!=='view-gestion' && can(v.id));
   if(others.length) html+=`<div class="acceso-group"><div class="acceso-group-title">🔧 Más</div><div class="acceso-group-btns">${others.map(btnHtml).join('')}</div></div>`;
   wrap.innerHTML=html;
+}
+
+// Atajo: ir a Carga y abrir/enfocar el panel de "Inscritos / Startlist"
+// (primera operación del jueves: pegar la lista de inscritos de la FCCV).
+function _inicioGoInscritos(){
+  try{ showView('view-carga'); }catch(_){}
+  setTimeout(()=>{
+    try{
+      const body=document.getElementById('inscritosBody');
+      if(body && getComputedStyle(body).display==='none' && typeof toggleInscritosPanel==='function') toggleInscritosPanel();
+      const ta=document.getElementById('pastedInscritos');
+      if(ta){ ta.scrollIntoView({behavior:'smooth',block:'center'}); ta.focus(); }
+    }catch(_){}
+  }, 250);
 }
 
 // B · Onboarding de primer uso (se muestra una vez; solo a staff/director)
