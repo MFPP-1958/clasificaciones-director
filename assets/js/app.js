@@ -6268,7 +6268,7 @@ async function _gLoadUsers(){
   }
   tbody.innerHTML = _localUsers.map(u=>`
     <tr style="border-bottom:1px solid #f3f4f6">
-      <td style="padding:10px 14px"><input id="gEmail_${escapeAttr(u.id)}" type="email" value="${escapeAttr(u.email)}" style="border:1px solid #d0d5dd;border-radius:8px;padding:5px 8px;font-size:13px;width:180px;font-weight:600" title="Corrige aquí el email y pulsa ✏️ Actualizar"></td>
+      <td style="padding:10px 14px"><input id="gEmail_${escapeAttr(u.id)}" type="email" value="${escapeAttr(u.email)}" style="border:1px solid #d0d5dd;border-radius:8px;padding:5px 8px;font-size:13px;width:150px;font-weight:600" title="Corrige aquí el email y pulsa ✏️ Actualizar"></td>
       <td style="padding:10px 14px"><input style="border:1px solid #d0d5dd;border-radius:8px;padding:5px 8px;font-size:13px;width:110px" value="${escapeHtml(u.name||'')}" onchange="_gUpdateUserName('${escapeAttr(u.id)}',this.value)"></td>
       <td style="padding:10px 14px"><select style="border:1px solid #d0d5dd;border-radius:8px;padding:5px 8px;font-size:13px" onchange="_gUpdateUserRole('${escapeAttr(u.id)}',this.value)">
         ${ROLES.map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join('')}
