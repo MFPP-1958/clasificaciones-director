@@ -777,26 +777,47 @@ const _ADMIN_EMAIL  = 'mfppmfpp@gmail.com';
 
 if(typeof emailjs !== 'undefined') emailjs.init(_EJS_KEY);
 
-async function _ejsSendBienvenida(email, nombre, pin){
+// Texto del correo de bienvenida (lo controla el CÓDIGO; la plantilla de
+// EmailJS solo tiene que mostrar {{mensaje}}). Ya NO hay PIN: se entra con
+// enlace mágico por email.
+function _ejsWelcomeMessage(nombre){
+  const n = nombre || 'ciclista';
+  return [
+    `Hola ${n}, ya tienes acceso al Dashboard Director del equipo.`,
+    ``,
+    `Para entrar (ya NO se usa PIN):`,
+    `1) Abre ${_APP_URL}`,
+    `2) Escribe tu correo y pulsa "Recibir enlace de acceso por email".`,
+    `3) Te llegará un correo con un enlace: ábrelo DESDE ESTE MISMO dispositivo y entrarás.`,
+    ``,
+    `Si no lo ves, mira en la carpeta de spam (y márcalo como "No es spam").`
+  ].join('\n');
+}
+
+async function _ejsSendBienvenida(email, nombre){
   if(typeof emailjs === 'undefined'){
     console.warn('EmailJS no cargado');
     return {ok: false, err: 'EmailJS no disponible'};
   }
+  const mensaje = _ejsWelcomeMessage(nombre);
   try {
-    // 1. Email al NUEVO USUARIO con su PIN. Pasamos el destinatario con varios
-    //    alias por si la plantilla de EmailJS usa otro nombre de variable en su
-    //    campo "To Email" (to_email / email / user_email / reply_to).
+    // 1. Email de bienvenida al NUEVO USUARIO. Pasamos el destinatario con varios
+    //    alias por si la plantilla de EmailJS usa otro nombre en su campo "To Email".
+    //    El cuerpo va en {{mensaje}}; mantenemos {{pin}} vacío por compatibilidad
+    //    con plantillas antiguas que aún lo referencien.
     await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
       to_email: email, email: email, user_email: email, reply_to: email, recipient: email,
       nombre:   nombre || email.split('@')[0],
-      pin:      pin,
+      mensaje:  mensaje,
+      pin:      '',
       app_url:  _APP_URL
     });
     // 2. Copia de confirmación al ADMINISTRADOR
     await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
       to_email: _ADMIN_EMAIL, email: _ADMIN_EMAIL, user_email: _ADMIN_EMAIL, reply_to: _ADMIN_EMAIL, recipient: _ADMIN_EMAIL,
       nombre:   `Admin — nuevo acceso para ${nombre || email}`,
-      pin:      `${pin} (usuario: ${email})`,
+      mensaje:  `Se ha dado acceso a ${email}. Procedimiento enviado al usuario:\n\n${mensaje}`,
+      pin:      '',
       app_url:  _APP_URL
     });
     return {ok: true};
@@ -6072,8 +6093,7 @@ async function _gLoadUsers(){
         ${ROLES.map(r=>`<option value="${r}"${u.role===r?' selected':''}>${r}</option>`).join('')}
       </select></td>
       <td style="padding:10px 14px;text-align:center">
-        <span style="font-size:16px;font-weight:900;letter-spacing:3px;color:#1a56db;font-family:monospace">${u.pin||'—'}</span>
-        <button title="Regenerar PIN" onclick="_gRegenPin('${escapeAttr(u.id)}','${escapeAttr(u.email)}')" style="margin-left:6px;background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:11px;font-weight:700">🔄</button>
+        <button title="Reenviar el correo de bienvenida con las instrucciones de acceso" onclick="_gResendWelcome('${escapeAttr(u.id)}','${escapeAttr(u.email)}','${escapeAttr(u.name||'')}')" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700">✉️ Reenviar acceso</button>
       </td>
       <td style="padding:10px 14px;text-align:center"><input type="checkbox" ${u.active?'checked':''} onchange="_gToggleUserActive('${escapeAttr(u.id)}',this.checked)" style="width:16px;height:16px;cursor:pointer"></td>
       <td style="padding:10px 14px;text-align:center;white-space:nowrap">
@@ -6094,21 +6114,24 @@ async function _gAddUser(){
   const role  = roleEl.value;
   if(!email || !email.includes('@')){ if(msg){msg.textContent='⚠️ Introduce un email válido.';msg.style.color='#dc2626';} return; }
   if(msg){ msg.textContent='Guardando...'; msg.style.color='#6b7280'; }
-  // Generate a random 4-digit PIN
-  const newPin = String(Math.floor(1000 + Math.random() * 9000));
+  // Ya NO se genera PIN: el acceso es por enlace mágico. Solo creamos la fila
+  // en app_users (rol + activo) y enviamos el correo de bienvenida.
+  // Texto listo para WhatsApp (extra), escapado para meterlo en el onclick.
+  const waText = _ejsWelcomeMessage(name).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n');
+  const waBtn = `<button onclick="navigator.clipboard.writeText('${waText}');this.textContent='✅ Copiado';setTimeout(()=>this.textContent='📋 Copiar para WhatsApp',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar para WhatsApp</button>`;
   // Try Supabase first
   if(_sb){
-    const {error} = await _sb.from('app_users').upsert({email, role, name, pin:newPin, active:true},{onConflict:'email'});
+    const {error} = await _sb.from('app_users').upsert({email, role, name, active:true},{onConflict:'email'});
     if(!error){
-      // Enviar emails (bienvenida al usuario + copia al admin)
-      if(msg){ msg.textContent='✉️ Enviando email de bienvenida...'; msg.style.color='#6b7280'; }
-      const ejsResult = await _ejsSendBienvenida(email, name, newPin);
+      // Enviar correo de bienvenida (sin PIN: explica cómo entrar) + copia al admin
+      if(msg){ msg.textContent='✉️ Enviando correo de bienvenida...'; msg.style.color='#6b7280'; }
+      const ejsResult = await _ejsSendBienvenida(email, name);
       const emailStatus = ejsResult.ok
-        ? '✉️ Email de bienvenida enviado al ciclista y copia al administrador.'
-        : `⚠️ Usuario añadido pero el email falló: ${ejsResult.err}`;
+        ? '✉️ Correo de bienvenida enviado al ciclista (y copia a ti).'
+        : `⚠️ Usuario creado, pero el correo de bienvenida falló: ${ejsResult.err}. Puedes avisarle tú con el botón de abajo.`;
       emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
       if(msg){
-        msg.innerHTML=`✅ Usuario añadido. PIN generado: <strong style="font-size:20px;letter-spacing:4px;color:#1a56db">${newPin}</strong> &nbsp;<button onclick="navigator.clipboard.writeText('${newPin}');this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar</button><br><span style="font-size:12px;color:${ejsResult.ok?'#059669':'#d97706'}">${emailStatus}</span>`;
+        msg.innerHTML=`✅ Usuario añadido. Ya puede entrar con su <b>enlace mágico</b>.<br><span style="font-size:12px;color:${ejsResult.ok?'#059669':'#d97706'}">${emailStatus}</span><br><div style="margin-top:6px">${waBtn}</div>`;
         msg.style.color='#059669';
       }
       await _gLoadUsers();
@@ -6135,38 +6158,31 @@ async function _gAddUser(){
   }
   // Fallback: local
   const existing = _localUsers.findIndex(u=>u.email===email);
-  if(existing>=0){ _localUsers[existing]={..._localUsers[existing], role, name, pin:newPin, active:true}; }
-  else { _localUsers.push({id:'local-'+Date.now(), email, role, name, pin:newPin, active:true}); }
+  if(existing>=0){ _localUsers[existing]={..._localUsers[existing], role, name, active:true}; }
+  else { _localUsers.push({id:'local-'+Date.now(), email, role, name, active:true}); }
   emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
   if(msg){
-    msg.innerHTML=`✅ Usuario añadido (local). PIN: <strong style="font-size:20px;letter-spacing:4px;color:#1a56db">${newPin}</strong>`;
+    msg.innerHTML=`✅ Usuario añadido (local, sin conexión). Cuando vuelva la conexión, vuelve a darlo de alta para guardarlo en la nube.`;
     msg.style.color='#d97706';
   }
   await _gLoadUsers();
 }
 
-async function _gRegenPin(id, email){
-  const newPin = String(Math.floor(1000 + Math.random() * 9000));
-  if(_sb){
-    const {error} = await _sb.from('app_users').update({pin: newPin}).eq('id', id);
-    if(error){ alert('Error regenerando PIN: '+error.message); return; }
-  }
-  const u = _localUsers.find(u=>u.id===id); if(u) u.pin=newPin;
-  await _gLoadUsers();
+// Reenvía el correo de bienvenida (instrucciones de acceso por enlace mágico)
+// a un usuario ya existente. Ya no hay PIN que regenerar.
+async function _gResendWelcome(id, email, name){
   const msg = document.getElementById('gAddUserMsg');
   if(msg){
-    msg.innerHTML=`🔄 Nuevo PIN para <strong>${escapeHtml(email)}</strong>: <strong style="font-size:20px;letter-spacing:4px;color:#1a56db">${newPin}</strong> &nbsp;<button onclick="navigator.clipboard.writeText('${newPin}');this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar</button><br><span style="font-size:12px;color:#6b7280">✉️ Enviando nuevo PIN por email...</span>`;
+    msg.innerHTML=`✉️ Reenviando el correo de acceso a <strong>${escapeHtml(email)}</strong>…`;
     msg.style.color='#1a56db';
     msg.scrollIntoView({behavior:'smooth',block:'nearest'});
   }
-  // Enviar el nuevo PIN por email
-  const nombre = u ? (u.name||email) : email;
-  const ejsResult = await _ejsSendBienvenida(email, nombre, newPin);
+  const ejsResult = await _ejsSendBienvenida(email, name||email);
   if(msg){
-    const statusHtml = ejsResult.ok
-      ? '<span style="font-size:12px;color:#059669">✉️ Nuevo PIN enviado por email al ciclista y copia al administrador.</span>'
-      : `<span style="font-size:12px;color:#d97706">⚠️ PIN regenerado pero el email falló: ${ejsResult.err}</span>`;
-    msg.innerHTML = msg.innerHTML.replace(/<span[^>]*>✉️ Enviando[^<]*<\/span>/, statusHtml);
+    msg.innerHTML = ejsResult.ok
+      ? `✅ Correo de acceso reenviado a <strong>${escapeHtml(email)}</strong> (y copia a ti).`
+      : `⚠️ No se pudo reenviar el correo: ${escapeHtml(ejsResult.err||'error')}. Puedes avisarle por WhatsApp.`;
+    msg.style.color = ejsResult.ok ? '#059669' : '#d97706';
   }
 }
 
@@ -6203,8 +6219,8 @@ async function _gUpdateUserEmail(id, oldEmail){
   }
   if(u) u.email=newEmail;
   if(changed){
-    const r=await _ejsSendBienvenida(newEmail, u?.name||'', u?.pin||'');
-    if(msg){ msg.innerHTML = r.ok ? `✅ Email actualizado a <b>${escapeHtml(newEmail)}</b> y correo de bienvenida reenviado.` : `✅ Email actualizado a <b>${escapeHtml(newEmail)}</b>. ⚠️ El reenvío falló: ${escapeHtml(r.err||'')}. Puedes darle el PIN <b>${escapeHtml(u?.pin||'')}</b> a mano.`; msg.style.color = r.ok?'#059669':'#b45309'; msg.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+    const r=await _ejsSendBienvenida(newEmail, u?.name||'');
+    if(msg){ msg.innerHTML = r.ok ? `✅ Email actualizado a <b>${escapeHtml(newEmail)}</b> y correo de acceso reenviado.` : `✅ Email actualizado a <b>${escapeHtml(newEmail)}</b>. ⚠️ El reenvío falló: ${escapeHtml(r.err||'')}. Puedes avisarle por WhatsApp.`; msg.style.color = r.ok?'#059669':'#b45309'; msg.scrollIntoView({behavior:'smooth',block:'nearest'}); }
     else if(typeof showToast==='function') showToast('✅ Email actualizado y reenviado','ok',3000);
   } else {
     if(typeof showToast==='function') showToast('Email sin cambios','info',2500);
