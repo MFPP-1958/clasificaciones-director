@@ -6103,6 +6103,13 @@ async function _gLoadUsers(){
     </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:30px">No hay usuarios todavía.</td></tr>';
 }
 
+// Texto de bienvenida del último alta, para el botón "Copiar para WhatsApp".
+let _gLastWelcomeText = '';
+function _gCopyWelcomeText(btn){
+  try{ navigator.clipboard.writeText(_gLastWelcomeText||''); }catch(_){}
+  if(btn){ const t=btn.textContent; btn.textContent='✅ Copiado'; setTimeout(()=>{ btn.textContent=t; },2000); }
+}
+
 async function _gAddUser(){
   const emailEl = document.getElementById('gNewEmail');
   const nameEl  = document.getElementById('gNewName');
@@ -6116,9 +6123,10 @@ async function _gAddUser(){
   if(msg){ msg.textContent='Guardando...'; msg.style.color='#6b7280'; }
   // Ya NO se genera PIN: el acceso es por enlace mágico. Solo creamos la fila
   // en app_users (rol + activo) y enviamos el correo de bienvenida.
-  // Texto listo para WhatsApp (extra), escapado para meterlo en el onclick.
-  const waText = _ejsWelcomeMessage(name).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n');
-  const waBtn = `<button onclick="navigator.clipboard.writeText('${waText}');this.textContent='✅ Copiado';setTimeout(()=>this.textContent='📋 Copiar para WhatsApp',2000)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar para WhatsApp</button>`;
+  // Guardamos el texto en una variable (NO inline en el onclick: el mensaje
+  // lleva comillas que romperían el HTML) y el botón solo lo copia.
+  _gLastWelcomeText = _ejsWelcomeMessage(name);
+  const waBtn = `<button onclick="_gCopyWelcomeText(this)" style="background:#e0e7ff;color:#1a56db;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;font-size:12px;font-weight:700">📋 Copiar para WhatsApp</button>`;
   // Try Supabase first
   if(_sb){
     const {error} = await _sb.from('app_users').upsert({email, role, name, active:true},{onConflict:'email'});
