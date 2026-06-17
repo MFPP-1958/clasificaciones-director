@@ -38426,10 +38426,31 @@ let _fccvSel = { titulares: [], reservas: [] }; // arrays de DNIs en orden de se
 
 // ── Init de la pestaña Generar ──
 function _fccvInitGenerar(){
+  // Respetar el FILTRO GLOBAL de categoría: el listado de convocados arranca en
+  // la categoría activa (Cadete/Juvenil), no siempre en cadetes.
+  try{
+    const g = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+    if(g==='cadete' || g==='juvenil') _fccvSelCat = g;
+  }catch(_){}
   _fccvPopulatePruebas();
   _fccvPopulateStaff();
   _fccvSetCat(_fccvSelCat);
   _fccvRenderSelected();
+}
+
+// ¿Una prueba (planificada o histórica) encaja con la categoría del filtro global?
+function _fccvRaceMatchesGlobalCat(extra, name){
+  const g = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  if(!g) return true;                       // "Todas" → no filtra
+  try{
+    const keys = _raceCatGroupKeys({ raceCat: extra.raceCat||extra.cat||'', cats: extra.cats||[], inscritos: extra.inscritos||[], riders: extra.riders||[] });
+    if(keys && keys.size) return keys.has(g);
+  }catch(_){}
+  // Fallback por texto (categoría declarada + nombre de la prueba)
+  const txt = ((extra.categoria||extra.cat||'')+' '+(name||'')).toLowerCase();
+  if(g==='cadete')  return /cadet/.test(txt);
+  if(g==='juvenil') return /juvenil|j[uú]nior|\bjun\b/.test(txt);
+  return true;
 }
 
 // Extender el toggle de tabs (ya definido) para inicializar Generar al entrar
@@ -38454,6 +38475,7 @@ async function _fccvPopulatePruebas(){
       (data||[]).forEach(r => {
         let extra = {};
         try{ extra = JSON.parse(r.notes||'{}'); }catch(e){}
+        if(!_fccvRaceMatchesGlobalCat(extra, r.name)) return;   // respeta el filtro global
         const dt = extra.raceDate || (formatDateDisplay(r.date)) || r.date;
         opts += `<option value="planif:${r.id}">📅 ${escapeHtml(dt||'?')} · ${escapeHtml(r.name||'')}</option>`;
       });
@@ -38463,11 +38485,13 @@ async function _fccvPopulatePruebas(){
   try{
     const hist = (Array.isArray(_cachedHistory) && _cachedHistory.length) ? _cachedHistory : (typeof _sbLoadHistory==='function' ? await _sbLoadHistory() : []);
     if(Array.isArray(_cachedHistory) === false || !_cachedHistory.length) _cachedHistory = hist;
-    const sorted = hist.slice().sort((a,b)=>{
-      const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
-      const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
-      return db.localeCompare(da);
-    }).slice(0,25);
+    const sorted = hist.slice()
+      .filter(_raceMatchesGlobalCatGroup)    // respeta el filtro global de categoría
+      .sort((a,b)=>{
+        const da = _parseSpanishDate(a.raceDate)||'0000-00-00';
+        const db = _parseSpanishDate(b.raceDate)||'0000-00-00';
+        return db.localeCompare(da);
+      }).slice(0,25);
     if(sorted.length){
       opts += '<optgroup label="── Histórico (últimas 25) ──">';
       sorted.forEach(h => {
