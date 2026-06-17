@@ -267,9 +267,9 @@
           <h2 style="margin:0">📊 Resumen general</h2>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span class="small" id="inicioSummaryHint">Datos cargados</span>
-            <button id="catCleanupBtn" onclick="_catCleanupOpen()" title="Detectar corredores con una categoría que no encaja con su carrera (p.ej. 1 junior colado en una de cadetes) y corregir o eliminar"
+            <button id="catCleanupBtn" class="admin-only" onclick="_catCleanupOpen()" title="Detectar corredores con una categoría que no encaja con su carrera (p.ej. 1 junior colado en una de cadetes) y corregir o eliminar"
               style="background:#b45309;color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer">🧹 Revisar categorías</button>
-            <button id="dbExportBtn" onclick="_dbExportBackup()" title="Descargar una copia de seguridad de TODA tu base de datos (carreras, clasificaciones, láminas…) en un archivo JSON"
+            <button id="dbExportBtn" class="admin-only" onclick="_dbExportBackup()" title="Descargar una copia de seguridad de TODA tu base de datos (carreras, clasificaciones, láminas…) en un archivo JSON"
               style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer">💾 Copia de la base de datos</button>
           </div>
         </div>
@@ -280,7 +280,7 @@
       <section class="panel" id="weatherWidgetPanel" style="display:none;border-left:4px solid #0ea5e9;background:linear-gradient(135deg,#f0f9ff,#fff)">
         <div class="section-title" style="margin-bottom:10px">
           <h2 style="margin:0;color:#075985">🌤️ El tiempo el día de la próxima carrera</h2>
-          <button class="btn light" id="weatherRefreshBtn" onclick="_wxRenderHomeWidget(true)" style="padding:5px 11px;font-size:12px" title="Actualizar previsión desde Open-Meteo">🔄 Actualizar</button>
+          <button class="btn light admin-only" id="weatherRefreshBtn" onclick="_wxRenderHomeWidget(true)" style="padding:5px 11px;font-size:12px" title="Actualizar previsión desde Open-Meteo">🔄 Actualizar</button>
         </div>
         <div id="weatherWidgetBody"></div>
       </section>

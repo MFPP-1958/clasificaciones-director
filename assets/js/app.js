@@ -14119,7 +14119,7 @@ async function renderInicio(){
   const heroTitle = `${greeting}, ${escapeHtml(displayName)}`;
   const heroSub = team
     ? `Estás llevando el equipo <strong>${escapeHtml(team)}</strong>`
-    : `Estás viendo datos <strong>globales</strong> · <span onclick="document.getElementById('gfMyTeam')?.focus()" style="cursor:pointer;text-decoration:underline">Configura tu equipo</span> en la barra de filtros para personalizar`;
+    : `Estás viendo datos <strong>globales</strong> · <span class="admin-only" onclick="document.getElementById('gfMyTeam')?.focus()" style="cursor:pointer;text-decoration:underline">Configura tu equipo</span> en la barra de filtros para personalizar`;
 
   const elHT = document.getElementById('inicioHeroTitle');
   const elHS = document.getElementById('inicioHeroSubtitle');
