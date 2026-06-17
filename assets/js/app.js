@@ -778,19 +778,27 @@ const _ADMIN_EMAIL  = 'mfppmfpp@gmail.com';
 if(typeof emailjs !== 'undefined') emailjs.init(_EJS_KEY);
 
 // Texto del correo de bienvenida (lo controla el CÓDIGO; la plantilla de
-// EmailJS solo tiene que mostrar {{mensaje}}). Ya NO hay PIN: se entra con
-// enlace mágico por email.
+// EmailJS solo tiene que mostrar {{mensaje}}). Para usuarios NUEVOS: explica
+// las dos formas de entrar (Google o enlace por correo). Sin mencionar el PIN.
 function _ejsWelcomeMessage(nombre){
   const n = nombre || 'ciclista';
   return [
     `Hola ${n}, ya tienes acceso al Dashboard Director del equipo.`,
     ``,
-    `Para entrar (ya NO se usa PIN):`,
-    `1) Abre ${_APP_URL}`,
-    `2) Escribe tu correo y pulsa "Recibir enlace de acceso por email".`,
-    `3) Te llegará un correo con un enlace: ábrelo DESDE ESTE MISMO dispositivo y entrarás.`,
+    `Para entrar, abre ${_APP_URL} y elige una de estas dos formas:`,
     ``,
-    `Si no lo ves, mira en la carpeta de spam (y márcalo como "No es spam").`
+    `OPCIÓN 1 (la más rápida) — Entrar con Google:`,
+    `   Pulsa el botón "Entrar con Google" y elige tu cuenta.`,
+    ``,
+    `OPCIÓN 2 — Enlace por correo:`,
+    `   Escribe tu correo, pulsa "Recibir enlace de acceso por email" y te`,
+    `   llegará un enlace; ábrelo DESDE ESTE MISMO dispositivo y entrarás.`,
+    ``,
+    `IMPORTANTE: usa el mismo correo que diste al equipo (este). Si entras con`,
+    `Google, que sea esa misma cuenta.`,
+    ``,
+    `Si el enlace no te llega, mira en la carpeta de spam (y márcalo como`,
+    `"No es spam"). Cualquier duda, escríbenos.`
   ].join('\n');
 }
 
