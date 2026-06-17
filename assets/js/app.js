@@ -15588,7 +15588,7 @@ async function renderHistory(){
           ${insBtn}
           <button onclick="event.stopPropagation();_routeOpenModal('${h.id}')" title="Subir/ver recorrido (GPX/FIT) y métricas de altimetría" style="background:#fff;color:#15803d;border:1.5px solid #86efac;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗺️ Recorrido${h.route&&h.route.distance_m?' ✓':''}</button>
           <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer">📂 Cargar</button>
-          <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1.5px solid #fecdd3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
+          <button class="admin-only" onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1.5px solid #fecdd3;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗑️</button>
         </div>
       </div>
       <!-- Cuerpo: Podio general + (si procede) Top 3 de mi equipo -->
@@ -15781,7 +15781,7 @@ async function renderHistory(){
           <option value="riders">👥 + corredores</option>
           <option value="name">🔤 Nombre A-Z</option>
         </select>
-        <button onclick="_histExportFiltered()" style="margin-left:auto;background:#10b981;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap">📥 Exportar CSV (filtrado)</button>
+        <button class="admin-only" onclick="_histExportFiltered()" style="margin-left:auto;background:#10b981;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap">📥 Exportar CSV (filtrado)</button>
       </div>
       <div id="histResultCount" style="font-size:12px;color:#9ca3af;margin-bottom:10px">${sorted.length} carreras</div>
       <div id="histRenderArea">${buildCards(sorted)}</div>
@@ -16012,7 +16012,7 @@ function _histBuildTable(list){
         ${fccvBtn}
         ${insBtn}
         <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;padding:3px 9px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\udcc2</button>
-        <button onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\uddd1\ufe0f</button>
+        <button class="admin-only" onclick="_histConfirmDelete('${h.id}','${escapeAttr(h.raceName||'')}')" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:3px 7px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\uddd1\ufe0f</button>
       </td>
     </tr>`;
   }).join('');
