@@ -1044,6 +1044,10 @@ async function _rbacFinishLogin(data, via){
   try{
     if(data.my_team && typeof setMyTeam==='function'){
       setMyTeam(data.my_team);
+    } else if(!data.my_team && typeof myTeam!=='undefined' && myTeam && _sb){
+      // La BD no tiene equipo pero ESTE dispositivo sí (p.ej. el PC del director):
+      // lo subimos para que se sincronice al móvil y demás dispositivos.
+      try{ await _sb.from('app_users').update({my_team: myTeam}).eq('email', data.email); }catch(_){}
     }
     // Restaurar también filtros globales por usuario (cat/modality/gender) si existen
     if(data.my_cat !== undefined && data.my_cat !== null){
@@ -1855,6 +1859,9 @@ async function _dispInit(){
       _dispTeamCanon = await _dispRiderTeam(_rbacUser.riderName) || (myTeam?getCanonicalTeam(myTeam).toLowerCase():'');
     } else {
       _dispTeamCanon = myTeam?getCanonicalTeam(myTeam).toLowerCase():'';
+      // Fallback (p.ej. en el móvil sin equipo guardado): inferir el equipo de
+      // las láminas (team_sheets) para no listar a TODOS los corredores.
+      if(!_dispTeamCanon){ _dispTeamCanon = await _dispInferTeam(); }
     }
     // Cargar las próximas. El calendario es POR CATEGORÍA: si hay filtro global,
     // mostramos las de ESA categoría (y, por compatibilidad, las antiguas sin
@@ -1918,6 +1925,19 @@ async function _dispSelectRace(raceId){
   try{ _setActiveRace({id:r.id, name:r.name, date:r.date, localidad:r.localidad}, 'disponibilidad'); }catch(_){}
   _dispRender();
   _dispSubscribe(r.id);
+}
+
+// Infiere el equipo del director cuando no hay myTeam (típico en el móvil):
+// el equipo dominante en las láminas guardadas en Supabase (team_sheets).
+async function _dispInferTeam(){
+  try{
+    if(!_sb) return '';
+    const {data}=await _sb.from('team_sheets').select('team');
+    const counts={};
+    (data||[]).forEach(x=>{ const t=getCanonicalTeam(x.team||'').toLowerCase(); if(t) counts[t]=(counts[t]||0)+1; });
+    let best='', bn=0; for(const k in counts){ if(counts[k]>bn){ bn=counts[k]; best=k; } }
+    return best;
+  }catch(_){ return ''; }
 }
 
 // Plantilla de mi equipo en la categoría activa (nombres "Apellido, Nombre")
