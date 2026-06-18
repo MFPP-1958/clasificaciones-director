@@ -11943,27 +11943,21 @@ function findRiderByQuery(q, pool){
 }
 function initAnalisis(){
   if(!riders.length) return;
-  // Solo auto-rellenar si el panel de resultado está vacío/oculto
+  // Solo actuar si el panel de resultado está vacío/oculto
   const result=$('individualResult');
   const alreadyShown = result && result.style.display!=='none' && result.innerHTML.trim().length>0;
   if(alreadyShown) return;
 
-  const myTeamLocal = myTeam || localStorage.getItem('myTeam') || '';
-  const teamSel=$('analysisTeamFilter');
-
-  // Determinar el mejor ciclista: primero del equipo propio, si no hay, el 1º general
-  const pool = myTeamLocal
-    ? riders.filter(r=>(r.team||'').toLowerCase()===myTeamLocal.toLowerCase())
-    : [];
-  const myBest = pool.length ? pool.sort((a,b)=>a.pos-b.pos)[0] : riders[0];
-  if(!myBest) return;
-
-  if(teamSel && myTeamLocal){
-    teamSel.value=myTeamLocal;
-    updateAnalysisSuggestions();
+  // POR DEFECTO no seleccionamos a nadie: se muestra la lista completa de
+  // ciclistas para que el usuario elija. (Antes auto-seleccionaba uno y parecía
+  // que la tabla estaba "rota" filtrada a un único corredor.)
+  if($('analysisSearchInput')) $('analysisSearchInput').value='';
+  if($('searchInput')) $('searchInput').value='';
+  try{ applyFilters(); }catch(_){}
+  try{ if(typeof updateAnalysisSuggestions==='function') updateAnalysisSuggestions(); }catch(_){}
+  if(result){
+    result.innerHTML='<div style="text-align:center;padding:34px 20px;color:#9ca3af"><div style="font-size:34px">👤</div><p style="margin-top:8px;font-weight:600;color:#6b7280">Busca o elige un ciclista de la lista para ver su análisis individual.</p></div>';
   }
-  if($('analysisSearchInput')) $('analysisSearchInput').value=myBest.name;
-  analyzeRiderByKey(getRiderKey(myBest));
 }
 
 function analyzeRiderByKey(key){
@@ -34055,7 +34049,7 @@ function _aiBuildNotesBlock(rider){
   const updatedTxt = (note && note.updated)
     ? `Última actualización: ${new Date(note.updated).toLocaleString('es-ES',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}`
     : '';
-  return `<div class="rider-history-block" style="margin-top:14px">
+  return `<div class="rider-history-block admin-only" style="margin-top:14px">
     <div class="rider-history-title">📝 Notas del director sobre ${escapeHtml(rider.name||'')}</div>
     <p class="small" style="margin:0 0 8px;color:#6b7280">Información contextual del corredor: lesiones, observaciones, eventos clave… Las notas se guardan localmente en este dispositivo.</p>
     <textarea id="aiRiderNoteTextarea" placeholder="Escribe aquí tus notas. Ej: 'Lesionado del 5 al 12 de mayo', 'Pinchazo en Trofeo X', 'Bueno en circuitos cortos'…" style="width:100%;min-height:90px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:13px;line-height:1.5;resize:vertical">${escapeHtml(existing)}</textarea>
