@@ -18907,7 +18907,7 @@ function _evolRenderRiders(history,myTeam){
           ${riderKeys.map(k=>{const e=riderMap.get(k);return`<option value="${escapeHtml(k)}">${escapeHtml(e.displayName)} (${e.races.length} carrera${e.races.length!==1?'s':''})</option>`;}).join('')}
         </select>
       </div>
-      <button class="btn" id="evolExportImgBtn" onclick="exportEvolRiderImage()" style="background:#0b2f6b;color:#fff;font-weight:700;padding:9px 16px;white-space:nowrap" title="Genera una imagen PNG con la trayectoria del corredor seleccionado">📸 Crear imagen</button>
+      <button class="btn" id="evolExportImgBtn" onclick="exportEvolRiderPDF()" style="background:#0b2f6b;color:#fff;font-weight:700;padding:9px 16px;white-space:nowrap" title="Genera un PDF maquetado con la trayectoria del corredor (título, KPIs, gráfico y tabla, con márgenes)">📄 Crear PDF</button>
     </div>
     <div id="evolRiderContent"></div>`;
   // Auto-seleccionar: corredor con más carreras; en empate, mejor posición media
@@ -21448,6 +21448,87 @@ async function exportEvolRiderImage(){
   }finally{
     tmpWrap.remove();
   }
+}
+
+// PDF MAQUETADO de la trayectoria del corredor (Evolución): documento limpio
+// en columna, con título, KPIs, gráfico y tabla, y márgenes en TODAS las
+// páginas (@page). El usuario imprime con "Márgenes: Predeterminado".
+async function exportEvolRiderPDF(){
+  const sel=document.getElementById('evolRiderSelect');
+  if(!sel||!sel.value){ alert('Primero selecciona un corredor.'); return; }
+  const entry=window._evolRiderMap?.get(sel.value);
+  if(!entry){ alert('No se han encontrado datos del corredor.'); return; }
+
+  const chartCanvas=document.getElementById('evolRiderChart');
+  const tableEl=document.getElementById('evolRiderContent')?.querySelector('table');
+  if(!chartCanvas||!tableEl){ alert('Aún no se ha renderizado el gráfico. Cambia de corredor y vuelve a pulsar.'); return; }
+
+  const races=entry.races.slice();
+  const positions=races.map(r=>r.pos);
+  const best=Math.min(...positions);
+  const avg=(positions.reduce((s,n)=>s+n,0)/positions.length).toFixed(1);
+  const totalCarreras=races.length;
+  const sortedByDate=races.slice().sort((a,b)=>(_parseSpanishDate(a.raceDate)||'0000').localeCompare(_parseSpanishDate(b.raceDate)||'0000'));
+  const periodoStr=(sortedByDate[0]?.raceDate&&sortedByDate[sortedByDate.length-1]?.raceDate)
+    ? `${sortedByDate[0].raceDate} → ${sortedByDate[sortedByDate.length-1].raceDate}` : '—';
+  const lastRace=sortedByDate[sortedByDate.length-1]||{};
+  const teamGuess=(riders||[]).find(r=>(r.name||'').toLowerCase()===entry.displayName.toLowerCase())?.team||'';
+  const catGuess=lastRace.cat||'';
+  const dateStr=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Gráfico → imagen
+  let chartImg=''; try{ chartImg=chartCanvas.toDataURL('image/png'); }catch(_){}
+  // Tabla → clon limpio (sin estilos en línea ni botones) para controlar la maqueta
+  const tClone=tableEl.cloneNode(true);
+  tClone.querySelectorAll('button').forEach(b=>b.remove());
+  tClone.querySelectorAll('[style]').forEach(e=>e.removeAttribute('style'));
+  tClone.removeAttribute('class');
+  const tableHTML=tClone.outerHTML;
+
+  const chips=[`🏁 ${totalCarreras} carreras`, `🥇 Mejor: ${best}º`, `📊 Media: ${avg}º`, teamGuess?`🚴 ${teamGuess}`:'', catGuess?`🎽 ${catGuess}`:'']
+    .filter(Boolean).map(t=>`<span class="chip">${escapeHtml(t)}</span>`).join('');
+  const _pdfLogoSrc=document.querySelector('.brand-logo')?.src||'';
+
+  const win=window.open('','_blank','width=1000,height=900');
+  if(!win){alert('El navegador bloqueó la ventana emergente. Permite las ventanas emergentes e inténtalo de nuevo.');return;}
+  win.document.open();
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Trayectoria — ${escapeHtml(entry.displayName)}</title>
+  <style>
+  @page{size:A4 portrait;margin:14mm 15mm}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  body{font-family:Arial,sans-serif;padding:0;color:#111;margin:0;box-sizing:border-box}
+  @media screen{body{background:#e9eef5;padding:28px 0}.sheet{max-width:210mm;margin:0 auto;background:#fff;padding:14mm 15mm;box-shadow:0 4px 24px rgba(0,0,0,.15);box-sizing:border-box}}
+  .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:18px 22px;border-radius:12px;margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+  .hdr *{color:#fff!important}
+  .hdr-title{font-size:21px;font-weight:900;margin:0 0 4px}
+  .hdr-sub{font-size:12px;opacity:.85}
+  .hdr-logo{height:60px;max-width:150px;object-fit:contain;background:#fff!important;border-radius:10px;padding:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 14px}
+  .chip{background:#eef2ff;color:#3730a3;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800}
+  .sec-title{font-size:14px;font-weight:800;color:#0b2f6b;margin:0 0 8px;page-break-after:avoid}
+  .chart-img{width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  th{background:#f0f4f8!important;padding:7px 9px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467}
+  td{padding:6px 9px;border-bottom:1px solid #eef2f7;color:#111}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  tr:nth-child(even) td{background:#f9fbff!important}
+  .footer{margin-top:16px;font-size:10px;color:#9ca3af;text-align:center}
+  </style></head><body>
+  <div class="sheet">
+    <div class="hdr">
+      <div><div class="hdr-title">🚴 Trayectoria — ${escapeHtml(entry.displayName)}</div><div class="hdr-sub">Periodo: ${escapeHtml(periodoStr)}</div></div>
+      ${_pdfLogoSrc?`<img class="hdr-logo" src="${_pdfLogoSrc}" alt="MFPP">`:''}
+    </div>
+    <div class="chips">${chips}</div>
+    ${chartImg?`<div class="sec-title">📈 Evolución de la posición</div><img class="chart-img" src="${chartImg}" alt="Evolución">`:''}
+    <div class="sec-title">📋 Carreras</div>
+    ${tableHTML}
+    <div class="footer">Resumen de trayectoria deportiva · MFPP · ${dateStr}</div>
+  </div>
+  <script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>
+  </body></html>`);
+  win.document.close();
 }
 
 /* ══════════════════════════════════════════════════════════════════
