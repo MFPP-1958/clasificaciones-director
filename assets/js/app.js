@@ -10692,9 +10692,12 @@ async function exportTop10AsPDF(){
   win.document.open();
   win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Top 10 — ${escapeHtml(raceName)}</title>
   <style>
-  @page{size:A4 portrait;margin:0}
+  @page{size:A4 portrait;margin:14mm 15mm}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-  body{font-family:Arial,sans-serif;padding:14mm 15mm;color:#111;margin:0;box-sizing:border-box}
+  body{font-family:Arial,sans-serif;padding:0;color:#111;margin:0;box-sizing:border-box}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  .sec-title{page-break-after:avoid}
   .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:18px 22px;border-radius:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:16px}
   .hdr *{color:#fff!important}
   .hdr-title{font-size:21px;font-weight:900;margin:0 0 4px}
