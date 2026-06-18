@@ -10916,6 +10916,9 @@ async function _eqLoadClub(){
   for(const race of history){
     const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
     if(year && ry!==year) continue;
+    // Solo carreras de la categoría activa (así "Clasificado X/Y" usa Y = carreras
+    // de esa categoría, sin mezclar cadetes y juveniles).
+    if(_gGrp && typeof _raceCatGroupKeys==='function' && !_raceCatGroupKeys(race).has(_gGrp)) continue;
     const raceId = race.id||race.raceName;
     allRaceIds.add(raceId);
     for(const r of (race.riders||[])){
@@ -11015,6 +11018,7 @@ function _buildTeamRosterData(history, teamName, year){
   for(const race of history){
     const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
     if(year && ry!==year) continue;
+    if(_gGrp && typeof _raceCatGroupKeys==='function' && !_raceCatGroupKeys(race).has(_gGrp)) continue;
     allRaceIds.add(race.id||race.raceName);
     for(const r of (race.riders||[])){
       if(getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) continue;
