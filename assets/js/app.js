@@ -10639,10 +10639,25 @@ async function exportTop10AsPDF(){
   const G=(r)=> (typeof formatSeconds==='function')?formatSeconds(r.gapSeconds):'';
   const medal=(p)=> p===1?'🥇':p===2?'🥈':p===3?'🥉':'';
 
-  // Equipos en el Top 10 (reparto)
-  const teamCount={}; top.forEach(r=>{ if(r.team) teamCount[r.team]=(teamCount[r.team]||0)+1; });
-  const teamChips=Object.entries(teamCount).sort((a,b)=>b[1]-a[1])
-    .map(([t,n])=>`<span style="display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:800;margin:2px 4px 2px 0">${escapeHtml(t)} · ${n}</span>`).join('');
+  // Equipos en el Top 10 (reparto): posiciones que ocupa cada equipo
+  const teamPos={}; top.forEach(r=>{ if(r.team){ (teamPos[r.team]=teamPos[r.team]||[]).push(r.pos); } });
+  const teamsByDom=Object.entries(teamPos).sort((a,b)=>b[1].length-a[1].length||Math.min(...a[1])-Math.min(...b[1]));
+  const domPalette=['#1a56db','#15803d','#b45309','#7c3aed','#0891b2','#be185d','#ca8a04','#475569'];
+
+  const teamChips=teamsByDom
+    .map(([t,p])=>`<span style="display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:800;margin:2px 4px 2px 0">${escapeHtml(t)} · ${p.length}</span>`).join('');
+
+  // Bloque "Dominio en el Top 10": círculos con las posiciones de cada equipo
+  const domRows=teamsByDom.map(([t,poss],i)=>{
+    const c=domPalette[i%domPalette.length];
+    const circles=poss.slice().sort((a,b)=>a-b).map(p=>`<span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:2px solid ${c};border-radius:50%;font-size:12px;font-weight:800;color:${c};margin:2px 4px 2px 0">${p}</span>`).join('');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eef2f7">
+      <span style="flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:${c}"></span>
+      <div style="flex:0 0 185px;font-weight:800;font-size:12px;color:#0b2f6b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t)}</div>
+      <div style="flex:1;display:flex;flex-wrap:wrap;align-items:center">${circles}</div>
+      <div style="flex:0 0 auto;font-weight:900;color:#0b2f6b;font-size:15px;min-width:20px;text-align:right">${poss.length}</div>
+    </div>`;
+  }).join('');
 
   const podium=top.slice(0,3);
   const podColors=['#fff7e6','#f1f5f9','#fef3e2'];
@@ -10700,6 +10715,7 @@ async function exportTop10AsPDF(){
   <div class="sec-title">🏆 Podio</div>
   <div class="podium">${podiumHtml}</div>
   ${teamChips?`<div class="sec-title">👥 Equipos en el Top 10</div><div style="margin-bottom:16px">${teamChips}</div>`:''}
+  ${domRows?`<div class="sec-title">📊 Dominio en el Top 10 <span style="font-weight:400;color:#94a3b8;font-size:11px">· posiciones por equipo</span></div><div style="margin-bottom:16px">${domRows}</div>`:''}
   <div class="sec-title">📋 Clasificación Top 10</div>
   <table>
     <thead><tr><th style="text-align:center">Pos</th><th>Ciclista</th><th>Equipo</th><th style="text-align:center">Cat.</th><th>CCAA</th><th style="text-align:center">Tiempo</th><th style="text-align:center">Dif.</th></tr></thead>
