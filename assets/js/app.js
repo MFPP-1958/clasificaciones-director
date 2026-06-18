@@ -10623,57 +10623,92 @@ async function exportTop10AsPNG(){
   }
 }
 
+// PDF del Top 10 MAQUETADO (no es una captura): bloques en columna, uno debajo
+// de otro, con márgenes. Cabecera + podio + equipos en el Top 10 + tabla.
 async function exportTop10AsPDF(){
   if(!hasValidData){alert('Carga una clasificación primero.');return;}
-  showLoading('Generando PDF del Top 10…','Capturando la infografía para PDF. Puede tardar unos segundos.');
-  try{
-    const canvas=await _captureTop10Canvas();
-    const imgData=canvas.toDataURL('image/png');
-    const raceName=($('raceName')?.value||'Top10').replace(/[<>:"/\\|?*]/g,'').trim();
-    const raceDate=($('raceDate')?.value||'').trim();
+  const top=(riders||[]).filter(r=>r.pos).slice().sort((a,b)=>a.pos-b.pos).slice(0,10);
+  if(!top.length){alert('No hay clasificación para exportar.');return;}
+  const raceName=($('raceName')?.value||'Top 10').trim();
+  const raceDate=($('raceDate')?.value||'').trim();
+  const km=($('raceKm')?.value||'').trim();
+  const avg=($('raceAvg')?.value||'').trim();
+  const loc=($('raceLocalidad')?.value||'').trim();
+  const ctype=($('raceCircuitType')?.value||'').trim();
+  const T=(r)=> r.time || (typeof formatHMS==='function'?formatHMS(r.totalSeconds):'') || '';
+  const G=(r)=> (typeof formatSeconds==='function')?formatSeconds(r.gapSeconds):'';
+  const medal=(p)=> p===1?'🥇':p===2?'🥈':p===3?'🥉':'';
 
-    // Calcular dimensiones exactas de la página en mm a partir del canvas
-    // canvas.width/height son el doble del lógico (scale:2), dividimos por 2
-    const logicW=canvas.width/2;
-    const logicH=canvas.height/2;
-    const MM=0.264583; // 1px a 96dpi = 0.264583mm
-    const pageWmm=Math.round(logicW*MM);
-    const pageHmm=Math.round(logicH*MM);
+  // Equipos en el Top 10 (reparto)
+  const teamCount={}; top.forEach(r=>{ if(r.team) teamCount[r.team]=(teamCount[r.team]||0)+1; });
+  const teamChips=Object.entries(teamCount).sort((a,b)=>b[1]-a[1])
+    .map(([t,n])=>`<span style="display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:800;margin:2px 4px 2px 0">${escapeHtml(t)} · ${n}</span>`).join('');
 
-    const win=window.open('','_blank','width=1000,height=800');
-    if(!win){hideLoading();alert('El navegador bloqueó la ventana emergente. Permite las ventanas emergentes e inténtalo de nuevo.');return;}
+  const podium=top.slice(0,3);
+  const podColors=['#fff7e6','#f1f5f9','#fef3e2'];
+  const podBorder=['#f59e0b','#9ca3af','#b45309'];
+  const podiumHtml=podium.map((r,i)=>`
+    <div style="flex:1;background:${podColors[i]};border:2px solid ${podBorder[i]};border-radius:12px;padding:12px;text-align:center">
+      <div style="font-size:22px">${medal(i+1)}</div>
+      <div style="font-size:18px;font-weight:900;color:#0b2f6b">${i+1}º</div>
+      <div style="font-weight:800;color:#0b2f6b;font-size:13px;margin-top:2px">${escapeHtml(_evolNormName?_evolNormName(r.name):r.name)}</div>
+      <div style="font-size:11px;color:#475569">${escapeHtml(r.team||'')}</div>
+      <div style="font-family:monospace;font-weight:800;color:#0b2f6b;margin-top:3px">${escapeHtml(T(r))}</div>
+      ${i>0?`<div style="font-size:11px;color:#b45309">+${escapeHtml(G(r))}</div>`:''}
+    </div>`).join('');
 
-    win.document.open();
-    win.document.write(`<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>${raceName} – Top 10</title>
-<style>
-  /* Página del mismo tamaño exacto que la imagen → sin escala, sin recorte, sin márgenes */
-  @page{size:${pageWmm}mm ${pageHmm}mm;margin:0}
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:${pageWmm}mm;height:${pageHmm}mm;background:#f4f7fb;overflow:hidden}
-  img{display:block;width:${pageWmm}mm;height:${pageHmm}mm;object-fit:fill}
-  @media print{
-    html,body{background:#f4f7fb}
-    img{width:${pageWmm}mm;height:${pageHmm}mm}
-  }
-</style>
-</head>
-<body>
-  <img src="${imgData}" alt="Top 10 – ${raceName}">
-<script>
-  window.onload=function(){setTimeout(function(){window.print();},600);}
-<\/script>
-</body>
-</html>`);
-    win.document.close();
-    hideLoading();
-  }catch(e){
-    hideLoading();
-    alert('Error al generar el PDF: '+(e.message||e));
-  }
+  const rowsHtml=top.map(r=>`
+    <tr>
+      <td style="text-align:center;font-weight:900;color:#0b2f6b">${medal(r.pos)} ${r.pos}º</td>
+      <td style="font-weight:700">${escapeHtml(_evolNormName?_evolNormName(r.name):r.name)}</td>
+      <td style="color:#475569">${escapeHtml(r.team||'')}</td>
+      <td style="text-align:center;color:#475569">${escapeHtml(r.cat||'')}</td>
+      <td style="color:#475569">${escapeHtml(r.region||'')}</td>
+      <td style="text-align:center;font-family:monospace">${escapeHtml(T(r))}</td>
+      <td style="text-align:center;color:#b45309">${r.pos===1?'—':'+'+escapeHtml(G(r))}</td>
+    </tr>`).join('');
+
+  const meta=[raceDate?'📅 '+raceDate:'', loc?'📍 '+loc:'', km?'📏 '+km+' km':'', avg?'⚡ '+avg+' km/h':'', ctype?'🛣️ '+ctype:''].filter(Boolean).join(' · ');
+  const _pdfLogoSrc=document.querySelector('.brand-logo')?.src||'';
+  const dateStr=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
+
+  const win=window.open('','_blank','width=1000,height=900');
+  if(!win){alert('El navegador bloqueó la ventana emergente. Permite las ventanas emergentes e inténtalo de nuevo.');return;}
+  win.document.open();
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Top 10 — ${escapeHtml(raceName)}</title>
+  <style>
+  @page{size:A4 portrait;margin:0}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  body{font-family:Arial,sans-serif;padding:14mm 15mm;color:#111;margin:0;box-sizing:border-box}
+  .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:18px 22px;border-radius:12px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .hdr *{color:#fff!important}
+  .hdr-title{font-size:21px;font-weight:900;margin:0 0 4px}
+  .hdr-sub{font-size:12px;opacity:.85}
+  .hdr-logo{height:64px;max-width:150px;object-fit:contain;background:#fff!important;border-radius:10px;padding:6px}
+  .sec-title{font-size:14px;font-weight:800;color:#0b2f6b;margin:0 0 8px}
+  .podium{display:flex;gap:10px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{background:#f0f4f8!important;padding:7px 9px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467}
+  td{padding:7px 9px;border-bottom:1px solid #eef2f7}
+  tr:nth-child(even) td{background:#f9fbff!important}
+  .footer{margin-top:16px;font-size:10px;color:#9ca3af;text-align:center}
+  </style></head><body>
+  <div class="hdr">
+    <div><div class="hdr-title">🏁 Top 10 — ${escapeHtml(raceName)}</div><div class="hdr-sub">${escapeHtml(meta)}</div></div>
+    ${_pdfLogoSrc?`<img class="hdr-logo" src="${_pdfLogoSrc}" alt="MFPP">`:''}
+  </div>
+  <div class="sec-title">🏆 Podio</div>
+  <div class="podium">${podiumHtml}</div>
+  ${teamChips?`<div class="sec-title">👥 Equipos en el Top 10</div><div style="margin-bottom:16px">${teamChips}</div>`:''}
+  <div class="sec-title">📋 Clasificación Top 10</div>
+  <table>
+    <thead><tr><th style="text-align:center">Pos</th><th>Ciclista</th><th>Equipo</th><th style="text-align:center">Cat.</th><th>CCAA</th><th style="text-align:center">Tiempo</th><th style="text-align:center">Dif.</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="footer">Informe generado por Dashboard Director · MFPP · ${dateStr}</div>
+  <script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>
+  </body></html>`);
+  win.document.close();
 }
 
 function renderTeamSummary(){
