@@ -11906,7 +11906,11 @@ function getPercentileColor(percentile){
 
 function updateAnalysisSuggestions(){
   const teamFilter=$('analysisTeamFilter')?.value||'';
-  const base=teamFilter ? riders.filter(r=>r.team===teamFilter) : riders;
+  // EL FILTRO GLOBAL MANDA: el buscador solo sugiere ciclistas de la categoría
+  // activa (p.ej. con "Cadete" no salen juveniles/sub23 del mismo club).
+  const _gGrp = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  const _inGrp = (cat)=>{ if(!_gGrp) return true; const cg=(typeof _calCatGroup==='function')?_calCatGroup(cat):null; return !!cg && cg.key===_gGrp; };
+  const base=(teamFilter ? riders.filter(r=>r.team===teamFilter) : riders).filter(r=>_inGrp(r.cat));
   // Enriquecer con ciclistas que SOLO aparecen en histórico (inscritos o clasificados en otras carreras)
   // — pensado sobre todo para el botón "DNFs de la temporada" cuando un ciclista no se ha clasificado
   // en la prueba actual pero sí ha estado inscrito en otras.
@@ -11922,6 +11926,7 @@ function updateAnalysisSuggestions(){
         const pushIfMatch = (x)=>{
           const k = nkey(x.name||''); if(!k || known.has(k) || acc.has(k)) return;
           if(teamFilter && (x.team||'').trim() !== teamFilter) return;
+          if(!_inGrp(x.cat)) return;   // el filtro global de categoría también manda aquí
           acc.set(k, { name: x.name||'', team: x.team||'', bib: x.bib||'' });
         };
         insArr.forEach(pushIfMatch);
