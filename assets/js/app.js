@@ -10899,6 +10899,16 @@ function _eqSelectClub(teamName){
   _eqLoadClub();
 }
 
+// Fiabilidad HONESTA: encogimiento bayesiano hacia una media + mínimo de carreras.
+// Evita el "100% con 1 sola carrera": con pocas carreras tira hacia la media (0.55)
+// y con menos de 3 se marca "pocos datos" (no se muestra un % engañoso).
+function _eqReliability(hits, n){
+  const K=3, PRIOR=0.55, MIN=3;
+  if(!n) return {pct:0, frac:0, few:true};
+  const frac=(hits + K*PRIOR)/(n + K);
+  return { pct: Math.round(frac*100), frac, few: n < MIN };
+}
+
 async function _eqLoadClub(){
   const teamName = _eqCurrentClub; if(!teamName) return;
   const year = $('eqClubYear')?.value||'';
@@ -10947,11 +10957,13 @@ async function _eqLoadClub(){
     const podiums=rd.positions.filter(p=>p<=3).length;
     const top10=rd.positions.filter(p=>p<=10).length;
     const margin=Math.max(3,Math.round(avg*0.3));
-    const rel=rd.positions.filter(p=>Math.abs(p-avg)<=margin).length/n;
+    const _hits=rd.positions.filter(p=>Math.abs(p-avg)<=margin).length;
+    const _relInfo=_eqReliability(_hits, n);   // fiabilidad con encogimiento + mínimo
+    const rel=_relInfo.frac;
     const partRatio=totalRaces>0?rd.raceIds.size/totalRaces:0;
     const score=avg*0.5+avg*(1-rel)*0.3+avg*(1-partRatio)*0.2;
     const adn=_computeADN(rd.positions,rd.raceHistory);
-    return {nameKey:nk,displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,races:rd.raceIds.size,totalRaces,score,adn,rel:Math.round(rel*100)};
+    return {nameKey:nk,displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,races:rd.raceIds.size,totalRaces,score,adn,rel:_relInfo.pct,relFew:_relInfo.few};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
 
   const medalColor = i=>i===0?'#f59e0b':i===1?'#9ca3af':i===2?'#b45309':'#e5e7eb';
@@ -10991,7 +11003,7 @@ async function _eqLoadClub(){
           <td style="text-align:center;font-weight:800;color:${r.wins>0?'#12b76a':'#9ca3af'}">${r.wins>0?'🥇 '+r.wins:'—'}</td>
           <td style="text-align:center;font-weight:800;color:${r.podiums>0?'#f59e0b':'#9ca3af'}">${r.podiums>0?'🏆 '+r.podiums:'—'}</td>
           <td style="text-align:center;color:#374151;font-weight:700">${r.top10}</td>
-          <td><span style="color:${r.rel>=75?'#12b76a':r.rel>=50?'#f59e0b':'#dc2626'};font-weight:800">${r.rel}%</span></td>
+          <td>${r.relFew?'<span style="color:#9ca3af;font-weight:700;font-size:11px">pocos datos</span>':`<span style="color:${r.rel>=75?'#12b76a':r.rel>=50?'#f59e0b':'#dc2626'};font-weight:800">${r.rel}%</span>`}</td>
           <td>
             <div style="font-size:11px;font-weight:700;color:${bg};white-space:nowrap">${r.races}/${totalRaces} (${pct}%)</div>
             <div class="club-participation-bar"><div class="club-participation-fill" style="width:${pct}%;background:${bg}"></div></div>
@@ -11040,11 +11052,13 @@ function _buildTeamRosterData(history, teamName, year){
     const podiums=rd.positions.filter(p=>p<=3).length;
     const top10=rd.positions.filter(p=>p<=10).length;
     const margin=Math.max(3,Math.round(avg*0.3));
-    const rel=Math.round(rd.positions.filter(p=>Math.abs(p-avg)<=margin).length/n*100);
+    const _hits=rd.positions.filter(p=>Math.abs(p-avg)<=margin).length;
+    const _relInfo=_eqReliability(_hits, n);   // fiabilidad con encogimiento + mínimo
+    const rel=_relInfo.pct;
     const partRatio=totalRaces>0?rd.raceIds.size/totalRaces:0;
-    const score=avg*0.5+avg*(1-rel/100)*0.3+avg*(1-partRatio)*0.2;
+    const score=avg*0.5+avg*(1-_relInfo.frac)*0.3+avg*(1-partRatio)*0.2;
     const adn=_computeADN(rd.positions,rd.raceHistory);
-    return {displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,races:rd.raceIds.size,totalRaces,score,adn,rel};
+    return {displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,races:rd.raceIds.size,totalRaces,score,adn,rel,relFew:_relInfo.few};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
   const teamWins=riders.reduce((s,r)=>s+r.wins,0);
   const teamPodiums=riders.reduce((s,r)=>s+r.podiums,0);
@@ -11077,7 +11091,7 @@ function _openTeamRosterPDFWindow(teamName, year, data){
       <td style="text-align:center;color:${r.wins>0?'#12b76a':'#9ca3af'};font-weight:700">${r.wins||'—'}</td>
       <td style="text-align:center;color:${r.podiums>0?'#b45309':'#9ca3af'};font-weight:700">${r.podiums||'—'}</td>
       <td style="text-align:center;font-weight:700">${r.top10}</td>
-      <td style="text-align:center;color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'};font-weight:700">${r.rel}%</td>
+      <td style="text-align:center;font-weight:700">${r.relFew?'<span style="color:#9ca3af;font-size:10px">pocos datos</span>':`<span style="color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'}">${r.rel}%</span>`}</td>
       <td style="text-align:center;color:#667085">${r.races}/${totalRaces}</td>
     </tr>`).join('');
 
@@ -11290,7 +11304,7 @@ function _ipRenderPreview(){
       <td style="padding:8px 12px;text-align:center;color:${r.wins>0?'#12b76a':'#9ca3af'};font-weight:700">${r.wins||'—'}</td>
       <td style="padding:8px 12px;text-align:center;color:${r.podiums>0?'#b45309':'#9ca3af'};font-weight:700">${r.podiums||'—'}</td>
       <td style="padding:8px 12px;text-align:center;font-weight:700">${r.top10}</td>
-      <td style="padding:8px 12px;text-align:center;color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'};font-weight:700">${r.rel}%</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:700">${r.relFew?'<span style="color:#9ca3af;font-size:11px">pocos datos</span>':`<span style="color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'}">${r.rel}%</span>`}</td>
       <td style="padding:8px 12px;text-align:center;color:#667085;font-size:12px">${r.races}/${data.totalRaces}</td>
     </tr>`).join('');
   box.innerHTML = `
