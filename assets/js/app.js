@@ -10907,6 +10907,9 @@ async function _eqLoadClub(){
 
   const history = await _ensureHistory();
   const teamCanon = getCanonicalTeam(teamName).toLowerCase();
+  // EL FILTRO GLOBAL MANDA: solo corredores de la categoría activa (Cadete →
+  // solo cadetes; Juvenil → solo juveniles). Se saltan las filas de otra categoría.
+  const _gGrp = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
 
   const riderMap = {};
   const allRaceIds = new Set();
@@ -10919,6 +10922,7 @@ async function _eqLoadClub(){
       if(getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) continue;
       const nameKey = normalizeRiderName(r.name||'').trim(); if(!nameKey) continue;
       const rcat = getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat);
+      if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(rcat):null; if(!(_cg && _cg.key===_gGrp)) continue; }
       if(!riderMap[nameKey]) riderMap[nameKey]={displayName:r.name||nameKey,positions:[],raceIds:new Set(),raceHistory:[],cat:rcat};
       riderMap[nameKey].positions.push(r.pos);
       riderMap[nameKey].raceIds.add(raceId);
