@@ -1586,13 +1586,13 @@
           </div>
           <button class="btn light" onclick="_simExportPDF()" id="simExportBtn" style="display:none;background:#0369a1;color:#fff;border:0;font-weight:800">🖨️ Exportar predicción PDF</button>
           <button class="btn light" onclick="_simOpenPredVsReal()" id="simPredVsRealBtn" style="display:none;background:#dc2626;color:#fff;border:0;font-weight:800" title="Comparar el Top 10 predicho con el resultado real">🎯 Predicho vs Real</button>
-          <button class="btn light" onclick="_simOpenTeamBriefing()" id="simBriefingHdrBtn" style="background:#0b2f6b;color:#fff;border:0;font-weight:800" title="Abrir briefing pre-carrera para explicar a los corredores">📋 Briefing pre-carrera</button>
-          <button class="btn light" onclick="_simOpenBriefPanel()" id="simBriefBtn" style="display:none;background:#7c3aed;color:#fff;border:0;font-weight:800">📋 Hoja de Ruta</button>
-          <button class="btn light" onclick="_simOpenCerebro()" id="simCerebroBtn" style="background:#7c3aed;color:#fff;border:0;font-weight:800" title="Conclusiones automáticas en texto: quién está en racha o en bajón y fiabilidad por tipo de prueba">🧠 Cerebro del Simulador</button>
-          <button class="btn light" onclick="_simToggleModelAccuracy()" style="background:#16a34a;color:#fff;border:0;font-weight:800">📊 Precisión del modelo</button>
-          <button class="btn light" onclick="_simOpenTerrainCalibration()" id="simTerrainCalibBtn" style="background:#0d9488;color:#fff;border:0;font-weight:800" title="Calibración global del factor de terreno sobre todo el histórico">🗺️ Calibración terreno</button>
-          <button class="btn light" onclick="_simOpenClimateCalibration()" id="simClimateCalibBtn" style="background:#0284c7;color:#fff;border:0;font-weight:800" title="Calibración global del factor climático (calor / frío / viento / lluvia) sobre todo el histórico">🌦️ Calibración clima</button>
-          <button class="btn light" onclick="_simToggleEloBlend()" id="simEloBlendBtn" style="background:#fff;color:#374151;border:1px solid #d1d5db;font-weight:700" title="Activa/desactiva la mezcla del rating Elo dinámico en las predicciones (Bloque 1)">🧬 Mezcla Elo: OFF</button>
+          <button class="btn light admin-only" onclick="_simOpenTeamBriefing()" id="simBriefingHdrBtn" style="background:#0b2f6b;color:#fff;border:0;font-weight:800" title="Abrir briefing pre-carrera para explicar a los corredores">📋 Briefing pre-carrera</button>
+          <button class="btn light admin-only" onclick="_simOpenBriefPanel()" id="simBriefBtn" style="display:none;background:#7c3aed;color:#fff;border:0;font-weight:800">📋 Hoja de Ruta</button>
+          <button class="btn light admin-only" onclick="_simOpenCerebro()" id="simCerebroBtn" style="background:#7c3aed;color:#fff;border:0;font-weight:800" title="Conclusiones automáticas en texto: quién está en racha o en bajón y fiabilidad por tipo de prueba">🧠 Cerebro del Simulador</button>
+          <button class="btn light admin-only" onclick="_simToggleModelAccuracy()" style="background:#16a34a;color:#fff;border:0;font-weight:800">📊 Precisión del modelo</button>
+          <button class="btn light admin-only" onclick="_simOpenTerrainCalibration()" id="simTerrainCalibBtn" style="background:#0d9488;color:#fff;border:0;font-weight:800" title="Calibración global del factor de terreno sobre todo el histórico">🗺️ Calibración terreno</button>
+          <button class="btn light admin-only" onclick="_simOpenClimateCalibration()" id="simClimateCalibBtn" style="background:#0284c7;color:#fff;border:0;font-weight:800" title="Calibración global del factor climático (calor / frío / viento / lluvia) sobre todo el histórico">🌦️ Calibración clima</button>
+          <button class="btn light admin-only" onclick="_simToggleEloBlend()" id="simEloBlendBtn" style="background:#fff;color:#374151;border:1px solid #d1d5db;font-weight:700" title="Activa/desactiva la mezcla del rating Elo dinámico en las predicciones (Bloque 1)">🧬 Mezcla Elo: OFF</button>
         </div>
         <div id="simRaceMeta" class="sim-race-meta" style="display:none"></div>
       </section>
