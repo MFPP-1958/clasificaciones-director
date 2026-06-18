@@ -10936,10 +10936,13 @@ async function _eqLoadClub(){
       const nameKey = normalizeRiderName(r.name||'').trim(); if(!nameKey) continue;
       const rcat = getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat);
       if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(rcat):null; if(!(_cg && _cg.key===_gGrp)) continue; }
-      if(!riderMap[nameKey]) riderMap[nameKey]={displayName:r.name||nameKey,positions:[],raceIds:new Set(),raceHistory:[],cat:rcat,dnf:0};
+      if(!riderMap[nameKey]) riderMap[nameKey]={displayName:r.name||nameKey,positions:[],raceIds:new Set(),raceHistory:[],cat:rcat,dnf:0,bestPos:null,bestField:null};
       riderMap[nameKey].positions.push(r.pos);
       riderMap[nameKey].raceIds.add(raceId);
       riderMap[nameKey].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos,time:r.time||''});
+      // Mejor puesto + tamaño del pelotón (clasificados) de ESA carrera
+      const _field=(race.riders||[]).length;
+      if(riderMap[nameKey].bestPos==null || r.pos<riderMap[nameKey].bestPos){ riderMap[nameKey].bestPos=r.pos; riderMap[nameKey].bestField=_field; }
     }
     // DNF: corredores del equipo que estaban INSCRITOS en esta carrera pero NO
     // aparecen en la clasificación (no acabaron). Es un dato de fiabilidad real.
@@ -10972,7 +10975,7 @@ async function _eqLoadClub(){
     const partRatio=totalRaces>0?rd.raceIds.size/totalRaces:0;
     const score=avg*0.5+avg*(1-rel)*0.3+avg*(1-partRatio)*0.2;
     const adn=_computeADN(rd.positions,rd.raceHistory);
-    return {nameKey:nk,displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,dnf:rd.dnf||0,races:rd.raceIds.size,totalRaces,score,adn,rel:_relInfo.pct,relFew:_relInfo.few};
+    return {nameKey:nk,displayName:rd.displayName,cat:rd.cat,avg,best,bestField:rd.bestField,wins,podiums,top10,dnf:rd.dnf||0,races:rd.raceIds.size,totalRaces,score,adn,rel:_relInfo.pct,relFew:_relInfo.few};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
 
   const medalColor = i=>i===0?'#f59e0b':i===1?'#9ca3af':i===2?'#b45309':'#e5e7eb';
@@ -11009,7 +11012,7 @@ async function _eqLoadClub(){
           <td style="color:#667085">${escapeHtml(r.cat||'—')}</td>
           <td>${_adnBadgeHtml(r.adn,'small')}</td>
           <td style="font-weight:800;color:#0b2f6b">${r.avg.toFixed(1)}º</td>
-          <td><span style="background:${r.best===1?'#12b76a':r.best<=3?'#f59e0b':'#f3f4f6'};color:${r.best<=3?'#fff':'#374151'};padding:2px 8px;border-radius:6px;font-weight:800;font-size:11px">${r.best}º</span></td>
+          <td><span style="background:${r.best===1?'#12b76a':r.best<=3?'#f59e0b':'#f3f4f6'};color:${r.best<=3?'#fff':'#374151'};padding:2px 8px;border-radius:6px;font-weight:800;font-size:11px">${r.best}º</span>${r.bestField?`<span style="color:#9ca3af;font-size:10px"> /${r.bestField}</span>`:''}</td>
           <td style="text-align:center;font-weight:800;color:${r.wins>0?'#12b76a':'#9ca3af'}">${r.wins>0?'🥇 '+r.wins:'—'}</td>
           <td style="text-align:center;font-weight:800;color:${r.podiums>0?'#f59e0b':'#9ca3af'}">${r.podiums>0?'🏆 '+r.podiums:'—'}</td>
           <td style="text-align:center;color:#374151;font-weight:700">${r.top10}</td>
@@ -11048,10 +11051,12 @@ function _buildTeamRosterData(history, teamName, year){
       const nk=normalizeRiderName(r.name||'').trim(); if(!nk) continue;
       const rcat=getRiderCorrectCat(r.name,ry?parseInt(ry):null,r.cat);
       if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(rcat):null; if(!(_cg && _cg.key===_gGrp)) continue; }
-      if(!riderMap[nk]) riderMap[nk]={displayName:r.name||nk,positions:[],raceIds:new Set(),cat:rcat,raceHistory:[],dnf:0};
+      if(!riderMap[nk]) riderMap[nk]={displayName:r.name||nk,positions:[],raceIds:new Set(),cat:rcat,raceHistory:[],dnf:0,bestPos:null,bestField:null};
       riderMap[nk].positions.push(r.pos);
       riderMap[nk].raceIds.add(race.id||race.raceName);
       riderMap[nk].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos});
+      const _field=(race.riders||[]).length;
+      if(riderMap[nk].bestPos==null || r.pos<riderMap[nk].bestPos){ riderMap[nk].bestPos=r.pos; riderMap[nk].bestField=_field; }
     }
     // DNF: inscritos del equipo que no acabaron (no aparecen en la clasificación)
     const _finishKeys=new Set((race.riders||[]).filter(r=>getCanonicalTeam(r.team||'').toLowerCase()===teamCanon).map(r=>normalizeRiderName(r.name||'').trim()));
@@ -11077,7 +11082,7 @@ function _buildTeamRosterData(history, teamName, year){
     const partRatio=totalRaces>0?rd.raceIds.size/totalRaces:0;
     const score=avg*0.5+avg*(1-_relInfo.frac)*0.3+avg*(1-partRatio)*0.2;
     const adn=_computeADN(rd.positions,rd.raceHistory);
-    return {displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,dnf:rd.dnf||0,races:rd.raceIds.size,totalRaces,score,adn,rel,relFew:_relInfo.few};
+    return {displayName:rd.displayName,cat:rd.cat,avg,best,bestField:rd.bestField,wins,podiums,top10,dnf:rd.dnf||0,races:rd.raceIds.size,totalRaces,score,adn,rel,relFew:_relInfo.few};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
   const teamWins=riders.reduce((s,r)=>s+r.wins,0);
   const teamPodiums=riders.reduce((s,r)=>s+r.podiums,0);
@@ -11106,7 +11111,7 @@ function _openTeamRosterPDFWindow(teamName, year, data){
       <td style="color:#475467">${escapeHtml(r.cat||'—')}</td>
       <td style="font-size:10px">${r.adn.icon} ${escapeHtml(r.adn.label)}</td>
       <td style="font-weight:800;color:#0b2f6b;text-align:center">${r.avg.toFixed(1)}º</td>
-      <td style="text-align:center;font-weight:800">${r.best}º</td>
+      <td style="text-align:center;font-weight:800">${r.best}º${r.bestField?`<span style="color:#9ca3af;font-weight:600;font-size:10px"> /${r.bestField}</span>`:''}</td>
       <td style="text-align:center;color:${r.wins>0?'#12b76a':'#9ca3af'};font-weight:700">${r.wins||'—'}</td>
       <td style="text-align:center;color:${r.podiums>0?'#b45309':'#9ca3af'};font-weight:700">${r.podiums||'—'}</td>
       <td style="text-align:center;font-weight:700">${r.top10}</td>
@@ -11320,7 +11325,7 @@ function _ipRenderPreview(){
       <td style="padding:8px 12px;color:#475467;font-size:12px">${escapeHtml(r.cat||'—')}</td>
       <td style="padding:8px 12px;font-size:12px">${r.adn.icon} ${escapeHtml(r.adn.label)}</td>
       <td style="padding:8px 12px;font-weight:800;color:#0b2f6b;text-align:center">${r.avg.toFixed(1)}º</td>
-      <td style="padding:8px 12px;text-align:center;font-weight:800">${r.best}º</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:800">${r.best}º${r.bestField?`<span style="color:#9ca3af;font-weight:600;font-size:10px"> /${r.bestField}</span>`:''}</td>
       <td style="padding:8px 12px;text-align:center;color:${r.wins>0?'#12b76a':'#9ca3af'};font-weight:700">${r.wins||'—'}</td>
       <td style="padding:8px 12px;text-align:center;color:${r.podiums>0?'#b45309':'#9ca3af'};font-weight:700">${r.podiums||'—'}</td>
       <td style="padding:8px 12px;text-align:center;font-weight:700">${r.top10}</td>
