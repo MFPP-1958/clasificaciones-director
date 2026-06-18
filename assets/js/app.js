@@ -6972,6 +6972,22 @@ function _toggleNav(){
 document.addEventListener('DOMContentLoaded', ()=>_applyNavState(false));
 // Fallback si DOMContentLoaded ya pasó
 if(document.readyState !== 'loading') _applyNavState(false);
+
+// Al terminar de cargar (o volver de la caché del navegador), LIMPIAR el filtro
+// de ciclista que el navegador restaura solo, para que la tabla salga completa
+// por defecto. El retardo asegura que se ejecuta DESPUÉS de la restauración.
+function _clearRiderSearchFilter(){
+  try{
+    const si=document.getElementById('searchInput');
+    const ai=document.getElementById('analysisSearchInput');
+    let changed=false;
+    if(si && si.value){ si.value=''; changed=true; }
+    if(ai && ai.value){ ai.value=''; changed=true; }
+    if(changed && typeof applyFilters==='function' && typeof riders!=='undefined' && riders && riders.length) applyFilters();
+  }catch(_){}
+}
+window.addEventListener('load',    ()=>setTimeout(_clearRiderSearchFilter,150));
+window.addEventListener('pageshow',()=>setTimeout(_clearRiderSearchFilter,150));
 // Al rotar el dispositivo o redimensionar ventana, ajustar automáticamente
 let _navResizeTimer;
 window.addEventListener('resize', ()=>{
