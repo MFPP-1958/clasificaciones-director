@@ -10940,8 +10940,9 @@ async function _eqLoadClub(){
       riderMap[nameKey].positions.push(r.pos);
       riderMap[nameKey].raceIds.add(raceId);
       riderMap[nameKey].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos,time:r.time||''});
-      // Mejor puesto + tamaño del pelotón (clasificados) de ESA carrera
-      const _field=(race.riders||[]).length;
+      // Mejor puesto + tamaño del pelotón de ESA carrera. Preferimos los INSCRITOS
+      // (los que tomaron la salida) si hay startlist; si no, los clasificados.
+      const _field=(Array.isArray(race.inscritos)&&race.inscritos.length)?race.inscritos.length:(race.riders||[]).length;
       if(riderMap[nameKey].bestPos==null || r.pos<riderMap[nameKey].bestPos){ riderMap[nameKey].bestPos=r.pos; riderMap[nameKey].bestField=_field; }
     }
     // DNF: corredores del equipo que estaban INSCRITOS en esta carrera pero NO
@@ -11012,7 +11013,7 @@ async function _eqLoadClub(){
           <td style="color:#667085">${escapeHtml(r.cat||'—')}</td>
           <td>${_adnBadgeHtml(r.adn,'small')}</td>
           <td style="font-weight:800;color:#0b2f6b">${r.avg.toFixed(1)}º</td>
-          <td><span style="background:${r.best===1?'#12b76a':r.best<=3?'#f59e0b':'#f3f4f6'};color:${r.best<=3?'#fff':'#374151'};padding:2px 8px;border-radius:6px;font-weight:800;font-size:11px">${r.best}º</span>${r.bestField?`<span style="color:#9ca3af;font-size:10px"> /${r.bestField}</span>`:''}</td>
+          <td><span style="background:${r.best===1?'#12b76a':r.best<=3?'#f59e0b':'#f3f4f6'};color:${r.best<=3?'#fff':'#374151'};padding:2px 8px;border-radius:6px;font-weight:800;font-size:11px">${r.best}º</span>${r.bestField?`<span style="color:#9ca3af;font-size:10px" title="de ${r.bestField} participantes que tomaron la salida en esa prueba"> /${r.bestField}</span>`:''}</td>
           <td style="text-align:center;font-weight:800;color:${r.wins>0?'#12b76a':'#9ca3af'}">${r.wins>0?'🥇 '+r.wins:'—'}</td>
           <td style="text-align:center;font-weight:800;color:${r.podiums>0?'#f59e0b':'#9ca3af'}">${r.podiums>0?'🏆 '+r.podiums:'—'}</td>
           <td style="text-align:center;color:#374151;font-weight:700">${r.top10}</td>
@@ -11055,7 +11056,7 @@ function _buildTeamRosterData(history, teamName, year){
       riderMap[nk].positions.push(r.pos);
       riderMap[nk].raceIds.add(race.id||race.raceName);
       riderMap[nk].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos});
-      const _field=(race.riders||[]).length;
+      const _field=(Array.isArray(race.inscritos)&&race.inscritos.length)?race.inscritos.length:(race.riders||[]).length;
       if(riderMap[nk].bestPos==null || r.pos<riderMap[nk].bestPos){ riderMap[nk].bestPos=r.pos; riderMap[nk].bestField=_field; }
     }
     // DNF: inscritos del equipo que no acabaron (no aparecen en la clasificación)
