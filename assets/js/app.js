@@ -8936,19 +8936,28 @@ function populateFilters(){
   // así un equipo cuyos corredores no se han clasificado en la prueba actual sigue siendo
   // seleccionable para el informe de DNFs.
   if($('analysisTeamFilter')){
+    // EL FILTRO GLOBAL MANDA: solo equipos con corredores de la CATEGORÍA y la
+    // CCAA activas (p.ej. "Cadete" + "Comunitat Valenciana").
+    const _gGrp=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+    const _gReg=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region)||'';
+    const _okGlobal=(x)=>{
+      if(_gGrp){ const cg=(typeof _calCatGroup==='function')?_calCatGroup(x&&x.cat):null; if(!(cg&&cg.key===_gGrp)) return false; }
+      if(_gReg){ if(((x&&x.region||'').trim())!==_gReg) return false; }
+      return true;
+    };
     const teamsSet = new Set();
-    riders.forEach(r=>{ if(r.team) teamsSet.add(r.team); });
+    riders.forEach(r=>{ if(r.team && _okGlobal(r)) teamsSet.add(r.team); });
     try{
       if(Array.isArray(_cachedHistory)){
         for(const race of _cachedHistory){
-          (race.inscritos||[]).forEach(i=>{ if(i.team) teamsSet.add(i.team); });
-          (race.riders||[]).forEach(r=>{ if(r.team) teamsSet.add(r.team); });
+          (race.inscritos||[]).forEach(i=>{ if(i.team && _okGlobal(i)) teamsSet.add(i.team); });
+          (race.riders||[]).forEach(r=>{ if(r.team && _okGlobal(r)) teamsSet.add(r.team); });
         }
       }
     }catch(e){}
-    const teams=[...teamsSet].sort();
+    const teams2=[...teamsSet].sort();
     $('analysisTeamFilter').innerHTML='<option value="">— Todos los equipos —</option>'+
-      teams.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+      teams2.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
   }
   updateAnalysisSuggestions();
   if($('compareTeamA')&&$('compareTeamB')){
