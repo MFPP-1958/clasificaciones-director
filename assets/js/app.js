@@ -11008,6 +11008,8 @@ async function _eqLoadClub(){
 // ═════════════════════════════════════════════════════════════════════
 function _buildTeamRosterData(history, teamName, year){
   const teamCanon = getCanonicalTeam(teamName).toLowerCase();
+  // EL FILTRO GLOBAL MANDA: solo corredores de la categoría activa.
+  const _gGrp = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
   const riderMap = {};
   const allRaceIds = new Set();
   for(const race of history){
@@ -11018,6 +11020,7 @@ function _buildTeamRosterData(history, teamName, year){
       if(getCanonicalTeam(r.team||'').toLowerCase()!==teamCanon) continue;
       const nk=normalizeRiderName(r.name||'').trim(); if(!nk) continue;
       const rcat=getRiderCorrectCat(r.name,ry?parseInt(ry):null,r.cat);
+      if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(rcat):null; if(!(_cg && _cg.key===_gGrp)) continue; }
       if(!riderMap[nk]) riderMap[nk]={displayName:r.name||nk,positions:[],raceIds:new Set(),cat:rcat,raceHistory:[]};
       riderMap[nk].positions.push(r.pos);
       riderMap[nk].raceIds.add(race.id||race.raceName);
@@ -11078,9 +11081,10 @@ function _openTeamRosterPDFWindow(teamName, year, data){
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>Informe ${escapeHtml(teamName)}</title>
   <style>
-  @page{size:A4 landscape;margin:15mm}
+  @page{size:A4 landscape;margin:0}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
-  body{font-family:Arial,sans-serif;padding:28px;color:#111;max-width:1200px;margin:0 auto}
+  /* Margen como PADDING en mm: así sale aunque el navegador imprima "sin márgenes". */
+  body{font-family:Arial,sans-serif;padding:13mm 15mm;color:#111;max-width:1200px;margin:0 auto;box-sizing:border-box}
   .hdr{background:linear-gradient(135deg,#0b2f6b,#1286c7)!important;color:#fff!important;padding:24px 28px;border-radius:12px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;gap:20px}
   .hdr *{color:#fff!important}
   .hdr-left{flex:1}
