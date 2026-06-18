@@ -10936,10 +10936,19 @@ async function _eqLoadClub(){
       const nameKey = normalizeRiderName(r.name||'').trim(); if(!nameKey) continue;
       const rcat = getRiderCorrectCat(r.name, ry?parseInt(ry):null, r.cat);
       if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(rcat):null; if(!(_cg && _cg.key===_gGrp)) continue; }
-      if(!riderMap[nameKey]) riderMap[nameKey]={displayName:r.name||nameKey,positions:[],raceIds:new Set(),raceHistory:[],cat:rcat};
+      if(!riderMap[nameKey]) riderMap[nameKey]={displayName:r.name||nameKey,positions:[],raceIds:new Set(),raceHistory:[],cat:rcat,dnf:0};
       riderMap[nameKey].positions.push(r.pos);
       riderMap[nameKey].raceIds.add(raceId);
       riderMap[nameKey].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos,time:r.time||''});
+    }
+    // DNF: corredores del equipo que estaban INSCRITOS en esta carrera pero NO
+    // aparecen en la clasificación (no acabaron). Es un dato de fiabilidad real.
+    const _finishKeys=new Set((race.riders||[]).filter(r=>getCanonicalTeam(r.team||'').toLowerCase()===teamCanon).map(r=>normalizeRiderName(r.name||'').trim()));
+    for(const ins of (race.inscritos||[])){
+      if(getCanonicalTeam(ins.team||'').toLowerCase()!==teamCanon) continue;
+      const ik=normalizeRiderName(ins.name||'').trim(); if(!ik || _finishKeys.has(ik)) continue;
+      if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(getRiderCorrectCat(ins.name, ry?parseInt(ry):null, ins.cat)):null; if(!(_cg && _cg.key===_gGrp)) continue; }
+      if(riderMap[ik]) riderMap[ik].dnf=(riderMap[ik].dnf||0)+1;  // solo cuenta DNF a quien ya tiene resultados
     }
   }
 
@@ -10963,7 +10972,7 @@ async function _eqLoadClub(){
     const partRatio=totalRaces>0?rd.raceIds.size/totalRaces:0;
     const score=avg*0.5+avg*(1-rel)*0.3+avg*(1-partRatio)*0.2;
     const adn=_computeADN(rd.positions,rd.raceHistory);
-    return {nameKey:nk,displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,races:rd.raceIds.size,totalRaces,score,adn,rel:_relInfo.pct,relFew:_relInfo.few};
+    return {nameKey:nk,displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,dnf:rd.dnf||0,races:rd.raceIds.size,totalRaces,score,adn,rel:_relInfo.pct,relFew:_relInfo.few};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
 
   const medalColor = i=>i===0?'#f59e0b':i===1?'#9ca3af':i===2?'#b45309':'#e5e7eb';
@@ -10987,6 +10996,7 @@ async function _eqLoadClub(){
       <thead><tr>
         <th>#</th><th>Ciclista</th><th>Cat.</th><th>ADN IA</th>
         <th>Media Ø</th><th>Mejor</th><th>Victorias</th><th>Podios</th><th>Top 10</th>
+        <th title="Carreras en las que estaba inscrito pero NO acabó (no clasificó)">DNF</th>
         <th>Fiabilidad</th><th title="Carreras en que aparece clasificado en los resultados">Clasificado</th>
       </tr></thead>
       <tbody>
@@ -11003,6 +11013,7 @@ async function _eqLoadClub(){
           <td style="text-align:center;font-weight:800;color:${r.wins>0?'#12b76a':'#9ca3af'}">${r.wins>0?'🥇 '+r.wins:'—'}</td>
           <td style="text-align:center;font-weight:800;color:${r.podiums>0?'#f59e0b':'#9ca3af'}">${r.podiums>0?'🏆 '+r.podiums:'—'}</td>
           <td style="text-align:center;color:#374151;font-weight:700">${r.top10}</td>
+          <td style="text-align:center;font-weight:800;color:${r.dnf>0?'#dc2626':'#9ca3af'}">${r.dnf>0?'🚫 '+r.dnf:'—'}</td>
           <td>${r.relFew?'<span style="color:#9ca3af;font-weight:700;font-size:11px">pocos datos</span>':`<span style="color:${r.rel>=75?'#12b76a':r.rel>=50?'#f59e0b':'#dc2626'};font-weight:800">${r.rel}%</span>`}</td>
           <td>
             <div style="font-size:11px;font-weight:700;color:${bg};white-space:nowrap">${r.races}/${totalRaces} (${pct}%)</div>
@@ -11037,10 +11048,18 @@ function _buildTeamRosterData(history, teamName, year){
       const nk=normalizeRiderName(r.name||'').trim(); if(!nk) continue;
       const rcat=getRiderCorrectCat(r.name,ry?parseInt(ry):null,r.cat);
       if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(rcat):null; if(!(_cg && _cg.key===_gGrp)) continue; }
-      if(!riderMap[nk]) riderMap[nk]={displayName:r.name||nk,positions:[],raceIds:new Set(),cat:rcat,raceHistory:[]};
+      if(!riderMap[nk]) riderMap[nk]={displayName:r.name||nk,positions:[],raceIds:new Set(),cat:rcat,raceHistory:[],dnf:0};
       riderMap[nk].positions.push(r.pos);
       riderMap[nk].raceIds.add(race.id||race.raceName);
       riderMap[nk].raceHistory.push({raceName:race.raceName,raceDate:race.raceDate,pos:r.pos});
+    }
+    // DNF: inscritos del equipo que no acabaron (no aparecen en la clasificación)
+    const _finishKeys=new Set((race.riders||[]).filter(r=>getCanonicalTeam(r.team||'').toLowerCase()===teamCanon).map(r=>normalizeRiderName(r.name||'').trim()));
+    for(const ins of (race.inscritos||[])){
+      if(getCanonicalTeam(ins.team||'').toLowerCase()!==teamCanon) continue;
+      const ik=normalizeRiderName(ins.name||'').trim(); if(!ik || _finishKeys.has(ik)) continue;
+      if(_gGrp){ const _cg=(typeof _calCatGroup==='function')?_calCatGroup(getRiderCorrectCat(ins.name, ry?parseInt(ry):null, ins.cat)):null; if(!(_cg && _cg.key===_gGrp)) continue; }
+      if(riderMap[ik]) riderMap[ik].dnf=(riderMap[ik].dnf||0)+1;
     }
   }
   const totalRaces=allRaceIds.size;
@@ -11058,7 +11077,7 @@ function _buildTeamRosterData(history, teamName, year){
     const partRatio=totalRaces>0?rd.raceIds.size/totalRaces:0;
     const score=avg*0.5+avg*(1-_relInfo.frac)*0.3+avg*(1-partRatio)*0.2;
     const adn=_computeADN(rd.positions,rd.raceHistory);
-    return {displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,races:rd.raceIds.size,totalRaces,score,adn,rel,relFew:_relInfo.few};
+    return {displayName:rd.displayName,cat:rd.cat,avg,best,wins,podiums,top10,dnf:rd.dnf||0,races:rd.raceIds.size,totalRaces,score,adn,rel,relFew:_relInfo.few};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
   const teamWins=riders.reduce((s,r)=>s+r.wins,0);
   const teamPodiums=riders.reduce((s,r)=>s+r.podiums,0);
@@ -11091,6 +11110,7 @@ function _openTeamRosterPDFWindow(teamName, year, data){
       <td style="text-align:center;color:${r.wins>0?'#12b76a':'#9ca3af'};font-weight:700">${r.wins||'—'}</td>
       <td style="text-align:center;color:${r.podiums>0?'#b45309':'#9ca3af'};font-weight:700">${r.podiums||'—'}</td>
       <td style="text-align:center;font-weight:700">${r.top10}</td>
+      <td style="text-align:center;font-weight:700;color:${r.dnf>0?'#dc2626':'#9ca3af'}">${r.dnf>0?r.dnf:'—'}</td>
       <td style="text-align:center;font-weight:700">${r.relFew?'<span style="color:#9ca3af;font-size:10px">pocos datos</span>':`<span style="color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'}">${r.rel}%</span>`}</td>
       <td style="text-align:center;color:#667085">${r.races}/${totalRaces}</td>
     </tr>`).join('');
@@ -11135,7 +11155,7 @@ function _openTeamRosterPDFWindow(teamName, year, data){
   <table>
     <thead><tr>
       <th>#</th><th>Ciclista</th><th>Cat.</th><th>ADN IA</th>
-      <th>Media</th><th>Mejor</th><th>Victorias</th><th>Podios</th><th>Top 10</th>
+      <th>Media</th><th>Mejor</th><th>Victorias</th><th>Podios</th><th>Top 10</th><th title="Inscrito pero no acabó">DNF</th>
       <th>Fiabilidad</th><th title="Carreras en que aparece clasificado en los resultados">Clasificado</th>
     </tr></thead>
     <tbody>${rowsHtml}</tbody>
@@ -11304,6 +11324,7 @@ function _ipRenderPreview(){
       <td style="padding:8px 12px;text-align:center;color:${r.wins>0?'#12b76a':'#9ca3af'};font-weight:700">${r.wins||'—'}</td>
       <td style="padding:8px 12px;text-align:center;color:${r.podiums>0?'#b45309':'#9ca3af'};font-weight:700">${r.podiums||'—'}</td>
       <td style="padding:8px 12px;text-align:center;font-weight:700">${r.top10}</td>
+      <td style="padding:8px 12px;text-align:center;font-weight:700;color:${r.dnf>0?'#dc2626':'#9ca3af'}">${r.dnf>0?r.dnf:'—'}</td>
       <td style="padding:8px 12px;text-align:center;font-weight:700">${r.relFew?'<span style="color:#9ca3af;font-size:11px">pocos datos</span>':`<span style="color:${r.rel>=75?'#12b76a':r.rel>=50?'#b45309':'#dc2626'}">${r.rel}%</span>`}</td>
       <td style="padding:8px 12px;text-align:center;color:#667085;font-size:12px">${r.races}/${data.totalRaces}</td>
     </tr>`).join('');
@@ -11329,6 +11350,7 @@ function _ipRenderPreview(){
             <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Victorias</th>
             <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Podios</th>
             <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Top 10</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467" title="Inscrito pero no acabó">DNF</th>
             <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Fiabilidad</th>
             <th style="padding:9px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#475467">Particip.</th>
           </tr>
