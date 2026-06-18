@@ -19851,9 +19851,12 @@ function _initPrFilters(history){
   const rSel = $('prRegionFilter');
   if(rSel){
     const prev = rSel.value;
-    const hasVLC = regions.includes('VLC');
+    // Por defecto (primera apertura, sin selección previa) respeta el FILTRO
+    // GLOBAL de CCAA. Si el director cambia luego este selector, se conserva.
+    const gReg = (typeof _globalFilters!=='undefined' && _globalFilters.region) || '';
+    const defReg = (!prev && gReg && regions.includes(gReg)) ? gReg : '';
     rSel.innerHTML = '<option value="">Todas</option>' +
-      regions.map(r=>`<option value="${r}"${!prev && r==='VLC' && hasVLC?' selected':''}>${r}</option>`).join('');
+      regions.map(r=>`<option value="${r}"${r===defReg?' selected':''}>${r}</option>`).join('');
     if(prev && regions.includes(prev)) rSel.value = prev;
   }
 
