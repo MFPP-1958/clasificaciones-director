@@ -15608,7 +15608,7 @@ async function renderHistory(){
     if(myInPodium){ cardBorder='2px solid #f59e0b'; cardShadow='box-shadow:0 4px 12px rgba(245,158,11,.15);'; }
     else if(isMyTeamIn){ cardBorder='2px solid #bfdbfe'; }
     if(isFav){ cardBorder='2px solid #ec4899'; cardShadow='box-shadow:0 4px 14px rgba(236,72,153,.18);'; }
-    const favBtn = `<button onclick="_histToggleFav('${h.id}',event)" title="${isFav?'Quitar de favoritas':'Marcar como favorita'}" style="background:${isFav?'#fce7f3':'#fff'};color:${isFav?'#ec4899':'#9ca3af'};border:1.5px solid ${isFav?'#f9a8d4':'#e5e7eb'};border-radius:10px;padding:8px 11px;font-weight:800;font-size:14px;cursor:pointer;line-height:1">${isFav?'⭐':'☆'}</button>`;
+    const favBtn = `<button class="admin-only" onclick="_histToggleFav('${h.id}',event)" title="${isFav?'Quitar de favoritas':'Marcar como favorita'}" style="background:${isFav?'#fce7f3':'#fff'};color:${isFav?'#ec4899':'#9ca3af'};border:1.5px solid ${isFav?'#f9a8d4':'#e5e7eb'};border-radius:10px;padding:8px 11px;font-weight:800;font-size:14px;cursor:pointer;line-height:1">${isFav?'⭐':'☆'}</button>`;
     return `<div data-racename="${escapeAttr(_searchIndex)}" data-circuittype="${escapeAttr(h.circuitType||'')}" data-year="${escapeAttr(_cardYear)}" data-cats="${escapeAttr(_cardCats)}" style="border:${cardBorder};${cardShadow}border-radius:16px;margin-bottom:14px;overflow:hidden;background:#fff">
       <div style="background:linear-gradient(135deg,#f8fbff,#eff8ff);padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:0">
@@ -16054,7 +16054,7 @@ function _histBuildTable(list){
       <td style="padding:7px 10px;font-size:12px;color:#475569">${winner?escapeHtml((winner.name||'').slice(0,22)):'\u2014'}</td>
       <td style="padding:7px 10px;text-align:center;color:#475569;font-size:12px">${riders.length} ${insMini}</td>
       <td style="padding:7px 10px;text-align:right;white-space:nowrap">
-        <button onclick="_histToggleFav('${h.id}',event)" title="${_histIsFav(h.id)?'Quitar favorita':'Marcar favorita'}" style="background:${_histIsFav(h.id)?'#fce7f3':'#fff'};color:${_histIsFav(h.id)?'#ec4899':'#9ca3af'};border:1px solid ${_histIsFav(h.id)?'#f9a8d4':'#e5e7eb'};border-radius:6px;padding:2px 6px;font-size:13px;cursor:pointer;line-height:1">${_histIsFav(h.id)?'\u2b50':'\u2606'}</button>
+        <button class="admin-only" onclick="_histToggleFav('${h.id}',event)" title="${_histIsFav(h.id)?'Quitar favorita':'Marcar favorita'}" style="background:${_histIsFav(h.id)?'#fce7f3':'#fff'};color:${_histIsFav(h.id)?'#ec4899':'#9ca3af'};border:1px solid ${_histIsFav(h.id)?'#f9a8d4':'#e5e7eb'};border-radius:6px;padding:2px 6px;font-size:13px;cursor:pointer;line-height:1">${_histIsFav(h.id)?'\u2b50':'\u2606'}</button>
         ${fccvBtn}
         ${insBtn}
         <button onclick="loadHistoryEntry('${h.id}')" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;padding:3px 9px;font-weight:700;font-size:11px;cursor:pointer;margin-left:3px">\ud83d\udcc2</button>
