@@ -655,6 +655,14 @@ function _gfShowHideBar(viewId){
 function showView(viewId){
   // RBAC: check permission
   if(_rbacUser && !_rbacPerms.has(viewId)){
+    // En vez de una pantalla brusca de "acceso denegado", llevamos al usuario a
+    // una sección que SÍ puede ver (mejor experiencia para los ciclistas).
+    const fallback = (typeof ALL_VIEWS!=='undefined') ? ALL_VIEWS.find(v=>_rbacPerms.has(v.id)) : null;
+    if(fallback && fallback.id !== viewId){
+      if(typeof showToast==='function') showToast('Esa sección no está disponible para tu acceso.','info',2800);
+      return showView(fallback.id);
+    }
+    // Sin ninguna sección permitida (caso raro): bloqueo clásico.
     document.querySelectorAll('.spa-view').forEach(v=>v.classList.remove('active'));
     const blocked = document.getElementById(viewId);
     if(blocked){
@@ -13210,6 +13218,18 @@ async function loadHistoryEntry(id){
   // Si solo hay pre-inscripción (sin clasificación), navegamos a Carga y desplegamos
   // el panel de inscritos para que el usuario pueda editar/añadir/eliminar.
   if(riders.length < 3 && hasInscritosOnly){
+    // ¿Puede el usuario ir a Carga? (staff). Si NO (ciclista/lector), lo
+    // llevamos a Tabla y filtros para que vea los inscritos, en vez de "denegado".
+    const _canCarga = !(typeof _rbacUser!=='undefined' && _rbacUser) || (typeof _rbacPerms!=='undefined' && _rbacPerms.has('view-carga'));
+    if(!_canCarga){
+      if($('fileName')) $('fileName').textContent = 'Inscritos de: '+escapeHtml(h.raceName||'');
+      hasValidData = riders.length>0;
+      selectedCompare = [];
+      try{ populateFilters(); applyFilters(); }catch(_){}
+      showView('view-tabla');
+      closeHistoryModal();
+      return;
+    }
     if($('fileName')) $('fileName').textContent = 'Pre-inscripción cargada (sin clasificación todavía): '+escapeHtml(h.raceName||'');
     hasValidData = false;
     selectedCompare = [];
