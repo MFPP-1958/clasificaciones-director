@@ -10833,19 +10833,30 @@ async function _eqInitYearFilter(){
   if(years.includes(cy)) sel.value = cy;
 }
 
-async function _eqShowAllClubs(){
-  // Muestra todos los equipos del año seleccionado al hacer foco en el input
-  const dd = $('eqClubDropdown'); if(!dd) return;
-  const year = $('eqClubYear')?.value||'';
-  const history = await _ensureHistory();
+// Lista de clubes que RESPETA el filtro global: categoría (vía _historyForGlobalCat)
+// y CCAA (region por corredor), además del año del selector del Explorador.
+async function _eqClubList(year){
+  let history = await _ensureHistory();
+  if(typeof _historyForGlobalCat==='function') history = _historyForGlobalCat(history);
+  const gReg = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
   const teams = new Set();
-  for(const race of history){
+  for(const race of (history||[])){
     const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
     if(year && ry!==year) continue;
-    for(const r of (race.riders||[]))
-      if(r.team) teams.add(getCanonicalTeam(r.team).trim());
+    for(const r of (race.riders||[])){
+      if(!r.team) continue;
+      if(gReg && ((r.region||'').trim())!==gReg) continue;
+      teams.add(getCanonicalTeam(r.team).trim());
+    }
   }
-  const sorted = [...teams].filter(Boolean).sort();
+  return [...teams].filter(Boolean).sort();
+}
+
+async function _eqShowAllClubs(){
+  // Muestra los equipos (del año + filtro global) al hacer foco en el input
+  const dd = $('eqClubDropdown'); if(!dd) return;
+  const year = $('eqClubYear')?.value||'';
+  const sorted = await _eqClubList(year);
   if(!sorted.length){ dd.classList.remove('open'); return; }
   const q = ($('eqClubSearchInput')?.value||'').trim().toLowerCase();
   const filtered = q ? sorted.filter(t=>t.toLowerCase().includes(q)) : sorted;
@@ -10858,15 +10869,7 @@ async function _eqSearchClub(){
   const q = ($('eqClubSearchInput')?.value||'').trim().toLowerCase();
   const dd = $('eqClubDropdown'); if(!dd) return;
   const year = $('eqClubYear')?.value||'';
-  const history = await _ensureHistory();
-  const teams = new Set();
-  for(const race of history){
-    const ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
-    if(year && ry!==year) continue;
-    for(const r of (race.riders||[]))
-      if(r.team) teams.add(getCanonicalTeam(r.team).trim());
-  }
-  const sorted = [...teams].filter(Boolean).sort();
+  const sorted = await _eqClubList(year);
   const matches = q ? sorted.filter(t=>t.toLowerCase().includes(q)) : sorted;
   if(!matches.length){ dd.classList.remove('open'); dd.innerHTML=''; return; }
   dd.innerHTML = matches.map(t=>`<div class="club-dd-item" onclick="_eqSelectClub('${escapeAttr(t)}')">${escapeHtml(t)}</div>`).join('');
