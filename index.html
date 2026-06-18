@@ -192,7 +192,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <label style="font-size:12px;font-weight:700;color:#475569">🎽 Categoría:</label>
-        <select id="gfCat" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:110px">
+        <select id="gfCat" class="gf-lock" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:110px">
           <option value="">Todas</option>
           <option value="cadete">Cadete</option>
           <option value="junior">Junior</option>
@@ -204,7 +204,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <label style="font-size:12px;font-weight:700;color:#475569">🚴 Modalidad:</label>
-        <select id="gfMod" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:120px">
+        <select id="gfMod" class="gf-lock" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:120px">
           <option value="">Todas</option>
           <option value="carretera">Carretera</option>
           <option value="btt">BTT / MTB</option>
@@ -215,7 +215,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <label style="font-size:12px;font-weight:700;color:#475569">⚥ Género:</label>
-        <select id="gfGen" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:120px">
+        <select id="gfGen" class="gf-lock" onchange="_gfDefaultsOnChange()" style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:120px">
           <option value="">Todos</option>
           <option value="masculino">Masculino</option>
           <option value="femenino">Femenino</option>
@@ -232,10 +232,10 @@
                  style="border:1.5px solid #fcd34d;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fffbeb;color:#78350f;min-width:200px;max-width:240px">
           <div id="gfMyTeamDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;background:#fff;border:1.5px solid #fcd34d;border-radius:8px;margin-top:3px;box-shadow:0 8px 20px rgba(0,0,0,.12);z-index:50"></div>
         </div>
-        <button onclick="_gfMyTeamUseLastRace()" title="Usar el equipo de la última prueba cargada" style="background:#fef3c7;border:1.5px solid #fcd34d;border-radius:8px;padding:5px 8px;font-size:11px;font-weight:700;color:#78350f;cursor:pointer">⚡</button>
-        <button onclick="_gfMyTeamSave()" id="gfMyTeamSaveBtn" title="Guardar selección" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:800;cursor:pointer">💾</button>
+        <button class="admin-only" onclick="_gfMyTeamUseLastRace()" title="Usar el equipo de la última prueba cargada" style="background:#fef3c7;border:1.5px solid #fcd34d;border-radius:8px;padding:5px 8px;font-size:11px;font-weight:700;color:#78350f;cursor:pointer">⚡</button>
+        <button class="admin-only" onclick="_gfMyTeamSave()" id="gfMyTeamSaveBtn" title="Guardar selección" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:800;cursor:pointer">💾</button>
       </div>
-      <button onclick="_gfReset()" style="background:#fff;border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#475569;cursor:pointer" title="Restablecer ambos filtros">✖ Limpiar</button>
+      <button class="admin-only" onclick="_gfReset()" style="background:#fff;border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#475569;cursor:pointer" title="Restablecer ambos filtros">✖ Limpiar</button>
       <span id="gfStatus" style="font-size:11px;color:#0369a1;font-weight:600;margin-left:auto"></span>
     </div>
     <!-- ═══════════════════════════════════════════════════════════════

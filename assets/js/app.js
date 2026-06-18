@@ -1333,6 +1333,28 @@ async function _togglePreviewCyclist(){
   }
 }
 
+// Para un CICLISTA: fija el filtro de categoría (y género si es femenino) a SU
+// clase, deducida de su histórico. Los selects quedan bloqueados por CSS (.gf-lock)
+// y los botones de guardar/limpiar ocultos (.admin-only) → no puede cambiarlo.
+async function _gfLockForCyclist(){
+  if(!(typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA')) return;
+  try{
+    const rg = (typeof _dispRiderCatGroup==='function' && _rbacUser.riderName) ? await _dispRiderCatGroup(_rbacUser.riderName) : '';
+    const map = {cadete:'cadete', juvenil:'junior', sub23:'sub23', elite:'elite', master:'master', fem:'femenino'};
+    const gfCat = map[rg] || '';
+    if(!gfCat) return;
+    const el=document.getElementById('gfCat'); if(el) el.value=gfCat;
+    if(typeof _globalFilters!=='undefined') _globalFilters.cat=gfCat;
+    try{ localStorage.setItem('gf_cat', gfCat); }catch(_){}
+    if(rg==='fem'){
+      const g=document.getElementById('gfGen'); if(g) g.value='femenino';
+      if(typeof _globalFilters!=='undefined') _globalFilters.gender='femenino';
+      try{ localStorage.setItem('gf_gender','femenino'); }catch(_){}
+    }
+    if(typeof _gfOnChange==='function') _gfOnChange();
+  }catch(_){}
+}
+
 function _rbacApplySession(){
   // Ocultar overlay
   const ov = document.getElementById('rbacOverlay');
@@ -1352,6 +1374,7 @@ function _rbacApplySession(){
     document.body.dataset.role = _rbacUser.role || '';
     document.body.classList.remove('preview-ciclista');
     if(staff && typeof _previewEnsureBtn==='function') _previewEnsureBtn();
+    if(!staff) setTimeout(()=>{ try{ _gfLockForCyclist(); }catch(_){} }, 300);
   }catch(_){}
   // Renderizar menú según permisos
   _rbacRenderMenu();

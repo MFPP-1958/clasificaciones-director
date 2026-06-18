@@ -1702,3 +1702,7 @@ details.sim-help .sim-help-body .tip{
    desoculte un botón). Se etiqueta cada elemento admin con class="admin-only".
    El flag body.rbac-staff lo pone _rbacApplySession según el rol. */
 body:not(.rbac-staff) .admin-only { display: none !important; }
+
+/* Filtros globales bloqueados para no-staff (ciclistas): ven su categoría/clase
+   pero no la pueden cambiar (evita que dejen el filtro en otra cosa). */
+body:not(.rbac-staff) .gf-lock { pointer-events: none; opacity: .6; background:#f1f5f9 !important; cursor: not-allowed; }
