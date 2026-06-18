@@ -9205,7 +9205,7 @@ function renderTable(){
     else if(r.pos >= 4 && r.pos <= 10) posClasses.push('row-top10');
     return `<tr data-rkey="${rkey}" onclick="selectAndAnalyzeRiderByKey('${rkey}')" class="${posClasses.join(' ')}" style="cursor:pointer">
       <td onclick="event.stopPropagation()" style="text-align:center;padding:4px">
-        <button class="edit-btn" onclick="editTableRow('${rkey}')" title="Editar fila">✏️</button>
+        <button class="edit-btn admin-only" onclick="editTableRow('${rkey}')" title="Editar fila">✏️</button>
       </td>
       <td><b>${medal}${r.pos}º</b></td>
       <td>${r.bib}</td>
@@ -25572,11 +25572,11 @@ function _buildRiderRow(r){
   const deltaCell = _historyMode ? `<td style="text-align:center">${_renderHistoricalDelta(r)}</td>` : '';
   const regionCell = (r.region||'').trim()
     ? `<td>${escapeHtml(r.region)}</td>`
-    : `<td><button onclick="event.stopPropagation();_assignRegionInline('${rkey}',event)" title="Asignar CCAA" style="background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;cursor:pointer">➕ CCAA</button></td>`;
+    : `<td><button class="admin-only" onclick="event.stopPropagation();_assignRegionInline('${rkey}',event)" title="Asignar CCAA" style="background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;cursor:pointer">➕ CCAA</button></td>`;
   return `<tr data-rkey="${rkey}" onclick="selectAndAnalyzeRiderByKey('${rkey}')" class="${isOwnTeam?'my-team-row':''}" style="cursor:pointer">
     <td class="compare-cell" onclick="event.stopPropagation()"><input type="checkbox" ${checked} onchange="toggleCompare(${r.pos},${r.bib},'${escapeAttr(r.name)}',this.checked)" title="Marca para comparar (máx 3)"></td>
     <td onclick="event.stopPropagation()" style="text-align:center;padding:4px">
-      <button class="edit-btn" onclick="editTableRow('${rkey}')" title="Editar fila">✏️</button>
+      <button class="edit-btn admin-only" onclick="editTableRow('${rkey}')" title="Editar fila">✏️</button>
     </td>
     <td><b>${medal}${r.pos}º</b></td>
     <td>${r.bib}</td>

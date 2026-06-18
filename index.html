@@ -649,15 +649,15 @@
     <h2>Clasificación filtrada</h2>
     <div class="classification-actions">
       <span class="small" id="shownCount">0 corredores mostrados · Tip: pulsa una fila para abrir el análisis individual</span>
-      <button class="btn light" onclick="enrichFromHistory()" title="Busca en el historial datos de categoría y comunidad autónoma que falten">🔍 Completar datos con historial</button>
-      <button class="btn light" onclick="showTeamRegionsDialog()" title="Equipos sin CCAA conocida en el historial">📋 Equipos sin CCAA</button>
+      <button class="btn light admin-only" onclick="enrichFromHistory()" title="Busca en el historial datos de categoría y comunidad autónoma que falten">🔍 Completar datos con historial</button>
+      <button class="btn light admin-only" onclick="showTeamRegionsDialog()" title="Equipos sin CCAA conocida en el historial">📋 Equipos sin CCAA</button>
       <button class="btn light" id="btnShowInscritos" onclick="showInscritosModal()" style="display:none" title="Ver inscritos, clasificados y DNF">📋 Inscritos & DNF</button>
       <button class="btn light" onclick="showGlobalFinishStatsModal()" title="Estadísticas de finalización del histórico (equipos, categorías y corredores)">📊 Stats finalización</button>
       <!-- Opción A · Tabla y filtros: exportar y abrir simulador -->
-      <button class="btn light" onclick="_tablaExportFiltered('xlsx')" title="Descarga un Excel con los corredores actualmente filtrados (incluye metadatos de la carrera y filtros aplicados)" style="background:#dcfce7;color:#15803d;border-color:#86efac">📊 Exportar Excel</button>
-      <button class="btn light" onclick="_tablaExportFiltered('csv')" title="Descarga un CSV con los corredores actualmente filtrados">📄 CSV</button>
+      <button class="btn light admin-only" onclick="_tablaExportFiltered('xlsx')" title="Descarga un Excel con los corredores actualmente filtrados (incluye metadatos de la carrera y filtros aplicados)" style="background:#dcfce7;color:#15803d;border-color:#86efac">📊 Exportar Excel</button>
+      <button class="btn light admin-only" onclick="_tablaExportFiltered('csv')" title="Descarga un CSV con los corredores actualmente filtrados">📄 CSV</button>
       <button class="btn light" onclick="_tablaOpenInSimulator()" title="Abre esta carrera en el simulador (necesita lista de inscritos guardada)" style="background:#ede9fe;color:#5b21b6;border-color:#a78bfa">🔮 Analizar en Simulador</button>
-      <button class="btn" style="background:#059669;border-color:#059669" onclick="saveHistory()" title="Guarda los datos actuales (incluidos los completados desde historial) en Supabase">💾 Guardar cambios</button>
+      <button class="btn admin-only" style="background:#059669;border-color:#059669" onclick="saveHistory()" title="Guarda los datos actuales (incluidos los completados desde historial) en Supabase">💾 Guardar cambios</button>
       <button class="btn light" onclick="exportFilteredClassificationPDF()">Descargar PDF</button>
     </div>
   </div>
