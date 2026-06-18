@@ -10692,12 +10692,13 @@ async function exportTop10AsPDF(){
   win.document.open();
   win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Top 10 — ${escapeHtml(raceName)}</title>
   <style>
-  @page{size:A4 portrait;margin:14mm 15mm}
+  /* margin:0 en @page + padding en la hoja → los márgenes los lleva el propio
+     documento, así sobreviven aunque el usuario elija "Márgenes: Ninguno" */
+  @page{size:A4 portrait;margin:0}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
   body{font-family:Arial,sans-serif;padding:0;color:#111;margin:0;box-sizing:border-box}
-  /* En pantalla simulamos una hoja A4 con sus márgenes; al imprimir manda @page */
-  @media screen{body{background:#e9eef5;padding:28px 0}.sheet{max-width:210mm;margin:0 auto;background:#fff;padding:14mm 15mm;box-shadow:0 4px 24px rgba(0,0,0,.15);box-sizing:border-box}}
-  @media print{.sheet{padding:0;box-shadow:none;max-width:none}}
+  .sheet{box-sizing:border-box;padding:14mm 15mm}
+  @media screen{body{background:#e9eef5;padding:28px 0}.sheet{max-width:210mm;margin:0 auto;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.15)}}
   tr{page-break-inside:avoid}
   thead{display:table-header-group}
   .sec-title{page-break-after:avoid}
