@@ -27668,8 +27668,56 @@ function _simRenderCurrent(){
   if(onlyKnown) filtered = filtered.filter(g => g.hasHistory);
   // Top 10 esperado
   _simRenderTop10(grid.slice(), catFilter);
+  // Columna derecha: resultado REAL (se rellena solo si la prueba ya se disputó)
+  _simRenderRealColumn(catFilter);
   // Tabla
   _simRenderGrid(filtered);
+}
+
+// Columna derecha del bloque "Top 10 esperado": muestra la clasificación REAL
+// de la prueba simulada en cuanto exista (se introduce el resultado). Mientras
+// no haya resultado, deja un texto-guía. Así se comparan predicción y realidad
+// lado a lado sin tener que abrir el modal "Predicho vs Real".
+function _simRenderRealColumn(catFilter){
+  const body = document.getElementById('simRealBody');
+  if(!body) return;
+  if(catFilter===undefined) catFilter = _simActiveCatFilter();
+  const race = _simCurrentData && _simCurrentData.race;
+  let real = ((race && race.riders)||[]).filter(r=>r && parseInt(r.pos)>0);
+  if(catFilter) real = real.filter(r=>(r.cat||'')===catFilter);
+  real = real.slice().sort((a,b)=>(parseInt(a.pos)||999)-(parseInt(b.pos)||999)).slice(0,10);
+
+  if(!real.length){
+    body.innerHTML = `<div class="sim-real-empty">
+        <span class="sim-real-empty-ico">⏳</span>
+        <b>Todavía sin resultado.</b><br>
+        En cuanto introduzcas la <b>clasificación real</b> de esta prueba (desde <b>Historial</b> o <b>Carga y Resumen</b>), aquí aparecerá <b>automáticamente</b> el Top 10 real junto a la predicción, para compararlos de un vistazo —sin pulsar ningún botón.
+      </div>`;
+    return;
+  }
+
+  // Set de nombres del Top 10 predicho para resaltar aciertos
+  const predNames = new Set(
+    _simPredictedPool((_simCurrentData&&_simCurrentData.grid)||[], catFilter)
+      .slice(0,10).map(g=>(g.name||'').trim().toLowerCase())
+  );
+
+  body.innerHTML = `<div class="sim-top-list">` + real.map((r,i)=>{
+    const rank=i+1;
+    const rankCls = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'def';
+    const hit = predNames.has((r.name||'').trim().toLowerCase());
+    const t = r.time || (r.totalSeconds!=null && typeof formatHMS==='function'?formatHMS(r.totalSeconds):'') || '';
+    return `<div class="sim-top-row" title="${hit?'Estaba en el Top 10 predicho ✔':'No estaba en el Top 10 predicho'}">
+      <div class="sim-top-rank ${rankCls}">${rank}º</div>
+      <div class="sim-top-info">
+        <div class="sim-top-name">${hit?'<span title="Acierto: también estaba en la predicción">✅ </span>':''}${escapeHtml(r.name||'')}</div>
+        <div class="sim-top-team">${escapeHtml(r.team||'(sin equipo)')}${r.cat?' · '+escapeHtml(r.cat):''}</div>
+      </div>
+      <div class="sim-top-metrics">
+        <div class="sim-top-metric"><div class="sim-top-metric-v" style="font-family:monospace">${escapeHtml(t)||'—'}</div><div class="sim-top-metric-l">Tiempo</div></div>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
 }
 
 function _simRenderKpis(k){
