@@ -15567,7 +15567,7 @@ async function renderHistory(){
       }
     }catch(_){}
     const fccvBtn = fccvIdMatch
-      ? `<button onclick="event.stopPropagation();_fccvShowRaceDetails('${escapeAttr(fccvIdMatch)}')" title="Ver ficha oficial FCCV" style="background:#fff;color:#1e40af;border:1.5px solid #93c5fd;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">ℹ️ FCCV</button>`
+      ? `<button class="admin-only" onclick="event.stopPropagation();_fccvShowRaceDetails('${escapeAttr(fccvIdMatch)}')" title="Ver ficha oficial FCCV" style="background:#fff;color:#1e40af;border:1.5px solid #93c5fd;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">ℹ️ FCCV</button>`
       : '';
     // ── Tier 3: badge + botón startlist ─────────────────────────────────
     const insN = Array.isArray(h.inscritos) ? h.inscritos.length : 0;
@@ -15590,7 +15590,7 @@ async function renderHistory(){
       insBadge = `<span title="Sin startlist. Cárgala desde el botón ✏️ Añadir startlist" style="display:inline-flex;align-items:center;gap:4px;background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:999px;font-size:11px;font-weight:700;padding:2px 9px">❌ Sin startlist</span>`;
     }
     const insBtnLbl = isPreInsc ? '👁️ Ver / Editar inscritos' : (insN ? '✏️ Editar startlist' : '➕ Añadir startlist');
-    const insBtn = `<button onclick="event.stopPropagation();_histAddStartlist('${h.id}')" title="${isPreInsc?'Abre la pre-inscripción para revisarla y editarla antes de la prueba':(insN?'Editar startlist existente':'Añadir startlist a esta prueba')}" style="background:#fff;color:${isPreInsc?'#1e3a8a':'#065f46'};border:1.5px solid ${isPreInsc?'#c7d2fe':'#a7f3d0'};border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">${insBtnLbl}</button>`;
+    const insBtn = `<button class="admin-only" onclick="event.stopPropagation();_histAddStartlist('${h.id}')" title="${isPreInsc?'Abre la pre-inscripción para revisarla y editarla antes de la prueba':(insN?'Editar startlist existente':'Añadir startlist a esta prueba')}" style="background:#fff;color:${isPreInsc?'#1e3a8a':'#065f46'};border:1.5px solid ${isPreInsc?'#c7d2fe':'#a7f3d0'};border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">${insBtnLbl}</button>`;
 
     const _norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     const _searchIndex=_norm(h.raceName)+' '+_norm(h.raceDate||'')+' '+_norm(h.localidad||'')+' '+_norm(h.circuitType||'');
@@ -15629,7 +15629,7 @@ async function renderHistory(){
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${favBtn}
-          <button onclick="event.stopPropagation();_histEditRace('${h.id}')" title="Editar la categoría de esta prueba (corrige si se creó en la categoría equivocada)" style="background:#fff;color:#7c3aed;border:1.5px solid #ddd6fe;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">✏️ Editar prueba${h.raceCat?' 🏷️':''}</button>
+          <button class="admin-only" onclick="event.stopPropagation();_histEditRace('${h.id}')" title="Editar la categoría de esta prueba (corrige si se creó en la categoría equivocada)" style="background:#fff;color:#7c3aed;border:1.5px solid #ddd6fe;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">✏️ Editar prueba${h.raceCat?' 🏷️':''}</button>
           ${fccvBtn}
           ${insBtn}
           <button onclick="event.stopPropagation();_routeOpenModal('${h.id}')" title="Subir/ver recorrido (GPX/FIT) y métricas de altimetría" style="background:#fff;color:#15803d;border:1.5px solid #86efac;border-radius:10px;padding:8px 12px;font-weight:800;font-size:12px;cursor:pointer">🗺️ Recorrido${h.route&&h.route.distance_m?' ✓':''}</button>
