@@ -10695,6 +10695,9 @@ async function exportTop10AsPDF(){
   @page{size:A4 portrait;margin:14mm 15mm}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
   body{font-family:Arial,sans-serif;padding:0;color:#111;margin:0;box-sizing:border-box}
+  /* En pantalla simulamos una hoja A4 con sus márgenes; al imprimir manda @page */
+  @media screen{body{background:#e9eef5;padding:28px 0}.sheet{max-width:210mm;margin:0 auto;background:#fff;padding:14mm 15mm;box-shadow:0 4px 24px rgba(0,0,0,.15);box-sizing:border-box}}
+  @media print{.sheet{padding:0;box-shadow:none;max-width:none}}
   tr{page-break-inside:avoid}
   thead{display:table-header-group}
   .sec-title{page-break-after:avoid}
@@ -10711,20 +10714,22 @@ async function exportTop10AsPDF(){
   tr:nth-child(even) td{background:#f9fbff!important}
   .footer{margin-top:16px;font-size:10px;color:#9ca3af;text-align:center}
   </style></head><body>
+  <div class="sheet">
   <div class="hdr">
     <div><div class="hdr-title">🏁 Top 10 — ${escapeHtml(raceName)}</div><div class="hdr-sub">${escapeHtml(meta)}</div></div>
     ${_pdfLogoSrc?`<img class="hdr-logo" src="${_pdfLogoSrc}" alt="MFPP">`:''}
   </div>
   <div class="sec-title">🏆 Podio</div>
   <div class="podium">${podiumHtml}</div>
-  ${teamChips?`<div class="sec-title">👥 Equipos en el Top 10</div><div style="margin-bottom:16px">${teamChips}</div>`:''}
   ${domRows?`<div class="sec-title">📊 Dominio en el Top 10 <span style="font-weight:400;color:#94a3b8;font-size:11px">· posiciones por equipo</span></div><div style="margin-bottom:16px">${domRows}</div>`:''}
   <div class="sec-title">📋 Clasificación Top 10</div>
   <table>
     <thead><tr><th style="text-align:center">Pos</th><th>Ciclista</th><th>Equipo</th><th style="text-align:center">Cat.</th><th>CCAA</th><th style="text-align:center">Tiempo</th><th style="text-align:center">Dif.</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
   </table>
+  ${teamChips?`<div class="sec-title" style="margin-top:16px">👥 Equipos en el Top 10</div><div style="margin-bottom:16px">${teamChips}</div>`:''}
   <div class="footer">Informe generado por Dashboard Director · MFPP · ${dateStr}</div>
+  </div>
   <script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>
   </body></html>`);
   win.document.close();
