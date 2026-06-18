@@ -8871,6 +8871,13 @@ function _clearAndOpenSearch(){
 }
 
 function populateFilters(){
+  // Por defecto, SIN filtro de ciclista (que la tabla salga completa). Evita que
+  // un corredor analizado antes —o restaurado por el navegador al recargar— deje
+  // la tabla filtrada a uno solo y parezca "rota".
+  try{
+    const si=$('searchInput'); if(si) si.value='';
+    const ai=$('analysisSearchInput'); if(ai) ai.value='';
+  }catch(_){}
   let teams=[...new Set(riders.map(r=>r.team).filter(Boolean))].sort();
   let cats=[...new Set(riders.map(r=>r.cat).filter(Boolean))].sort();
   let regions=[...new Set(riders.map(r=>r.region).filter(Boolean))].sort();
