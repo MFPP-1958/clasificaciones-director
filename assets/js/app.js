@@ -12354,7 +12354,7 @@ function analyseSelectedRider(){
       ${podiumHtml}
     </div>
     ${typeof renderFinishRateBlockForRider==='function'?renderFinishRateBlockForRider(r):''}
-    <div class="rider-block block-simulator">
+    <div class="rider-block block-simulator admin-only">
       <div class="rider-block-title">🎯 Simulador de Objetivos · ¿Qué pasaría si...?</div>
       <div class="small" style="margin-bottom:4px">¿Cuánto habrías subido si mejoraras X segundos por kilómetro?</div>
       <div class="sim-controls-row">
@@ -12367,7 +12367,7 @@ function analyseSelectedRider(){
 
   ${_notesStaff ? `
   <!-- #3 · Notas privadas del director -->
-  <div class="rider-history-block" style="margin-top:14px">
+  <div class="rider-history-block admin-only" style="margin-top:14px">
     <div class="rider-history-title">🗒️ Notas privadas del director <span style="font-weight:600;color:#94a3b8;font-size:12px">(solo las ve el staff)</span></div>
     <div id="riderNotesBox" data-key="${escapeAttr(_noteKey)}" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
