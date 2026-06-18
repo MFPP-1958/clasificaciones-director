@@ -12968,7 +12968,7 @@ async function openHistoryModal(){
           <div class="hist-entry-meta">${escapeHtml(meta)} · <i>aún sin inscritos · clic para empezar a añadirlos</i></div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <button class="hist-entry-load" style="background:#1f6feb" onclick="event.stopPropagation();loadPlanificadaToCarga('${h.id}')">▶ Añadir inscritos</button>
+          <button class="hist-entry-load admin-only" style="background:#1f6feb" onclick="event.stopPropagation();loadPlanificadaToCarga('${h.id}')">▶ Añadir inscritos</button>
         </div>
       </div>`;
     }
@@ -15728,7 +15728,7 @@ async function renderHistory(){
             <div style="font-weight:800;color:#0b2f6b;font-size:14px">📅 ${escapeHtml(p.raceName||'Prueba planificada')}${stateBadge}</div>
             <div style="font-size:11.5px;color:#475467;margin-top:2px">${escapeHtml(meta)}</div>
           </div>
-          <button class="btn" style="background:#1f6feb;color:#fff;font-weight:800;font-size:12px;padding:7px 12px;white-space:nowrap"
+          <button class="btn admin-only" style="background:#1f6feb;color:#fff;font-weight:800;font-size:12px;padding:7px 12px;white-space:nowrap"
             onclick="loadPlanificadaToCarga('${escapeAttr(p.id)}')">▶ Añadir inscritos</button>
         </div>`;
       }).join('');
