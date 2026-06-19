@@ -20578,11 +20578,9 @@ function _initTrendFilters(history){
       `<span class="pr-cat-pill pr-pill-all${allActive?' pr-pill-active':''}" data-cat="__all__" onclick="_trendToggleCat('__all__')">Todas</span>` +
       cats.map(c=>`<span class="pr-cat-pill${_trendSelectedCats.has(c)?' pr-pill-active':''}" data-cat="${escapeHtml(c)}" onclick="_trendToggleCat('${escapeAttr(c)}')">${escapeHtml(c)}</span>`).join('');
   }
-  // Datalists — el de ciclistas se construye con equipo y filtro global aparte
+  // Datalists — ciclistas y equipos se construyen aparte respetando el filtro global
   _trendBuildRiderDatalist(history);
-  const allTeams = [...new Set(history.flatMap(h=>(h.riders||[]).map(r=>getCanonicalTeam(r.team||'')).filter(Boolean)))].sort();
-  const tdl = $('trendTeamDatalist');
-  if(tdl) tdl.innerHTML = allTeams.map(t=>`<option value="${escapeHtml(t)}">`).join('');
+  _trendBuildTeamDatalist(history);
   // Auto-cargar el mejor ciclista de mi equipo si la lista está vacía
   if(_trendSelectedRiders.length===0 && _trendSelectedTeams.length===0 && myTeam){
     const myCanon = getCanonicalTeam(myTeam||'').toLowerCase();
@@ -20643,6 +20641,29 @@ function _trendBuildRiderDatalist(history){
       else opts.push(`<option value="${escapeAttr(o.name)}">`);
     });
   rdl.innerHTML=opts.join('');
+}
+
+// Datalist de EQUIPOS de Tendencias: respeta el filtro global de CCAA y género.
+// La región/género del equipo se infieren por mayoría de sus corredores
+// (_prBuildTeamMeta). La categoría ya viene acotada por _historyForGlobalCat.
+function _trendBuildTeamDatalist(history){
+  const tdl = $('trendTeamDatalist');
+  if(!tdl) return;
+  const gReg=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
+  const gGen=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.gender) || '';
+  let teamRegion={}, teamGender={};
+  try{ ({teamRegion, teamGender} = _prBuildTeamMeta(history)); }catch(_){}
+  const teams=[...new Set((history||[]).flatMap(h=>(h.riders||[]).map(r=>getCanonicalTeam(r.team||'')).filter(Boolean)))];
+  const out=teams.filter(t=>{
+    if(gReg && (teamRegion[t]||'')!==gReg) return false;
+    if(gGen && gGen!=='mixto'){
+      const tg=teamGender[t];
+      if(gGen==='femenino' && tg!=='F') return false;
+      if(gGen==='masculino' && tg!=='M') return false;
+    }
+    return true;
+  }).sort((a,b)=>a.localeCompare(b));
+  tdl.innerHTML=out.map(t=>`<option value="${escapeAttr(t)}">`).join('');
 }
 
 function _trendAddRiderByName(name){
@@ -20732,9 +20753,10 @@ async function renderTendencias(){
     _initTrendFilters(history);
     _trendFiltersReady = true;
   }
-  // Reconstruir el datalist de ciclistas en cada render para que refleje el
-  // filtro global actual (CCAA + categoría/género) y muestre el equipo.
+  // Reconstruir los datalists (ciclistas y equipos) en cada render para que
+  // reflejen el filtro global actual (CCAA + categoría/género).
   _trendBuildRiderDatalist(history);
+  _trendBuildTeamDatalist(history);
   // Auto-cargar mejor ciclista de Mi Equipo si la lista está vacía
   if(_trendSelectedRiders.length===0 && _trendSelectedTeams.length===0 && myTeam){
     const myCanon = getCanonicalTeam(myTeam||'').toLowerCase();
