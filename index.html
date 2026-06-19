@@ -2790,6 +2790,18 @@
             <div id="rvPassForm"></div>
             <div id="rvPasos"></div>
           </div>
+
+          <!-- Diario de carrera (cronologia de eventos) -->
+          <div class="rv-block">
+            <div class="rv-block-h">📓 Diario de carrera</div>
+            <div class="rv-pass-tabs">
+              <button class="rv-passbtn" onclick="_rvQuickMecanico()" title="Registra un problema mecanico. Usa el dorsal del buscador si hay uno escrito.">🔧 Mecanico</button>
+              <button class="rv-passbtn" onclick="_rvQuickAvit()">🍔 Avituallamiento</button>
+              <button class="rv-passbtn" onclick="_rvQuickAtaque()" title="Ataque de tu equipo. Usa el dorsal del buscador si hay uno escrito.">⚡ Ataque mi equipo</button>
+              <button class="rv-passbtn" onclick="_rvQuickNota()">📝 Nota</button>
+            </div>
+            <div id="rvDiario"></div>
+          </div>
         </div>
       </section>
     </div>

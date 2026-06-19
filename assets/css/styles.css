@@ -1734,3 +1734,11 @@ body:not(.rbac-staff) .admin-only { display: none !important; }
 /* Filtros globales bloqueados para no-staff (ciclistas): ven su categoría/clase
    pero no la pueden cambiar (evita que dejen el filtro en otra cosa). */
 body:not(.rbac-staff) .gf-lock { pointer-events: none; opacity: .6; background:#f1f5f9 !important; cursor: not-allowed; }
+
+/* Diario de carrera (linea de tiempo de Radio Vuelta) */
+.rv-diario-item{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:15px}
+.rv-diario-t{font-weight:900;color:#64748b;font-size:13px;min-width:46px}
+.rv-diario-ic{font-size:18px}
+.rv-diario-tx{flex:1;color:#111827}
+body.rv-mode-car #view-radiovuelta .rv-diario-item{font-size:19px}
+body.rv-mode-car #view-radiovuelta .rv-diario-tx{color:#000}

@@ -44567,7 +44567,7 @@ let _rvPassDraft = null;  // {type, bibs:[]}
 function _rvRaceId(){ return (_simCurrentData && _simCurrentData.race && _simCurrentData.race.id)
   || (typeof _activeRace!=='undefined' && _activeRace && _activeRace.id) || (typeof _simSelectedRaceId!=='undefined' && _simSelectedRaceId) || ''; }
 function _rvKey(){ return 'rv_'+_rvRaceId(); }
-function _rvLoad(){ try{ const s=localStorage.getItem(_rvKey()); _rvSt = s?JSON.parse(s):{breakaway:null,attacks:[],passes:[]}; }catch(_){ _rvSt={breakaway:null,attacks:[],passes:[]}; } if(!_rvSt.attacks)_rvSt.attacks=[]; if(!_rvSt.passes)_rvSt.passes=[]; }
+function _rvLoad(){ try{ const s=localStorage.getItem(_rvKey()); _rvSt = s?JSON.parse(s):{breakaway:null,attacks:[],passes:[]}; }catch(_){ _rvSt={breakaway:null,attacks:[],passes:[]}; } if(!_rvSt.attacks)_rvSt.attacks=[]; if(!_rvSt.passes)_rvSt.passes=[]; if(!_rvSt.events)_rvSt.events=[]; }
 function _rvSave(){ try{ localStorage.setItem(_rvKey(), JSON.stringify(_rvSt)); }catch(_){} }
 
 async function _rvInit(){
@@ -44618,7 +44618,7 @@ async function _rvInit(){
     dl.innerHTML=sorted.map(g=>`<option value="${escapeAttr(String(g.bib))}">${escapeAttr(String(g.bib))} · ${escapeAttr(_evolNormName?_evolNormName(g.name):g.name)}${g.team?' ('+escapeAttr(g.team)+')':''}${g.isMyTeam?' ⭐':''}</option>`).join('');
   }
   _rvLoad();
-  _rvRenderFuga(); _rvRenderAtaques(); _rvRenderPasos();
+  _rvRenderFuga(); _rvRenderAtaques(); _rvRenderPasos(); _rvRenderDiario();
   const bib=document.getElementById('rvBib'); if(bib){ bib.value=''; setTimeout(()=>bib.focus(),150); }
   document.getElementById('rvCard').innerHTML='';
 }
@@ -44726,7 +44726,7 @@ function _rvCatchFuga(){
   const bk=_rvSt.breakaway; if(!bk) return;
   const names=(bk.bibs||[]).map(b=>{ const g=_rvBibMap&&_rvBibMap[b]; return g?{bib:b,name:g.name,team:g.team}:{bib:b,name:'Dorsal '+b,team:''}; });
   _rvSt.attacks.unshift({ bibs:bk.bibs, gap:bk.gap||'', names, at:Date.now() });
-  _rvSt.breakaway=null; _rvSave(); _rvRenderFuga(); _rvRenderAtaques();
+  _rvSt.breakaway=null; _rvSave(); _rvRenderFuga(); _rvRenderAtaques(); _rvRenderDiario();
 }
 function _rvRenderAtaques(){
   const el=document.getElementById('rvAtaques'); if(!el) return;
@@ -44737,7 +44737,7 @@ function _rvRenderAtaques(){
     return `<div class="rv-atk"><div class="rv-atk-h">🕐 ${t}${a.gap?` · llegó a tener ⏱ ${escapeHtml(a.gap)}`:''}<button class="rv-atk-del" title="Borrar" onclick="_rvDelAtaque(${i})">✕</button></div><div class="rv-atk-who">${who}</div></div>`;
   }).join('');
 }
-function _rvDelAtaque(i){ _rvSt.attacks.splice(i,1); _rvSave(); _rvRenderAtaques(); }
+function _rvDelAtaque(i){ _rvSt.attacks.splice(i,1); _rvSave(); _rvRenderAtaques(); _rvRenderDiario(); }
 
 function _rvPassMode(type){
   _rvPassDraft={ type, bibs:['','',''] };
@@ -44762,7 +44762,7 @@ function _rvLogPass(){
   if(!bibs.some(Boolean)){ if(typeof showToast==='function') showToast('Mete al menos el 1º','warn'); return; }
   const top=bibs.map(b=>{ if(!b) return null; const g=_rvBibMap&&_rvBibMap[b]; return { bib:b, name:g?g.name:'Dorsal '+b, team:g?g.team:'' }; });
   _rvSt.passes.unshift({ type:_rvPassDraft.type, top, at:Date.now() });
-  _rvSave(); _rvPassCancel(); _rvRenderPasos();
+  _rvSave(); _rvPassCancel(); _rvRenderPasos(); _rvRenderDiario();
 }
 function _rvRenderPasos(){
   const el=document.getElementById('rvPasos'); if(!el) return;
@@ -44774,7 +44774,34 @@ function _rvRenderPasos(){
     return `<div class="rv-paso"><div class="rv-paso-h">${ic} ${tl} · ${t}<button class="rv-atk-del" onclick="_rvDelPaso(${i})">✕</button></div><div class="rv-paso-ord">${ord}</div></div>`;
   }).join('');
 }
-function _rvDelPaso(i){ _rvSt.passes.splice(i,1); _rvSave(); _rvRenderPasos(); }
+function _rvDelPaso(i){ _rvSt.passes.splice(i,1); _rvSave(); _rvRenderPasos(); _rvRenderDiario(); }
+
+// Diario de carrera: eventos rapidos + linea de tiempo (ataques, pasos y eventos)
+function _rvBibInfo(b){ const g=_rvBibMap&&_rvBibMap[b]; return g?{bib:b,name:g.name,team:g.team}:{bib:b,name:'Dorsal '+b,team:''}; }
+function _rvLogEvent(ev){ if(!_rvSt.events)_rvSt.events=[]; _rvSt.events.unshift(Object.assign({at:Date.now()},ev)); _rvSave(); _rvRenderDiario(); if(typeof showToast==='function') showToast('Anotado en el diario','ok',1500); }
+function _rvQuickMecanico(){ let b=(document.getElementById('rvBib')&&document.getElementById('rvBib').value||'').trim(); if(!b){ b=(prompt('Dorsal con problema mecanico (deja vacio para anotar sin dorsal):')||'').trim(); } const info=b?_rvBibInfo(b):null; _rvLogEvent({type:'mecanico', bib:b||'', name:info?info.name:'', team:info?info.team:''}); }
+function _rvQuickAvit(){ _rvLogEvent({type:'avit'}); }
+function _rvQuickAtaque(){ const b=(document.getElementById('rvBib')&&document.getElementById('rvBib').value||'').trim(); const info=b?_rvBibInfo(b):null; _rvLogEvent({type:'ataque_mio', bib:b||'', name:info?info.name:'', team:info?info.team:''}); }
+function _rvQuickNota(){ const t=(prompt('Nota rapida:')||'').trim(); if(!t) return; _rvLogEvent({type:'nota', text:t}); }
+function _rvDelEvent(i){ if(!_rvSt.events) return; _rvSt.events.splice(i,1); _rvSave(); _rvRenderDiario(); }
+function _rvRenderDiario(){
+  const el=document.getElementById('rvDiario'); if(!el) return;
+  const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
+  const items=[];
+  (_rvSt.events||[]).forEach((e,i)=>{
+    let icon='📝', label='', sub='';
+    if(e.type==='mecanico'){ icon='🔧'; label='Mecanico'; sub=e.bib?('Dorsal '+e.bib+(e.name&&e.name!=='Dorsal '+e.bib?' · '+nn(e.name):'')):''; }
+    else if(e.type==='avit'){ icon='🍔'; label='Avituallamiento'; }
+    else if(e.type==='ataque_mio'){ icon='⚡'; label='Ataque de mi equipo'; sub=e.bib?('Dorsal '+e.bib+(e.name?' · '+nn(e.name):'')):''; }
+    else if(e.type==='nota'){ icon='📝'; label='Nota'; sub=e.text||''; }
+    items.push({at:e.at, icon, label, sub, del:i});
+  });
+  (_rvSt.attacks||[]).forEach(a=>{ const who=(a.names||[]).map(n=>n.bib).join(', '); items.push({at:a.at, icon:'🏆', label:'Fuga cazada', sub:(a.gap?'⏱ '+a.gap+' · ':'')+'dorsales '+who}); });
+  (_rvSt.passes||[]).forEach(p=>{ const ic=p.type==='volante'?'🏁':'⛰️'; const tl=p.type==='volante'?'Meta volante':'Premio montana'; const ord=(p.top||[]).filter(Boolean).map((n,j)=>(j+1)+'º '+n.bib).join(' · '); items.push({at:p.at, icon:ic, label:tl, sub:ord}); });
+  if(!items.length){ el.innerHTML='<div class="rv-hint">Sin eventos aun. Usa los botones para registrar mecanicos, avituallamientos, ataques o notas. Aqui veras tambien las fugas cazadas y los pasos, por orden de hora.</div>'; return; }
+  items.sort((a,b)=>(b.at||0)-(a.at||0));
+  el.innerHTML=items.map(it=>{ const t=new Date(it.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); const del=(it.del!=null)?('<button class="rv-atk-del" title="Borrar" onclick="_rvDelEvent('+it.del+')">✕</button>'):''; return '<div class="rv-diario-item"><span class="rv-diario-t">'+t+'</span><span class="rv-diario-ic">'+it.icon+'</span><span class="rv-diario-tx"><b>'+escapeHtml(it.label)+'</b>'+(it.sub?(' · '+escapeHtml(it.sub)):'')+'</span>'+del+'</div>'; }).join('');
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // 🔬 FASE 1 · INGENIERÍA DE CARACTERÍSTICAS (Feature Engineering) — MOTOR PURO
