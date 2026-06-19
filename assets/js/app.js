@@ -5767,6 +5767,26 @@ async function _resHeatComputeData(){
     const ys = [...new Set(history.map(r=>{ const d=_parseSpanishDate(r.raceDate)||''; return d.slice(0,4); }).filter(Boolean))].sort((a,b)=>b-a);
     ys.forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent='Temporada '+y; yearSel.appendChild(o); });
   }
+  // Poblar el SELECTOR de equipo respetando el FILTRO GLOBAL (CCAA + género).
+  // Se reconstruye en cada render para reflejar cambios del filtro global.
+  const teamSelEl = document.getElementById('resHeatTeam');
+  if(teamSelEl){
+    const gReg=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
+    const gGen=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.gender) || '';
+    let teamRegion={}, teamGender={};
+    try{ ({teamRegion, teamGender} = _prBuildTeamMeta(history)); }catch(_){}
+    const teams=[...new Set(history.flatMap(r=>(r.riders||[]).map(x=>getCanonicalTeam(x.team||'')).filter(Boolean)))]
+      .filter(t=>{
+        if(gReg && (teamRegion[t]||'')!==gReg) return false;
+        if(gGen && gGen!=='mixto'){ const tg=teamGender[t]; if(gGen==='femenino'&&tg!=='F')return false; if(gGen==='masculino'&&tg!=='M')return false; }
+        return true;
+      }).sort((a,b)=>a.localeCompare(b));
+    const prev=teamSelEl.value;
+    const myLabel = myTeam ? `⭐ Mi equipo (${myTeam})` : '⭐ Mi equipo';
+    teamSelEl.innerHTML = `<option value="">${escapeHtml(myLabel)}</option>` + teams.map(t=>`<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
+    if(prev && teams.includes(prev)) teamSelEl.value=prev; else teamSelEl.value='';
+  }
+
   const selYear = yearSel ? yearSel.value : '';
   if(selYear) history = history.filter(r=> (_parseSpanishDate(r.raceDate)||'').slice(0,4)===selYear );
 
