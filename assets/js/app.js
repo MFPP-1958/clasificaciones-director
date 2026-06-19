@@ -44663,17 +44663,17 @@ function _featBuildRiderFeatures(history){
 
     // marcar a TODOS los que sabemos que tomaron la salida
     const seen = new Set();
-    const touch = (name, team, cat)=>{
+    const touch = (name, team, cat, region)=>{
       const k=_nk(name); if(!k) return null;
-      if(!map.has(k)) map.set(k,{ key:k, displayName:name, team:team||'', cat:cat||'', results:[], startedCount:0, finishedCount:0, finishedInStarted:0 });
+      if(!map.has(k)) map.set(k,{ key:k, displayName:name, team:team||'', cat:cat||'', region:region||'', results:[], startedCount:0, finishedCount:0, finishedInStarted:0 });
       const o=map.get(k);
       if(name && name.length>=o.displayName.length) o.displayName=name; // mejor nombre visible
-      if(team) o.team=team; if(cat) o.cat=cat;
+      if(team) o.team=team; if(cat) o.cat=cat; if(region) o.region=region;
       return o;
     };
     // finalizadores
     finishers.forEach(r=>{
-      const o=touch(r.name, r.team, r.cat); if(!o) return;
+      const o=touch(r.name, r.team, r.cat, r.region); if(!o) return;
       o.results.push({ dateISO, pos:r.pos, field, pct: field>0 ? r.pos/field : null, type:rt });
       o.finishedCount++; seen.add(o.key);
       if(hadStartlist){ /* started se cuenta abajo desde startSet */ }
@@ -44683,7 +44683,7 @@ function _featBuildRiderFeatures(history){
       startSet.forEach(k=>{
         // localizar nombre original del inscrito
         const ins=(race.inscritos||[]).find(i=>_nk(i&&i.name)===k);
-        const o=touch(ins?ins.name:k, ins?ins.team:'', ins?ins.cat:'');
+        const o=touch(ins?ins.name:k, ins?ins.team:'', ins?ins.cat:'', ins?ins.region:'');
         if(o){ o.startedCount++; if(seen.has(k)) o.finishedInStarted++; }  // ¿salió Y acabó?
       });
     }
@@ -44780,6 +44780,16 @@ function _labGet(name){
   const _nk = s => (typeof normalizeRiderName==='function') ? normalizeRiderName(s||'').trim() : (s||'').trim().toLowerCase();
   return _labFeatAll().get(_nk(name)) || null;
 }
+// ¿El corredor cumple el FILTRO GLOBAL (CCAA + categoría/género)? La categoría
+// de grupo ya la aplica _historyForGlobalCat; aquí afinamos CCAA, categoría y
+// género. Si el filtro global está en "todas las CCAA", no acota por región.
+function _labMatchesGlobalFilters(o){
+  if(!o) return false;
+  const gReg=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
+  if(gReg && (o.region||'')!==gReg) return false;
+  if(typeof _gfMatchesCatGender==='function' && !_gfMatchesCatGender(o.cat||'', o.displayName||'')) return false;
+  return true;
+}
 
 async function _labInit(){
   try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
@@ -44787,7 +44797,7 @@ async function _labInit(){
   // Poblar el datalist SOLO con corredores de la categoría activa
   const dl=document.getElementById('labRiderList');
   if(dl){
-    const all=[..._labFeatAll().values()].sort((a,b)=>a.displayName.localeCompare(b.displayName));
+    const all=[..._labFeatAll().values()].filter(_labMatchesGlobalFilters).sort((a,b)=>a.displayName.localeCompare(b.displayName));
     dl.innerHTML=all.map(o=>`<option value="${escapeAttr(o.displayName)}${o.team?' ('+escapeAttr(o.team)+')':''}">`).join('');
   }
   _labRenderRaceTags();
@@ -44827,7 +44837,7 @@ function _labShow(){
   const disc=(typeof _clDiscipline==='function')?_clDiscipline(o):null;
   const discHtml= disc ? `<span class="lab-disc" title="Según su rendimiento por tipo de prueba (confianza ${disc.confidence})">${disc.icon} ${disc.label}${disc.confidence!=='alta'?' · confianza '+disc.confidence:''}</span>` : '';
   // Selector de rival para head-to-head
-  const others=[..._labFeatAll().values()].filter(x=>x.key!==o.key).sort((a,b)=>a.displayName.localeCompare(b.displayName));
+  const others=[..._labFeatAll().values()].filter(x=>x.key!==o.key && _labMatchesGlobalFilters(x)).sort((a,b)=>a.displayName.localeCompare(b.displayName));
   const rivalOpts='<option value="">— elige un rival —</option>'+others.map(x=>`<option value="${escapeAttr(x.displayName)}">${escapeHtml(x.displayName)}${x.team?' ('+escapeHtml(x.team)+')':''}</option>`).join('');
 
   card.innerHTML=`<div class="lab-card">
