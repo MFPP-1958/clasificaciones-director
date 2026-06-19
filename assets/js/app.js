@@ -20968,7 +20968,7 @@ function _trendDrawRidersChart(filtered){
       scales:{
         y:{reverse:true, title:{display:true,text:'Posición (↑ mejor)'},
            ticks:{stepSize:1}, grid:{color:'#f0f0f0'}},
-        x:{ticks:{maxRotation:0, minRotation:0, font:{size:10}, autoSkip:false}, grid:{display:false}}
+        x:{ticks:{maxRotation:60, minRotation:60, font:{size:10}, autoSkip:false}, grid:{display:false}}
       },
       plugins:{
         legend:{
@@ -21089,7 +21089,7 @@ function _trendDrawTeamsChart(filtered){
       scales:{
         y:{reverse:true, title:{display:true,text:'Ranking equipo (↑ mejor)'},
            ticks:{stepSize:1}, grid:{color:'#f0f0f0'}},
-        x:{ticks:{maxRotation:0, minRotation:0, font:{size:10}, autoSkip:false}, grid:{display:false}}
+        x:{ticks:{maxRotation:60, minRotation:60, font:{size:10}, autoSkip:false}, grid:{display:false}}
       },
       plugins:{
         legend:{
