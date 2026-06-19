@@ -88,6 +88,13 @@ function openLoadPanelForNew(){
 function _navToggleSection(sectionId){
   const sec = document.querySelector(`.nav-section[data-section="${sectionId}"]`);
   if(!sec) return;
+  const willOpen = sec.classList.contains('collapsed'); // estaba cerrada → se abrirá
+  // ACORDEÓN: al abrir una sección, cerrar las demás (solo las que tienen cabecera).
+  if(willOpen){
+    document.querySelectorAll('.nav-section[data-section]').forEach(s=>{
+      if(s!==sec && s.querySelector('.nav-section-header')) s.classList.add('collapsed');
+    });
+  }
   sec.classList.toggle('collapsed');
   // Persistir estado
   try{
@@ -114,16 +121,30 @@ function _navAutoExpandActive(viewId){
   const btn = document.querySelector(`.nav-btn[data-view="${viewId}"]`);
   if(!btn) return;
   const sec = btn.closest('.nav-section');
-  if(sec && sec.classList.contains('collapsed')){
-    sec.classList.remove('collapsed');
-    // No persistimos esta auto-expansión (solo al click del usuario)
-  }
+  if(!sec) return;
+  // ACORDEÓN: al navegar, dejar abierta solo la sección de la vista activa.
+  document.querySelectorAll('.nav-section[data-section]').forEach(s=>{
+    if(s!==sec && s.querySelector('.nav-section-header')) s.classList.add('collapsed');
+  });
+  if(sec.classList.contains('collapsed')) sec.classList.remove('collapsed');
+  // No persistimos esta auto-expansión (solo al click del usuario)
+}
+// ── Menú off-canvas en tablet/móvil (hamburguesa) ──
+function _navMobileToggle(){ document.body.classList.toggle('nav-mobile-open'); }
+function _navMobileClose(){ document.body.classList.remove('nav-mobile-open'); }
+// En tablet/móvil, al pulsar cualquier enlace del menú, cerrar el off-canvas
+// para dejar la pantalla libre. (Delegado: vale para botones presentes y futuros.)
+function _navWireMobileAutoClose(){
+  const nav=document.getElementById('sideNav');
+  if(!nav || nav._mobileWired) return;
+  nav._mobileWired=true;
+  nav.addEventListener('click', e=>{ if(e.target.closest('.nav-btn')) _navMobileClose(); });
 }
 // Llamar tras DOM ready
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', _navRestoreSections);
+  document.addEventListener('DOMContentLoaded', ()=>{ _navRestoreSections(); _navWireMobileAutoClose(); });
 } else {
-  setTimeout(_navRestoreSections, 0);
+  setTimeout(()=>{ _navRestoreSections(); _navWireMobileAutoClose(); }, 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
