@@ -2398,8 +2398,11 @@ async function _dispRender(){
   // Pendientes = en el roster pero sin haber dicho ni Sí ni No.
   const pending=roster.filter(n=>{ const k=normalizeForMatching(n); return !confSet.has(k) && !decSet.has(k); });
   // Solo director/admin (o sin login = director en su PC) ven copiar/exportar.
-  const isAdmin = !(typeof _rbacUser!=='undefined' && _rbacUser) || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
-  const isCiclista = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA');
+  // En modo "Ver como ciclista" (clase preview-ciclista) se trata como ciclista
+  // para que la vista previa refleje EXACTAMENTE lo que ve un corredor real.
+  const _previewing = (typeof document!=='undefined') && document.body.classList.contains('preview-ciclista');
+  const isAdmin = !_previewing && (!(typeof _rbacUser!=='undefined' && _rbacUser) || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role));
+  const isCiclista = _previewing || (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA');
   const meNk = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.riderName) ? normalizeForMatching(_rbacUser.riderName) : '';
   const meFirst=(a,b)=>{ const am=meNk&&normalizeForMatching(a)===meNk, bm=meNk&&normalizeForMatching(b)===meNk; if(am&&!bm)return -1; if(bm&&!am)return 1; return a.localeCompare(b); };
   pending.sort(meFirst);
