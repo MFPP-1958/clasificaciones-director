@@ -5403,27 +5403,57 @@ async function _calDeletePlanned(id){
 
 // ── Filtro de ciclista en Estadísticas ───────────────────────
 let _resRiderFilter = ''; // nombre exacto seleccionado
-let _resRiderNames  = []; // caché de nombres
+let _resRiderNames  = []; // caché [{name, team}] respetando filtro global
+let _resRiderNamesToken = '';
+
+// Lista de ciclistas del filtro de Estadísticas: con EQUIPO y respetando el
+// FILTRO GLOBAL (CCAA + categoría/género). Con "todas las CCAA" no acota región.
+function _resBuildRiderNames(){
+  const gReg=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
+  const byName=new Map();
+  (_cachedHistory||[]).forEach(r=>(r.riders||[]).forEach(x=>{
+    const nm=normalizeRiderName(x.name); if(!nm) return;
+    if(!byName.has(nm)) byName.set(nm,{name:nm, region:x.region||'', cat:x.cat||'', teams:new Set()});
+    const o=byName.get(nm);
+    if(x.team) o.teams.add(getCanonicalTeam(x.team));
+    if(x.region) o.region=x.region;
+    if(x.cat) o.cat=x.cat;
+  }));
+  const out=[];
+  [...byName.values()].filter(o=>{
+    if(gReg && (o.region||'')!==gReg) return false;
+    if(typeof _gfMatchesCatGender==='function' && !_gfMatchesCatGender(o.cat||'', o.name||'')) return false;
+    return true;
+  }).forEach(o=>{
+    const teams=[...o.teams].filter(Boolean).sort();
+    if(teams.length) teams.forEach(t=>out.push({name:o.name, team:t}));
+    else out.push({name:o.name, team:''});
+  });
+  out.sort((a,b)=> a.name.localeCompare(b.name) || a.team.localeCompare(b.team));
+  return out;
+}
 
 function _resRiderSuggest(query){
   const box = document.getElementById('resRiderBox');
   const inp = document.getElementById('resRiderInput');
   if(!box || !inp) return;
-  // Construir lista la primera vez
-  if(_resRiderNames.length === 0 && _cachedHistory && _cachedHistory.length > 0){
-    _resRiderNames = [...new Set(
-      _cachedHistory.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name)).filter(Boolean))
-    )].sort();
+  // (Re)construir lista cuando cambie el filtro global o el historial
+  const tok=((_globalFilters&&_globalFilters.region)||'')+'|'+((_globalFilters&&_globalFilters.cat)||'')+'|'+((_globalFilters&&_globalFilters.gender)||'')+'|'+((_cachedHistory&&_cachedHistory.length)||0);
+  if((_resRiderNamesToken!==tok || _resRiderNames.length===0) && _cachedHistory && _cachedHistory.length>0){
+    _resRiderNames=_resBuildRiderNames(); _resRiderNamesToken=tok;
   }
   const q = (query||'').trim().toLowerCase();
-  const filtered = q ? _resRiderNames.filter(n=>n.toLowerCase().includes(q)) : _resRiderNames;
+  const filtered = q ? _resRiderNames.filter(o=>o.name.toLowerCase().includes(q)) : _resRiderNames;
   if(filtered.length === 0){ box.style.display='none'; return; }
-  box.innerHTML = filtered.map(n=>`
-    <div onclick="_resRiderPick('${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}');"
+  box.innerHTML = filtered.map(o=>{
+    const nameHl = q ? escapeHtml(o.name).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong style="color:#1a56db">$1</strong>') : escapeHtml(o.name);
+    const teamHtml = o.team ? ` <span style="color:#6b7280">(${escapeHtml(o.team)})</span>` : '';
+    return `<div onclick="_resRiderPick('${o.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}');"
       style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
       onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
-      ${q ? escapeHtml(n).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong style="color:#1a56db">$1</strong>') : escapeHtml(n)}
-    </div>`).join('');
+      ${nameHl}${teamHtml}
+    </div>`;
+  }).join('');
   const r = inp.getBoundingClientRect();
   box.style.top   = (r.bottom+4)+'px';
   box.style.left  = r.left+'px';
