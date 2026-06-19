@@ -2844,8 +2844,8 @@ function _calBuildMonth(y, m){
         </div>
         <div style="font-size:12px;color:#6b7280;flex-shrink:0">${r.date.getDate()} ${_CAL_MONTHS_ES[r.date.getMonth()]}</div>
         ${infoBtn}
-        ${isPlan?`<button onclick="event.stopPropagation();_calEditPlanned('${r.id}')" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700;margin-right:4px" title="Editar">✏️</button><button onclick="event.stopPropagation();_calDeletePlanned('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700" title="Eliminar">✕</button>`
-        : (r.id?`<button onclick="event.stopPropagation();_histEditRace('${escapeAttr(r.id)}')" style="background:#f5f3ff;color:#7c3aed;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700" title="Editar nombre, fecha o categoría">✏️</button>`:'')}
+        ${isPlan?`<button class="admin-only" onclick="event.stopPropagation();_calEditPlanned('${r.id}')" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700;margin-right:4px" title="Editar">✏️</button><button class="admin-only" onclick="event.stopPropagation();_calDeletePlanned('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700" title="Eliminar">✕</button>`
+        : (r.id?`<button class="admin-only" onclick="event.stopPropagation();_histEditRace('${escapeAttr(r.id)}')" style="background:#f5f3ff;color:#7c3aed;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;font-weight:700" title="Editar nombre, fecha o categoría">✏️</button>`:'')}
       </div>`;
     });
     html += '</div>';
@@ -2856,7 +2856,7 @@ function _calBuildMonth(y, m){
   const hasCurrentOrFuture = new Date(y,m+1,0) >= now2;
   if(hasCurrentOrFuture){
     html += `<div style="margin-top:16px;text-align:center">
-      <button onclick="_calOpenModal(null)" style="background:#10b981;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer">➕ Añadir carrera planificada</button>
+      <button class="admin-only" onclick="_calOpenModal(null)" style="background:#10b981;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer">➕ Añadir carrera planificada</button>
     </div>`;
   }
   return html;
