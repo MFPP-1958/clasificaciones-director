@@ -3148,7 +3148,16 @@ function _calDayClick(y,m,d){
 // ID de la carrera que se está editando (null = modo añadir)
 let _calEditingId = null;
 
+// ¿El usuario actual es ciclista (o el director está en "Ver como ciclista")?
+// Para estos usuarios el calendario es solo de lectura: no se abren modales de
+// añadir/editar pruebas.
+function _calIsReadOnlyUser(){
+  if(typeof document!=='undefined' && document.body.classList.contains('preview-ciclista')) return true;
+  return (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA');
+}
+
 function _calOpenModal(dateStr){
+  if(_calIsReadOnlyUser()) return; // ciclistas: calendario solo de lectura
   _calEditingId = null;
   const modal = document.getElementById('calModal');
   const dateInp = document.getElementById('calPlanDate');
@@ -3175,6 +3184,7 @@ function _calOpenModal(dateStr){
 }
 
 function _calEditPlanned(id){
+  if(_calIsReadOnlyUser()) return; // ciclistas: no pueden editar
   const race = _calPlanned.find(r=>r.id===id);
   if(!race) return;
   _calEditingId = id;
@@ -5330,6 +5340,7 @@ async function _fccvAddRace(idx){
 }
 
 async function _calSavePlanned(){
+  if(_calIsReadOnlyUser()) return; // ciclistas: calendario solo de lectura
   const name  = document.getElementById('calPlanName')?.value.trim();
   const date  = document.getElementById('calPlanDate')?.value;
   const cat   = document.getElementById('calPlanCat')?.value.trim();
@@ -5381,6 +5392,7 @@ async function _calSavePlanned(){
 }
 
 async function _calDeletePlanned(id){
+  if(_calIsReadOnlyUser()) return; // ciclistas: calendario solo de lectura
   if(!confirm('¿Eliminar esta carrera planificada?')) return;
   if(_sb && !String(id).startsWith('local-')){
     await _sb.from('races').delete().eq('id',id);
