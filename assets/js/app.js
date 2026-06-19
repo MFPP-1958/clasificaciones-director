@@ -5982,36 +5982,70 @@ async function _scoutInit(){
   }
 }
 
-let _scoutAllNames = [];
+let _scoutAllNames = [];   // [{name, team}] respetando filtro global
+let _scoutNamesToken = '';
 let _scoutHlIdx = -1;
+
+// Construye la lista de ciclistas del buscador de Seguimiento: cada uno con su
+// EQUIPO (para distinguir homónimos) y RESPETANDO EL FILTRO GLOBAL por defecto
+// (CCAA + categoría/género). Con "todas las CCAA" no acota por región.
+function _scoutBuildNames(){
+  const gReg=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
+  const byName=new Map(); // nm -> {name, region, cat, teams:Set}
+  _scoutHistory.forEach(r=>(r.riders||[]).forEach(x=>{
+    const nm=normalizeRiderName(x.name); if(!nm) return;
+    if(!byName.has(nm)) byName.set(nm,{name:nm, region:x.region||'', cat:x.cat||'', teams:new Set()});
+    const o=byName.get(nm);
+    if(x.team) o.teams.add(getCanonicalTeam(x.team));
+    if(x.region) o.region=x.region;
+    if(x.cat) o.cat=x.cat;
+  }));
+  const out=[];
+  [...byName.values()].filter(o=>{
+    if(gReg && (o.region||'')!==gReg) return false;
+    if(typeof _gfMatchesCatGender==='function' && !_gfMatchesCatGender(o.cat||'', o.name||'')) return false;
+    return true;
+  }).forEach(o=>{
+    const teams=[...o.teams].filter(Boolean).sort();
+    if(teams.length) teams.forEach(t=>out.push({name:o.name, team:t}));
+    else out.push({name:o.name, team:''});
+  });
+  out.sort((a,b)=> a.name.localeCompare(b.name) || a.team.localeCompare(b.team));
+  return out;
+}
+function _scoutEnsureNames(){
+  const tok=((_globalFilters&&_globalFilters.region)||'')+'|'+((_globalFilters&&_globalFilters.cat)||'')+'|'+((_globalFilters&&_globalFilters.gender)||'')+'|'+_scoutHistory.length;
+  if(_scoutNamesToken!==tok || _scoutAllNames.length===0){
+    _scoutAllNames=_scoutBuildNames();
+    _scoutNamesToken=tok;
+  }
+}
 
 function _scoutSuggest(query){
   const box = document.getElementById('scoutSuggestBox');
   const inp = document.getElementById('scoutRiderInput');
   if(!box || !inp) return;
 
-  // Construir lista completa la primera vez
-  if(_scoutAllNames.length === 0 && _scoutHistory.length > 0){
-    _scoutAllNames = [...new Set(
-      _scoutHistory.flatMap(r=>(r.riders||[]).map(x=>normalizeRiderName(x.name)).filter(Boolean))
-    )].sort();
-  }
+  if(_scoutHistory.length > 0) _scoutEnsureNames();
 
   const q = (query||'').trim().toLowerCase();
   const filtered = q
-    ? _scoutAllNames.filter(n=>n.toLowerCase().includes(q))
+    ? _scoutAllNames.filter(o=>o.name.toLowerCase().includes(q))
     : _scoutAllNames;
 
   if(filtered.length === 0){ box.style.display='none'; return; }
 
   _scoutHlIdx = -1;
-  box.innerHTML = filtered.map((n,i)=>`
-    <div class="scout-suggest-item" data-idx="${i}" data-name="${escapeHtml(n)}"
-      onclick="_scoutPickRider('${n.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}');"
+  box.innerHTML = filtered.map((o,i)=>{
+    const nameHl = q ? escapeHtml(o.name).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong style="color:#1a56db">$1</strong>') : escapeHtml(o.name);
+    const teamHtml = o.team ? ` <span style="color:#6b7280">(${escapeHtml(o.team)})</span>` : '';
+    return `<div class="scout-suggest-item" data-idx="${i}" data-name="${escapeHtml(o.name)}"
+      onclick="_scoutPickRider('${o.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}');"
       style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
       onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
-      ${q ? escapeHtml(n).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<strong style="color:#1a56db">$1</strong>') : escapeHtml(n)}
-    </div>`).join('');
+      ${nameHl}${teamHtml}
+    </div>`;
+  }).join('');
 
   // Posicionar bajo el input
   const r = inp.getBoundingClientRect();
