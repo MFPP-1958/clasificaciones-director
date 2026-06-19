@@ -20578,10 +20578,8 @@ function _initTrendFilters(history){
       `<span class="pr-cat-pill pr-pill-all${allActive?' pr-pill-active':''}" data-cat="__all__" onclick="_trendToggleCat('__all__')">Todas</span>` +
       cats.map(c=>`<span class="pr-cat-pill${_trendSelectedCats.has(c)?' pr-pill-active':''}" data-cat="${escapeHtml(c)}" onclick="_trendToggleCat('${escapeAttr(c)}')">${escapeHtml(c)}</span>`).join('');
   }
-  // Datalists
-  const allRiders = [...new Set(history.flatMap(h=>(h.riders||[]).map(r=>normalizeRiderName(r.name||'')).filter(Boolean)))].sort();
-  const rdl = $('trendRiderDatalist');
-  if(rdl) rdl.innerHTML = allRiders.map(r=>`<option value="${escapeHtml(r)}">`).join('');
+  // Datalists — el de ciclistas se construye con equipo y filtro global aparte
+  _trendBuildRiderDatalist(history);
   const allTeams = [...new Set(history.flatMap(h=>(h.riders||[]).map(r=>getCanonicalTeam(r.team||'')).filter(Boolean)))].sort();
   const tdl = $('trendTeamDatalist');
   if(tdl) tdl.innerHTML = allTeams.map(t=>`<option value="${escapeHtml(t)}">`).join('');
@@ -20614,6 +20612,39 @@ function _initTrendFilters(history){
   }
 }
 
+// Datalist de ciclistas de Tendencias: muestra "Apellido, Nombre (Equipo)" para
+// distinguir homónimos de distinto equipo, y RESPETA EL FILTRO GLOBAL (CCAA +
+// categoría/género). Con "todas las CCAA" no acota por región. Se reconstruye
+// en cada render para reflejar cambios del filtro global.
+function _trendBuildRiderDatalist(history){
+  const rdl = $('trendRiderDatalist');
+  if(!rdl) return;
+  const gReg=(typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '';
+  const info=new Map(); // nk -> {name, teams:Set, region, cat}
+  (history||[]).forEach(h=>(h.riders||[]).forEach(r=>{
+    const nm=normalizeRiderName(r.name||''); if(!nm) return;
+    if(!info.has(nm)) info.set(nm,{name:nm, teams:new Set(), region:r.region||'', cat:r.cat||''});
+    const o=info.get(nm);
+    if(r.team) o.teams.add(getCanonicalTeam(r.team));
+    if(r.region) o.region=r.region;
+    if(r.cat) o.cat=r.cat;
+  }));
+  const opts=[];
+  [...info.values()]
+    .filter(o=>{
+      if(gReg && (o.region||'')!==gReg) return false;
+      if(typeof _gfMatchesCatGender==='function' && !_gfMatchesCatGender(o.cat||'', o.name||'')) return false;
+      return true;
+    })
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .forEach(o=>{
+      const teams=[...o.teams].filter(Boolean).sort();
+      if(teams.length) teams.forEach(t=>opts.push(`<option value="${escapeAttr(o.name)} (${escapeAttr(t)})">`));
+      else opts.push(`<option value="${escapeAttr(o.name)}">`);
+    });
+  rdl.innerHTML=opts.join('');
+}
+
 function _trendAddRiderByName(name){
   if(!name || _trendSelectedRiders.find(r=>r.name===name)) return;
   _trendSelectedRiders.push({name, color:_trendColor(name)});
@@ -20625,7 +20656,7 @@ function _trendAddTeamByName(name){
 
 function trendAddRider(){
   const inp = $('trendRiderInput'); if(!inp) return;
-  const val = inp.value.trim(); if(!val) return;
+  const val = inp.value.trim().replace(/\s*\(.*\)\s*$/,'').trim(); if(!val) return;
   _trendAddRiderByName(normalizeRiderName(val)||val);
   inp.value = '';
   _trendRenderChips();
@@ -20681,7 +20712,7 @@ function _trendRenderChipsComp(){
 
 function trendAddRiderComp(){
   const inp=$('trendRiderInputComp'); if(!inp) return;
-  const val=inp.value.trim(); if(!val) return;
+  const val=inp.value.trim().replace(/\s*\(.*\)\s*$/,'').trim(); if(!val) return;
   _trendAddRiderByName(normalizeRiderName(val)||val);
   inp.value=''; _trendRenderChipsComp(); trendDrawComp();
 }
@@ -20701,6 +20732,9 @@ async function renderTendencias(){
     _initTrendFilters(history);
     _trendFiltersReady = true;
   }
+  // Reconstruir el datalist de ciclistas en cada render para que refleje el
+  // filtro global actual (CCAA + categoría/género) y muestre el equipo.
+  _trendBuildRiderDatalist(history);
   // Auto-cargar mejor ciclista de Mi Equipo si la lista está vacía
   if(_trendSelectedRiders.length===0 && _trendSelectedTeams.length===0 && myTeam){
     const myCanon = getCanonicalTeam(myTeam||'').toLowerCase();
