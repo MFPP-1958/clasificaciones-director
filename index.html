@@ -2749,13 +2749,15 @@
         <div class="section-title">
           <h2 style="margin:0">📻 Panel de Radio Vuelta</h2>
           <span id="rvRaceName" class="rv-racename"></span>
-          <button class="btn light" onclick="_rvInit()" style="padding:6px 12px;font-size:12px;margin-left:auto">🔄 Recargar</button>
+          <button class="btn light" id="rvCarModeBtn" onclick="_rvToggleCarMode()" style="padding:6px 12px;font-size:12px;margin-left:auto" title="Texto más grande y mayor contraste para leer dentro del coche">🚗 Modo coche</button>
+          <button class="btn light" onclick="_rvInit()" style="padding:6px 12px;font-size:12px">🔄 Recargar</button>
         </div>
         <div id="rvBody">
           <!-- Buscador exprés -->
           <div class="rv-search">
             <input id="rvBib" class="rv-bibinput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Nº dorsal"
-              autocomplete="off" onkeydown="if(event.key==='Enter')_rvFind()">
+              list="rvBibList" autocomplete="off" onkeydown="if(event.key==='Enter')_rvFind()" oninput="_rvFindLive()">
+            <datalist id="rvBibList"></datalist>
             <button class="rv-btn-find" onclick="_rvFind()">🔍 BUSCAR</button>
             <button class="rv-btn-clear" onclick="_rvClear()">✕ Limpiar</button>
           </div>

@@ -44579,27 +44579,65 @@ async function _rvInit(){
   if(id && (!_simCurrentData || !_simCurrentData.race || _simCurrentData.race.id!==id) && typeof _simBuildData==='function'){
     try{ _simBuildData(id); }catch(_){}
   }
-  const grid=(_simCurrentData && Array.isArray(_simCurrentData.grid))?_simCurrentData.grid:[];
-  if(nameEl) nameEl.textContent = (_simCurrentData && _simCurrentData.race)
-    ? ('· '+(_simCurrentData.race.raceName||_simCurrentData.race.name||'')) : '';
+  const gridAll=(_simCurrentData && Array.isArray(_simCurrentData.grid))?_simCurrentData.grid:[];
+  // Respetar el GRUPO DE CATEGORÍA GLOBAL: en el coche solo manejamos dorsales
+  // de TU categoría (si el evento mezcla cadete+juvenil, no aparecen los otros).
+  const _gGrp=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+  const _inGrp=g=>{ if(!_gGrp) return true; const cg=(typeof _calCatGroup==='function')?_calCatGroup(g&&g.cat):null; return !!cg && cg.key===_gGrp; };
+  const grid=gridAll.filter(_inGrp);
+  // Restaurar "modo coche" si estaba activo
+  try{ const on=localStorage.getItem('rv_car_mode')==='1'; document.body.classList.toggle('rv-mode-car', on); const b=document.getElementById('rvCarModeBtn'); if(b) b.textContent=on?'🚗 Modo coche: ON':'🚗 Modo coche'; }catch(_){}
+  if(nameEl){
+    const rn=(_simCurrentData && _simCurrentData.race)?(_simCurrentData.race.raceName||_simCurrentData.race.name||''):'';
+    const catTxt=_gGrp?(' · '+_gGrp.charAt(0).toUpperCase()+_gGrp.slice(1)):'';
+    nameEl.textContent = rn ? ('· '+rn+catTxt) : '';
+  }
   if(!grid.length){
     body.querySelectorAll('.rv-search,.rv-block').forEach(el=>el.style.display='none');
+    const hayOtros = gridAll.length>0;
     document.getElementById('rvCard').innerHTML = `<div class="rv-empty">
       <div style="font-size:46px">📻</div>
-      <p style="font-weight:800;color:#374151;margin-top:8px">No hay ninguna prueba con parrilla cargada.</p>
-      <p style="font-size:13px;color:#6b7280">Ve al <b>Simulador</b>, elige la prueba de hoy (con su lista de inscritos) y vuelve aquí. Quedará lista para el coche.</p>
+      ${hayOtros
+        ? `<p style="font-weight:800;color:#374151;margin-top:8px">La prueba cargada no tiene corredores de tu categoría${_gGrp?(' ('+_gGrp+')'):''}.</p>
+           <p style="font-size:13px;color:#6b7280">Cambia el <b>filtro de categoría</b> de arriba o carga otra prueba desde el <b>Simulador</b>.</p>`
+        : `<p style="font-weight:800;color:#374151;margin-top:8px">No hay ninguna prueba con parrilla cargada.</p>
+           <p style="font-size:13px;color:#6b7280">Ve al <b>Simulador</b>, elige la prueba de hoy (con su lista de inscritos) y vuelve aquí. Quedará lista para el coche.</p>`}
       <button class="rv-btn-find" style="margin-top:14px;max-width:260px" onclick="showView('view-simulador')">Ir al Simulador →</button>
     </div>`;
     return;
   }
   body.querySelectorAll('.rv-search,.rv-block').forEach(el=>el.style.display='');
-  // Mapa de dorsales
+  // Mapa de dorsales (solo categoría activa)
   _rvBibMap={};
   grid.forEach(g=>{ const b=String(g.bib||'').trim(); if(b) _rvBibMap[b]=g; });
+  // Autocompletar dorsales: mi equipo primero, luego por dorsal
+  const dl=document.getElementById('rvBibList');
+  if(dl){
+    const sorted=grid.filter(g=>String(g.bib||'').trim()).slice()
+      .sort((a,b)=> (b.isMyTeam?1:0)-(a.isMyTeam?1:0) || (parseInt(a.bib)||0)-(parseInt(b.bib)||0));
+    dl.innerHTML=sorted.map(g=>`<option value="${escapeAttr(String(g.bib))}">${escapeAttr(String(g.bib))} · ${escapeAttr(_evolNormName?_evolNormName(g.name):g.name)}${g.team?' ('+escapeAttr(g.team)+')':''}${g.isMyTeam?' ⭐':''}</option>`).join('');
+  }
   _rvLoad();
   _rvRenderFuga(); _rvRenderAtaques(); _rvRenderPasos();
   const bib=document.getElementById('rvBib'); if(bib){ bib.value=''; setTimeout(()=>bib.focus(),150); }
   document.getElementById('rvCard').innerHTML='';
+}
+
+// Modo coche: texto más grande y alto contraste, solo en Radio Vuelta.
+function _rvToggleCarMode(){
+  const on=!document.body.classList.contains('rv-mode-car');
+  document.body.classList.toggle('rv-mode-car', on);
+  try{ localStorage.setItem('rv_car_mode', on?'1':'0'); }catch(_){}
+  const b=document.getElementById('rvCarModeBtn'); if(b) b.textContent=on?'🚗 Modo coche: ON':'🚗 Modo coche';
+}
+// Cronómetro de la fuga (tiempo que lleva escapada)
+let _rvFugaTimer=null;
+function _rvFmtElapsed(ms){ const s=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60; return (h>0?h+':'+String(m).padStart(2,'0'):String(m))+':'+String(ss).padStart(2,'0'); }
+function _rvFugaStopTimer(){ if(_rvFugaTimer){ clearInterval(_rvFugaTimer); _rvFugaTimer=null; } }
+function _rvFugaStartTimer(at){
+  _rvFugaStopTimer();
+  const upd=()=>{ const el=document.getElementById('rvFugaTimer'); if(!el){ _rvFugaStopTimer(); return; } el.textContent='🚀 fugada hace '+_rvFmtElapsed(Date.now()-at); };
+  upd(); _rvFugaTimer=setInterval(upd,1000);
 }
 
 function _rvRelPct(g){ const r=g&&g.reliability; if(r==null) return null; return Math.round(r<=1?r*100:r); }
@@ -44626,12 +44664,14 @@ function _rvCardHtml(g, opts){
   const lo=(g.predLower!=null)?Math.round(g.predLower):null;
   const hi=(g.predUpper!=null)?Math.round(g.predUpper):null;
   const mine=g.isMyTeam;
+  // Peligro: rival predicho arriba (Top 10) y fiable → ojo con él en la fuga.
+  const isThreat = !mine && pred!=null && pred<=10 && rel!=null && rel>=60;
   const relColor = rel==null?'#9ca3af':(rel>=70?'#16a34a':rel>=40?'#f59e0b':'#dc2626');
-  return `<div class="rv-card${mine?' rv-card-mine':''}${opts.small?' rv-card-sm':''}">
+  return `<div class="rv-card${mine?' rv-card-mine':''}${isThreat?' rv-card-threat':''}${opts.small?' rv-card-sm':''}">
     <div class="rv-card-top">
       <span class="rv-card-bib">${escapeHtml(String(g.bib||'—'))}</span>
       <div class="rv-card-id">
-        <div class="rv-card-name">${escapeHtml(_evolNormName?_evolNormName(g.name):g.name)}${mine?' <span class="rv-mine-tag">⭐ MI EQUIPO</span>':''}</div>
+        <div class="rv-card-name">${escapeHtml(_evolNormName?_evolNormName(g.name):g.name)}${mine?' <span class="rv-mine-tag">⭐ MI EQUIPO</span>':''}${isThreat?' <span class="rv-threat-tag">⚠️ PELIGROSO</span>':''}</div>
         <div class="rv-card-team">${escapeHtml(g.team||'—')}${g.cat?' · '+escapeHtml(g.cat):''}${gen?' · '+gen:''}</div>
       </div>
     </div>
@@ -44652,6 +44692,16 @@ function _rvFind(){
   if(!g){ card.innerHTML=`<div class="rv-notfound">🔎 No hay ningún corredor con el dorsal <b>${escapeHtml(b)}</b> en la parrilla de esta prueba.</div>`; return; }
   card.innerHTML=_rvCardHtml(g);
 }
+// Búsqueda "en vivo" al teclear/elegir del desplegable: muestra la tarjeta solo
+// si el dorsal coincide exactamente; si no, no molesta con mensajes de error.
+function _rvFindLive(){
+  const inp=document.getElementById('rvBib'); const card=document.getElementById('rvCard');
+  const b=(inp?.value||'').trim();
+  if(!card) return;
+  if(!b){ card.innerHTML=''; return; }
+  const g=_rvBibMap?_rvBibMap[b]:null;
+  card.innerHTML = g ? _rvCardHtml(g) : '';
+}
 function _rvClear(){ const inp=document.getElementById('rvBib'); if(inp){ inp.value=''; inp.focus(); } const c=document.getElementById('rvCard'); if(c) c.innerHTML=''; }
 
 function _rvSaveFuga(){
@@ -44666,10 +44716,11 @@ function _rvSaveFuga(){
 function _rvRenderFuga(){
   const el=document.getElementById('rvFugaActiva'); if(!el) return;
   const bk=_rvSt.breakaway;
-  if(!bk || !bk.bibs || !bk.bibs.length){ el.innerHTML='<div class="rv-hint">Sin fuga activa. Mete los dorsales y la diferencia, y pulsa FIJAR FUGA.</div>'; return; }
+  if(!bk || !bk.bibs || !bk.bibs.length){ _rvFugaStopTimer(); el.innerHTML='<div class="rv-hint">Sin fuga activa. Mete los dorsales y la diferencia, y pulsa FIJAR FUGA.</div>'; return; }
   const cards=bk.bibs.map(b=>{ const g=_rvBibMap&&_rvBibMap[b]; return g?_rvCardHtml(g,{small:true}):`<div class="rv-card rv-card-sm"><div class="rv-card-top"><span class="rv-card-bib">${escapeHtml(b)}</span><div class="rv-card-id"><div class="rv-card-name">Dorsal ${escapeHtml(b)}</div><div class="rv-card-team">no está en la parrilla</div></div></div></div>`; }).join('');
-  el.innerHTML=`<div class="rv-fuga-head"><span class="rv-fuga-tag">🚀 FUGA ACTIVA · ${bk.bibs.length} corredores</span>${bk.gap?`<span class="rv-fuga-gap">⏱ ${escapeHtml(bk.gap)}</span>`:''}<button class="rv-btn-caught" onclick="_rvCatchFuga()">✅ Fuga cazada</button></div>
+  el.innerHTML=`<div class="rv-fuga-head"><span class="rv-fuga-tag">🚀 FUGA ACTIVA · ${bk.bibs.length} corredores</span>${bk.gap?`<span class="rv-fuga-gap">⏱ ${escapeHtml(bk.gap)}</span>`:''}<span class="rv-fuga-timer" id="rvFugaTimer"></span><button class="rv-btn-caught" onclick="_rvCatchFuga()">✅ Fuga cazada</button></div>
     <div class="rv-cards-row">${cards}</div>`;
+  _rvFugaStartTimer(bk.at||Date.now());
 }
 function _rvCatchFuga(){
   const bk=_rvSt.breakaway; if(!bk) return;
