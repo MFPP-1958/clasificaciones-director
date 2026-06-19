@@ -8372,11 +8372,20 @@ function buildChallengeStandings(history, optYear){
     if(r.pos > 0) lastRacePosByRider.set(normalizeForMatching(r.name), parseInt(r.pos));
   });
 
-  // Agregación por corredor
+  // Agregación por corredor — respetando el GRUPO DE CATEGORÍA GLOBAL
+  // (cadete/juvenil/sub23…): no se mezclan categorías, cada uno compite y
+  // "gana" dentro de la suya. Sin filtro global de categoría → se incluyen todas.
+  const _gGrp = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
   const byRider = new Map();
   filtered.forEach(race => {
+    const _ry = (_parseSpanishDate(race.raceDate)||'').slice(0,4);
     (race.riders || []).forEach(r => {
       if(!r.pos || r.pos <= 0) return;
+      if(_gGrp){
+        const _rcat = (typeof getRiderCorrectCat==='function') ? getRiderCorrectCat(r.name, _ry?parseInt(_ry):null, r.cat) : (r.cat||'');
+        const _cg = (typeof _calCatGroup==='function') ? _calCatGroup(_rcat) : null;
+        if(!(_cg && _cg.key===_gGrp)) return; // no es de mi categoría → fuera
+      }
       const key = normalizeForMatching(r.name);
       if(!key) return;
       const pts = calcularPuntosChallenge(r.pos);
