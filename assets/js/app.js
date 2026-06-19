@@ -673,6 +673,35 @@ function _gfShowHideBar(viewId){
   if(shouldShow) _gfApplyToLocalFilters();
 }
 
+// Elige la última prueba CON clasificación (≥3 clasificados) que encaje con el
+// grupo de categoría global. Para autocargar algo útil al entrar a una vista de
+// prueba sin nada cargado (mejor que mandar siempre al Historial vacío).
+function _autoPickLastClassifiedRaceId(){
+  const hist=(typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory))?_cachedHistory:[];
+  const _gGrp=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+  const inGrp=r=>{ if(!_gGrp) return true; try{ return _raceCatGroupKeys(r).has(_gGrp); }catch(_){ return true; } };
+  const cands=hist.filter(r=> r && r.id && (r.riders||[]).filter(x=>x&&x.pos>0).length>=3 && inGrp(r));
+  if(!cands.length) return '';
+  cands.sort((a,b)=>(_parseSpanishDate(b.raceDate)||'').localeCompare(_parseSpanishDate(a.raceDate)||''));
+  return cands[0].id||'';
+}
+let _autoLoadBusy=false;
+async function _autoLoadLastClassified(targetView){
+  if(_autoLoadBusy) return;
+  _autoLoadBusy=true;
+  try{
+    try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
+    const id=_autoPickLastClassifiedRaceId();
+    if(id && typeof loadHistoryEntry==='function'){
+      if(typeof showToast==='function') showToast('Cargo la última prueba con clasificación para que puedas trabajar…','info',3000);
+      try{ await loadHistoryEntry(id); }catch(_){}
+      if(riders && riders.length){ _autoLoadBusy=false; return showView(targetView); }
+    }
+    if(typeof showToast==='function') showToast('No hay ninguna prueba con clasificación de tu categoría. Cárgala desde el Historial.','warn',4500);
+    showView('view-historial');
+  } finally { _autoLoadBusy=false; }
+}
+
 function showView(viewId){
   // RBAC: check permission
   if(_rbacUser && !_rbacPerms.has(viewId)){
@@ -700,10 +729,11 @@ function showView(viewId){
   // configurado — Fase 2 no-bloqueo.
   const VIEWS_REQUIRE_RACE = ['view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-validacion'];
   if(VIEWS_REQUIRE_RACE.includes(viewId) && (!riders || !riders.length)){
-    if(typeof showToast === 'function'){
-      showToast('Primero carga una prueba desde el Historial', 'warn', 4500);
-    }
-    return showView('view-historial');
+    // No hay prueba cargada → cargar AUTOMÁTICAMENTE la última con clasificación
+    // de tu categoría (filtro global) para que siempre tengas algo con lo que
+    // trabajar. Si no existe ninguna, se va al Historial.
+    _autoLoadLastClassified(viewId);
+    return;
   }
   document.querySelectorAll('.spa-view').forEach(v=>v.classList.toggle('active',v.id===viewId));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
