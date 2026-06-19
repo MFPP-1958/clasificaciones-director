@@ -12,7 +12,7 @@
       const s=[...document.getElementsByTagName('script')].find(x=>/assets\/js\/app\.js/.test(x.src||''));
       const m=s && (s.src||'').match(/[?&]v=([^&]+)/);
       const el=document.getElementById('appVersionBadge');
-      if(el) el.textContent = m ? ('v·'+decodeURIComponent(m[1])) : 'v·(sin versión)';
+      if(el) el.textContent = '🧪 BETA · ' + (m ? ('v·'+decodeURIComponent(m[1])) : 'v·(sin versión)');
     }catch(_){}
   }
   if(document.readyState!=='loading') set();
