@@ -15099,6 +15099,9 @@ async function renderInicio(){
             .map(p => ({...p, iso: p.dateStr || (p.date instanceof Date ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}-${String(p.date.getDate()).padStart(2,'0')}` : '')}))
             .filter(p => {
               if(!p.iso) return false;
+              // Respetar el grupo de categoría global (no avisar de pruebas de
+              // otra categoría: p.ej. una juvenil cuando el filtro es Cadete).
+              if(typeof _calRaceMatchesCat==='function' && !_calRaceMatchesCat(p)) return false;
               const t = new Date(p.iso+'T12:00:00').getTime();
               if(t < todayMs) return false;
               if(t > week7) return false;
