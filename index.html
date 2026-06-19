@@ -2497,7 +2497,8 @@
         </details>
 
         <div class="sim-filters">
-          <input id="simSearchInput" placeholder="🔎 Buscar corredor o equipo…" oninput="_simRenderCurrent()" />
+          <input id="simSearchInput" placeholder="🔎 Buscar o elegir corredor/equipo…" list="simSearchDatalist" autocomplete="off" oninput="_simRenderCurrent()" />
+          <datalist id="simSearchDatalist"></datalist>
           <label class="sim-chip-toggle"><input type="checkbox" id="simOnlyMyTeam" onchange="_simRenderCurrent()"> 🔵 Solo mi equipo</label>
           <label class="sim-chip-toggle"><input type="checkbox" id="simOnlyKnown" onchange="_simRenderCurrent()"> 🔍 Solo con historial</label>
         </div>

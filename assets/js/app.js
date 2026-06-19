@@ -27917,6 +27917,21 @@ function _simRenderCurrent(){
   if(q) filtered = filtered.filter(g => `${g.name} ${g.team} ${g.bib}`.toLowerCase().includes(q));
   if(onlyMy) filtered = filtered.filter(g => g.isMyTeam);
   if(onlyKnown) filtered = filtered.filter(g => g.hasHistory);
+  // Datalist del buscador: nombres de corredores y equipos EXACTOS de la
+  // parrilla (respetando el sub-filtro de categoría activo), para poder elegir
+  // sin saber cómo se escriben. Al elegir, el campo se filtra igual que al teclear.
+  try{
+    const _dl=document.getElementById('simSearchDatalist');
+    if(_dl){
+      const pool = catFilter ? grid.filter(g=>(g.cat||'')===catFilter) : grid;
+      const names=[...new Set(pool.map(g=>g.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+      const teams=[...new Set(pool.map(g=>getCanonicalTeam(g.team||'')).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+      const teamOf=g=>getCanonicalTeam(g.team||'');
+      _dl.innerHTML =
+        names.map(n=>{ const t=teamOf(pool.find(g=>g.name===n)||{}); return `<option value="${escapeAttr(n)}">${escapeAttr(n)}${t?' · '+escapeAttr(t):''}</option>`; }).join('') +
+        teams.map(t=>`<option value="${escapeAttr(t)}">🏷️ Equipo: ${escapeAttr(t)}</option>`).join('');
+    }
+  }catch(_){}
   // Top 10 esperado
   _simRenderTop10(grid.slice(), catFilter);
   // Columna derecha: resultado REAL (se rellena solo si la prueba ya se disputó)
