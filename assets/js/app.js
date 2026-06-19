@@ -14418,7 +14418,8 @@ function _inicioRenderQuickActions(){
     {id:'view-carga',          ic:'📥', lbl:'Cargar clasificación'},
     {id:'view-disponibilidad', ic:'🚴', lbl:'Disponibilidad'},
     {id:'view-fccv-docs',      ic:'🏷️', lbl:'Inscribir FCCV'},
-    {id:'view-simulador',      ic:'🔮', lbl:'Simulador'}
+    {id:'view-simulador',      ic:'🔮', lbl:'Simulador'},
+    {id:'view-radiovuelta',    ic:'📻', lbl:'Radio Vuelta'}
   ].filter(a=>can(a.id));
   if(!actions.length){ panel.style.display='none'; return; }
   panel.style.display='';
@@ -44570,12 +44571,28 @@ function _rvKey(){ return 'rv_'+_rvRaceId(); }
 function _rvLoad(){ try{ const s=localStorage.getItem(_rvKey()); _rvSt = s?JSON.parse(s):{breakaway:null,attacks:[],passes:[]}; }catch(_){ _rvSt={breakaway:null,attacks:[],passes:[]}; } if(!_rvSt.attacks)_rvSt.attacks=[]; if(!_rvSt.passes)_rvSt.passes=[]; if(!_rvSt.events)_rvSt.events=[]; }
 function _rvSave(){ try{ localStorage.setItem(_rvKey(), JSON.stringify(_rvSt)); }catch(_){} }
 
+// Elige por defecto la prueba más reciente CON lista de inscritos que encaje con
+// el grupo de categoría global. Así Radio Vuelta se abre directo, sin pasar por
+// el Simulador a seleccionarla.
+function _rvAutoPickRaceId(){
+  const hist=(typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory))?_cachedHistory:[];
+  const _gGrp=(typeof _calGlobalCatGroup==='function')?_calGlobalCatGroup():'';
+  const inGrp=r=>{ if(!_gGrp) return true; try{ return _raceCatGroupKeys(r).has(_gGrp); }catch(_){ return true; } };
+  const cands=hist.filter(r=> r && Array.isArray(r.inscritos) && r.inscritos.length>0 && r.id && inGrp(r));
+  if(!cands.length) return '';
+  cands.sort((a,b)=> (_parseSpanishDate(b.raceDate)||'').localeCompare(_parseSpanishDate(a.raceDate)||''));
+  return cands[0].id || '';
+}
+
 async function _rvInit(){
   const body=document.getElementById('rvBody'); if(!body) return;
   const nameEl=document.getElementById('rvRaceName');
   // Asegurar historial y el grid de predicción de la prueba activa
   try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
-  const id=_rvRaceId();
+  // Si no hay ninguna prueba seleccionada, abrir AUTOMÁTICAMENTE la última con
+  // lista de inscritos de tu categoría → te ahorra ir al Simulador a elegirla.
+  let id=_rvRaceId();
+  if(!id){ id=_rvAutoPickRaceId(); if(id) _simSelectedRaceId=id; }
   if(id && (!_simCurrentData || !_simCurrentData.race || _simCurrentData.race.id!==id) && typeof _simBuildData==='function'){
     try{ _simBuildData(id); }catch(_){}
   }
