@@ -379,7 +379,7 @@
       <button class="btn secondary" onclick="document.getElementById('pastedText').value=''">Limpiar texto</button>
     </div>
   </div>
-  <div class="carga-nav"><button type="button" class="btn" onclick="_cargaTab(4)">Ir al resumen ➔</button></div>
+  <div class="carga-nav"><button type="button" class="btn admin-only" style="background:#059669;border-color:#059669" onclick="saveHistory()" title="Guarda la clasificación (resultados) en la base de datos">💾 Guardar clasificación</button><button type="button" class="btn" onclick="_cargaNextFromClasif()">Ir al resumen ➔</button></div>
 </section>
 <!-- PASO 1 · Datos de la prueba (visible por defecto) -->
 <section class="panel load-panel carga-step" data-step="1">

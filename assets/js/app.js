@@ -50,6 +50,7 @@ function _cargaTab(n){
 // ¿Están guardados los datos del Paso 1 y los inscritos del Paso 2?
 let _cargaDatosSaved=false;
 let _inscritosSaved=true;   // true = nada pendiente (al arrancar no hay inscritos nuevos)
+let _clasifSaved=true;      // true = clasificación guardada (o aún no hay ninguna nueva)
 function _cargaMarkUnsaved(){ _cargaDatosSaved=false; }
 // Cablear los inputs de datos para detectar cambios sin guardar (una sola vez).
 function _cargaWireDirty(){
@@ -77,6 +78,16 @@ async function _cargaNextFromInscritos(){
   if(!r) return;   // se queda en Inscritos para revisarlos
   try{ await saveInscritosOnly(); }catch(_){}
   if(_inscritosSaved) _cargaTab(3);
+}
+// "Ir al resumen" desde Clasificación: si hay clasificación sin guardar, recuérdalo
+// y ofrécete a guardarla en la base de datos antes de continuar.
+async function _cargaNextFromClasif(){
+  const hay = hasValidData && Array.isArray(riders) && riders.length>0;
+  if(!hay || _clasifSaved){ _cargaTab(4); return; }
+  const r=confirm('⚠️ La clasificación no está guardada.\n\n¿La guardo en la base de datos y paso al Resumen?');
+  if(!r) return;   // se queda en Clasificación
+  try{ await saveHistory(); }catch(_){}
+  if(_clasifSaved) _cargaTab(4);
 }
 
 // PASO 1 · "Guardar datos de la prueba": persiste los METADATOS (nombre, fecha,
@@ -7599,6 +7610,7 @@ function parseText(text){
     return;
   }
   clearAllFilters();
+  _clasifSaved=false;   // clasificación recién procesada → pendiente de guardar
   setTimeout(_collapseLoadPanel, 80);
   showView('view-tabla');
   // ===== BLOQUE 1: Banner de éxito y datalist equipo =====
@@ -13723,7 +13735,7 @@ async function loadHistoryEntry(id){
   const hist = _cachedHistory || await _sbLoadHistory();
   const h = hist.find(x=>x.id===id);
   if(!h){alert('No se encontró la carrera seleccionada.');return;}
-  try{ _cargaDatosSaved=true; _inscritosSaved=true; }catch(_){}  // viene de la BD → ya guardado
+  try{ _cargaDatosSaved=true; _inscritosSaved=true; _clasifSaved=true; }catch(_){}  // viene de la BD → ya guardado
   riders = h.riders||[];
   const hasInscritosOnly = Array.isArray(h.inscritos) && h.inscritos.length > 0;
   // Pre-inscripción (sin clasificación todavía): permitimos cargar para editar inscritos
@@ -14230,6 +14242,7 @@ async function saveHistory(){
   }
   _cachedHistory=null; _prFiltersReady=false; _trendFiltersReady=false;
   await renderHistory();
+  _clasifSaved=true;   // clasificación guardada en la BD
   // Opción A · Mejora #3: toast clickable con enlace al Historial (en vez de alert)
   if(typeof _cargaShowSaveToast === 'function'){
     _cargaShowSaveToast(accion);
