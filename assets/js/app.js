@@ -44,6 +44,8 @@ function _cargaTab(n){
     try{ if(typeof _inscritosSyncCatFilter==='function') _inscritosSyncCatFilter(); }catch(_){}
     try{ if(typeof _inscritosShowRace==='function') _inscritosShowRace(); }catch(_){}
   }
+  // Paso 3: mostrar el nombre de la prueba elegida en el Paso 1.
+  if(n==='3'){ try{ if(typeof _inscritosShowRace==='function') _inscritosShowRace(); }catch(_){} }
   try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
 }
 
@@ -14817,6 +14819,14 @@ function _inscritosShowRace(){
   }
   const btn=document.getElementById('inscritosFccvBtn');
   if(btn){ btn.style.display = (name && _inscFccvUrlForCurrent()) ? '' : 'none'; }
+  // Mismo rótulo en el Paso 3 (Clasificación), para saber a qué prueba pertenece.
+  const lbl3=document.getElementById('clasifRaceLabel');
+  if(lbl3){
+    lbl3.innerHTML = name
+      ? `🏁 ${escapeHtml(name)}${date?` · <span style="color:#475569;font-weight:600">${escapeHtml(date)}</span>`:''}`
+      : '⚠️ Aún no has elegido la prueba. Ve al <b>Paso 1 · Datos</b> y rellénala o cárgala.';
+    lbl3.style.color = name ? '#0b2f6b' : '#b45309';
+  }
 }
 // Busca el enlace FCCV de la prueba actual (por nombre+fecha) en histórico/planificadas.
 function _inscFccvUrlForCurrent(){
