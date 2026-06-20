@@ -38,8 +38,12 @@ function _cargaTab(n){
   n=String(n);
   document.querySelectorAll('#view-carga .carga-step').forEach(el=>{ el.style.display = (el.dataset.step===n)?'':'none'; });
   document.querySelectorAll('#cargaTabs .carga-tab').forEach(b=>{ b.classList.toggle('active', b.dataset.step===n); });
-  // Al entrar a Inscritos, alinear "Importar SOLO la categoría" con el filtro global.
-  if(n==='2'){ try{ if(typeof _inscritosSyncCatFilter==='function') _inscritosSyncCatFilter(); }catch(_){} }
+  // Al entrar a Inscritos, alinear "Importar SOLO la categoría" con el filtro global
+  // y mostrar el nombre de la prueba elegida en el Paso 1.
+  if(n==='2'){
+    try{ if(typeof _inscritosSyncCatFilter==='function') _inscritosSyncCatFilter(); }catch(_){}
+    try{ if(typeof _inscritosShowRace==='function') _inscritosShowRace(); }catch(_){}
+  }
   try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
 }
 
@@ -14737,8 +14741,11 @@ async function _inscPopulateRaces(){
     });
   }catch(_){}
   sel.innerHTML=opts;
-  // Autoseleccionar la SIGUIENTE prueba (la primera real) y aplicar sus datos.
-  if(sel.options.length>1){ sel.selectedIndex=1; _inscPickRace(); }
+  // Autoseleccionar la SIGUIENTE prueba SOLO si el Paso 1 está vacío (atajo desde
+  // Inicio). Si ya hay una prueba elegida en el Paso 1, NO la pisamos.
+  const yaHayPrueba=(($('raceName')?.value||'').trim().length>0);
+  if(sel.options.length>1 && !yaHayPrueba){ sel.selectedIndex=1; _inscPickRace(); }
+  try{ _inscritosShowRace(); }catch(_){}
 }
 
 // Aplica la prueba elegida: rellena nombre/fecha/etc del formulario de Carga y
@@ -14772,12 +14779,37 @@ function _fccvRaceUrl(extra){
   return '';
 }
 
-// Abre la prueba seleccionada en la web de la FCCV (nueva pestaña) para copiar
-// allí los pre-inscritos y pegarlos aquí.
+// Muestra en el Paso 2 el NOMBRE de la prueba elegida en el Paso 1 (solo lectura)
+// y enseña el botón "Ver en FCCV" solo si esa prueba tiene enlace guardado.
+function _inscritosShowRace(){
+  const lbl=document.getElementById('inscritosRaceLabel');
+  const name=($('raceName')?.value||'').trim();
+  const date=($('raceDate')?.value||'').trim();
+  if(lbl){
+    lbl.innerHTML = name
+      ? `🏁 ${escapeHtml(name)}${date?` · <span style="color:#475569;font-weight:600">${escapeHtml(date)}</span>`:''}`
+      : '⚠️ Aún no has elegido la prueba. Ve al <b>Paso 1 · Datos</b> y rellénala o cárgala.';
+    lbl.style.color = name ? '#0b2f6b' : '#b45309';
+  }
+  const btn=document.getElementById('inscritosFccvBtn');
+  if(btn){ btn.style.display = (name && _inscFccvUrlForCurrent()) ? '' : 'none'; }
+}
+// Busca el enlace FCCV de la prueba actual (por nombre+fecha) en histórico/planificadas.
+function _inscFccvUrlForCurrent(){
+  try{
+    const name=($('raceName')?.value||'').trim().toLowerCase();
+    const iso=_parseSpanishDate(($('raceDate')?.value||'').trim())||'';
+    if(!name) return '';
+    const pool=[...(Array.isArray(_cachedHistory)?_cachedHistory:[]), ...(Array.isArray(_calPlanned)?_calPlanned:[])];
+    const r=pool.find(x=>((x.raceName||x.name||'').trim().toLowerCase()===name) && ((_parseSpanishDate(x.raceDate||x.dateStr||'')||'')===iso));
+    if(!r) return '';
+    let extra={}; if(r.notes){ try{ extra=JSON.parse(r.notes); }catch(_){ extra={}; } } else { extra=r; }
+    return _fccvRaceUrl(extra);
+  }catch(_){ return ''; }
+}
+// Abre la prueba actual (la del Paso 1) en la web de la FCCV (nueva pestaña).
 function _inscOpenFccv(){
-  const sel=document.getElementById('inscritosRaceSelect'); if(!sel) return;
-  const opt=sel.options[sel.selectedIndex];
-  const url=opt && opt.dataset ? (opt.dataset.fccvurl||'') : '';
+  const url=_inscFccvUrlForCurrent();
   if(!url){ if(typeof showToast==='function') showToast('Esta prueba no tiene enlace a la FCCV guardado.','warn',3000); return; }
   try{ window.open(url,'_blank','noopener'); }catch(_){}
 }
