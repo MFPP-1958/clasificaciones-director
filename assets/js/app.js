@@ -9134,16 +9134,11 @@ function populateFilters(){
       if(_gReg){ if(((x&&x.region||'').trim())!==_gReg) return false; }
       return true;
     };
+    // SOLO equipos que participan en LA PRUEBA CARGADA (clasificados + inscritos),
+    // no de todo el histórico: así no se ofrecen equipos que no han corrido aquí.
     const teamsSet = new Set();
     riders.forEach(r=>{ if(r.team && _okGlobal(r)) teamsSet.add(r.team); });
-    try{
-      if(Array.isArray(_cachedHistory)){
-        for(const race of _cachedHistory){
-          (race.inscritos||[]).forEach(i=>{ if(i.team && _okGlobal(i)) teamsSet.add(i.team); });
-          (race.riders||[]).forEach(r=>{ if(r.team && _okGlobal(r)) teamsSet.add(r.team); });
-        }
-      }
-    }catch(e){}
+    try{ (Array.isArray(inscritos)?inscritos:[]).forEach(i=>{ if(i.team && _okGlobal(i)) teamsSet.add(i.team); }); }catch(e){}
     const teams2=[...teamsSet].sort();
     $('analysisTeamFilter').innerHTML='<option value="">— Todos los equipos —</option>'+
       teams2.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
@@ -12226,48 +12221,41 @@ function updateAnalysisSuggestions(){
   const _gGrp = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
   const _inGrp = (cat)=>{ if(!_gGrp) return true; const cg=(typeof _calCatGroup==='function')?_calCatGroup(cat):null; return !!cg && cg.key===_gGrp; };
   const base=(teamFilter ? riders.filter(r=>r.team===teamFilter) : riders).filter(r=>_inGrp(r.cat));
-  // Enriquecer con ciclistas que SOLO aparecen en histórico (inscritos o clasificados en otras carreras)
-  // — pensado sobre todo para el botón "DNFs de la temporada" cuando un ciclista no se ha clasificado
-  // en la prueba actual pero sí ha estado inscrito en otras.
-  let extraHist = [];
+  // Añadir los INSCRITOS de ESTA prueba que NO se clasificaron (DNF/DNS), para que
+  // también se puedan elegir y analizar (al hacerlo se explica que no acabaron).
+  // NO se mezclan corredores de otras pruebas del histórico.
+  let dnfThisRace = [];
   try{
-    if(Array.isArray(_cachedHistory) && _cachedHistory.length){
-      const nkey = (typeof normalizeForMatching==='function') ? (s)=>normalizeForMatching(s||'') : (s)=>(s||'').toLowerCase().trim();
-      const known = new Set(base.map(r=>nkey(r.name||'')));
-      const acc = new Map(); // key -> { name, team, bib }
-      for(const race of _cachedHistory){
-        const insArr = Array.isArray(race.inscritos) ? race.inscritos : [];
-        const ridArr = Array.isArray(race.riders) ? race.riders : [];
-        const pushIfMatch = (x)=>{
-          const k = nkey(x.name||''); if(!k || known.has(k) || acc.has(k)) return;
-          if(teamFilter && (x.team||'').trim() !== teamFilter) return;
-          if(!_inGrp(x.cat)) return;   // el filtro global de categoría también manda aquí
-          acc.set(k, { name: x.name||'', team: x.team||'', bib: x.bib||'' });
-        };
-        insArr.forEach(pushIfMatch);
-        ridArr.forEach(pushIfMatch);
-      }
-      extraHist = [...acc.values()].sort((a,b)=>a.name.localeCompare(b.name,'es'));
-    }
+    const list = Array.isArray(inscritos) ? inscritos : [];
+    const nkey = (typeof normalizeForMatching==='function') ? (s)=>normalizeForMatching(s||'') : (s)=>(s||'').toLowerCase().trim();
+    const known = new Set(base.map(r=>nkey(r.name||'')));
+    list.forEach(i=>{
+      const k = nkey(i.name||''); if(!k || known.has(k)) return;
+      if(teamFilter && (i.team||'').trim() !== teamFilter) return;
+      if(!_inGrp(i.cat)) return;
+      known.add(k);
+      dnfThisRace.push({ name:i.name||'', team:i.team||'', bib:i.bib||'' });
+    });
+    dnfThisRace.sort((a,b)=>a.name.localeCompare(b.name,'es'));
   }catch(e){}
   if($('analysisSuggestions')){
     const baseHtml = base.map(r=>
       `<option value="${escapeHtml(r.name)}">Dorsal ${r.bib} · ${escapeHtml(r.team)}</option>`
     ).join('');
-    const extraHtml = extraHist.map(r=>
-      `<option value="${escapeHtml(r.name)}">${r.bib?'Dorsal '+escapeHtml(String(r.bib))+' · ':''}${escapeHtml(r.team||'')} · solo histórico</option>`
+    const dnfHtml = dnfThisRace.map(r=>
+      `<option value="${escapeHtml(r.name)}">${r.bib?'Dorsal '+escapeHtml(String(r.bib))+' · ':''}${escapeHtml(r.team||'')} · no terminó (DNF)</option>`
     ).join('');
-    $('analysisSuggestions').innerHTML = baseHtml + extraHtml;
+    $('analysisSuggestions').innerHTML = baseHtml + dnfHtml;
   }
   // Contador informativo
   const counter=$('analysisTeamCount');
   if(counter){
-    const extraTxt = extraHist.length ? ` · +${extraHist.length} solo histórico (para DNFs)` : '';
+    const dnfTxt = dnfThisRace.length ? ` · +${dnfThisRace.length} no terminaron (DNF)` : '';
     if(teamFilter){
-      counter.textContent=`Mostrando ${base.length} ciclista${base.length!==1?'s':''} de ${escapeHtml(teamFilter)}${extraTxt}`;
+      counter.textContent=`Mostrando ${base.length} ciclista${base.length!==1?'s':''} de ${escapeHtml(teamFilter)}${dnfTxt}`;
       counter.style.color='#1f6feb';
     } else {
-      counter.textContent=base.length ? `${base.length} ciclistas en total${extraTxt}` : '';
+      counter.textContent=base.length ? `${base.length} ciclistas en esta prueba${dnfTxt}` : '';
       counter.style.color='';
     }
   }
@@ -12459,6 +12447,40 @@ function percentileLabel(p){
   if(n>=50)return '<span class="percentile-label bueno">✅ BUENO · Top '+Math.round(100-n)+'%</span>';
   return '<span class="percentile-label progreso">📈 EN PROGRESO · '+n.toFixed(1)+'%</span>';
 }
+// Busca un INSCRITO de la prueba cargada (que NO se clasificó) por dorsal o nombre.
+function _aiFindInscritoThisRace(q, teamSel){
+  const list = Array.isArray(inscritos) ? inscritos : [];
+  if(!list.length) return null;
+  q = cleanSpaces(String(q||'')).toLowerCase(); if(!q) return null;
+  const nk = (typeof normalizeForMatching==='function') ? (s)=>normalizeForMatching(s||'') : (s)=>(s||'').toLowerCase().trim();
+  const classified = new Set(riders.map(r=>nk(r.name)));
+  let pool = list.filter(i=> !classified.has(nk(i.name)));      // solo los que NO terminaron
+  if(teamSel) pool = pool.filter(i=>(i.team||'')===teamSel);
+  return pool.find(i=>String(i.bib||'').toLowerCase()===q)
+      || pool.find(i=>(i.name||'').toLowerCase().includes(q))
+      || null;
+}
+// Tarjeta explicativa cuando el corredor estaba inscrito pero no acabó (DNF/DNS).
+function _aiDnfThisRaceCard(ins){
+  const nm = escapeHtml(_evolNormName?_evolNormName(ins.name):ins.name);
+  const team = ins.team?escapeHtml(ins.team):'';
+  const bib = ins.bib?('Dorsal '+escapeHtml(String(ins.bib))):'';
+  const raceNm = escapeHtml((_activeRace&&_activeRace.name) || ($('raceName')&&$('raceName').value) || 'esta prueba');
+  try{ if($('analysisSearchInput')) $('analysisSearchInput').value=ins.name; }catch(_){}
+  return `<div style="text-align:center;padding:26px 20px">
+    <div style="font-size:44px">🚫</div>
+    <h3 style="margin:8px 0 2px;color:#0b2f6b">${nm}</h3>
+    <div style="color:#6b7280;font-size:13px;margin-bottom:12px">${[bib,team].filter(Boolean).join(' · ')}</div>
+    <div style="display:inline-block;text-align:left;max-width:560px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:12px;padding:14px 16px;color:#9a3412;line-height:1.55;font-size:14px">
+      <b>Estaba inscrito en «${raceNm}» pero no aparece en la clasificación.</b><br>
+      Es decir, <b>no terminó (DNF)</b> o no tomó la salida (DNS). Por eso no hay datos de su resultado en esta prueba.
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn" onclick="_aiOpenDNFModal()" style="background:#dc2626;color:#fff;border:0;font-weight:800;padding:9px 16px">🚫 Ver sus DNFs de la temporada</button>
+    </div>
+  </div>`;
+}
+
 function analyseSelectedRider(){
   if($('individualResult')) $('individualResult').style.display='block';
   if(!hasValidData||!riders.length){$('individualResult').innerHTML='Carga primero una clasificación válida.';return}
@@ -12467,7 +12489,12 @@ function analyseSelectedRider(){
   const teamSel=$('analysisTeamFilter')?.value||'';
   const searchPool=teamSel ? riders.filter(x=>x.team===teamSel) : null;
   let r=findRiderByQuery(q, searchPool);
-  if(!r){$('individualResult').innerHTML='No he encontrado ningún ciclista con esa búsqueda'+(teamSel?' en el equipo <b>'+escapeHtml(teamSel)+'</b>':'')+'.';return}
+  if(!r){
+    // ¿Estaba inscrito en ESTA prueba pero no aparece en la clasificación? → DNF/DNS.
+    const ins=_aiFindInscritoThisRace(q, teamSel);
+    if(ins){ $('individualResult').innerHTML=_aiDnfThisRaceCard(ins); return; }
+    $('individualResult').innerHTML='No he encontrado ningún ciclista con esa búsqueda'+(teamSel?' en el equipo <b>'+escapeHtml(teamSel)+'</b>':'')+'.';return;
+  }
 
   if($('searchInput'))$('searchInput').value=r.name;
   if($('analysisSearchInput'))$('analysisSearchInput').value=r.name;
