@@ -343,20 +343,16 @@
     </div>
 
     <div id="view-carga" class="spa-view active">
-<!-- Barra de carga colapsable -->
-<div id="loadCollapsibleWrap" style="margin-bottom:16px">
-  <div class="load-bar load-bar-open" id="loadBar" onclick="toggleLoadPanel()">
-    <span class="load-bar-left">
-      <span id="loadChevron" class="load-chevron">▼</span>
-      <span id="loadBarLabel">📂 Cargar / editar clasificación</span>
-    </span>
-    <div class="load-bar-actions" onclick="event.stopPropagation()">
-      <button class="btn light" style="padding:7px 13px;font-size:13px" onclick="openLoadPanelForNew()">➕ Añadir otra prueba</button>
-      <button class="btn" style="padding:7px 13px;font-size:13px;background:#059669;border-color:#059669" onclick="saveHistory()">💾 Guardar en historial</button>
-    </div>
-  </div>
-  <div id="loadPanelBody" class="load-panel-body">
-<section class="panel load-panel">
+<!-- Navegación por PASOS (pestañas) · rediseño UX de Carga y Resumen -->
+<div class="carga-tabs" id="cargaTabs">
+  <button type="button" class="carga-tab active" data-step="1" onclick="_cargaTab(1)">📝 1 · Datos</button>
+  <button type="button" class="carga-tab" data-step="2" onclick="_cargaTab(2)">📋 2 · Inscritos</button>
+  <button type="button" class="carga-tab" data-step="3" onclick="_cargaTab(3)">🏁 3 · Clasificación</button>
+  <button type="button" class="carga-tab" data-step="4" onclick="_cargaTab(4)">✅ 4 · Resumen</button>
+</div>
+<!-- PASO 3 · Clasificación (resultados) -->
+<section class="panel load-panel carga-step" data-step="3" style="display:none">
+  <h2 style="margin:0 0 12px">🏁 Cargar clasificación (resultados de la prueba)</h2>
   <div class="upload" id="dropZone">
     <h2>Cargar clasificación</h2>
     <p class="help">Arrastra aquí el archivo o pulsa el botón. Formatos: <b>PDF, CSV, XLS, XLSX</b>.</p>
@@ -383,7 +379,14 @@
       <button class="btn secondary" onclick="document.getElementById('pastedText').value=''">Limpiar texto</button>
     </div>
   </div>
-
+  <div class="carga-nav"><button type="button" class="btn" onclick="_cargaTab(4)">Ir al resumen ➔</button></div>
+</section>
+<!-- PASO 1 · Datos de la prueba (visible por defecto) -->
+<section class="panel load-panel carga-step" data-step="1">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+    <h2 style="margin:0">📝 Datos de la prueba</h2>
+    <button type="button" class="btn light" onclick="openLoadPanelForNew()" title="Vaciar el formulario para empezar otra prueba">➕ Prueba nueva (vaciar)</button>
+  </div>
   <!-- Metadatos con etiquetas y campos obligatorios -->
   <div class="meta-labeled">
     <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,.65fr) minmax(95px,.55fr) minmax(95px,.55fr) minmax(125px,.65fr) minmax(125px,.65fr) minmax(135px,.7fr);gap:10px">
@@ -487,7 +490,11 @@
   </div>
 
   <p class="help" style="margin-top:10px">💡 Campos <b style="color:#b42318">*</b> son obligatorios para el histórico. El análisis es 100% local.</p>
-
+  <div class="carga-nav"><button type="button" class="btn" onclick="_cargaTab(2)">Siguiente paso ➔</button></div>
+</section>
+<!-- PASO 2 · Inscritos (startlist · pre-carrera) -->
+<section class="panel load-panel carga-step" data-step="2" style="display:none">
+  <h2 style="margin:0 0 12px">📋 Lista de inscritos (startlist · pre-carrera)</h2>
   <!-- ── INSCRITOS / STARTLIST (Tier 1) ──────────────────────────────────── -->
   <div id="inscritosCard" class="inscritos-card">
     <div class="inscritos-header" onclick="toggleInscritosPanel()">
@@ -546,12 +553,15 @@
       <div id="inscritosListWrap" style="display:none"></div>
     </div>
   </div>
+  <div class="carga-nav"><button type="button" class="btn" onclick="_cargaTab(3)">Siguiente paso ➔</button></div>
 </section>
-  </div><!-- fin loadPanelBody -->
-</div><!-- fin loadCollapsibleWrap -->
 
-<!-- KPIs Generales -->
-<section class="grid always-visible race-summary">
+<!-- PASO 4 · Resumen y guardado -->
+<section class="panel carga-step" data-step="4" style="display:none">
+  <h2 style="margin:0 0 6px">✅ Resumen y guardado</h2>
+  <p class="help" style="margin:0 0 12px">Revisa los datos cargados y, cuando todo esté correcto, guarda la prueba en la base de datos.</p>
+  <!-- KPIs Generales -->
+  <section class="grid always-visible race-summary">
   <div class="card"><div class="label">Clasificados</div><div class="value" id="totalRiders">0</div></div>
   <div class="card"><div class="label">Equipos</div><div class="value" id="totalTeams">0</div></div>
   <div class="card"><div class="label">Categorías</div><div class="value" id="totalCats">0</div></div>
@@ -565,6 +575,10 @@
   <div class="card card-rivals"><div class="label">⚠️ Equipos rivales en Top 10</div><div class="value" id="kpiRivals">—</div></div>
   <div class="card card-spread"><div class="label">📐 Spread del equipo</div><div class="value" id="kpiSpread">—</div></div>
 </section>
+  <div class="carga-nav" style="justify-content:center;margin-top:16px">
+    <button type="button" class="btn admin-only" style="background:#059669;border-color:#059669;font-size:15px;padding:12px 24px;font-weight:800" onclick="saveHistory()" title="Guarda la prueba (datos + inscritos + clasificación) en la base de datos">💾 Guardar en la base de datos</button>
+  </div>
+</section><!-- fin PASO 4 -->
     </div>
 
     <div id="view-tabla" class="spa-view">

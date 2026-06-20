@@ -32,8 +32,19 @@ function toggleLoadPanel(){
   if(bar) bar.classList.toggle('load-bar-open', !isOpen);
 }
 
+// Navegación por PASOS (pestañas) de Carga y Resumen. Muestra solo el paso
+// activo; los datos de los demás pasos NO se borran (siguen en el DOM).
+function _cargaTab(n){
+  n=String(n);
+  document.querySelectorAll('#view-carga .carga-step').forEach(el=>{ el.style.display = (el.dataset.step===n)?'':'none'; });
+  document.querySelectorAll('#cargaTabs .carga-tab').forEach(b=>{ b.classList.toggle('active', b.dataset.step===n); });
+  try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
+}
+
 /* Colapsa el panel de carga y actualiza la etiqueta con el nombre de la carrera */
 function _collapseLoadPanel(){
+  // Con la interfaz de pestañas, "colapsar" = saltar al PASO 4 (Resumen) tras cargar.
+  try{ if(typeof _cargaTab==='function') _cargaTab(4); }catch(_){}
   const body=$('loadPanelBody');
   const chevron=$('loadChevron');
   const bar=$('loadBar');

@@ -1777,3 +1777,17 @@ body.rv-mode-car #view-radiovuelta .rv-diario-tx{color:#000}
 .empty-state .empty-msg{font-size:14.5px;font-weight:800;color:#475569;max-width:380px;line-height:1.45}
 .empty-state .empty-sub{font-size:12.5px;color:#94a3b8;max-width:380px;line-height:1.4}
 .btn-spin{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:7px}
+
+/* ════════════════════════════════════════════════════════════════════
+   Carga y Resumen · navegación por PASOS (pestañas)
+   ════════════════════════════════════════════════════════════════════ */
+.carga-tabs{display:flex;gap:6px;flex-wrap:wrap;background:#fff;border:1px solid var(--border);border-radius:14px;padding:6px;margin-bottom:16px;box-shadow:0 10px 24px rgba(16,24,40,.06)}
+.carga-tab{flex:1;min-width:130px;border:0;background:#f3f6fb;color:#475569;font-weight:800;font-size:13.5px;padding:12px 10px;border-radius:10px;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
+.carga-tab:hover{background:#e6eefb;color:#1f6feb}
+.carga-tab.active{background:linear-gradient(135deg,#0b2f6b,#1286c7);color:#fff;box-shadow:0 4px 12px rgba(11,47,107,.28)}
+.carga-step{animation:cargaFade .22s ease}
+@keyframes cargaFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.carga-nav{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:16px;padding-top:14px;border-top:1px dashed #d0d5dd}
+.carga-nav-hint{font-size:12px;color:#94a3b8;margin-right:auto}
+.carga-nav .btn{font-size:14px;padding:10px 18px}
+@media(max-width:700px){.carga-tab{min-width:0;font-size:12px;padding:10px 6px}}
