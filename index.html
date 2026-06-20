@@ -488,13 +488,11 @@
     </div>
     <div class="mi-equipo-right">
       <button class="btn-save-equipo" id="btnSaveEquipo" onclick="saveMyTeam()">💾 Guardar equipo</button>
-      <button class="btn-historial-load" onclick="openPlannedRacesModal()" style="background:#0369a1;border-color:#0369a1;color:#fff">📅 Traer datos de prueba planificada</button>
-      <button class="btn-historial-load" onclick="openHistoryModal()">📁 Cargar desde histórico</button>
     </div>
   </div>
 
   <p class="help" style="margin-top:10px">💡 Campos <b style="color:#b42318">*</b> son obligatorios para el histórico. El análisis es 100% local.</p>
-  <div class="carga-nav"><span id="cargaDatosStatus" class="carga-nav-hint"></span><button type="button" class="btn admin-only" style="background:#0369a1;border-color:#0369a1" onclick="_cargaSaveDatos(this)" title="Guarda los datos de la prueba ya (aunque aún no tengas inscritos ni clasificación), para no perderlos">💾 Guardar datos</button><button type="button" class="btn" onclick="_cargaTab(2)">Siguiente paso ➔</button></div>
+  <div class="carga-nav"><span id="cargaDatosStatus" class="carga-nav-hint"></span><button type="button" class="btn admin-only" style="background:#0369a1;border-color:#0369a1" onclick="_cargaSaveDatos(this)" title="Guarda los datos de la prueba ya (aunque aún no tengas inscritos ni clasificación), para no perderlos">💾 Guardar datos</button><button type="button" class="btn" onclick="_cargaNextFromDatos()">Siguiente paso ➔</button></div>
 </section>
 <!-- PASO 2 · Inscritos (startlist · pre-carrera) -->
 <section class="panel load-panel carga-step" data-step="2" style="display:none">

@@ -41,6 +41,27 @@ function _cargaTab(n){
   try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
 }
 
+// ¿Están guardados los datos del Paso 1? (false = hay cambios sin guardar)
+let _cargaDatosSaved=false;
+function _cargaMarkUnsaved(){ _cargaDatosSaved=false; }
+// Cablear los inputs de datos para detectar cambios sin guardar (una sola vez).
+function _cargaWireDirty(){
+  ['raceName','raceDate','raceStartTime','raceKm','raceAvg','raceLocalidad','raceCircuitType','raceCCAA','raceChallengeCV'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el && !el._dirtyWired){ el._dirtyWired=true; el.addEventListener('input',_cargaMarkUnsaved); el.addEventListener('change',_cargaMarkUnsaved); }
+  });
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _cargaWireDirty);
+else setTimeout(_cargaWireDirty,0);
+// "Siguiente paso" desde Datos: exige guardar antes de continuar.
+async function _cargaNextFromDatos(){
+  if(_cargaDatosSaved){ _cargaTab(2); return; }
+  const r=confirm('⚠️ Primero guarda los datos de la prueba para no perderlos.\n\n¿Los guardo ahora y paso a «Inscritos»?');
+  if(!r) return;
+  try{ await _cargaSaveDatos(null); }catch(_){}
+  if(_cargaDatosSaved) _cargaTab(2);
+}
+
 // PASO 1 · "Guardar datos de la prueba": persiste los METADATOS (nombre, fecha,
 // CCAA, km, hora…) en Supabase como prueba PLANIFICADA, para que NO se pierdan
 // aunque cierres la app o vuelvas días después. Si ya existe una prueba con ese
@@ -89,6 +110,7 @@ async function _cargaSaveDatos(btn){
     _cachedHistory=null;
     if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
     try{ if(typeof renderHistory==='function') await renderHistory(); }catch(_){}
+    _cargaDatosSaved=true;   // marca que los datos del Paso 1 ya están guardados
     if(typeof showToast==='function') showToast('✅ Datos de la prueba guardados. Puedes seguir otro día y cargarla desde el histórico.','ok',4000);
     if(st){ st.textContent='✅ Guardado'; st.style.color='#15803d'; setTimeout(()=>{ if(st&&st.textContent==='✅ Guardado') st.textContent=''; },5000); }
   }catch(e){
@@ -13682,6 +13704,7 @@ async function loadHistoryEntry(id){
   const hist = _cachedHistory || await _sbLoadHistory();
   const h = hist.find(x=>x.id===id);
   if(!h){alert('No se encontró la carrera seleccionada.');return;}
+  try{ _cargaDatosSaved=true; }catch(_){}  // viene de la BD → datos ya guardados
   riders = h.riders||[];
   const hasInscritosOnly = Array.isArray(h.inscritos) && h.inscritos.length > 0;
   // Pre-inscripción (sin clasificación todavía): permitimos cargar para editar inscritos
@@ -25199,6 +25222,7 @@ function _fillFromPlanned(id){
   if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
   // Scroll al nombre
   setTimeout(()=>{ $('raceName')?.scrollIntoView({behavior:'smooth', block:'center'}); }, 50);
+  try{ _cargaDatosSaved=true; }catch(_){}  // viene de una planificada guardada
 }
 // ===== FIN TRAER DATOS DESDE PRUEBA PLANIFICADA =====
 
