@@ -968,6 +968,62 @@ function _betaToast(){
 // Guard para el inicio de funciones de mutación (UX limpia: avisa y corta).
 function _betaGuard(){ if(_isBetaTester()){ _betaToast(); return true; } return false; }
 
+// ════════════════════════════════════════════════════════════════════════
+// BETA FEEDBACK · módulo aislado (FAB + modal). No toca nada del resto.
+// ════════════════════════════════════════════════════════════════════════
+// Nombre legible de la pantalla activa (Inicio, Simulador, Calendario…).
+function _bfCurrentSection(){
+  try{
+    const v=document.querySelector('.spa-view.active'); const id=v?v.id:'';
+    if(typeof ALL_VIEWS!=='undefined' && Array.isArray(ALL_VIEWS)){ const m=ALL_VIEWS.find(x=>x.id===id); if(m && m.label) return m.label; }
+    return id ? id.replace(/^view-/,'') : '(desconocida)';
+  }catch(_){ return '(desconocida)'; }
+}
+// ¿Quién ve el botón de feedback? Beta testers + staff (no el ciclista, para no
+// generar ruido). La LECTURA/gestión de reportes es solo del SUPERADMIN (RLS).
+function _bfCanReport(){
+  if(typeof _rbacUser==='undefined' || !_rbacUser) return false;
+  const r=_rbacUser.role;
+  return r==='BETA_TESTER' || r==='LECTOR' || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(r);
+}
+function _bfApplyVisibility(){
+  const fab=document.getElementById('bfFab'); if(!fab) return;
+  fab.style.display = _bfCanReport() ? 'flex' : 'none';
+}
+function _bfOpen(){
+  const ov=document.getElementById('bfOverlay'); if(!ov) return;
+  const s=document.getElementById('bfSection'); if(s) s.textContent='📍 Pantalla detectada: '+_bfCurrentSection();
+  const st=document.getElementById('bfStatus'); if(st){ st.textContent=''; }
+  const d=document.getElementById('bfDesc'); if(d) d.value='';
+  ov.style.display='flex';
+  setTimeout(()=>{ try{ document.getElementById('bfDesc')?.focus(); }catch(_){} },100);
+}
+function _bfClose(){ const ov=document.getElementById('bfOverlay'); if(ov) ov.style.display='none'; }
+async function _bfSubmit(btn){
+  const desc=(document.getElementById('bfDesc')?.value||'').trim();
+  const tipo=document.getElementById('bfType')?.value||'Fallo';
+  const st=document.getElementById('bfStatus');
+  if(!desc){ if(st){ st.textContent='Escribe una breve descripción.'; st.style.color='#dc2626'; } try{document.getElementById('bfDesc')?.focus();}catch(_){} return; }
+  if(!_sb){ if(st){ st.textContent='Sin conexión a la base de datos.'; st.style.color='#dc2626'; } return; }
+  const unlock=_lockBtn(btn,'Enviando…'); if(unlock===null) return;
+  if(st){ st.textContent=''; }
+  try{
+    const {error}=await _sb.from('beta_feedback').insert({
+      id_usuario:     (_rbacUser&&_rbacUser.email)||'',
+      rol_usuario:    (_rbacUser&&_rbacUser.role)||'',
+      seccion_actual: _bfCurrentSection(),     // pantalla capturada automáticamente
+      tipo_reporte:   tipo,
+      descripcion_texto: desc
+    });
+    if(error) throw error;
+    if(typeof showToast==='function') showToast('🙏 ¡Gracias! Tu reporte se ha enviado. Nos ayuda muchísimo a mejorar.','ok',4500);
+    _bfClose();
+  }catch(e){
+    // No bloquear la interfaz si falla: solo avisar.
+    if(st){ st.textContent='⚠️ No se ha podido enviar (revisa tu conexión). Vuelve a intentarlo.'; st.style.color='#b45309'; }
+  }finally{ unlock(); }
+}
+
 // ── Interceptor GLOBAL de escrituras a Supabase para Beta Tester ──
 // Envuelve _sb.from(): si el usuario es beta tester, insert/update/delete/upsert
 // se anulan (no tocan la base de datos) y se muestra el aviso. Las LECTURAS
@@ -990,7 +1046,9 @@ if(_sb && typeof _sb.from === 'function'){
   };
   _sb.from = function(table){
     const b=_sbOrigFrom(table);
-    if(_isBetaTester()){
+    // EXCEPCIÓN: la tabla de feedback SÍ admite INSERT del beta tester (es su
+    // canal para reportar). El resto de escrituras siguen bloqueadas para él.
+    if(_isBetaTester() && table !== 'beta_feedback'){
       ['insert','update','delete','upsert'].forEach(m=>{
         if(b && typeof b[m]==='function'){ b[m]=function(){ _betaToast(); return _betaNoopQuery(); }; }
       });
@@ -1608,6 +1666,7 @@ function _rbacApplySession(){
     // El botón "Ver como ciclista" es una herramienta de dirección; no para beta testers.
     if(staff && !_beta && typeof _previewEnsureBtn==='function') _previewEnsureBtn();
     if(!staff) setTimeout(()=>{ try{ _gfLockForCyclist(); }catch(_){} }, 300);
+    try{ if(typeof _bfApplyVisibility==='function') _bfApplyVisibility(); }catch(_){}
   }catch(_){}
   // Renderizar menú según permisos
   _rbacRenderMenu();
@@ -1639,6 +1698,7 @@ function _rbacLogout(){
   _rbacUser = null;
   _rbacPerms = new Set();
   try{ document.body.classList.remove('rbac-staff','preview-ciclista'); document.body.dataset.role=''; const pb=document.getElementById('previewCyclistBtn'); if(pb) pb.remove(); }catch(_){}
+  try{ const fab=document.getElementById('bfFab'); if(fab) fab.style.display='none'; _bfClose&&_bfClose(); }catch(_){}
   // Ocultar todo y mostrar overlay
   const bar = document.getElementById('rbacUserBar');
   if(bar) bar.style.display='none';

@@ -1791,3 +1791,25 @@ body.rv-mode-car #view-radiovuelta .rv-diario-tx{color:#000}
 .carga-nav-hint{font-size:12px;color:#94a3b8;margin-right:auto}
 .carga-nav .btn{font-size:14px;padding:10px 18px}
 @media(max-width:700px){.carga-tab{min-width:0;font-size:12px;padding:10px 6px}}
+
+/* ════════════════════════════════════════════════════════════════════
+   BETA FEEDBACK · FAB + modal (módulo aislado, namespace bf-*)
+   ════════════════════════════════════════════════════════════════════ */
+#bfFab{position:fixed;right:18px;bottom:18px;z-index:9300;width:54px;height:54px;border-radius:50%;border:none;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 6px 20px rgba(91,33,182,.45);transition:transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center}
+#bfFab:hover{transform:translateY(-2px) scale(1.05);box-shadow:0 10px 26px rgba(91,33,182,.55)}
+.bf-overlay{position:fixed;inset:0;z-index:9400;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box}
+.bf-modal{background:#fff;border-radius:16px;width:100%;max-width:460px;box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+.bf-head{background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;font-size:17px;font-weight:900}
+.bf-x{background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:8px;font-size:15px;font-weight:900;cursor:pointer}
+.bf-body{padding:18px}
+.bf-help{font-size:13px;color:#64748b;margin:0 0 14px;line-height:1.5}
+.bf-label{display:block;font-size:12px;font-weight:800;color:#0b2f6b;margin:0 0 5px}
+.bf-field{width:100%;box-sizing:border-box;border:1.5px solid #d0d5dd;border-radius:9px;padding:10px 12px;font-size:14px;margin-bottom:14px;background:#fff;color:#111}
+.bf-field:focus{outline:none;border-color:#7c3aed}
+.bf-textarea{min-height:120px;resize:vertical;font-family:inherit}
+.bf-section{font-size:12px;color:#475569;background:#f3f0ff;border:1px solid #ddd6fe;border-radius:8px;padding:7px 11px;margin-bottom:6px}
+.bf-status{font-size:13px;font-weight:700;min-height:18px}
+.bf-foot{display:flex;justify-content:flex-end;gap:10px;padding:0 18px 18px}
+.bf-btn-cancel{background:#fff;border:1.5px solid #d0d5dd;color:#475569;font-weight:700;padding:10px 16px;border-radius:9px;cursor:pointer}
+.bf-btn-send{background:#5b21b6;border:none;color:#fff;font-weight:800;padding:10px 18px;border-radius:9px;cursor:pointer}
+.bf-btn-send:disabled{opacity:.6;cursor:not-allowed}

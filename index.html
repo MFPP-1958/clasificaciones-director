@@ -3606,6 +3606,34 @@
 </div>
 
 
+<!-- ════════ BETA FEEDBACK · módulo aislado (FAB + modal) ════════ -->
+<button id="bfFab" onclick="_bfOpen()" title="Enviar un fallo o sugerencia" aria-label="Enviar feedback" style="display:none">💬</button>
+<div id="bfOverlay" class="bf-overlay" style="display:none" onclick="if(event.target===this)_bfClose()">
+  <div class="bf-modal" role="dialog" aria-modal="true" aria-labelledby="bfTitle">
+    <div class="bf-head">
+      <span id="bfTitle">💬 Enviar feedback</span>
+      <button class="bf-x" onclick="_bfClose()" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="bf-body">
+      <p class="bf-help">¿Has visto un fallo o se te ocurre una mejora? Cuéntanoslo. Detectamos solos en qué pantalla estás.</p>
+      <label class="bf-label" for="bfType">Tipo de reporte</label>
+      <select id="bfType" class="bf-field">
+        <option value="Fallo">🐞 Fallo</option>
+        <option value="Sugerencia">💡 Sugerencia</option>
+        <option value="Mejora de Interfaz">🎨 Mejora de Interfaz</option>
+      </select>
+      <label class="bf-label" for="bfDesc">Descripción</label>
+      <textarea id="bfDesc" class="bf-field bf-textarea" placeholder="Describe qué ha pasado o qué propones…"></textarea>
+      <div id="bfSection" class="bf-section"></div>
+      <div id="bfStatus" class="bf-status"></div>
+    </div>
+    <div class="bf-foot">
+      <button class="bf-btn-cancel" onclick="_bfClose()">Cancelar</button>
+      <button id="bfSendBtn" class="bf-btn-send" onclick="_bfSubmit(this)">Enviar reporte</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/js/app.js"></script>
 </body>
 </html>
