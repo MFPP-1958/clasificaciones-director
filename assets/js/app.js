@@ -41,6 +41,62 @@ function _cargaTab(n){
   try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
 }
 
+// PASO 1 · "Guardar datos de la prueba": persiste los METADATOS (nombre, fecha,
+// CCAA, km, hora…) en Supabase como prueba PLANIFICADA, para que NO se pierdan
+// aunque cierres la app o vuelvas días después. Si ya existe una prueba con ese
+// nombre y fecha, actualiza sus datos (no toca inscritos ni clasificación).
+async function _cargaSaveDatos(btn){
+  const raceName=($('raceName')?.value||'').trim();
+  const raceDateStr=($('raceDate')?.value||'').trim();
+  if(!raceName){ alert('Pon al menos el NOMBRE de la carrera para guardar.'); $('raceName')?.focus(); return; }
+  if(!raceDateStr){ alert('Pon la FECHA de la carrera para guardar.'); $('raceDate')?.focus(); return; }
+  const parsedDate=(typeof _parseSpanishDate==='function')?_parseSpanishDate(raceDateStr):null;
+  if(!parsedDate){ alert('Fecha "'+raceDateStr+'" no reconocida. Usa DD/MM/AAAA.'); return; }
+  if(!_sb){ alert('Supabase no disponible. Revisa la conexión.'); return; }
+  const m={
+    raceDate:raceDateStr,
+    km:($('raceKm')?.value||'').trim(),
+    avg:($('raceAvg')?.value||'').trim(),
+    localidad:($('raceLocalidad')?.value||'').trim(),
+    circuitType:($('raceCircuitType')?.value||'').trim(),
+    hora_inicio:($('raceStartTime')?.value||'').trim(),
+    challengeCV:!!($('raceChallengeCV')?.checked),
+    ccaa:($('raceCCAA')?.value||'').trim()
+  };
+  const _gfCat=(typeof _globalFilters!=='undefined'&&_globalFilters)?(_globalFilters.cat||''):'';
+  const _gLbl=(typeof _CAT_IMPORT_LABEL!=='undefined'&&_gfCat)?(_CAT_IMPORT_LABEL[_gfCat]||''):'';
+  const st=document.getElementById('cargaDatosStatus');
+  const unlock=_lockBtn(btn,'Guardando…'); if(unlock===null) return;
+  if(st){ st.textContent='Guardando…'; st.style.color='#6b7280'; }
+  try{
+    const {data:existing,error:dupErr}=await _sb.from('races').select('id,name,notes,race_type').eq('date',parsedDate);
+    if(dupErr){ alert('❌ Error comprobando duplicados: '+dupErr.message); if(st)st.textContent=''; return; }
+    const same=(existing||[]).find(r=>_sameRaceName(r.name,raceName));
+    if(same){
+      // Actualizar SOLO metadatos, preservando inscritos/resultados/tipo.
+      let extra={}; try{ extra=JSON.parse(same.notes||'{}'); }catch(_){}
+      extra.raceDate=m.raceDate; extra.km=m.km; extra.avg=m.avg; extra.localidad=m.localidad;
+      extra.circuitType=m.circuitType; extra.hora_inicio=m.hora_inicio; extra.challengeCV=m.challengeCV; extra.ccaa=m.ccaa;
+      if(_gLbl && !extra.raceCat){ extra.raceCat=_gLbl; if(!extra.cat) extra.cat=_gLbl; }
+      const {error:updErr}=await _sb.from('races').update({name:raceName,notes:JSON.stringify(extra)}).eq('id',same.id);
+      if(updErr){ alert('❌ Error guardando los datos:\n\n'+updErr.message+'\n\n(Probable causa: políticas RLS de Supabase.)'); if(st)st.textContent=''; return; }
+    } else {
+      // Crear prueba PLANIFICADA con los metadatos.
+      const extra={raceDate:m.raceDate,km:m.km,avg:m.avg,localidad:m.localidad,circuitType:m.circuitType,hora_inicio:m.hora_inicio,challengeCV:m.challengeCV,ccaa:m.ccaa,regions:{},raceCat:_gLbl||'',cat:_gLbl||''};
+      const {error:insErr}=await _sb.from('races').insert({name:raceName,date:parsedDate,race_type:'planificada',notes:JSON.stringify(extra)});
+      if(insErr){ alert('❌ Error creando la prueba:\n\n'+insErr.message+'\n\n(Probable causa: políticas RLS de Supabase.)'); if(st)st.textContent=''; return; }
+    }
+    _cachedHistory=null;
+    if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
+    try{ if(typeof renderHistory==='function') await renderHistory(); }catch(_){}
+    if(typeof showToast==='function') showToast('✅ Datos de la prueba guardados. Puedes seguir otro día y cargarla desde el histórico.','ok',4000);
+    if(st){ st.textContent='✅ Guardado'; st.style.color='#15803d'; setTimeout(()=>{ if(st&&st.textContent==='✅ Guardado') st.textContent=''; },5000); }
+  }catch(e){
+    alert('❌ Error de conexión al guardar. Vuelve a intentarlo.');
+    if(st) st.textContent='';
+  }finally{ unlock(); }
+}
+
 /* Colapsa el panel de carga y actualiza la etiqueta con el nombre de la carrera */
 function _collapseLoadPanel(){
   // Con la interfaz de pestañas, "colapsar" = saltar al PASO 4 (Resumen) tras cargar.

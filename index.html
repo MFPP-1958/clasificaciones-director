@@ -385,7 +385,11 @@
 <section class="panel load-panel carga-step" data-step="1">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
     <h2 style="margin:0">📝 Datos de la prueba</h2>
-    <button type="button" class="btn light" onclick="openLoadPanelForNew()" title="Vaciar el formulario para empezar otra prueba">➕ Prueba nueva (vaciar)</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn light admin-only" onclick="openHistoryModal()" title="Cargar una prueba ya guardada en el histórico (con sus datos, inscritos o clasificación)">📁 Cargar guardada</button>
+      <button type="button" class="btn light admin-only" onclick="openPlannedRacesModal()" title="Traer los datos de una prueba que añadiste al calendario (planificada)">📅 Traer planificada</button>
+      <button type="button" class="btn light admin-only" onclick="openLoadPanelForNew()" title="Vaciar el formulario para empezar otra prueba">➕ Prueba nueva (vaciar)</button>
+    </div>
   </div>
   <!-- Metadatos con etiquetas y campos obligatorios -->
   <div class="meta-labeled">
@@ -490,7 +494,7 @@
   </div>
 
   <p class="help" style="margin-top:10px">💡 Campos <b style="color:#b42318">*</b> son obligatorios para el histórico. El análisis es 100% local.</p>
-  <div class="carga-nav"><button type="button" class="btn" onclick="_cargaTab(2)">Siguiente paso ➔</button></div>
+  <div class="carga-nav"><span id="cargaDatosStatus" class="carga-nav-hint"></span><button type="button" class="btn admin-only" style="background:#0369a1;border-color:#0369a1" onclick="_cargaSaveDatos(this)" title="Guarda los datos de la prueba ya (aunque aún no tengas inscritos ni clasificación), para no perderlos">💾 Guardar datos</button><button type="button" class="btn" onclick="_cargaTab(2)">Siguiente paso ➔</button></div>
 </section>
 <!-- PASO 2 · Inscritos (startlist · pre-carrera) -->
 <section class="panel load-panel carga-step" data-step="2" style="display:none">
