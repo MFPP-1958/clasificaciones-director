@@ -2741,7 +2741,7 @@
         <div class="section-title"><h2 style="margin:0">✅ Disponibilidad semanal</h2>
           <button class="btn light" onclick="_dispInit()" style="padding:6px 12px;font-size:12px">🔄 Actualizar</button>
         </div>
-        <div id="dispBody"><div style="padding:40px;text-align:center;color:#9ca3af">⏳ Cargando próxima carrera…</div></div>
+        <div id="dispBody"><div class="inline-loading"><div class="spin-ring"></div><div>Cargando próxima carrera…</div></div></div>
       </section>
     </div>
 
@@ -3033,7 +3033,7 @@
           <div id="calModalMsg" style="margin-top:10px;font-size:12px;font-weight:700;min-height:18px"></div>
           <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
             <button onclick="_calCloseModal()" style="padding:9px 18px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;cursor:pointer">Cancelar</button>
-            <button onclick="_calSavePlanned()" style="padding:9px 18px;border-radius:9px;border:none;background:#10b981;color:#fff;font-weight:700;cursor:pointer">💾 Guardar</button>
+            <button onclick="_calSavePlanned(this)" style="padding:9px 18px;border-radius:9px;border:none;background:#10b981;color:#fff;font-weight:700;cursor:pointer">💾 Guardar</button>
           </div>
         </div>
       </div>

@@ -2522,7 +2522,7 @@ async function _dispRender(){
           <div style="font-size:12.5px;color:#475569;font-weight:700;margin-bottom:6px">¿No estás en la lista? Regístrate:</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <input id="dispNewName" type="text" placeholder="Apellido, Nombre (ej: Alcon, Manuel)" style="flex:1;min-width:160px;border:1.5px solid #cbd5e1;border-radius:9px;padding:11px 12px;font-size:14px" onkeydown="if(event.key==='Enter')_dispRegister()">
-            <button onclick="_dispRegister()" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:11px 16px;font-weight:800;font-size:14px;cursor:pointer">➕ Añadir</button>
+            <button onclick="_dispRegister(this)" style="background:#0b2f6b;color:#fff;border:0;border-radius:9px;padding:11px 16px;font-weight:800;font-size:14px;cursor:pointer">➕ Añadir</button>
           </div>
           <div style="font-size:11px;color:#94a3b8;margin-top:4px">Formato obligatorio: <b>Apellido, Nombre</b> (con la coma). Ej: <i>Gómez, Carlos</i>.</div>
         </div>
@@ -2550,6 +2550,7 @@ async function _dispRender(){
 }
 
 // Fija el estado de asistencia de un corredor: 'asiste' | 'no_asiste' | 'pendiente'.
+let _dispBusy=false;
 async function _dispSetStatus(name, status){
   if(!_dispState) return;
   // Seguridad: un CICLISTA solo puede cambiar SU propio estado.
@@ -2558,6 +2559,8 @@ async function _dispSetStatus(name, status){
     if(!me){ if(typeof showToast==='function') showToast('No podemos identificarte. Avisa al director.','warn',3000); return; }
     if(normalizeForMatching(name)!==me){ if(typeof showToast==='function') showToast('🔒 Solo puedes cambiar TU estado','warn',2800); return; }
   }
+  if(_dispBusy) return;   // anti doble-clic: hay un guardado en curso
+  _dispBusy=true;
   const nk=normalizeForMatching(name);
   if(!Array.isArray(_dispState.confirmed)) _dispState.confirmed=[];
   if(!Array.isArray(_dispState.declined))  _dispState.declined=[];
@@ -2567,11 +2570,13 @@ async function _dispSetStatus(name, status){
   if(status==='asiste') _dispState.confirmed.push(name);
   else if(status==='no_asiste') _dispState.declined.push(name);
   // 'pendiente' = no está en ninguna de las dos.
-  await _dispSave();
-  await _dispRender();
+  try{
+    await _dispSave();
+    await _dispRender();
+  } finally { _dispBusy=false; }
 }
 
-function _dispRegister(){
+function _dispRegister(btn){
   const inp=document.getElementById('dispNewName'); if(!inp) return;
   const raw=(inp.value||'').trim();
   if(!raw){ inp.focus(); return; }
@@ -2582,7 +2587,9 @@ function _dispRegister(){
   if(!_dispState.extraRoster.some(n=>normalizeForMatching(n)===nk) ) _dispState.extraRoster.push(norm);
   // Lo añadimos ya como confirmado (se está apuntando) — o solo al roster? Lo dejamos en "sin confirmar".
   inp.value='';
-  _dispSave().then(_dispRender);
+  // Anti doble-clic: bloquear el botón hasta que termine de guardar.
+  const unlock=_lockBtn(btn,'Añadiendo…'); if(unlock===null) return;
+  _dispSave().then(_dispRender).catch(()=>{}).finally(unlock);
 }
 
 async function _dispSave(){
@@ -5390,7 +5397,7 @@ async function _fccvAddRace(idx){
   }
 }
 
-async function _calSavePlanned(){
+async function _calSavePlanned(btn){
   if(_calIsReadOnlyUser()) return; // ciclistas: calendario solo de lectura
   const name  = document.getElementById('calPlanName')?.value.trim();
   const date  = document.getElementById('calPlanDate')?.value;
@@ -5401,6 +5408,8 @@ async function _calSavePlanned(){
 
   if(!name){ if(msg){msg.textContent='⚠️ El nombre es obligatorio.';msg.style.color='#dc2626';} return; }
   if(!date){ if(msg){msg.textContent='⚠️ La fecha es obligatoria.';msg.style.color='#dc2626';} return; }
+  // Anti doble-clic: bloquear el botón. Si ya estaba en curso, abortar.
+  const unlock=_lockBtn(btn,'Guardando…'); if(unlock===null) return;
   if(msg){msg.textContent='Guardando...';msg.style.color='#6b7280';}
 
   // El calendario es POR CATEGORÍA: si no se indica categoría a mano, se toma la
@@ -5411,35 +5420,41 @@ async function _calSavePlanned(){
   const effCat = cat || _gLbl;   // categoría efectiva de la prueba
   const notesJson = JSON.stringify({cat:effCat, raceCat:effCat, localidad:loc, notes});
 
-  if(_calEditingId){
-    // ── MODO EDICIÓN ──
-    const id = _calEditingId;
-    if(_sb && !String(id).startsWith('local-')){
-      // IMPORTANTE: NO reconstruir las notas desde cero. Leemos las existentes y
-      // solo cambiamos cat/localidad/notes, preservando TODO lo demás (apuntados
-      // de disponibilidad, inscritos, predicción, fccvId, clima…). Antes esto
-      // borraba la lista de confirmados al editar la prueba.
-      let extra={};
-      try{ const {data}=await _sb.from('races').select('notes').eq('id',id).single(); if(data&&data.notes) extra=JSON.parse(data.notes); }catch(_){}
-      extra.cat=effCat; extra.raceCat=effCat; extra.localidad=loc; extra.notes=notes;
-      const {error} = await _sb.from('races').update({name, date, notes:JSON.stringify(extra)}).eq('id',id);
-      if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
-    }
-    // Actualizar en memoria
-    const idx = _calPlanned.findIndex(r=>r.id===id);
-    if(idx>=0) _calPlanned[idx] = {..._calPlanned[idx], name, date:new Date(date+'T12:00:00'), dateStr:date, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||''};
-  } else {
-    // ── MODO AÑADIR ──
-    if(_sb){
-      const {data, error} = await _sb.from('races').insert({name, date, notes:notesJson, race_type:'planificada'}).select().single();
-      if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
-      _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
+  try{
+    if(_calEditingId){
+      // ── MODO EDICIÓN ──
+      const id = _calEditingId;
+      if(_sb && !String(id).startsWith('local-')){
+        // IMPORTANTE: NO reconstruir las notas desde cero. Leemos las existentes y
+        // solo cambiamos cat/localidad/notes, preservando TODO lo demás (apuntados
+        // de disponibilidad, inscritos, predicción, fccvId, clima…). Antes esto
+        // borraba la lista de confirmados al editar la prueba.
+        let extra={};
+        try{ const {data}=await _sb.from('races').select('notes').eq('id',id).single(); if(data&&data.notes) extra=JSON.parse(data.notes); }catch(_){}
+        extra.cat=effCat; extra.raceCat=effCat; extra.localidad=loc; extra.notes=notes;
+        const {error} = await _sb.from('races').update({name, date, notes:JSON.stringify(extra)}).eq('id',id);
+        if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
+      }
+      // Actualizar en memoria
+      const idx = _calPlanned.findIndex(r=>r.id===id);
+      if(idx>=0) _calPlanned[idx] = {..._calPlanned[idx], name, date:new Date(date+'T12:00:00'), dateStr:date, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||''};
     } else {
-      _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
+      // ── MODO AÑADIR ──
+      if(_sb){
+        const {data, error} = await _sb.from('races').insert({name, date, notes:notesJson, race_type:'planificada'}).select().single();
+        if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
+        _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
+      } else {
+        _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
+      }
     }
+    _calCloseModal();
+    _calRender();
+  }catch(e){
+    if(msg){ msg.textContent='❌ Error de conexión. Vuelve a intentarlo.'; msg.style.color='#dc2626'; }
+  }finally{
+    unlock();  // SIEMPRE re-habilita el botón, aunque falle la red
   }
-  _calCloseModal();
-  _calRender();
 }
 
 async function _calDeletePlanned(id){
@@ -5885,7 +5900,7 @@ function _resHeatModeLabel(){ return _resHeatMode==='top10' ? 'Verde = Top 10' :
 async function _resRenderHeat(){
   const body = document.getElementById('resHeatBody');
   if(!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">⏳ Construyendo mapa de calor…</div>';
+  body.innerHTML = _spinnerHTML('Construyendo mapa de calor…');
   const data = await _resHeatComputeData();
   if(data.error==='noteam'){ body.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">Configura tu equipo (barra de filtros) o escribe un equipo arriba para ver su mapa de calor.</div>'; return; }
   if(data.error==='norace'){ body.innerHTML = `<div style="text-align:center;padding:40px;color:#9ca3af"><div style="font-size:36px">🌡️</div><p style="margin-top:8px">No hay carreras de <b>${escapeHtml(data.teamName)}</b> en esta categoría${data.selYear?' ('+data.selYear+')':''}.</p></div>`; return; }
@@ -7411,6 +7426,23 @@ function _cargaValidatePastedText(text){
 async function handleFile(file){if(!file)return;$('fileName').textContent='Archivo cargado: '+file.name;const ext=file.name.split('.').pop().toLowerCase();showLoading('Procesando '+file.name,'Leyendo y ordenando la clasificación…');try{let text=''; if(ext==='pdf') text=await readPDF(file); else if(ext==='csv') text=await file.text(); else text=await readExcel(file); parseText(text); }catch(err){alert('No he podido leer el archivo. Prueba con CSV o Excel. Error: '+err.message)}finally{hideLoading();}}
 function showLoading(title,detail){$('loadingText').textContent=title||'Procesando archivo…';$('loadingDetail').textContent=detail||'Puede tardar unos segundos.';$('loadingOverlay').classList.remove('hidden')}
 function hideLoading(){$('loadingOverlay').classList.add('hidden')}
+
+// ── Feedback visual reutilizable (spinner inline, estado vacío, bloqueo botón) ──
+// Spinner para inyectar dentro de un contenedor mientras se cargan datos.
+function _spinnerHTML(text){ return '<div class="inline-loading"><div class="spin-ring"></div><div>'+escapeHtml(text||'Cargando datos…')+'</div></div>'; }
+// Estado vacío amigable y centrado cuando una consulta no devuelve nada.
+function _emptyStateHTML(icon, msg, sub){ return '<div class="empty-state"><div class="empty-ico">'+(icon||'📭')+'</div><div class="empty-msg">'+escapeHtml(msg||'No hay datos')+'</div>'+(sub?('<div class="empty-sub">'+escapeHtml(sub)+'</div>'):'')+'</div>'; }
+// Bloquea un botón mientras corre una acción async (anti doble-clic). Devuelve
+// una función de restauración para usar SIEMPRE en finally. Si el botón ya
+// estaba bloqueado (acción en curso), devuelve null → el llamador debe abortar.
+function _lockBtn(btn, txt){
+  if(!btn) return ()=>{};
+  if(btn.disabled) return null;
+  const orig=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML='<span class="btn-spin"></span>'+escapeHtml(txt||'Guardando…');
+  return ()=>{ try{ btn.disabled=false; btn.innerHTML=orig; }catch(_){} };
+}
 async function readPDF(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
@@ -8491,9 +8523,7 @@ async function _chgInit(){
   // pantalla vacía hasta que el usuario tocara los filtros.
   const rankingBox = document.getElementById('chgRanking');
   if(rankingBox && !rankingBox.innerHTML.trim()){
-    rankingBox.innerHTML = `<div style="padding:30px;text-align:center;color:#0369a1">
-      ⏳ Cargando histórico de pruebas Challenge…
-    </div>`;
+    rankingBox.innerHTML = _spinnerHTML('Cargando histórico de pruebas Challenge…');
   }
   // Asegurar histórico cargado (igual que hace _ipInit)
   if(typeof _ensureHistory === 'function'){
@@ -20077,7 +20107,7 @@ function _prBuildTeamMeta(races){
 async function renderPowerRanking(){
   const grid = $('prGrid');
   if(!grid) return;
-  grid.innerHTML = '<div class="pr-loading">⏳ Cargando datos de temporada...</div>';
+  grid.innerHTML = _spinnerHTML('Cargando datos de temporada…');
 
   let history;
   try {
@@ -20091,7 +20121,7 @@ async function renderPowerRanking(){
     return;
   }
   if(!history || !history.length){
-    grid.innerHTML = '<div class="pr-empty-msg">No hay datos en el historial.<br><span style="font-size:12px">Carga carreras primero desde "Carga y Resumen".</span></div>';
+    grid.innerHTML = _emptyStateHTML('📭','No hay datos en el historial.','Carga carreras primero desde "Carga y Resumen".');
     const _b=document.getElementById('prIRCBars'); if(_b) _b.innerHTML='';
     return;
   }
@@ -20243,7 +20273,7 @@ async function renderPowerRanking(){
   }
 
   if(!teams.length){
-    grid.innerHTML = '<div class="pr-empty-msg">No hay datos para los filtros seleccionados.<br><span style="font-size:12px">Comprueba que hay carreras guardadas en el historial con datos de CCAA.</span></div>';
+    grid.innerHTML = _emptyStateHTML('🔍','No hay datos para los filtros seleccionados.','Comprueba que hay carreras guardadas en el historial con datos de CCAA.');
     const info=$('prInfo'); if(info) info.textContent='';
     return;
   }
