@@ -356,7 +356,10 @@
   <!-- Prueba activa (la elegida en el Paso 1) · SOLO LECTURA -->
   <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:10px 12px;margin:0 0 14px">
     <div style="font-size:12.5px;font-weight:800;color:#0b2f6b;margin-bottom:6px">🏁 Clasificación para la prueba seleccionada en el Paso 1:</div>
-    <div id="clasifRaceLabel" style="background:#fff;border:1.5px solid #c7d2fe;border-radius:8px;padding:9px 11px;font-size:14px;font-weight:800;color:#0b2f6b">—</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div id="clasifRaceLabel" style="flex:1;min-width:0;background:#fff;border:1.5px solid #c7d2fe;border-radius:8px;padding:9px 11px;font-size:14px;font-weight:800;color:#0b2f6b">—</div>
+      <button id="clasifFccvBtn" onclick="_cargaOpenFccvInfo()" style="display:none;background:#0b2f6b;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap" title="Abrir la ficha FCCV de esta prueba (clasificación y documentos) sin salir de la app">📋 Datos FCCV</button>
+    </div>
     <div class="small" style="color:#6b7280;margin-top:6px">Estos resultados se guardarán para <b>esa</b> prueba. Si necesitas otra, cámbiala en el <b>Paso 1 · Datos</b>.</div>
   </div>
   <div class="upload" id="dropZone">
@@ -518,7 +521,7 @@
         <div style="font-size:12.5px;font-weight:800;color:#0b2f6b;margin-bottom:6px">🏁 Inscritos para la prueba seleccionada en el Paso 1:</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <div id="inscritosRaceLabel" style="flex:1;min-width:0;background:#fff;border:1.5px solid #c7d2fe;border-radius:8px;padding:9px 11px;font-size:14px;font-weight:800;color:#0b2f6b">—</div>
-          <button id="inscritosFccvBtn" onclick="_inscOpenFccv()" style="display:none;background:#0b2f6b;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap" title="Abrir esta prueba en la web de la FCCV para copiar los pre-inscritos">🔗 Ver en FCCV</button>
+          <button id="inscritosFccvBtn" onclick="_cargaOpenFccvInfo()" style="display:none;background:#0b2f6b;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap" title="Abrir la ficha FCCV de esta prueba (deportistas/inscritos y documentos) sin salir de la app">📋 Datos FCCV</button>
           <!-- Select oculto (se conserva por compatibilidad interna; ya no se usa para elegir) -->
           <select id="inscritosRaceSelect" onchange="_inscPickRace()" style="display:none"><option value=""></option></select>
         </div>

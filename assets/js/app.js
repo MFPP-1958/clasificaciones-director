@@ -14880,8 +14880,9 @@ function _inscritosShowRace(){
       : '⚠️ Aún no has elegido la prueba. Ve al <b>Paso 1 · Datos</b> y rellénala o cárgala.';
     lbl.style.color = name ? '#0b2f6b' : '#b45309';
   }
-  const btn=document.getElementById('inscritosFccvBtn');
-  if(btn){ btn.style.display = (name && _inscFccvUrlForCurrent()) ? '' : 'none'; }
+  // Botones "Datos FCCV" (Paso 2 e Paso 3): visibles si hay prueba elegida.
+  const b2=document.getElementById('inscritosFccvBtn'); if(b2) b2.style.display = name ? '' : 'none';
+  const b3=document.getElementById('clasifFccvBtn');   if(b3) b3.style.display = name ? '' : 'none';
   // Mismo rótulo en el Paso 3 (Clasificación), para saber a qué prueba pertenece.
   const lbl3=document.getElementById('clasifRaceLabel');
   if(lbl3){
@@ -14909,6 +14910,25 @@ function _inscOpenFccv(){
   const url=_inscFccvUrlForCurrent();
   if(!url){ if(typeof showToast==='function') showToast('Esta prueba no tiene enlace a la FCCV guardado.','warn',3000); return; }
   try{ window.open(url,'_blank','noopener'); }catch(_){}
+}
+// Abre, SIN salir de la app, la FICHA FCCV de la prueba actual (la del Paso 1):
+// pestañas de Deportistas (inscritos), Clasificación y documentos. Reutiliza el
+// mismo modal que el botón "Info" del calendario.
+function _cargaOpenFccvInfo(){
+  const name=($('raceName')?.value||'').trim();
+  if(!name){ if(typeof showToast==='function') showToast('Primero elige la prueba en el Paso 1.','warn',3000); return; }
+  const dateStr=($('raceDate')?.value||'').trim();
+  const iso=_parseSpanishDate(dateStr)||'';
+  let fccvId='', cat='', mod='';
+  try{
+    const pool=[...(Array.isArray(_cachedHistory)?_cachedHistory:[]), ...(Array.isArray(_calPlanned)?_calPlanned:[])];
+    const r=pool.find(x=>((x.raceName||x.name||'').trim().toLowerCase()===name.toLowerCase()) && ((_parseSpanishDate(x.raceDate||x.dateStr||'')||'')===iso));
+    if(r){ let extra={}; if(r.notes){ try{extra=JSON.parse(r.notes);}catch(_){ extra={}; } } else { extra=r; }
+      fccvId=extra.fccvId||''; cat=extra.raceCat||extra.cat||''; mod=extra.modality||extra.circuitType||''; }
+  }catch(_){}
+  // Pista de categoría desde el filtro global si la prueba no la trae.
+  if(!cat){ const gf=(typeof _globalFilters!=='undefined'&&_globalFilters)?(_globalFilters.cat||''):''; const map={cadete:'Cadete',junior:'Junior',sub23:'Sub23',elite:'Elite',master:'Master'}; cat=map[gf]||''; }
+  if(typeof _calOpenFccvInfo==='function') _calOpenFccvInfo(name, iso, cat, mod, fccvId);
 }
 
 // B · Onboarding de primer uso (se muestra una vez; solo a staff/director)
