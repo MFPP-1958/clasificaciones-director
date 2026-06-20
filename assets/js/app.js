@@ -47,8 +47,9 @@ function _cargaTab(n){
   try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
 }
 
-// ¿Están guardados los datos del Paso 1? (false = hay cambios sin guardar)
+// ¿Están guardados los datos del Paso 1 y los inscritos del Paso 2?
 let _cargaDatosSaved=false;
+let _inscritosSaved=true;   // true = nada pendiente (al arrancar no hay inscritos nuevos)
 function _cargaMarkUnsaved(){ _cargaDatosSaved=false; }
 // Cablear los inputs de datos para detectar cambios sin guardar (una sola vez).
 function _cargaWireDirty(){
@@ -66,6 +67,16 @@ async function _cargaNextFromDatos(){
   if(!r) return;
   try{ await _cargaSaveDatos(null); }catch(_){}
   if(_cargaDatosSaved) _cargaTab(2);
+}
+// "Siguiente paso" desde Inscritos: si hay inscritos sin guardar, recuérdalo y
+// ofrécete a guardarlos (sin clasificación) antes de continuar.
+async function _cargaNextFromInscritos(){
+  const hay = Array.isArray(inscritos) && inscritos.length>0;
+  if(!hay || _inscritosSaved){ _cargaTab(3); return; }
+  const r=confirm('⚠️ Tienes inscritos sin guardar.\n\nPara no perderlos, ¿los guardo ahora (sin clasificación) y paso a «Clasificación»?');
+  if(!r) return;   // se queda en Inscritos para revisarlos
+  try{ await saveInscritosOnly(); }catch(_){}
+  if(_inscritosSaved) _cargaTab(3);
 }
 
 // PASO 1 · "Guardar datos de la prueba": persiste los METADATOS (nombre, fecha,
@@ -13712,7 +13723,7 @@ async function loadHistoryEntry(id){
   const hist = _cachedHistory || await _sbLoadHistory();
   const h = hist.find(x=>x.id===id);
   if(!h){alert('No se encontró la carrera seleccionada.');return;}
-  try{ _cargaDatosSaved=true; }catch(_){}  // viene de la BD → datos ya guardados
+  try{ _cargaDatosSaved=true; _inscritosSaved=true; }catch(_){}  // viene de la BD → ya guardado
   riders = h.riders||[];
   const hasInscritosOnly = Array.isArray(h.inscritos) && h.inscritos.length > 0;
   // Pre-inscripción (sin clasificación todavía): permitimos cargar para editar inscritos
@@ -24270,6 +24281,7 @@ async function processPastedInscritos(){
     return;
   }
   _updateInscritosUI();
+  _inscritosSaved=false;   // inscritos nuevos sin guardar
   _showInscritosEnrichmentReport(inscritos, 'texto pegado');
 }
 
@@ -24316,6 +24328,7 @@ async function handleFileInscritos(file){
       return;
     }
     _updateInscritosUI();
+    _inscritosSaved=false;   // inscritos nuevos sin guardar
     _showInscritosEnrichmentReport(inscritos, `"${file.name}"`);
   }catch(err){
     alert('No he podido leer el archivo de inscritos. Error: ' + err.message);
@@ -24334,6 +24347,7 @@ function clearInscritos(){
   const fi = document.getElementById('fileInputInscritos');
   if(fi) fi.value = '';
   _updateInscritosUI();
+  _inscritosSaved=true;   // lista vacía → nada pendiente de guardar
 }
 
 // Cruce inscritos × clasificados: devuelve {acabaron, dnf, total}
@@ -24540,6 +24554,7 @@ function _inscritoRemove(idx){
   if(!confirm(`¿Quitar a "${r.name||'?'}" de la lista de inscritos?\n\nSe eliminará solo de esta lista, no del histórico.`)) return;
   inscritos.splice(idx,1);
   _updateInscritosUI();
+  _inscritosSaved=false;   // se ha modificado la lista → pendiente de guardar
 }
 
 // Modal con lista de inscritos y estado (Acabó / DNF)
@@ -25079,6 +25094,7 @@ async function saveInscritosOnly(){
     if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
     if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
     await renderHistory();
+    _inscritosSaved=true;
     alert(`✅ Lista de inscritos actualizada en "${dupClasif.name}" (${inscritos.length} inscritos).`);
     return;
   }
@@ -25117,6 +25133,7 @@ async function saveInscritosOnly(){
     // Quitar de _calPlanned para que desaparezca del calendario
     if(Array.isArray(_calPlanned)) _calPlanned = _calPlanned.filter(p=>p.id!==dupPlanif.id);
     await renderHistory();
+    _inscritosSaved=true;
     alert(`✅ Prueba convertida y pre-inscripción guardada:\n\n"${dupPlanif.name}" (${inscritos.length} inscritos).\n\nYa aparece en el Historial con el badge "📋 ${inscritos.length} pre-inscritos".`);
     return;
   }
@@ -25139,6 +25156,7 @@ async function saveInscritosOnly(){
   }
   console.log('[saveInscritosOnly] insert OK, id:', raceRow?.id);
 
+  _inscritosSaved=true;
   _cachedHistory = null;
   if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
   if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
