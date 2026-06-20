@@ -97,6 +97,7 @@ async function _cargaNextFromClasif(){
 // aunque cierres la app o vuelvas días después. Si ya existe una prueba con ese
 // nombre y fecha, actualiza sus datos (no toca inscritos ni clasificación).
 async function _cargaSaveDatos(btn){
+  if(_betaGuard()) return;   // Beta Tester: no escribe en la BD
   const raceName=($('raceName')?.value||'').trim();
   const raceDateStr=($('raceDate')?.value||'').trim();
   if(!raceName){ alert('Pon al menos el NOMBRE de la carrera para guardar.'); $('raceName')?.focus(); return; }
@@ -948,6 +949,56 @@ const _SB_URL = 'https://neeamkhbtoqsdxvsaogd.supabase.co';
 const _SB_KEY = 'sb_publishable_R7anMfu6xfwlr7Ew3kMUbg_N1mqNRJb';
 const _sb = (typeof supabase !== 'undefined') ? supabase.createClient(_SB_URL, _SB_KEY) : null;
 
+// ════════════════════════════════════════════════════════════════════════
+// ROL "BETA TESTER" (antes "LECTOR"): ve TODA la interfaz para evaluar la
+// experiencia, pero NO puede escribir/modificar/borrar datos reales.
+// ════════════════════════════════════════════════════════════════════════
+function _isBetaTester(){
+  return (typeof _rbacUser!=='undefined' && _rbacUser && (_rbacUser.role==='BETA_TESTER' || _rbacUser.role==='LECTOR'));
+}
+let _betaToastTs=0;
+function _betaToast(){
+  const now=Date.now();
+  if(now-_betaToastTs < 1500) return;   // evitar spam si una acción dispara varias escrituras
+  _betaToastTs=now;
+  const msg='🧪 Modo Beta Tester activo: La interfaz y el botón funcionan correctamente, pero la edición de datos reales está deshabilitada para tu perfil de prueba.';
+  if(typeof showToast==='function') showToast(msg,'info',6000);
+  else alert(msg);
+}
+// Guard para el inicio de funciones de mutación (UX limpia: avisa y corta).
+function _betaGuard(){ if(_isBetaTester()){ _betaToast(); return true; } return false; }
+
+// ── Interceptor GLOBAL de escrituras a Supabase para Beta Tester ──
+// Envuelve _sb.from(): si el usuario es beta tester, insert/update/delete/upsert
+// se anulan (no tocan la base de datos) y se muestra el aviso. Las LECTURAS
+// (select) pasan con normalidad para que puedan navegar y ver datos reales.
+if(_sb && typeof _sb.from === 'function'){
+  const _sbOrigFrom = _sb.from.bind(_sb);
+  const _betaNoopQuery = ()=>{
+    const res={data:[],error:null,count:0,status:200,statusText:'OK (beta no-op)'};
+    const p=Promise.resolve(res);
+    const proxy=new Proxy(function(){}, {
+      get(_t,prop){
+        if(prop==='then')    return p.then.bind(p);
+        if(prop==='catch')   return p.catch.bind(p);
+        if(prop==='finally') return p.finally.bind(p);
+        return ()=>proxy;   // select/single/eq/order… siguen siendo no-op encadenable
+      },
+      apply(){ return proxy; }
+    });
+    return proxy;
+  };
+  _sb.from = function(table){
+    const b=_sbOrigFrom(table);
+    if(_isBetaTester()){
+      ['insert','update','delete','upsert'].forEach(m=>{
+        if(b && typeof b[m]==='function'){ b[m]=function(){ _betaToast(); return _betaNoopQuery(); }; }
+      });
+    }
+    return b;
+  };
+}
+
 // ── EmailJS ───────────────────────────────────────────────────
 const _EJS_SERVICE  = 'service_ek1fcgg';
 const _EJS_TEMPLATE = 'template_6l42t3d';
@@ -1091,7 +1142,7 @@ const ALL_VIEWS = [
   {id:'view-challenge',          icon:'🏆', label:'Challenge CV'},
   {id:'view-gestion',            icon:'⚙️', label:'Gestión'},
 ];
-const ROLES = ['SUPERADMIN','ADMIN','DIRECTOR','CICLISTA','LECTOR'];
+const ROLES = ['SUPERADMIN','ADMIN','DIRECTOR','CICLISTA','BETA_TESTER'];
 
 let _rbacUser = null;       // {email, role, name}
 let _rbacPerms = new Set(); // set of allowed view-ids for current user
@@ -1443,6 +1494,12 @@ async function _rbacLoadPerms(role){
     ALL_VIEWS.forEach(v => _rbacPerms.add(v.id));
     return;
   }
+  // BETA_TESTER (o el antiguo LECTOR): ve TODA la interfaz para evaluarla.
+  // No puede escribir (lo bloquea el interceptor de Supabase), pero navega por todo.
+  if(role === 'BETA_TESTER' || role === 'LECTOR'){
+    ALL_VIEWS.forEach(v => _rbacPerms.add(v.id));
+    return;
+  }
   // CICLISTA / LECTOR / DIRECTOR: permisos desde app_permissions (configurables
   // en ⚙️ Gestión → Permisos). Así se les puede ir abriendo acceso poco a poco.
   if(!_sb){
@@ -1541,11 +1598,15 @@ function _rbacApplySession(){
   // Marca de rol para el renderizado condicional (.admin-only). STAFF = dirección.
   // OJO: esto solo OCULTA en pantalla; el candado real es el RLS de Supabase.
   try{
-    const staff = ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role);
+    // Beta tester ve TODA la interfaz (como staff a efectos visuales), pero el
+    // interceptor de Supabase le impide escribir. Así evalúa toda la experiencia.
+    const _beta = _isBetaTester();
+    const staff = ['SUPERADMIN','ADMIN','DIRECTOR'].includes(_rbacUser.role) || _beta;
     document.body.classList.toggle('rbac-staff', staff);
     document.body.dataset.role = _rbacUser.role || '';
     document.body.classList.remove('preview-ciclista');
-    if(staff && typeof _previewEnsureBtn==='function') _previewEnsureBtn();
+    // El botón "Ver como ciclista" es una herramienta de dirección; no para beta testers.
+    if(staff && !_beta && typeof _previewEnsureBtn==='function') _previewEnsureBtn();
     if(!staff) setTimeout(()=>{ try{ _gfLockForCyclist(); }catch(_){} }, 300);
   }catch(_){}
   // Renderizar menú según permisos
@@ -2714,6 +2775,7 @@ function _dispRegister(btn){
 }
 
 async function _dispSave(){
+  if(_betaGuard()) return;   // Beta Tester: no escribe en la BD
   if(!_dispState || !_sb) return;
   try{
     const data={ updatedAt:new Date().toISOString(), confirmed:_dispState.confirmed, declined:(_dispState.declined||[]), roster:_dispState.extraRoster, inscritos:(_dispState.inscritos||[]), deadline:(_dispState.deadline||'') };
@@ -6772,7 +6834,7 @@ async function _gAddUser(){
       const emailStatus = ejsResult.ok
         ? '✉️ Correo de bienvenida enviado al ciclista (y copia a ti).'
         : `⚠️ Usuario creado, pero el correo de bienvenida falló: ${ejsResult.err}. Puedes avisarle tú con el botón de abajo.`;
-      emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
+      emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='BETA_TESTER';
       if(msg){
         msg.innerHTML=`✅ Usuario añadido. Ya puede entrar con su <b>enlace mágico</b>.<br><span style="font-size:12px;color:${ejsResult.ok?'#059669':'#d97706'}">${emailStatus}</span><br><div style="margin-top:6px">${waBtn}</div>`;
         msg.style.color='#059669';
@@ -6786,7 +6848,7 @@ async function _gAddUser(){
     if(error && /pin/i.test(error.message||'') && /(column|schema cache)/i.test(error.message||'')){
       const {error:e2}=await _sb.from('app_users').upsert({email, role, name, active:true, my_team:(typeof myTeam!=='undefined'?myTeam:'')||''},{onConflict:'email'});
       if(!e2){
-        emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
+        emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='BETA_TESTER';
         if(msg){
           msg.innerHTML=`✅ Usuario <b>${escapeHtml(email)}</b> creado en la nube (ya aparece en la lista).<br><span style="color:#b45309">⚠️ Para activar los PIN, ejecuta UNA vez en Supabase → SQL Editor:</span><br><code style="display:block;background:#f1f5f9;color:#0b2f6b;padding:8px 10px;border-radius:8px;margin-top:6px;font-size:11px;white-space:pre-wrap">ALTER TABLE app_users ADD COLUMN IF NOT EXISTS pin text DEFAULT '';\nALTER TABLE app_users ADD COLUMN IF NOT EXISTS rider_name text;</code><span style="font-size:12px;color:#6b7280">Mientras tanto, este usuario puede entrar con CUALQUIER PIN.</span>`;
           msg.style.color='#059669';
@@ -6803,7 +6865,7 @@ async function _gAddUser(){
   const existing = _localUsers.findIndex(u=>u.email===email);
   if(existing>=0){ _localUsers[existing]={..._localUsers[existing], role, name, active:true}; }
   else { _localUsers.push({id:'local-'+Date.now(), email, role, name, active:true}); }
-  emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='LECTOR';
+  emailEl.value=''; if(nameEl) nameEl.value=''; roleEl.value='BETA_TESTER';
   if(msg){
     msg.innerHTML=`✅ Usuario añadido (local, sin conexión). Cuando vuelva la conexión, vuelve a darlo de alta para guardarlo en la nube.`;
     msg.style.color='#d97706';
@@ -6873,7 +6935,7 @@ async function _gUpdateUserEmail(id, oldEmail){
 
 // ── Gestión: Permisos ─────────────────────────────────────────
 // Roles editables (SUPERADMIN always has everything, not shown)
-const EDITABLE_ROLES = ['ADMIN','DIRECTOR','CICLISTA','LECTOR'];
+const EDITABLE_ROLES = ['ADMIN','DIRECTOR','CICLISTA','BETA_TESTER'];
 
 // Local permissions cache — initialized from defaults
 let _localPerms = {};
@@ -6882,7 +6944,7 @@ function _initLocalPerms(){
     ADMIN:    ALL_VIEWS.map(v=>v.id),
     DIRECTOR: ALL_VIEWS.filter(v=>v.id!=='view-gestion').map(v=>v.id),
     CICLISTA: ['view-carga','view-tabla','view-analisis','view-equipos'],
-    LECTOR:   ['view-carga','view-tabla']
+    BETA_TESTER: ALL_VIEWS.map(v=>v.id)   // ve toda la interfaz (no puede escribir)
   };
   EDITABLE_ROLES.forEach(r=>{
     _localPerms[r] = {};
@@ -14092,6 +14154,7 @@ function _sameRaceName(a,b){
 }
 
 async function saveHistory(){
+  if(_betaGuard()) return;   // Beta Tester: no escribe en la BD
   // Si solo hay pre-inscripción cargada (sin clasificación final), delegamos
   // en saveInscritosOnly para que el director no tenga que distinguir entre
   // los dos botones. Antes el botón "Guardar en historial" se cancelaba con
@@ -25014,6 +25077,7 @@ async function _histAddStartlist(raceId){
 //   ÚNICAMENTE el campo notes.inscritos (sin tocar race_results ni otros campos).
 // - Si no existe: crea una entrada nueva con riders vacíos y notes.inscritos.
 async function saveInscritosOnly(){
+  if(_betaGuard()) return;   // Beta Tester: no escribe en la BD
   console.log('[saveInscritosOnly] iniciando…');
   if(!Array.isArray(inscritos) || !inscritos.length){
     alert('No hay inscritos cargados. Pega o sube primero la lista de inscritos.');
