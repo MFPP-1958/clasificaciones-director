@@ -9139,6 +9139,9 @@ function populateFilters(){
     const teamsSet = new Set();
     riders.forEach(r=>{ if(r.team && _okGlobal(r)) teamsSet.add(r.team); });
     try{ (Array.isArray(inscritos)?inscritos:[]).forEach(i=>{ if(i.team && _okGlobal(i)) teamsSet.add(i.team); }); }catch(e){}
+    // MI EQUIPO siempre seleccionable, aunque hoy no se haya clasificado nadie:
+    // así el corredor ve "su equipo" y, si procede, el aviso de que no clasificó.
+    if(myTeam) teamsSet.add(myTeam);
     const teams2=[...teamsSet].sort();
     $('analysisTeamFilter').innerHTML='<option value="">— Todos los equipos —</option>'+
       teams2.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
@@ -12302,16 +12305,54 @@ function initAnalisis(){
   const alreadyShown = result && result.style.display!=='none' && result.innerHTML.trim().length>0;
   if(alreadyShown) return;
 
-  // POR DEFECTO no seleccionamos a nadie: se muestra la lista completa de
-  // ciclistas para que el usuario elija. (Antes auto-seleccionaba uno y parecía
-  // que la tabla estaba "rota" filtrada a un único corredor.)
+  // POR DEFECTO: seleccionar MI EQUIPO en el filtro (si está en la lista).
+  const teamSel=$('analysisTeamFilter');
+  if(teamSel && myTeam && [...teamSel.options].some(o=>o.value===myTeam)) teamSel.value=myTeam;
   if($('analysisSearchInput')) $('analysisSearchInput').value='';
   if($('searchInput')) $('searchInput').value='';
   try{ applyFilters(); }catch(_){}
   try{ if(typeof updateAnalysisSuggestions==='function') updateAnalysisSuggestions(); }catch(_){}
+
+  const sel = teamSel ? teamSel.value : '';
+  if(sel){
+    // ¿Hay clasificados de ese equipo en ESTA prueba? → analizar el MEJOR.
+    const mine = riders.filter(r=>r.team===sel).sort((a,b)=>a.pos-b.pos);
+    if(mine.length){
+      const best=mine[0];
+      if($('analysisSearchInput')) $('analysisSearchInput').value=best.name;
+      try{ analyzeRiderByKey(getRiderKey(best)); }catch(_){}
+      return;
+    }
+    // Ninguno clasificado → texto explicativo (participaron pero no acabaron / sin datos).
+    if(result){ result.innerHTML=_aiNoClassifiedTeamCard(sel); }
+    return;
+  }
+  // Sin equipo seleccionable → guía normal.
   if(result){
     result.innerHTML='<div style="text-align:center;padding:34px 20px;color:#9ca3af"><div style="font-size:34px">👤</div><p style="margin-top:8px;font-weight:600;color:#6b7280">Busca o elige un ciclista de la lista para ver su análisis individual.</p></div>';
   }
+}
+// Aviso cuando el equipo seleccionado no tiene NINGÚN clasificado en la prueba.
+function _aiNoClassifiedTeamCard(team){
+  const raceNm = escapeHtml((_activeRace&&_activeRace.name) || ($('raceName')&&$('raceName').value) || 'esta prueba');
+  const nk = (typeof normalizeForMatching==='function') ? (s)=>normalizeForMatching(s||'') : (s)=>(s||'').toLowerCase().trim();
+  const classified = new Set(riders.map(r=>nk(r.name)));
+  const dnf = (Array.isArray(inscritos)?inscritos:[]).filter(i=>(i.team||'')===team && !classified.has(nk(i.name)));
+  let extra;
+  if(dnf.length){
+    const names = dnf.map(i=>escapeHtml(_evolNormName?_evolNormName(i.name):i.name)).join(' · ');
+    extra = `Participaron pero <b>no terminó ninguno (DNF)</b>:<br><span style="color:#7c2d12">${names}</span>`;
+  } else {
+    extra = `No constan inscritos de este equipo en los datos de esta prueba, así que no podemos confirmar si tomaron la salida.`;
+  }
+  return `<div style="text-align:center;padding:26px 20px">
+    <div style="font-size:44px">📋</div>
+    <h3 style="margin:8px 0 2px;color:#0b2f6b">${escapeHtml(team)}</h3>
+    <div style="display:inline-block;text-align:left;max-width:580px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:12px;padding:14px 16px;color:#1e3a8a;line-height:1.55;font-size:14px;margin-top:8px">
+      <b>Hoy ningún corredor de ${escapeHtml(team)} aparece en la clasificación de «${raceNm}».</b><br>${extra}
+    </div>
+    <div style="margin-top:12px;font-size:13px;color:#6b7280">Puedes elegir otro equipo arriba o usar el buscador para ver a cualquier participante.</div>
+  </div>`;
 }
 
 function analyzeRiderByKey(key){
