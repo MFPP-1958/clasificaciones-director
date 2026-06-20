@@ -38,6 +38,8 @@ function _cargaTab(n){
   n=String(n);
   document.querySelectorAll('#view-carga .carga-step').forEach(el=>{ el.style.display = (el.dataset.step===n)?'':'none'; });
   document.querySelectorAll('#cargaTabs .carga-tab').forEach(b=>{ b.classList.toggle('active', b.dataset.step===n); });
+  // Al entrar a Inscritos, alinear "Importar SOLO la categoría" con el filtro global.
+  if(n==='2'){ try{ if(typeof _inscritosSyncCatFilter==='function') _inscritosSyncCatFilter(); }catch(_){} }
   try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
 }
 
@@ -441,6 +443,8 @@ async function _gfDefaultsOnChange(){
     if(activeView) _gfApplyDefaultsToView(activeView.id);
   }catch(_){}
   _gfTriggerCurrentViewRerender();
+  // Sincronizar el desplegable "Importar SOLO la categoría" de Inscritos.
+  try{ if(typeof _inscritosSyncCatFilter==='function') _inscritosSyncCatFilter(); }catch(_){}
   // Notificar al resto de la app
   try{ window.dispatchEvent(new CustomEvent('myfilters:changed', {detail:{..._globalFilters}})); }catch(_){}
 }
@@ -24184,11 +24188,23 @@ function _inscritosActiveCatGroups(){
   if(!v || v==='all') return new Set();
   return new Set([v]);   // v ya es una clave de grupo (cadete, juvenil, sub23…)
 }
-// Restaura la última categoría elegida en el desplegable
-function _inscritosRestoreCatFilter(){
+// Sincroniza el desplegable "Importar SOLO la categoría" con el FILTRO GLOBAL,
+// para no equivocarse al inscribir (si el filtro es Cadete → importa Cadetes).
+// Si no hay categoría global y force=true, respeta lo último elegido.
+function _inscritosSyncCatFilter(force){
   const sel=document.getElementById('inscritosCatFilter'); if(!sel) return;
-  const v=localStorage.getItem('inscritosCatFilter'); if(v) sel.value=v;
+  const map={cadete:'cadete', junior:'juvenil', sub23:'sub23', elite:'elite', master:'master', femenino:'fem'};
+  const gfCat=(typeof _globalFilters!=='undefined'&&_globalFilters)?(_globalFilters.cat||''):'';
+  const gfGen=(typeof _globalFilters!=='undefined'&&_globalFilters)?(_globalFilters.gender||''):'';
+  let val = map[gfCat] || (gfGen==='femenino'?'fem':'');
+  if(!val){
+    if(force){ const v=localStorage.getItem('inscritosCatFilter'); if(v && [...sel.options].some(o=>o.value===v)) sel.value=v; }
+    return;
+  }
+  if([...sel.options].some(o=>o.value===val)){ sel.value=val; try{ localStorage.setItem('inscritosCatFilter',val); }catch(_){} }
 }
+// Restaura/sincroniza la categoría del desplegable (global manda; si no, último valor)
+function _inscritosRestoreCatFilter(){ _inscritosSyncCatFilter(true); }
 if(typeof document!=='undefined'){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _inscritosRestoreCatFilter);
   else _inscritosRestoreCatFilter();
