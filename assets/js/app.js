@@ -102,7 +102,54 @@ function _cargaResumenRender(){
   const hasData = Array.isArray(riders) && riders.length>0;
   if(empty)   empty.style.display   = hasData ? 'none' : 'block';
   if(content) content.style.display = hasData ? '' : 'none';
-  if(hasData){ _cargaRenderContext(); _cargaRenderTable(); }
+  if(hasData){ _cargaRenderContext(); _cargaRenderTable(); _cargaRenderValidation(); }
+}
+
+// FASE 3 · Validación automática del resumen. Devuelve {errores:[], avisos:[]}.
+function _validateSummary(){
+  const errores=[], avisos=[];
+  const name=($('raceName')?.value||'').trim();
+  const fecha=($('raceDate')?.value||'').trim();
+  if(!name)  errores.push('Falta el NOMBRE de la prueba (Paso 1).');
+  if(!fecha) errores.push('Falta la FECHA de la prueba (Paso 1).');
+  const list=Array.isArray(riders)?riders:[];
+  // (c) Dorsales duplicados
+  const seen={}, dups=new Set();
+  list.forEach(r=>{ const b=String(r.bib||'').trim(); if(!b) return; if(seen[b]) dups.add(b); else seen[b]=1; });
+  if(dups.size) errores.push('Dorsales duplicados: '+[...dups].join(', ')+'.');
+  // (d) Tiempos imposibles
+  const malt=list.filter(r=>r.totalSeconds!=null && (r.totalSeconds<=0 || r.totalSeconds>86400)).length;
+  if(malt) avisos.push(malt+' corredor(es) con un tiempo imposible (revisa la clasificación).');
+  // (e) Corredores sin equipo
+  const sinEq=list.filter(r=>!(r.team||'').trim()).length;
+  if(sinEq) avisos.push(sinEq+' corredor(es) sin equipo asignado.');
+  // (f) Inscritos vs clasificados
+  try{
+    if(Array.isArray(inscritos) && inscritos.length){
+      const cls=new Set(list.map(r=>normalizeForMatching(r.name)));
+      const dnf=inscritos.filter(i=>i && i.name && !cls.has(normalizeForMatching(i.name))).length;
+      avisos.push(inscritos.length+' inscritos · '+list.length+' clasificados'+(dnf?(' · '+dnf+' no terminaron (DNF)'):'')+'.');
+    }
+  }catch(_){}
+  return {errores, avisos};
+}
+function _cargaRenderValidation(){
+  const el=document.getElementById('cargaResumenValidation'); if(!el) return;
+  const {errores, avisos}=_validateSummary();
+  let bg,bd,icon,titulo,items;
+  if(errores.length){ bg='#fef2f2'; bd='#fecaca'; icon='⛔'; titulo='Hay errores que debes corregir antes de guardar'; items=errores.concat(avisos); }
+  else if(avisos.length){ bg='#fffbeb'; bd='#fde68a'; icon='⚠️'; titulo='Revisa estos avisos (puedes guardar igualmente)'; items=avisos; }
+  else { bg='#ecfdf3'; bd='#a7f3d0'; icon='✅'; titulo='Todo correcto. Listo para guardar.'; items=[]; }
+  el.innerHTML=`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:12px 14px;margin-bottom:14px">
+    <div style="font-weight:800;color:#111;font-size:13.5px;margin-bottom:${items.length?'6px':'0'}">${icon} ${titulo}</div>
+    ${items.length?('<ul style="margin:0;padding-left:20px;font-size:13px;color:#374151;line-height:1.6">'+items.map(t=>'<li'+(errores.includes(t)?' style="color:#b91c1c;font-weight:700"':'')+'>'+escapeHtml(t)+'</li>').join('')+'</ul>'):''}
+  </div>`;
+  // (3.3) Bloquear el botón de guardar si hay errores.
+  const btn=document.getElementById('cargaSaveBtn');
+  if(btn){
+    if(errores.length){ btn.disabled=true; btn.style.opacity='.55'; btn.style.cursor='not-allowed'; btn.title='Corrige los errores antes de guardar'; }
+    else { btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.title='Guarda la prueba (datos + inscritos + clasificación) en la base de datos'; }
+  }
 }
 
 // FASE 2 · Tabla compacta de revisión (Pos·Dorsal·Nombre·Equipo·Cat·Tiempo·Estado).
@@ -177,6 +224,7 @@ function _cargaCellSave(td){
   _clasifSaved=false;   // hay cambios sin guardar
   // Si cambia el equipo, refrescar la tabla para recalcular el resaltado.
   if(f==='team'){ _cargaRenderTable(); }
+  try{ _cargaRenderValidation(); }catch(_){}   // recalcular avisos/errores
   if(typeof showToast==='function') showToast('Cambiado. Recuerda Guardar para que quede en la base de datos.','info',2600);
 }
 function _cargaRenderContext(){

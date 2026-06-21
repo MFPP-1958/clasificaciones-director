@@ -588,6 +588,8 @@
   <div id="cargaResumenContent">
   <!-- FASE 1.2 · Tarjeta de contexto de la prueba -->
   <div id="cargaResumenContext"></div>
+  <!-- FASE 3 · Panel de validación automática -->
+  <div id="cargaResumenValidation"></div>
   <!-- FASE 2 · Tabla de clasificación revisable (con edición inline) -->
   <div id="cargaResumenTable"></div>
   <!-- KPIs Generales -->
@@ -606,7 +608,7 @@
   <div class="card card-spread"><div class="label">📐 Spread del equipo</div><div class="value" id="kpiSpread">—</div></div>
 </section>
   <div class="carga-nav" style="justify-content:center;margin-top:16px">
-    <button type="button" class="btn admin-only" style="background:#059669;border-color:#059669;font-size:15px;padding:12px 24px;font-weight:800" onclick="saveHistory()" title="Guarda la prueba (datos + inscritos + clasificación) en la base de datos">💾 Guardar en la base de datos</button>
+    <button type="button" id="cargaSaveBtn" class="btn admin-only" style="background:#059669;border-color:#059669;font-size:15px;padding:12px 24px;font-weight:800" onclick="saveHistory()" title="Guarda la prueba (datos + inscritos + clasificación) en la base de datos">💾 Guardar en la base de datos</button>
   </div>
   </div><!-- fin cargaResumenContent -->
 </section><!-- fin PASO 4 -->
