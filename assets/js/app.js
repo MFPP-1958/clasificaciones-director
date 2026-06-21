@@ -1147,6 +1147,7 @@ async function _ejsSendBienvenida(email, nombre){
     await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
       to_email: email, email: email, user_email: email, reply_to: email, recipient: email,
       nombre:   nombre || email.split('@')[0],
+      asunto:   'Bienvenido al Dashboard Director MFPP',
       mensaje:  mensaje,
       pin:      '',
       app_url:  _APP_URL
@@ -1155,6 +1156,7 @@ async function _ejsSendBienvenida(email, nombre){
     await emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
       to_email: _ADMIN_EMAIL, email: _ADMIN_EMAIL, user_email: _ADMIN_EMAIL, reply_to: _ADMIN_EMAIL, recipient: _ADMIN_EMAIL,
       nombre:   `Admin — nuevo acceso para ${nombre || email}`,
+      asunto:   `Nuevo acceso concedido: ${email}`,
       mensaje:  `Se ha dado acceso a ${email}. Procedimiento enviado al usuario:\n\n${mensaje}`,
       pin:      '',
       app_url:  _APP_URL
