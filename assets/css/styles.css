@@ -1838,3 +1838,13 @@ body.rv-mode-car #view-radiovuelta .rv-diario-tx{color:#000}
   .sim-top-metrics{width:100%;justify-content:space-between;gap:6px;margin-top:6px}
   .sim-top-metric{min-width:0;flex:1}
 }
+/* Simulador: que los selectores largos NO desborden la pantalla en móvil/iPad */
+.sim-toolbar select{width:100%;max-width:100%;box-sizing:border-box}
+@media(max-width:820px){
+  .sim-toolbar{max-width:100%}
+  .sim-race-picker,.sim-cat-picker{min-width:0;flex:1 1 100%}
+  .sim-toolbar label.sim-label{max-width:100%}
+}
+/* Evitar scroll horizontal del documento en móvil/tablet (las tablas tienen su
+   propio scroll interno con .table-wrap, así que esto es seguro) */
+@media(max-width:1024px){ html,body{overflow-x:hidden} }
