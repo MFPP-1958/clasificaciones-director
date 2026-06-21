@@ -28699,10 +28699,8 @@ function _simRenderCurrent(){
         teams.map(t=>`<option value="${escapeAttr(t)}">🏷️ Equipo: ${escapeAttr(t)}</option>`).join('');
     }
   }catch(_){}
-  // Top 10 esperado
+  // Top 10 esperado (una sola columna; el resultado real se ve con "Predicho vs Real")
   _simRenderTop10(grid.slice(), catFilter);
-  // Columna derecha: resultado REAL (se rellena solo si la prueba ya se disputó)
-  _simRenderRealColumn(catFilter);
   // Tabla
   _simRenderGrid(filtered);
 }
