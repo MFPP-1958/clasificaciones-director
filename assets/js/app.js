@@ -102,7 +102,82 @@ function _cargaResumenRender(){
   const hasData = Array.isArray(riders) && riders.length>0;
   if(empty)   empty.style.display   = hasData ? 'none' : 'block';
   if(content) content.style.display = hasData ? '' : 'none';
-  if(hasData) _cargaRenderContext();
+  if(hasData){ _cargaRenderContext(); _cargaRenderTable(); }
+}
+
+// FASE 2 · Tabla compacta de revisión (Pos·Dorsal·Nombre·Equipo·Cat·Tiempo·Estado).
+// Resalta mi equipo, permite editar Nombre/Equipo/Categoría con doble-clic, y
+// enlaza a "Tabla y filtros" para orden/filtros/paginación (que ya existen).
+function _cargaRenderTable(){
+  const wrap=document.getElementById('cargaResumenTable'); if(!wrap) return;
+  const list = Array.isArray(riders) ? riders : [];
+  // DNF: inscritos de esta prueba que no aparecen en la clasificación.
+  let dnf=[];
+  try{
+    if(Array.isArray(inscritos) && inscritos.length){
+      const cls=new Set(list.map(r=>normalizeForMatching(r.name)));
+      dnf=inscritos.filter(i=>i && i.name && !cls.has(normalizeForMatching(i.name)));
+    }
+  }catch(_){}
+  const rowsHtml = list.map((r,i)=>{
+    const mine=isMyTeam(r);
+    const st=`<span style="font-size:11px;font-weight:800;color:#15803d;background:#dcfce7;border-radius:6px;padding:2px 7px">Acabó</span>`;
+    return `<tr style="${mine?'background:#ecfdf3':''}">
+      <td style="${mine?'border-left:3px solid #059669':''};text-align:center;font-weight:800">${escapeHtml(String(r.pos??''))}</td>
+      <td style="text-align:center">${escapeHtml(String(r.bib??''))}</td>
+      <td class="cz-edit" data-idx="${i}" data-field="name" title="Doble-clic para editar" ondblclick="_cargaCellOn(this)" onblur="_cargaCellSave(this)">${escapeHtml(r.name||'')}${mine?' <span style="font-size:10px;background:#059669;color:#fff;border-radius:5px;padding:1px 5px">MI EQUIPO</span>':''}</td>
+      <td class="cz-edit" data-idx="${i}" data-field="team" title="Doble-clic para editar" ondblclick="_cargaCellOn(this)" onblur="_cargaCellSave(this)">${escapeHtml(r.team||'')}</td>
+      <td class="cz-edit" data-idx="${i}" data-field="cat" title="Doble-clic para editar" ondblclick="_cargaCellOn(this)" onblur="_cargaCellSave(this)" style="text-align:center">${escapeHtml(r.cat||'')}</td>
+      <td style="text-align:center;font-family:monospace">${escapeHtml(r.time||'')}</td>
+      <td style="text-align:center">${st}</td>
+    </tr>`;
+  }).join('');
+  const dnfHtml = dnf.map(d=>`<tr style="background:#fff7ed;color:#9a3412">
+      <td style="text-align:center">—</td>
+      <td style="text-align:center">${escapeHtml(String(d.bib??''))}</td>
+      <td>${escapeHtml(_evolNormName?_evolNormName(d.name):d.name)}</td>
+      <td>${escapeHtml(d.team||'')}</td>
+      <td style="text-align:center">${escapeHtml(d.cat||'')}</td>
+      <td style="text-align:center">—</td>
+      <td style="text-align:center"><span style="font-size:11px;font-weight:800;color:#9a3412;background:#fed7aa;border-radius:6px;padding:2px 7px">DNF</span></td>
+    </tr>`).join('');
+  wrap.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:4px 0 8px">
+      <div style="font-weight:800;color:#0b2f6b;font-size:14px">📋 Clasificación (${list.length}${dnf.length?(' + '+dnf.length+' DNF'):''})</div>
+      <button class="btn light" style="font-size:12px;padding:6px 12px" onclick="showView('view-tabla')" title="Filtros, búsqueda, orden por columnas y paginación">🔎 Revisar a fondo en Tabla y filtros →</button>
+    </div>
+    <div class="small" style="color:#94a3b8;margin-bottom:6px">✏️ Doble-clic en Nombre, Equipo o Categoría para corregir. Los cambios se guardan al pulsar "Guardar en la base de datos".</div>
+    <div class="table-wrap" style="max-height:420px">
+      <table>
+        <thead><tr>
+          <th style="text-align:center">Pos</th><th style="text-align:center">Dorsal</th><th>Nombre</th><th>Equipo</th><th style="text-align:center">Cat.</th><th style="text-align:center">Tiempo</th><th style="text-align:center">Estado</th>
+        </tr></thead>
+        <tbody>${rowsHtml}${dnfHtml}</tbody>
+      </table>
+    </div>`;
+}
+// Activar edición de una celda (doble-clic).
+function _cargaCellOn(td){
+  if(!td) return;
+  td.contentEditable='true';
+  td.style.outline='2px solid #1d4ed8';
+  td.focus();
+  try{ const r=document.createRange(); r.selectNodeContents(td); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r); }catch(_){}
+}
+// Guardar el cambio en el array riders al perder el foco.
+function _cargaCellSave(td){
+  if(!td) return;
+  td.contentEditable='false'; td.style.outline='';
+  const i=parseInt(td.dataset.idx,10); const f=td.dataset.field;
+  if(isNaN(i) || !riders[i] || !f) return;
+  // Tomar solo el texto (sin el badge "MI EQUIPO")
+  let v=(td.textContent||'').replace(/MI EQUIPO/g,'').trim();
+  if(v===String(riders[i][f]||'')) return;   // sin cambios
+  riders[i][f]=v;
+  _clasifSaved=false;   // hay cambios sin guardar
+  // Si cambia el equipo, refrescar la tabla para recalcular el resaltado.
+  if(f==='team'){ _cargaRenderTable(); }
+  if(typeof showToast==='function') showToast('Cambiado. Recuerda Guardar para que quede en la base de datos.','info',2600);
 }
 function _cargaRenderContext(){
   const el=document.getElementById('cargaResumenContext'); if(!el) return;
