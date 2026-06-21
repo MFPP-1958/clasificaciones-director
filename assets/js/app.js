@@ -971,34 +971,24 @@ function _betaGuard(){ if(_isBetaTester()){ _betaToast(); return true; } return 
 // ════════════════════════════════════════════════════════════════════════
 // EMAILJS · correos automáticos del ciclo de feedback (acuse, resuelto, descartado)
 // ────────────────────────────────────────────────────────────────────────
-// Rellena estos 3 valores con los de tu cuenta EmailJS (https://emailjs.com):
-//   · publicKey  → Account → API Keys → Public Key
-//   · serviceId  → Email Services → (tu servicio) → Service ID
-//   · templateId → Email Templates → (plantilla dinámica) → Template ID
-// La plantilla debe usar las variables: {{to_email}}, {{asunto}}, {{cuerpo}}
-// (y opcionalmente {{from_name}}). Mientras estén vacíos, no se envía nada.
-const _EMAILJS = { publicKey:'', serviceId:'', templateId:'' };
-let _emailjsReady=false;
-function _emailInit(){
-  try{
-    if(_emailjsReady) return;
-    if(typeof emailjs==='undefined' || !_EMAILJS.publicKey) return;
-    emailjs.init({publicKey:_EMAILJS.publicKey});
-    _emailjsReady=true;
-  }catch(_){}
-}
-// Envía un correo dinámico (asunto+cuerpo) SIN bloquear la interfaz. Si EmailJS
-// no está configurado o falla, simplemente se omite/registra: NUNCA revierte ni
-// impide el guardado en Supabase.
+// Reutiliza la MISMA cuenta/plantilla de EmailJS ya configurada para el login
+// (_EJS_SERVICE / _EJS_TEMPLATE / _EJS_KEY). La plantilla muestra {{mensaje}}.
+// SIN bloquear la interfaz: si EmailJS falla, solo se registra; NUNCA revierte
+// ni impide el guardado/cambio de estado en Supabase.
 function _emailSend(toEmail, asunto, cuerpo){
   try{
-    _emailInit();
-    if(!_emailjsReady || !toEmail || !_EMAILJS.serviceId || !_EMAILJS.templateId){
-      console.warn('[email] EmailJS no configurado o sin destinatario; envío omitido.');
+    if(typeof emailjs==='undefined' || !toEmail){
+      console.warn('[email] EmailJS no disponible o sin destinatario; envío omitido.');
       return;
     }
-    emailjs.send(_EMAILJS.serviceId, _EMAILJS.templateId, {
-      to_email: toEmail, asunto: asunto, cuerpo: cuerpo, from_name: 'Dirección TBG-WIXUM'
+    emailjs.send(_EJS_SERVICE, _EJS_TEMPLATE, {
+      // alias de destinatario (según el campo "To Email" de la plantilla)
+      to_email: toEmail, email: toEmail, user_email: toEmail, reply_to: toEmail, recipient: toEmail,
+      nombre: (String(toEmail).split('@')[0] || 'usuario'),
+      asunto: asunto,            // por si la plantilla usa {{asunto}} en el asunto
+      mensaje: cuerpo,           // cuerpo del correo (la plantilla muestra {{mensaje}})
+      pin: '',
+      app_url: (typeof _APP_URL!=='undefined'?_APP_URL:'')
     })
     .then(()=>{ console.log('[email] enviado a', toEmail); })
     .catch(err=>{ console.warn('[email] fallo de envío (no afecta a los datos):', err); });
