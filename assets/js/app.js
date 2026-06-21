@@ -969,6 +969,43 @@ function _betaToast(){
 function _betaGuard(){ if(_isBetaTester()){ _betaToast(); return true; } return false; }
 
 // ════════════════════════════════════════════════════════════════════════
+// EMAILJS · correos automáticos del ciclo de feedback (acuse, resuelto, descartado)
+// ────────────────────────────────────────────────────────────────────────
+// Rellena estos 3 valores con los de tu cuenta EmailJS (https://emailjs.com):
+//   · publicKey  → Account → API Keys → Public Key
+//   · serviceId  → Email Services → (tu servicio) → Service ID
+//   · templateId → Email Templates → (plantilla dinámica) → Template ID
+// La plantilla debe usar las variables: {{to_email}}, {{asunto}}, {{cuerpo}}
+// (y opcionalmente {{from_name}}). Mientras estén vacíos, no se envía nada.
+const _EMAILJS = { publicKey:'', serviceId:'', templateId:'' };
+let _emailjsReady=false;
+function _emailInit(){
+  try{
+    if(_emailjsReady) return;
+    if(typeof emailjs==='undefined' || !_EMAILJS.publicKey) return;
+    emailjs.init({publicKey:_EMAILJS.publicKey});
+    _emailjsReady=true;
+  }catch(_){}
+}
+// Envía un correo dinámico (asunto+cuerpo) SIN bloquear la interfaz. Si EmailJS
+// no está configurado o falla, simplemente se omite/registra: NUNCA revierte ni
+// impide el guardado en Supabase.
+function _emailSend(toEmail, asunto, cuerpo){
+  try{
+    _emailInit();
+    if(!_emailjsReady || !toEmail || !_EMAILJS.serviceId || !_EMAILJS.templateId){
+      console.warn('[email] EmailJS no configurado o sin destinatario; envío omitido.');
+      return;
+    }
+    emailjs.send(_EMAILJS.serviceId, _EMAILJS.templateId, {
+      to_email: toEmail, asunto: asunto, cuerpo: cuerpo, from_name: 'Dirección TBG-WIXUM'
+    })
+    .then(()=>{ console.log('[email] enviado a', toEmail); })
+    .catch(err=>{ console.warn('[email] fallo de envío (no afecta a los datos):', err); });
+  }catch(err){ console.warn('[email] error inesperado:', err); }
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // BETA FEEDBACK · módulo aislado (FAB + modal). No toca nada del resto.
 // ════════════════════════════════════════════════════════════════════════
 // Nombre legible de la pantalla activa (Inicio, Simulador, Calendario…).
@@ -1027,6 +1064,10 @@ async function _bfSubmit(btn){
       descripcion_texto: desc
     });
     if(error) throw error;
+    // Correo 1 · Acuse de recibo automático al autor (no bloquea; ya está guardado).
+    _emailSend((_rbacUser&&_rbacUser.email)||'',
+      'Hemos recibido tu mensaje',
+      'Hola. Hemos recibido tu mensaje correctamente. Nuestro equipo técnico lo revisará lo antes posible. En cuanto tengamos novedades o tu sugerencia sea resuelta, te informaremos por esta misma vía. ¡Gracias por ayudarnos a mejorar!');
     if(typeof showToast==='function') showToast('🙏 ¡Gracias! Tu reporte se ha enviado. Nos ayuda muchísimo a mejorar.','ok',4500);
     _bfClose();
   }catch(e){
@@ -6848,9 +6889,10 @@ async function _gLoadFeedback(){
       const resuelto=r.estado==='Resuelto';
       const idA=escapeAttr(String(r.id));
       const mailBtn = r.id_usuario ? `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbMail('${escapeAttr(r.id_usuario)}','${idA}',this)">✉️ Avisar al autor</button>` : '';
-      const btnResuelto = `<button class="btn" style="font-size:12px;padding:6px 10px;background:#15803d;border-color:#15803d" onclick="_gFbSetEstado('${idA}','Resuelto')">✅ Marcar resuelto</button>`;
-      const btnReabrir  = `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbSetEstado('${idA}','Pendiente')">↩️ Reabrir</button>`;
-      const btnDescartar= `<button class="btn light" style="font-size:12px;padding:6px 10px;background:#f1f5f9;color:#64748b;border-color:#cbd5e1" title="Descartar: no se va a desarrollar" onclick="_gFbSetEstado('${idA}','Descartado')">🗑️ Descartar</button>`;
+      const emA=escapeAttr(r.id_usuario||'');
+      const btnResuelto = `<button class="btn" style="font-size:12px;padding:6px 10px;background:#15803d;border-color:#15803d" onclick="_gFbSetEstado('${idA}','Resuelto','${emA}')">✅ Marcar resuelto</button>`;
+      const btnReabrir  = `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbSetEstado('${idA}','Pendiente','')">↩️ Reabrir</button>`;
+      const btnDescartar= `<button class="btn light" style="font-size:12px;padding:6px 10px;background:#f1f5f9;color:#64748b;border-color:#cbd5e1" title="Descartar: no se va a desarrollar" onclick="_gFbSetEstado('${idA}','Descartado','${emA}')">🗑️ Descartar</button>`;
       let acciones;
       if(r.estado==='Resuelto') acciones=btnReabrir+btnDescartar;
       else if(r.estado==='Descartado') acciones=btnReabrir;
@@ -6872,12 +6914,20 @@ async function _gLoadFeedback(){
     body.innerHTML=_emptyStateHTML('⚠️','No se han podido cargar los reportes.', (e&&e.message)||'');
   }
 }
-async function _gFbSetEstado(id, estado){
+async function _gFbSetEstado(id, estado, email){
   if(!_sb) return;
   try{
     const {error}=await _sb.from('beta_feedback').update({estado}).eq('id',id);
-    if(error) throw error;
+    if(error) throw error;   // si falla la BD, NO se envía correo
     if(typeof showToast==='function') showToast('Reporte marcado como "'+estado+'".','ok',2500);
+    // Correos automáticos (no bloquean; el estado ya está guardado en Supabase).
+    if(email && estado==='Resuelto'){
+      _emailSend(email, '¡Tu sugerencia ha sido RESUELTA!',
+        '¡Buenas noticias! La sugerencia o fallo que nos reportaste ha sido marcado como RESUELTO por el equipo técnico. Te invitamos a entrar en la aplicación para comprobar los cambios. Gracias por tu colaboración.');
+    } else if(email && estado==='Descartado'){
+      _emailSend(email, 'Sobre tu sugerencia',
+        'Hola. Hemos analizado detalladamente tu reciente sugerencia. Aunque agradecemos mucho tu aportación, por motivos de arquitectura técnica o prioridades de la temporada, en estos momentos no es viable su realización. Hemos guardado tu idea para estudiarla más adelante. ¡Sigue enviándonos tu feedback!');
+    }
     _gLoadFeedback();
   }catch(e){ alert('No se ha podido actualizar el estado: '+((e&&e.message)||e)); }
 }
