@@ -94,6 +94,80 @@ async function _cargaNextFromClasif(){
   if(_clasifSaved) _cargaTab(4);
 }
 
+// FASE 5 · Guardado mejorado: modal de confirmación, panel de éxito y de error.
+let _cargaLastSaveOk=false;
+function _cargaConfirmSave(){
+  const {errores}=_validateSummary();
+  if(errores.length){ if(typeof showToast==='function') showToast('Corrige los errores antes de guardar.','warn',3000); return; }
+  const name=($('raceName')?.value||'').trim()||'(sin nombre)';
+  const fecha=($('raceDate')?.value||'').trim()||'—';
+  const nClas=Array.isArray(riders)?riders.length:0;
+  const nEq=new Set((riders||[]).map(r=>(r.team||'').trim()).filter(Boolean)).size;
+  const {avisos}=_validateSummary();
+  const avisosHtml = avisos.length
+    ? '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:12.5px;color:#92400e">⚠️ '+avisos.map(escapeHtml).join('<br>⚠️ ')+'</div>'
+    : '<div style="color:#15803d;font-size:13px;font-weight:700;margin-top:10px">✅ Sin avisos. Todo correcto.</div>';
+  let ov=document.getElementById('cargaSaveModal');
+  if(!ov){ ov=document.createElement('div'); ov.id='cargaSaveModal'; ov.className='bf-overlay'; document.body.appendChild(ov); }
+  ov.innerHTML=`<div class="bf-modal" style="max-width:440px">
+    <div class="bf-head" style="background:linear-gradient(135deg,#047857,#059669)">💾 Confirmar guardado<button class="bf-x" onclick="_cargaCloseConfirm()">✕</button></div>
+    <div class="bf-body">
+      <div style="font-size:14px;color:#111;line-height:1.6">
+        <div><b>Prueba:</b> ${escapeHtml(name)}</div>
+        <div><b>Fecha:</b> ${escapeHtml(fecha)}</div>
+        <div><b>Clasificados:</b> ${nClas}</div>
+        <div><b>Equipos:</b> ${nEq}</div>
+      </div>
+      ${avisosHtml}
+    </div>
+    <div class="bf-foot">
+      <button class="bf-btn-cancel" onclick="_cargaCloseConfirm()">Cancelar</button>
+      <button class="bf-btn-send" style="background:#059669" onclick="_cargaDoSave()">Confirmar guardado</button>
+    </div>
+  </div>`;
+  ov.style.display='flex';
+}
+function _cargaCloseConfirm(){ const ov=document.getElementById('cargaSaveModal'); if(ov) ov.style.display='none'; }
+async function _cargaDoSave(){
+  _cargaCloseConfirm();
+  _cargaLastSaveOk=false;
+  try{ await saveHistory(); }catch(_){}
+  if(_cargaLastSaveOk) _cargaShowSaveSuccess();
+  else _cargaShowSaveError('No se ha completado el guardado. Revisa tu conexión (o el aviso anterior) y vuelve a intentarlo.');
+}
+function _cargaShowSaveSuccess(){
+  const el=document.getElementById('cargaResumenSaveResult'); if(!el) return;
+  const name=($('raceName')?.value||'').trim();
+  el.style.display='';
+  el.innerHTML=`<div style="background:#ecfdf3;border:1.5px solid #a7f3d0;border-radius:14px;padding:22px;text-align:center;margin-bottom:16px">
+    <div style="font-size:50px">✅</div>
+    <h3 style="margin:8px 0 4px;color:#15803d;font-size:20px">¡Prueba guardada correctamente!</h3>
+    <div style="color:#475569;font-size:13.5px;margin-bottom:16px">${escapeHtml(name||'')}</div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn light" onclick="showView('view-historial')">📁 Ver en Historial</button>
+      <button class="btn light" onclick="showView('view-tabla')">📊 Analizar esta prueba</button>
+      <button class="btn" style="background:#0369a1;border-color:#0369a1" onclick="_cargaNuevaPrueba()">➕ Cargar nueva prueba</button>
+    </div>
+  </div>`;
+  try{ el.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
+}
+function _cargaShowSaveError(msg){
+  const el=document.getElementById('cargaResumenSaveResult'); if(!el) return;
+  el.style.display='';
+  el.innerHTML=`<div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:14px;padding:18px;text-align:center;margin-bottom:16px">
+    <div style="font-size:40px">⚠️</div>
+    <h3 style="margin:8px 0 4px;color:#b91c1c;font-size:18px">No se ha podido guardar</h3>
+    <div style="color:#7f1d1d;font-size:13px;margin-bottom:14px">${escapeHtml(msg||'')}</div>
+    <button class="btn" style="background:#059669;border-color:#059669" onclick="_cargaConfirmSave()">🔄 Reintentar</button>
+  </div>`;
+  try{ el.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
+}
+function _cargaNuevaPrueba(){
+  try{ const el=document.getElementById('cargaResumenSaveResult'); if(el){ el.style.display='none'; el.innerHTML=''; } }catch(_){}
+  if(typeof openLoadPanelForNew==='function') openLoadPanelForNew();
+  _cargaTab(1);
+}
+
 // PASO 4 · Resumen — Fase 1: empty state (sin datos) vs contenido + tarjeta de
 // contexto de la prueba. (Fases 2-5 se irán añadiendo.)
 function _cargaResumenRender(){
@@ -102,7 +176,62 @@ function _cargaResumenRender(){
   const hasData = Array.isArray(riders) && riders.length>0;
   if(empty)   empty.style.display   = hasData ? 'none' : 'block';
   if(content) content.style.display = hasData ? '' : 'none';
-  if(hasData){ _cargaRenderContext(); _cargaRenderTable(); _cargaRenderValidation(); }
+  if(hasData){ _cargaRenderContext(); _cargaRenderTable(); _cargaRenderValidation(); _cargaRenderKpis(); }
+}
+
+// FASE 4 · KPIs extra + placeholder de Mi Equipo + distribución por categoría.
+function _cargaRenderKpis(){
+  const list=Array.isArray(riders)?riders:[];
+  const nk=(typeof normalizeForMatching==='function')?normalizeForMatching:(s=>(s||'').toLowerCase().trim());
+  // 4.1 · KPIs extra
+  const winner=list.find(r=>parseInt(r.pos)===1) || list.slice().sort((a,b)=>(parseInt(a.pos)||999)-(parseInt(b.pos)||999))[0];
+  const wTime=winner&&winner.time?winner.time:'—';
+  let avg=($('raceAvg')?.value||'').trim(); if(avg && !/km\/h/i.test(avg)) avg+=' km/h';
+  const ins=Array.isArray(inscritos)?inscritos.length:0;
+  let dnf=0, pctFin='—';
+  if(ins){
+    const cls=new Set(list.map(r=>nk(r.name)));
+    dnf=inscritos.filter(i=>i&&i.name&&!cls.has(nk(i.name))).length;
+    pctFin=Math.round(list.length/Math.max(1,ins)*100)+'%';
+  }
+  const cards=[['🏆 Tiempo ganador', wTime], ['⚡ Velocidad media', avg||'—']];
+  if(ins){ cards.push(['✅ % Finishers', pctFin]); cards.push(['🚫 DNF / DNS', String(dnf)]); }
+  const kp=document.getElementById('cargaResumenKpis');
+  if(kp) kp.innerHTML='<section class="grid" style="margin-bottom:14px">'+cards.map(c=>`<div class="card"><div class="label">${c[0]}</div><div class="value" style="font-size:20px">${escapeHtml(String(c[1]))}</div></div>`).join('')+'</section>';
+  // 4.2 · Placeholder de Mi Equipo
+  const ph=document.getElementById('cargaResumenMiEquipoPlaceholder');
+  if(ph){
+    if(!myTeam){
+      ph.style.display='';
+      ph.innerHTML=`<div class="card" style="background:#eff6ff;border:1px dashed #93c5fd;text-align:center;padding:16px">
+        <div style="font-weight:800;color:#1e3a8a;margin-bottom:8px">🏆 Configura tu equipo en el Paso 1 para ver estadísticas aquí</div>
+        <button class="btn light" onclick="_cargaGoConfigTeam()">Ir a configurar →</button>
+      </div>`;
+    } else { ph.style.display='none'; ph.innerHTML=''; }
+  }
+  _cargaRenderCatDist();
+}
+function _cargaGoConfigTeam(){
+  _cargaTab(1);
+  setTimeout(()=>{ try{ const el=document.getElementById('miEquipoInput'); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus(); } }catch(_){} }, 220);
+}
+function _cargaRenderCatDist(){
+  const el=document.getElementById('cargaResumenCatDist'); if(!el) return;
+  const list=Array.isArray(riders)?riders:[];
+  const counts={};
+  list.forEach(r=>{ const c=((r.cat||'').trim())||'(sin categoría)'; counts[c]=(counts[c]||0)+1; });
+  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){ el.innerHTML=''; return; }
+  const max=Math.max(...entries.map(e=>e[1]));
+  el.innerHTML='<div style="font-weight:800;color:#0b2f6b;font-size:13px;margin:4px 0 8px">📊 Distribución por categoría</div>'+
+    entries.map(([c,n])=>{
+      const pct=Math.round(n/max*100);
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12.5px">
+        <div style="flex:0 0 140px;color:#475569;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c)}</div>
+        <div style="flex:1;background:#eef2f7;border-radius:6px;overflow:hidden;height:16px"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#1f6feb,#12b76a)"></div></div>
+        <div style="flex:0 0 32px;text-align:right;font-weight:800;color:#0b2f6b">${n}</div>
+      </div>`;
+    }).join('');
 }
 
 // FASE 3 · Validación automática del resumen. Devuelve {errores:[], avisos:[]}.
@@ -14508,6 +14637,7 @@ function _sameRaceName(a,b){
 
 async function saveHistory(){
   if(_betaGuard()) return;   // Beta Tester: no escribe en la BD
+  try{ _cargaLastSaveOk=false; }catch(_){}   // resultado del guardado (Fase 5)
   // Si solo hay pre-inscripción cargada (sin clasificación final), delegamos
   // en saveInscritosOnly para que el director no tenga que distinguir entre
   // los dos botones. Antes el botón "Guardar en historial" se cancelaba con
@@ -14661,6 +14791,7 @@ async function saveHistory(){
   _cachedHistory=null; _prFiltersReady=false; _trendFiltersReady=false;
   await renderHistory();
   _clasifSaved=true;   // clasificación guardada en la BD
+  _cargaLastSaveOk=true;   // éxito → el Paso 4 mostrará el panel de éxito
   // Opción A · Mejora #3: toast clickable con enlace al Historial (en vez de alert)
   if(typeof _cargaShowSaveToast === 'function'){
     _cargaShowSaveToast(accion);

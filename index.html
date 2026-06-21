@@ -586,6 +586,8 @@
 
   <!-- Contenido del resumen (cuando hay datos) -->
   <div id="cargaResumenContent">
+  <!-- FASE 5 · Panel de resultado del guardado (éxito/error) -->
+  <div id="cargaResumenSaveResult" style="display:none"></div>
   <!-- FASE 1.2 · Tarjeta de contexto de la prueba -->
   <div id="cargaResumenContext"></div>
   <!-- FASE 3 · Panel de validación automática -->
@@ -607,8 +609,14 @@
   <div class="card card-rivals"><div class="label">⚠️ Equipos rivales en Top 10</div><div class="value" id="kpiRivals">—</div></div>
   <div class="card card-spread"><div class="label">📐 Spread del equipo</div><div class="value" id="kpiSpread">—</div></div>
 </section>
+  <!-- FASE 4.2 · Placeholder de Mi Equipo (si no está configurado) -->
+  <div id="cargaResumenMiEquipoPlaceholder" style="display:none;margin-bottom:14px"></div>
+  <!-- FASE 4.1 · KPIs extra (tiempo ganador, vel. media, % finishers, DNF) -->
+  <div id="cargaResumenKpis"></div>
+  <!-- FASE 4.3 · Mini-distribución por categoría -->
+  <div id="cargaResumenCatDist" style="margin-bottom:14px"></div>
   <div class="carga-nav" style="justify-content:center;margin-top:16px">
-    <button type="button" id="cargaSaveBtn" class="btn admin-only" style="background:#059669;border-color:#059669;font-size:15px;padding:12px 24px;font-weight:800" onclick="saveHistory()" title="Guarda la prueba (datos + inscritos + clasificación) en la base de datos">💾 Guardar en la base de datos</button>
+    <button type="button" id="cargaSaveBtn" class="btn admin-only" style="background:#059669;border-color:#059669;font-size:15px;padding:12px 24px;font-weight:800" onclick="_cargaConfirmSave()" title="Guarda la prueba (datos + inscritos + clasificación) en la base de datos">💾 Guardar en la base de datos</button>
   </div>
   </div><!-- fin cargaResumenContent -->
 </section><!-- fin PASO 4 -->
