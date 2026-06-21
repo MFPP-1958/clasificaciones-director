@@ -3589,12 +3589,18 @@
 
       <!-- PANEL FEEDBACK (solo superadmin) -->
       <div id="gPanelFeedback" style="display:none">
+        <!-- Interruptor maestro -->
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:#f8fbff;border:1px solid #cfe3ff;border-radius:12px;padding:12px 14px;margin-bottom:14px">
+          <div style="font-size:13.5px;font-weight:800;color:#0b2f6b">🔘 Activar recepción de Sugerencias y Feedback<div style="font-size:11.5px;font-weight:500;color:#64748b;margin-top:2px">Si lo apagas, el botón flotante 💬 desaparece para todos (tú lo seguirás viendo).</div></div>
+          <label class="bf-switch"><input type="checkbox" id="gFbFlagToggle" onchange="_gToggleFeedbackFlag(this)"><span class="bf-slider"></span></label>
+        </div>
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
           <div style="font-weight:800;font-size:14px;color:#0b2f6b">💬 Reportes de los Beta Testers</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select id="gFbFilter" onchange="_gLoadFeedback()" style="border:1.5px solid #d0d5dd;border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700">
               <option value="Pendiente">🟠 Pendientes</option>
               <option value="Resuelto">✅ Resueltos</option>
+              <option value="Descartado">🗑️ Descartados</option>
               <option value="">Todos</option>
             </select>
             <button onclick="_gLoadFeedback()" class="btn light" style="font-size:12px;padding:7px 12px">🔄 Actualizar</button>

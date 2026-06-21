@@ -979,12 +979,23 @@ function _bfCurrentSection(){
     return id ? id.replace(/^view-/,'') : '(desconocida)';
   }catch(_){ return '(desconocida)'; }
 }
-// ¿Quién ve el botón de feedback? Beta testers + staff (no el ciclista, para no
-// generar ruido). La LECTURA/gestión de reportes es solo del SUPERADMIN (RLS).
+// Interruptor maestro (feature flag) leído de app_settings.feedback_activo.
+let _bfFeatureOn=true;
+async function _bfLoadFeatureFlag(){
+  try{
+    if(!_sb) return;
+    const {data,error}=await _sb.from('app_settings').select('value').eq('key','feedback_activo').limit(1);
+    if(error) return;   // tabla aún no creada → mantener default (true)
+    if(Array.isArray(data) && data.length) _bfFeatureOn = String(data[0].value)!=='false';
+  }catch(_){}
+}
+// ¿Quién ve el botón de feedback? CUALQUIER usuario autenticado (incluidos
+// ciclistas) si el interruptor está activo. Si está apagado, solo el SUPERADMIN
+// lo ve (para poder volver a encenderlo). La gestión/lectura es solo del SUPERADMIN.
 function _bfCanReport(){
   if(typeof _rbacUser==='undefined' || !_rbacUser) return false;
-  const r=_rbacUser.role;
-  return r==='BETA_TESTER' || r==='LECTOR' || ['SUPERADMIN','ADMIN','DIRECTOR'].includes(r);
+  if(_bfFeatureOn) return true;
+  return _rbacUser.role==='SUPERADMIN';
 }
 function _bfApplyVisibility(){
   const fab=document.getElementById('bfFab'); if(!fab) return;
@@ -1666,7 +1677,7 @@ function _rbacApplySession(){
     // El botón "Ver como ciclista" es una herramienta de dirección; no para beta testers.
     if(staff && !_beta && typeof _previewEnsureBtn==='function') _previewEnsureBtn();
     if(!staff) setTimeout(()=>{ try{ _gfLockForCyclist(); }catch(_){} }, 300);
-    try{ if(typeof _bfApplyVisibility==='function') _bfApplyVisibility(); }catch(_){}
+    try{ if(typeof _bfLoadFeatureFlag==='function'){ _bfLoadFeatureFlag().then(()=>{ try{_bfApplyVisibility();}catch(_){} }); } else if(typeof _bfApplyVisibility==='function'){ _bfApplyVisibility(); } }catch(_){}
   }catch(_){}
   // Renderizar menú según permisos
   _rbacRenderMenu();
@@ -6818,6 +6829,9 @@ function _gSetTab(tab){
 // ── Gestión: FEEDBACK de Beta Testers (solo SUPERADMIN; RLS lo garantiza) ──
 async function _gLoadFeedback(){
   const body=document.getElementById('gFbBody'); if(!body) return;
+  // Reflejar el estado del interruptor maestro (relee por si cambió en otro sitio).
+  try{ await _bfLoadFeatureFlag(); }catch(_){}
+  const tg=document.getElementById('gFbFlagToggle'); if(tg) tg.checked=_bfFeatureOn;
   if(!_sb){ body.innerHTML=_emptyStateHTML('🔌','Sin conexión a la base de datos.'); return; }
   body.innerHTML=_spinnerHTML('Cargando reportes…');
   const filtro=(document.getElementById('gFbFilter')?.value)||'';
@@ -6832,7 +6846,15 @@ async function _gLoadFeedback(){
     body.innerHTML=data.map(r=>{
       const f=r.fecha?new Date(r.fecha).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
       const resuelto=r.estado==='Resuelto';
-      const mailBtn = r.id_usuario ? `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbMail('${escapeAttr(r.id_usuario)}','${escapeAttr(String(r.id))}')">✉️ Avisar al autor</button>` : '';
+      const idA=escapeAttr(String(r.id));
+      const mailBtn = r.id_usuario ? `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbMail('${escapeAttr(r.id_usuario)}','${idA}',this)">✉️ Avisar al autor</button>` : '';
+      const btnResuelto = `<button class="btn" style="font-size:12px;padding:6px 10px;background:#15803d;border-color:#15803d" onclick="_gFbSetEstado('${idA}','Resuelto')">✅ Marcar resuelto</button>`;
+      const btnReabrir  = `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbSetEstado('${idA}','Pendiente')">↩️ Reabrir</button>`;
+      const btnDescartar= `<button class="btn light" style="font-size:12px;padding:6px 10px;background:#f1f5f9;color:#64748b;border-color:#cbd5e1" title="Descartar: no se va a desarrollar" onclick="_gFbSetEstado('${idA}','Descartado')">🗑️ Descartar</button>`;
+      let acciones;
+      if(r.estado==='Resuelto') acciones=btnReabrir+btnDescartar;
+      else if(r.estado==='Descartado') acciones=btnReabrir;
+      else acciones=btnResuelto+btnDescartar;
       return `<div style="border:1px solid #e5e7eb;border-left:4px solid ${tipoColor(r.tipo_reporte)};border-radius:12px;padding:12px 14px;margin-bottom:10px;background:${resuelto?'#f6fef9':'#fff'}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
           <span style="font-weight:900;color:${tipoColor(r.tipo_reporte)};font-size:13px">${tipoBadge(r.tipo_reporte)}</span>
@@ -6841,9 +6863,7 @@ async function _gLoadFeedback(){
         <div style="font-size:14px;color:#111;line-height:1.5;white-space:pre-wrap;margin-bottom:8px">${escapeHtml(r.descripcion_texto||'')}</div>
         <div style="font-size:11.5px;color:#64748b;margin-bottom:10px">👤 ${escapeHtml(r.id_usuario||'?')} · 🏷️ ${escapeHtml(r.rol_usuario||'?')} · 📍 ${escapeHtml(r.seccion_actual||'?')} · estado: <b style="color:${resuelto?'#15803d':'#b45309'}">${escapeHtml(r.estado||'Pendiente')}</b></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${resuelto
-            ? `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbSetEstado('${escapeAttr(String(r.id))}','Pendiente')">↩️ Reabrir</button>`
-            : `<button class="btn" style="font-size:12px;padding:6px 10px;background:#15803d;border-color:#15803d" onclick="_gFbSetEstado('${escapeAttr(String(r.id))}','Resuelto')">✅ Marcar resuelto</button>`}
+          ${acciones}
           ${mailBtn}
         </div>
       </div>`;
@@ -6862,11 +6882,33 @@ async function _gFbSetEstado(id, estado){
   }catch(e){ alert('No se ha podido actualizar el estado: '+((e&&e.message)||e)); }
 }
 // Abrir el cliente de correo del director con un mensaje prerelleno al autor.
-function _gFbMail(email, id){
+// Muestra estado de carga en el botón y un toast de confirmación/aviso.
+function _gFbMail(email, id, btn){
   const subject='Sobre tu reporte en la app de clasificaciones';
   const body='Hola,\n\nGracias por tu reporte. Te escribo para decirte que ya lo hemos revisado/realizado.\n\nUn saludo,\nDirección TBG-WIXUM';
   const url='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-  try{ window.location.href=url; }catch(_){ window.open(url,'_blank'); }
+  const unlock = btn ? _lockBtn(btn,'Enviando…') : ()=>{};
+  if(unlock===null) return;
+  try{
+    window.location.href=url;
+    if(typeof showToast==='function') showToast('✉️ Notificación enviada con éxito al correo del autor.','ok',4000);
+  }catch(e){
+    if(typeof showToast==='function') showToast('❌ No se ha podido abrir el correo.','warn',4000);
+  }finally{
+    setTimeout(unlock, 900);
+  }
+}
+// Interruptor maestro: encender/apagar la recepción de feedback para todos.
+async function _gToggleFeedbackFlag(el){
+  const on=!!el.checked;
+  if(!_sb){ el.checked=!on; alert('Sin conexión a la base de datos.'); return; }
+  try{
+    const {error}=await _sb.from('app_settings').upsert({key:'feedback_activo',value:on?'true':'false',updated_at:new Date().toISOString()},{onConflict:'key'});
+    if(error) throw error;
+    _bfFeatureOn=on;
+    try{ _bfApplyVisibility(); }catch(_){}
+    if(typeof showToast==='function') showToast(on?'✅ Recepción de feedback ACTIVADA para todos.':'🚫 Recepción de feedback DESACTIVADA (solo tú ves el botón).','ok',3200);
+  }catch(e){ el.checked=!on; alert('No se pudo cambiar el ajuste: '+((e&&e.message)||e)); }
 }
 
 // ── Gestión: Usuarios ─────────────────────────────────────────
