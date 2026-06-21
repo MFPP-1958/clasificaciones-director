@@ -15103,6 +15103,7 @@ function _inicioRenderQuickActions(){
   const perms=(typeof _rbacPerms!=='undefined' && _rbacPerms && _rbacPerms.size) ? _rbacPerms : null;
   const can=(id)=> !perms || perms.has(id);
   const actions=[
+    {id:'view-historial',      ic:'📁', lbl:'Historial'},
     {id:'view-carga',          ic:'📋', lbl:'Añadir lista de inscritos', handler:'_inicioGoInscritos()'},
     {id:'view-carga',          ic:'📥', lbl:'Cargar clasificación'},
     {id:'view-disponibilidad', ic:'🚴', lbl:'Disponibilidad'},
