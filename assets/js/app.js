@@ -46,6 +46,8 @@ function _cargaTab(n){
   }
   // Paso 3: mostrar el nombre de la prueba elegida en el Paso 1.
   if(n==='3'){ try{ if(typeof _inscritosShowRace==='function') _inscritosShowRace(); }catch(_){} }
+  // Paso 4: empty state / contexto (Fase 1).
+  if(n==='4'){ try{ if(typeof _cargaResumenRender==='function') _cargaResumenRender(); }catch(_){} }
   try{ document.getElementById('view-carga')?.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
 }
 
@@ -90,6 +92,35 @@ async function _cargaNextFromClasif(){
   if(!r) return;   // se queda en Clasificación
   try{ await saveHistory(); }catch(_){}
   if(_clasifSaved) _cargaTab(4);
+}
+
+// PASO 4 · Resumen — Fase 1: empty state (sin datos) vs contenido + tarjeta de
+// contexto de la prueba. (Fases 2-5 se irán añadiendo.)
+function _cargaResumenRender(){
+  const empty=document.getElementById('cargaResumenEmpty');
+  const content=document.getElementById('cargaResumenContent');
+  const hasData = Array.isArray(riders) && riders.length>0;
+  if(empty)   empty.style.display   = hasData ? 'none' : 'block';
+  if(content) content.style.display = hasData ? '' : 'none';
+  if(hasData) _cargaRenderContext();
+}
+function _cargaRenderContext(){
+  const el=document.getElementById('cargaResumenContext'); if(!el) return;
+  const name =($('raceName')?.value||'').trim();
+  const fecha=($('raceDate')?.value||'').trim();
+  const loc  =($('raceLocalidad')?.value||'').trim();
+  const km   =($('raceKm')?.value||'').trim();
+  const tipo =($('raceCircuitType')?.value||'').trim();
+  const ccaa =($('raceCCAA')?.value||'').trim();
+  const chall=!!($('raceChallengeCV')?.checked);
+  const chips=[fecha&&('📅 '+fecha), loc&&('📍 '+loc), km&&('📏 '+km+' km'), tipo&&('🛣️ '+tipo), ccaa&&('🗺️ '+ccaa)].filter(Boolean);
+  el.innerHTML=`<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+    <div style="min-width:0">
+      <div style="font-size:16px;font-weight:900;color:#ea580c">${escapeHtml(name||'(sin nombre)')}</div>
+      <div style="font-size:12.5px;color:#475569;margin-top:4px">${chips.map(escapeHtml).join(' · ')}${chall?' · <span style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:999px;padding:1px 8px;font-weight:800;font-size:11px">🏆 Challenge CV</span>':''}</div>
+    </div>
+    <button class="btn light admin-only" style="font-size:12px;padding:6px 12px;white-space:nowrap" onclick="_cargaTab(1)">Editar datos ✏️</button>
+  </div>`;
 }
 
 // PASO 1 · "Guardar datos de la prueba": persiste los METADATOS (nombre, fecha,

@@ -571,6 +571,23 @@
 <section class="panel carga-step" data-step="4" style="display:none">
   <h2 style="margin:0 0 6px">✅ Resumen y guardado</h2>
   <p class="help" style="margin:0 0 12px">Revisa los datos cargados y, cuando todo esté correcto, guarda la prueba en la base de datos.</p>
+
+  <!-- FASE 1.1 · Empty state (sin datos cargados) -->
+  <div id="cargaResumenEmpty" style="display:none;text-align:center;padding:46px 20px">
+    <div style="font-size:60px">📋</div>
+    <h3 style="margin:14px 0 4px;color:#0b2f6b;font-size:20px">Aún no hay datos para resumir</h3>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 20px">Completa los pasos anteriores para ver el resumen de la prueba aquí.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn light" onclick="_cargaTab(1)">1 · Introducir datos</button>
+      <button class="btn light" onclick="_cargaTab(2)">2 · Cargar inscritos</button>
+      <button class="btn light" onclick="_cargaTab(3)">3 · Subir clasificación</button>
+    </div>
+  </div>
+
+  <!-- Contenido del resumen (cuando hay datos) -->
+  <div id="cargaResumenContent">
+  <!-- FASE 1.2 · Tarjeta de contexto de la prueba -->
+  <div id="cargaResumenContext"></div>
   <!-- KPIs Generales -->
   <section class="grid always-visible race-summary">
   <div class="card"><div class="label">Clasificados</div><div class="value" id="totalRiders">0</div></div>
@@ -589,6 +606,7 @@
   <div class="carga-nav" style="justify-content:center;margin-top:16px">
     <button type="button" class="btn admin-only" style="background:#059669;border-color:#059669;font-size:15px;padding:12px 24px;font-weight:800" onclick="saveHistory()" title="Guarda la prueba (datos + inscritos + clasificación) en la base de datos">💾 Guardar en la base de datos</button>
   </div>
+  </div><!-- fin cargaResumenContent -->
 </section><!-- fin PASO 4 -->
     </div>
 
