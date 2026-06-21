@@ -6800,7 +6800,7 @@ let _gActiveTab = 'users';
 function _gSetTab(tab){
   _gActiveTab = tab;
   // Tabs styling
-  ['users','perms','sql'].forEach(t=>{
+  ['users','perms','sql','feedback'].forEach(t=>{
     const btn = document.getElementById('gTab' + t.charAt(0).toUpperCase() + t.slice(1));
     const panel = document.getElementById('gPanel' + t.charAt(0).toUpperCase() + t.slice(1));
     if(btn){
@@ -6812,6 +6812,61 @@ function _gSetTab(tab){
   if(tab==='perms') _gLoadPermissions();
   if(tab==='users') _gLoadUsers();
   if(tab==='sql')   _gRenderSQL();
+  if(tab==='feedback') _gLoadFeedback();
+}
+
+// ── Gestión: FEEDBACK de Beta Testers (solo SUPERADMIN; RLS lo garantiza) ──
+async function _gLoadFeedback(){
+  const body=document.getElementById('gFbBody'); if(!body) return;
+  if(!_sb){ body.innerHTML=_emptyStateHTML('🔌','Sin conexión a la base de datos.'); return; }
+  body.innerHTML=_spinnerHTML('Cargando reportes…');
+  const filtro=(document.getElementById('gFbFilter')?.value)||'';
+  try{
+    let q=_sb.from('beta_feedback').select('*').order('fecha',{ascending:false});
+    if(filtro) q=q.eq('estado',filtro);
+    const {data,error}=await q;
+    if(error) throw error;
+    if(!data || !data.length){ body.innerHTML=_emptyStateHTML('📭', filtro?('No hay reportes "'+filtro+'".'):'Aún no hay reportes de los beta testers.'); return; }
+    const tipoBadge=t=> t==='Fallo'?'🐞 Fallo': t==='Sugerencia'?'💡 Sugerencia':'🎨 Mejora';
+    const tipoColor=t=> t==='Fallo'?'#dc2626': t==='Sugerencia'?'#0369a1':'#7c3aed';
+    body.innerHTML=data.map(r=>{
+      const f=r.fecha?new Date(r.fecha).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      const resuelto=r.estado==='Resuelto';
+      const mailBtn = r.id_usuario ? `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbMail('${escapeAttr(r.id_usuario)}','${escapeAttr(String(r.id))}')">✉️ Avisar al autor</button>` : '';
+      return `<div style="border:1px solid #e5e7eb;border-left:4px solid ${tipoColor(r.tipo_reporte)};border-radius:12px;padding:12px 14px;margin-bottom:10px;background:${resuelto?'#f6fef9':'#fff'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+          <span style="font-weight:900;color:${tipoColor(r.tipo_reporte)};font-size:13px">${tipoBadge(r.tipo_reporte)}</span>
+          <span style="font-size:11.5px;color:#94a3b8">${escapeHtml(f)}</span>
+        </div>
+        <div style="font-size:14px;color:#111;line-height:1.5;white-space:pre-wrap;margin-bottom:8px">${escapeHtml(r.descripcion_texto||'')}</div>
+        <div style="font-size:11.5px;color:#64748b;margin-bottom:10px">👤 ${escapeHtml(r.id_usuario||'?')} · 🏷️ ${escapeHtml(r.rol_usuario||'?')} · 📍 ${escapeHtml(r.seccion_actual||'?')} · estado: <b style="color:${resuelto?'#15803d':'#b45309'}">${escapeHtml(r.estado||'Pendiente')}</b></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${resuelto
+            ? `<button class="btn light" style="font-size:12px;padding:6px 10px" onclick="_gFbSetEstado('${escapeAttr(String(r.id))}','Pendiente')">↩️ Reabrir</button>`
+            : `<button class="btn" style="font-size:12px;padding:6px 10px;background:#15803d;border-color:#15803d" onclick="_gFbSetEstado('${escapeAttr(String(r.id))}','Resuelto')">✅ Marcar resuelto</button>`}
+          ${mailBtn}
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    body.innerHTML=_emptyStateHTML('⚠️','No se han podido cargar los reportes.', (e&&e.message)||'');
+  }
+}
+async function _gFbSetEstado(id, estado){
+  if(!_sb) return;
+  try{
+    const {error}=await _sb.from('beta_feedback').update({estado}).eq('id',id);
+    if(error) throw error;
+    if(typeof showToast==='function') showToast('Reporte marcado como "'+estado+'".','ok',2500);
+    _gLoadFeedback();
+  }catch(e){ alert('No se ha podido actualizar el estado: '+((e&&e.message)||e)); }
+}
+// Abrir el cliente de correo del director con un mensaje prerelleno al autor.
+function _gFbMail(email, id){
+  const subject='Sobre tu reporte en la app de clasificaciones';
+  const body='Hola,\n\nGracias por tu reporte. Te escribo para decirte que ya lo hemos revisado/realizado.\n\nUn saludo,\nDirección TBG-WIXUM';
+  const url='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  try{ window.location.href=url; }catch(_){ window.open(url,'_blank'); }
 }
 
 // ── Gestión: Usuarios ─────────────────────────────────────────
