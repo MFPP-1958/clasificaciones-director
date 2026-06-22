@@ -2095,6 +2095,19 @@ function _rbacApplySession(){
   // Navegar a primera vista permitida
   const first = ALL_VIEWS.find(v=>_rbacPerms.has(v.id));
   if(first) showView(first.id);
+  // Autocargar (silencioso) la última prueba CON clasificación del filtro global,
+  // para que al abrir/refrescar ya haya datos listos sin cambiar de vista.
+  try{ setTimeout(()=>{ try{ _autoLoadLastClassifiedSilent&&_autoLoadLastClassifiedSilent(); }catch(_){} }, 500); }catch(_){}
+}
+// Carga silenciosa al arrancar: si no hay prueba cargada, trae la última con
+// clasificación que encaje con el grupo de categoría global (sin navegar).
+async function _autoLoadLastClassifiedSilent(){
+  try{
+    if(hasValidData && Array.isArray(riders) && riders.length) return;   // ya hay prueba
+    try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
+    const id=(typeof _autoPickLastClassifiedRaceId==='function')?_autoPickLastClassifiedRaceId():'';
+    if(id && typeof loadHistoryEntry==='function'){ await loadHistoryEntry(id, {silent:true}); }
+  }catch(_){}
 }
 
 function _rbacRenderMenu(){
@@ -14372,7 +14385,8 @@ async function _histDoDelete(id){
   _cachedHistory=null; _prFiltersReady=false; _trendFiltersReady=false;
   await renderHistory();
 }
-async function loadHistoryEntry(id){
+async function loadHistoryEntry(id, opts){
+  const _silent = !!(opts && opts.silent);
   const hist = _cachedHistory || await _sbLoadHistory();
   const h = hist.find(x=>x.id===id);
   if(!h){alert('No se encontró la carrera seleccionada.');return;}
@@ -14450,6 +14464,7 @@ async function loadHistoryEntry(id){
   selectedCompare = [];
   populateFilters();
   applyFilters();
+  if(_silent){ closeHistoryModal(); return; }   // carga silenciosa: datos listos, sin cambiar de vista
   setTimeout(_collapseLoadPanel, 80);
   showView('view-tabla');
   showSuccessBanner();
@@ -15775,10 +15790,25 @@ async function renderInicio(){
       .filter(p => p.iso && p.iso >= todayIso)
       .filter(p => { const k=p.iso+'|'+String(p.name||'').toLowerCase().trim(); if(_seenUp.has(k)) return false; _seenUp.add(k); return true; })
       .sort((a,b) => a.iso.localeCompare(b.iso));
+    // ESTRICTO con el grupo de categoría global: una próxima prueba solo cuenta
+    // si su grupo (cadete/juvenil/sub23…) coincide con el filtro. Las pruebas SIN
+    // categoría identificable NO se muestran bajo un filtro concreto (así no se
+    // cuela una juvenil cuando el filtro es Cadete).
+    const _gGrpUp = (typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+    const _inGlobalGroup = (p)=>{
+      if(!_gGrpUp) return true;
+      const groups=new Set();
+      String(p.cat||p.raceCat||'').split(/[\s,;]+/).filter(Boolean).forEach(c=>{ const g=(typeof _calCatGroup==='function')?_calCatGroup(c):null; if(g) groups.add(g.key); });
+      if(!groups.size){ const ng=(typeof _calCatGroup==='function')?_calCatGroup(p.name||''):null; if(ng) groups.add(ng.key); }
+      if(!groups.size) return false;   // sin categoría → no mostrar con filtro activo
+      return groups.has(_gGrpUp);
+    };
     const upcoming = allUpcoming
       .filter(p => {
         if(!_gfMatchesGlobalMod(`${p.modality||''} ${p.name||''}`)) return false;
-        return _gfMatchesCatGender(p.cat||'', p.name||'');
+        if(!_inGlobalGroup(p)) return false;
+        if(typeof _gfMatchesGlobalGender==='function' && !_gfMatchesGlobalGender(p.cat||'', p.name||'')) return false;
+        return true;
       })
       .slice(0, 5);
 
