@@ -15657,6 +15657,25 @@ async function renderInicio(){
     myTeamRiders = set.size;
   }
 
+  // ─── CICLISTA: datos personalizados centrados en SU rendimiento ──────
+  // Cuando el rol es ciclista (o vista previa como ciclista), el Inicio deja de
+  // mostrar datos globales del equipo y muestra los resultados del corredor
+  // logueado (KPIs, su rendimiento de temporada y badges en las últimas carreras).
+  const isCyclistView = (role === 'CICLISTA' || document.body.classList.contains('preview-ciclista'));
+  const myRiderName = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.riderName) ? _rbacUser.riderName : '';
+  const myRiderKey  = myRiderName ? normalizeRiderName(myRiderName).toLowerCase() : '';
+  let myResults = [];   // {race, name, team, pos|null, dnf, raceName, raceDate, total} en orden cronológico ASC
+  if(isCyclistView && myRiderKey){
+    history.forEach(race=>{
+      const mine = (race.riders||[]).find(r=> normalizeRiderName(r.name||'').toLowerCase() === myRiderKey);
+      if(!mine) return;
+      const pos = (mine.pos && mine.pos>0) ? mine.pos : null;
+      myResults.push({ race, name:mine.name||myRiderName, team:mine.team||'', pos, dnf:!pos,
+        raceName:race.raceName||'Carrera', raceDate:race.raceDate||'', total:(race.riders||[]).length });
+    });
+    myResults.sort((a,b)=> (_parseSpanishDate(a.raceDate)||'').localeCompare(_parseSpanishDate(b.raceDate)||''));
+  }
+
   // ─── Cálculo de tendencias: últimos 30 días vs 30 días anteriores ───
   const now = new Date();
   const day30 = new Date(now.getTime() - 30*86400000);
@@ -15754,7 +15773,21 @@ async function renderInicio(){
   }
 
   const kpiBox = document.getElementById('inicioKpis');
-  if(kpiBox){
+  if(kpiBox && isCyclistView){
+    // 4 KPIs centradas en el ciclista logueado.
+    const fin = myResults.filter(r=>r.pos);
+    const avgPos = fin.length ? fin.reduce((s,r)=>s+r.pos,0)/fin.length : null;
+    let best=null, bestRace='';
+    fin.forEach(r=>{ if(best==null || r.pos<best){ best=r.pos; bestRace=r.raceName; } });
+    const podios = fin.filter(r=>r.pos<=3).length;
+    const posSpark = sparkline(fin.slice(-8).map(r=>r.pos), '#1d4ed8');
+    const medalFor = (p)=> p===1?'🥇 ':p===2?'🥈 ':p===3?'🥉 ':'';
+    kpiBox.innerHTML = `
+      <div class="evol-kpi"><div class="ek-label">🏁 Tus carreras</div><div class="ek-value">${myResults.length}</div><div class="ek-sub">${fin.length} con clasificación${myResults.length>fin.length?` · ${myResults.length-fin.length} DNF`:''}</div></div>
+      <div class="evol-kpi" style="background:linear-gradient(135deg,#eff6ff,#fff);border-left:3px solid #2563eb"><div class="ek-label">📊 Tu posición media</div><div class="ek-value" style="color:#1d4ed8">${avgPos!=null?avgPos.toFixed(1)+'º':'—'}${posSpark}</div><div class="ek-sub">${fin.length?`en ${fin.length} carrera${fin.length!==1?'s':''}`:'Aún sin resultados'}</div></div>
+      <div class="evol-kpi" style="background:linear-gradient(135deg,#fef9c3,#fff);border-left:3px solid #f59e0b"><div class="ek-label">⭐ Tu mejor resultado</div><div class="ek-value" style="color:#92400e">${best!=null?medalFor(best)+best+'º':'—'}</div><div class="ek-sub">${bestRace?escapeHtml(bestRace.slice(0,28)):'Aún sin resultados'}</div></div>
+      <div class="evol-kpi" style="background:linear-gradient(135deg,#ecfdf5,#fff);border-left:3px solid #16a34a"><div class="ek-label">🏆 Podios conseguidos</div><div class="ek-value" style="color:#15803d">${podios}</div><div class="ek-sub">${podios?'¡Sigue así! 💪':'Tu próximo objetivo 🎯'}</div></div>`;
+  } else if(kpiBox){
     kpiBox.innerHTML = `
       <div class="evol-kpi"><div class="ek-label">Carreras en historial</div><div class="ek-value">${totalRaces}</div><div class="ek-sub">Últimos 30 días: ${racesLast30.length}${trendChip(racesDelta,' pruebas')}</div></div>
       ${team
@@ -16177,7 +16210,50 @@ async function renderInicio(){
   // ranking GLOBAL del histórico con un chip discreto invitando a configurar
   // el equipo. Si SÍ hay equipo, filtramos solo los suyos.
   const topBox = document.getElementById('inicioTopRiders');
-  if(topBox){
+  const topTitle = document.getElementById('inicioTopRidersTitle');
+  if(topTitle) topTitle.textContent = isCyclistView ? '📈 Tu rendimiento esta temporada' : '🏆 Top corredores de mi equipo';
+  if(topBox && isCyclistView){
+    // CICLISTA: solo SUS estadísticas (posiciones + tendencia). Clic → su ficha.
+    const fin = myResults.filter(r=>r.pos);
+    if(!myRiderKey || !myResults.length){
+      topBox.innerHTML = `<div class="inicio-empty">Todavía no tenemos resultados tuyos${myRiderName?` para "${escapeHtml(myRiderName)}"`:''} en el historial.<br>En cuanto corras una prueba clasificada, aquí verás tu rendimiento. 🚴</div>`;
+    } else {
+      const positions = fin.map(r=>r.pos);
+      const avg   = positions.length ? positions.reduce((s,p)=>s+p,0)/positions.length : null;
+      const best  = positions.length ? Math.min(...positions) : null;
+      const podios= positions.filter(p=>p<=3).length;
+      const wins  = positions.filter(p=>p===1).length;
+      const top10 = positions.filter(p=>p<=10).length;
+      // Tendencia: últimas 3 vs 3 anteriores (cronológico ASC → cola = recientes)
+      const recent3 = fin.slice(-3).map(r=>r.pos);
+      const prev3   = fin.slice(-6,-3).map(r=>r.pos);
+      let trendIc='➡️', trendTxt='estable', trendColor='#64748b';
+      if(recent3.length>=2 && prev3.length){
+        const ra=recent3.reduce((s,p)=>s+p,0)/recent3.length;
+        const pa=prev3.reduce((s,p)=>s+p,0)/prev3.length;
+        const d=pa-ra;
+        if(d>2){ trendIc='⬆️'; trendTxt='en forma'; trendColor='#15803d'; }
+        else if(d<-2){ trendIc='⬇️'; trendTxt='en bajón'; trendColor='#b91c1c'; }
+      }
+      const spark = sparkline(fin.slice(-10).map(r=>r.pos), '#2563eb');
+      const safeNm = escapeAttr(fin[fin.length-1].name||myRiderName);
+      const miniStat=(ic,val,lbl)=>`<div style="background:#f8fbff;border:1px solid #dbeafe;border-radius:9px;padding:8px 6px;text-align:center"><div style="font-size:18px;font-weight:900;color:#0b2f6b">${ic} ${val}</div><div style="font-size:10.5px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.3px">${lbl}</div></div>`;
+      topBox.innerHTML = `
+        <div class="inicio-rider-row" onclick="_inicioOpenRider('${safeNm}')" style="cursor:pointer;flex-direction:column;align-items:stretch;gap:10px;padding:12px" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="font-weight:800;color:#0b2f6b;font-size:15px">📊 ${avg!=null?avg.toFixed(1)+'º de media':'Sin clasificaciones'} ${spark}</div>
+            <div style="font-size:13px;font-weight:800;color:${trendColor}">${trendIc} ${trendTxt}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            ${miniStat('🏁', fin.length, 'carreras')}
+            ${miniStat('⭐', best!=null?best+'º':'—', 'mejor')}
+            ${miniStat('🏆', podios, 'podios')}
+            ${miniStat('🎯', top10, 'top 10')}
+          </div>
+          <div style="font-size:12px;color:#6b7280">${wins>0?`🥇 ${wins} victoria${wins>1?'s':''} · `:''}Pulsa para ver tu ficha completa ›</div>
+        </div>`;
+    }
+  } else if(topBox){
     if(!history.length){
       topBox.innerHTML = `<div class="inicio-empty">Carga al menos una prueba para empezar a ver estadísticas.</div>`;
     } else {
@@ -16528,6 +16604,19 @@ async function renderInicio(){
         const myTeamKeyRec = team ? (typeof teamKey === 'function' ? teamKey(team) : team.toLowerCase().trim()) : '';
         recBox.innerHTML = filtered5.map(race=>{
           const nRiders = (race.riders||[]).length;
+          // CICLISTA: badge con SU resultado en esta carrera (junto a la fecha).
+          let myBadge='';
+          if(isCyclistView && myRiderKey){
+            const mine=(race.riders||[]).find(r=> normalizeRiderName(r.name||'').toLowerCase()===myRiderKey);
+            if(mine && mine.pos>0){
+              const p=mine.pos, ic=p===1?'🥇':p===2?'🥈':p===3?'🥉':'🟢';
+              myBadge=`<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;margin-left:8px;white-space:nowrap">${ic} Tu puesto: ${p}º</span>`;
+            } else if(mine){
+              myBadge=`<span style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;margin-left:8px;white-space:nowrap">DNF</span>`;
+            } else {
+              myBadge=`<span style="color:#9ca3af;font-size:11px;font-weight:600;margin-left:8px;white-space:nowrap">No participaste</span>`;
+            }
+          }
           // Riders del equipo en esta carrera con posición válida
           let myRiders = [];
           let bestTeamResult = null;
@@ -16582,10 +16671,10 @@ async function renderInicio(){
             : '';
           return `<div class="inicio-race-row" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:9px 11px" onmouseenter="this.style.background='#eff6ff'" onmouseleave="this.style.background=''">
             <div style="flex:1;min-width:0" onclick="_inicioOpenRaceAnalysis('${escapeAttr(raceId)}','${escapeAttr(race.raceName||'')}')">
-              ${tacticHeader}
+              ${isCyclistView?'':tacticHeader}
               <div style="font-weight:700;color:#0b2f6b">${escapeHtml((race.raceName||'').slice(0,50))}</div>
-              <div style="font-size:12px;color:#6b7280">${race.raceDate||'—'}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''} · ${nRiders} corredores</div>
-              ${resultBadge}
+              <div style="font-size:12px;color:#6b7280">${race.raceDate||'—'}${myBadge}${race.localidad?' · 📍 '+escapeHtml(race.localidad):''} · ${nRiders} corredores</div>
+              ${isCyclistView?'':resultBadge}
             </div>
             <button onclick="_inicioOpenRaceAnalysis('${escapeAttr(raceId)}','${escapeAttr(race.raceName||'')}')" title="Analizar esta carrera" style="background:#dbeafe;color:#1d4ed8;border:0;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">📊 Analizar</button>
           </div>`;
