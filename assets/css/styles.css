@@ -621,6 +621,9 @@ th.th-edit{width:36px;min-width:36px;text-align:center}
 .evol-rivals-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
 @media(max-width:700px){.evol-rivals-grid{grid-template-columns:1fr}}
 @media(max-width:800px){.evol-kpis{grid-template-columns:repeat(2,1fr)}.evol-tabs-bar{flex-wrap:wrap}}
+/* Historial: en móvil la vista de Tabla rompe el layout → ocultar el interruptor
+   y forzar siempre Tarjetas (la lógica JS de _histRender también lo fuerza). */
+@media(max-width:768px){.hist-view-switch{display:none!important}}
 /* ===== FIN BLOQUE EVOLUCIÓN CSS ===== */
 
 /* ===== DARK MODE & UX POLISH CSS ===== */

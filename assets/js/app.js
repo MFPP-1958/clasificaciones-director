@@ -17198,8 +17198,11 @@ async function renderHistory(){
   // Solo aparece si hay planificadas que aún no se han convertido a
   // clasificación. Permite al director seleccionar la próxima carrera y
   // empezar a añadir los pre-inscritos directamente desde aquí.
+  // Los ciclistas solo ven el HISTÓRICO REAL: el panel de pruebas planificadas
+  // (sin inscritos) es una herramienta de planificación del director.
+  const _isCicHist = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA') || document.body.classList.contains('preview-ciclista');
   let plannedBlock = '';
-  if(_histPlanned && _histPlanned.length){
+  if(_histPlanned && _histPlanned.length && !_isCicHist){
     const todayIso = new Date().toISOString().slice(0,10);
     // Año global aplicado también a planificadas para no saturar
     const _plannedFiltered = _histPlanned.filter(p=>{
@@ -17302,8 +17305,8 @@ async function renderHistory(){
       </div>
       <!-- Fila 2 — Controles de presentación -->
       <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;font-size:12.5px">
-        <span style="color:#475569;font-weight:700">📐 Vista:</span>
-        <div style="display:inline-flex;border:1.5px solid #d0d5dd;border-radius:10px;overflow:hidden">
+        <span class="hist-view-switch" style="color:#475569;font-weight:700">📐 Vista:</span>
+        <div class="hist-view-switch" style="display:inline-flex;border:1.5px solid #d0d5dd;border-radius:10px;overflow:hidden">
           <button id="histViewCards" onclick="_histSetView('cards')" style="padding:7px 12px;border:none;background:#1f6feb;color:#fff;font-weight:800;font-size:12px;cursor:pointer">🃏 Tarjetas</button>
           <button id="histViewTable" onclick="_histSetView('table')" style="padding:7px 12px;border:none;background:#fff;color:#475569;font-weight:700;font-size:12px;cursor:pointer">📋 Tabla</button>
         </div>
@@ -17579,7 +17582,10 @@ function _histBuildTable(list){
 function _histRender(){
   const st = window._histState||{};
   if(!st.sorted) return;
-  const view = st.viewMode || 'cards';
+  // En móvil (<768px) la vista de TABLA rompe el diseño → forzamos tarjetas
+  // siempre, sin tocar la preferencia guardada del usuario para escritorio.
+  const _histMobile = typeof window!=='undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches;
+  const view = _histMobile ? 'cards' : (st.viewMode || 'cards');
   const groupMode = $('histGroup')?.value || 'none';
   const sortMode  = $('histSort')?.value  || 'date-desc';
   const filtered  = _histGetFiltered();
