@@ -400,17 +400,21 @@
       <button type="button" class="btn light admin-only" onclick="openLoadPanelForNew()" title="Vaciar el formulario para empezar otra prueba">➕ Prueba nueva (vaciar)</button>
     </div>
   </div>
+  <!-- Borrador recuperable (autosave en localStorage) -->
+  <div id="cargaDraftBanner" style="display:none"></div>
   <!-- Metadatos con etiquetas y campos obligatorios -->
   <div class="meta-labeled">
-    <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,.65fr) minmax(95px,.55fr) minmax(95px,.55fr) minmax(125px,.65fr) minmax(125px,.65fr) minmax(135px,.7fr);gap:10px">
+    <div class="meta-grid">
       <div class="meta-field">
         <div class="meta-field-lbl">Nombre de la carrera <span class="req">*</span></div>
-        <input id="raceName" class="req-field" placeholder="Ej: XXX Copa de España Ciclismo" />
+        <input id="raceName" class="req-field" placeholder="Ej: XXX Copa de España Ciclismo" oninput="_cargaValidateField('raceName')" onblur="_cargaValidateField('raceName')" />
+        <div id="raceNameErr" class="meta-err"></div>
       </div>
       <div class="meta-field">
         <div class="meta-field-lbl">Fecha <span class="req">*</span></div>
-        <input id="raceDate" class="req-field" placeholder="dd/mm/aaaa" />
+        <input id="raceDate" class="req-field" placeholder="dd/mm/aaaa" oninput="_cargaValidateField('raceDate')" onblur="_cargaValidateField('raceDate')" />
         <div id="raceDateHint" style="font-size:11px;margin-top:3px;min-height:14px"></div>
+        <div id="raceDateErr" class="meta-err"></div>
       </div>
       <div class="meta-field">
         <div class="meta-field-lbl">🕓 Hora inicio <span class="small" style="color:#94a3b8">(meteo)</span></div>
@@ -421,7 +425,7 @@
         <input id="raceKm" placeholder="Ej: 142,5" inputmode="decimal" />
       </div>
       <div class="meta-field">
-        <div class="meta-field-lbl">Velocidad media <span id="avgCalcBadge" style="display:none;background:#ecfdf3;color:#065f46;font-size:10px;padding:1px 6px;border-radius:999px;font-weight:800">⚡ calculada</span></div>
+        <div class="meta-field-lbl">Velocidad media <span id="avgCalcBadge" title="Calculada automáticamente: distancia / tiempo" style="display:none;background:#ecfdf3;color:#065f46;font-size:10px;padding:1px 6px;border-radius:999px;font-weight:800;cursor:help">⚡ calculada</span></div>
         <input id="raceAvg" placeholder="Ej: 38,4 km/h" />
       </div>
       <div class="meta-field">

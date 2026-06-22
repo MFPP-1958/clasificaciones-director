@@ -1848,3 +1848,14 @@ body.rv-mode-car #view-radiovuelta .rv-diario-tx{color:#000}
 /* Evitar scroll horizontal del documento en móvil/tablet (las tablas tienen su
    propio scroll interno con .table-wrap, así que esto es seguro) */
 @media(max-width:1024px){ html,body{overflow-x:hidden} }
+
+/* ════════════════════════════════════════════════════════════════════
+   Paso 1 (Datos): grid de metadatos responsive + validación de campos
+   ════════════════════════════════════════════════════════════════════ */
+.meta-grid{display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,.65fr) minmax(95px,.55fr) minmax(95px,.55fr) minmax(125px,.65fr) minmax(125px,.65fr) minmax(135px,.7fr);gap:10px}
+@media(max-width:1280px){ .meta-grid{grid-template-columns:repeat(4,1fr)} }   /* 7 → 4+3 */
+@media(max-width:760px){  .meta-grid{grid-template-columns:1fr 1fr} }
+@media(max-width:460px){  .meta-grid{grid-template-columns:1fr} }
+/* Campo obligatorio en error */
+.req-field.err{border-color:#dc2626!important;box-shadow:0 0 0 2px rgba(220,38,38,.15)!important}
+.meta-err{font-size:11px;color:#dc2626;font-weight:700;margin-top:3px;min-height:14px}

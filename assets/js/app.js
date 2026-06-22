@@ -36,6 +36,21 @@ function toggleLoadPanel(){
 // activo; los datos de los demás pasos NO se borran (siguen en el DOM).
 function _cargaTab(n){
   n=String(n);
+  // GUARDIA: no permitir avanzar del Paso 1 si faltan Nombre o Fecha (válidos).
+  // Solo bloquea HACIA DELANTE (1 → 2/3/4), nunca al retroceder.
+  try{
+    const cur=document.querySelector('#cargaTabs .carga-tab.active');
+    const curStep=cur?cur.dataset.step:'';
+    if(curStep==='1' && (n==='2'||n==='3'||n==='4') && typeof _cargaValidateDatos==='function'){
+      if(!_cargaValidateDatos()){
+        if(typeof showToast==='function') showToast('Rellena el nombre y la fecha de la prueba antes de continuar.','warn',3200);
+        try{ document.getElementById('raceName')?.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){}
+        return;   // no avanza
+      }
+    }
+  }catch(_){}
+  // Autosave del borrador al cambiar de pestaña.
+  try{ if(typeof _cargaDraftSave==='function') _cargaDraftSave(); }catch(_){}
   document.querySelectorAll('#view-carga .carga-step').forEach(el=>{ el.style.display = (el.dataset.step===n)?'':'none'; });
   document.querySelectorAll('#cargaTabs .carga-tab').forEach(b=>{ b.classList.toggle('active', b.dataset.step===n); });
   // Al entrar a Inscritos, alinear "Importar SOLO la categoría" con el filtro global
@@ -55,6 +70,80 @@ function _cargaTab(n){
 let _cargaDatosSaved=false;
 let _inscritosSaved=true;   // true = nada pendiente (al arrancar no hay inscritos nuevos)
 let _clasifSaved=true;      // true = clasificación guardada (o aún no hay ninguna nueva)
+
+// ── Paso 1 · Validación en tiempo real de Nombre y Fecha ──
+function _cargaValidateField(id){
+  const el=document.getElementById(id); if(!el) return true;
+  const v=(el.value||'').trim();
+  let ok=true, msg='';
+  if(id==='raceName'){ if(!v){ ok=false; msg='El nombre es obligatorio.'; } }
+  else if(id==='raceDate'){
+    if(!v){ ok=false; msg='La fecha es obligatoria.'; }
+    else if(typeof _parseSpanishDate==='function' && !_parseSpanishDate(v)){ ok=false; msg='Fecha no válida (usa DD/MM/AAAA).'; }
+  }
+  el.classList.toggle('err', !ok);
+  const errEl=document.getElementById(id==='raceName'?'raceNameErr':'raceDateErr');
+  if(errEl) errEl.textContent = ok?'':msg;
+  return ok;
+}
+function _cargaValidateDatos(){ const a=_cargaValidateField('raceName'); const b=_cargaValidateField('raceDate'); return a && b; }
+
+// ── Paso 1 · Autosave de borrador en localStorage + recuperación ──
+function _cargaDraftSave(){
+  try{
+    if(_cargaDatosSaved) return;   // ya guardado en BD → no es un borrador pendiente
+    const name=($('raceName')?.value||'').trim();
+    const date=($('raceDate')?.value||'').trim();
+    if(!name && !date) return;     // nada que guardar
+    const d={ raceName:name, raceDate:date,
+      raceStartTime:$('raceStartTime')?.value||'', raceKm:$('raceKm')?.value||'',
+      raceAvg:$('raceAvg')?.value||'', raceLocalidad:$('raceLocalidad')?.value||'',
+      raceCircuitType:$('raceCircuitType')?.value||'', raceCCAA:$('raceCCAA')?.value||'',
+      raceChallengeCV:!!($('raceChallengeCV')?.checked), at:Date.now() };
+    localStorage.setItem('carga_draft', JSON.stringify(d));
+  }catch(_){}
+}
+function _cargaDraftClear(){ try{ localStorage.removeItem('carga_draft'); }catch(_){} }
+function _cargaDraftRestore(){
+  try{
+    const banner=document.getElementById('cargaDraftBanner'); if(!banner) return;
+    if(($('raceName')?.value||'').trim()){ banner.style.display='none'; return; }   // ya hay datos
+    const raw=localStorage.getItem('carga_draft'); if(!raw){ banner.style.display='none'; return; }
+    const d=JSON.parse(raw); if(!d || (!d.raceName && !d.raceDate)){ banner.style.display='none'; return; }
+    const fecha=d.at?new Date(d.at).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+    banner.style.display='';
+    banner.innerHTML=`<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="font-size:13px;color:#92400e">📝 Tienes un <b>borrador guardado</b>${d.raceName?(' · '+escapeHtml(d.raceName)):''}${fecha?(' <span style="color:#b45309">('+escapeHtml(fecha)+')</span>'):''}. ¿Recuperarlo?</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn light" style="font-size:12px;padding:6px 12px" onclick="_cargaDraftApply()">↩️ Recuperar</button>
+        <button class="btn light" style="font-size:12px;padding:6px 12px;background:#fff;color:#b91c1c;border-color:#fca5a5" onclick="_cargaDraftDiscard()">🗑️ Descartar</button>
+      </div>
+    </div>`;
+  }catch(_){}
+}
+function _cargaDraftApply(){
+  try{
+    const raw=localStorage.getItem('carga_draft'); if(!raw) return;
+    const d=JSON.parse(raw);
+    const set=(id,v)=>{ const el=document.getElementById(id); if(el && v!=null) el.value=v; };
+    set('raceName',d.raceName); set('raceDate',d.raceDate); set('raceStartTime',d.raceStartTime);
+    set('raceKm',d.raceKm); set('raceAvg',d.raceAvg); set('raceLocalidad',d.raceLocalidad);
+    set('raceCircuitType',d.raceCircuitType); set('raceCCAA',d.raceCCAA);
+    const chk=document.getElementById('raceChallengeCV'); if(chk) chk.checked=!!d.raceChallengeCV;
+    _cargaDatosSaved=false;
+    const b=document.getElementById('cargaDraftBanner'); if(b) b.style.display='none';
+    try{ _cargaValidateDatos(); }catch(_){}
+    if(typeof showToast==='function') showToast('Borrador recuperado. Revisa y pulsa Guardar.','ok',2800);
+  }catch(_){}
+}
+function _cargaDraftDiscard(){ _cargaDraftClear(); const b=document.getElementById('cargaDraftBanner'); if(b){ b.style.display='none'; b.innerHTML=''; } }
+// Autosave periódico (cada 30 s) + recuperación al cargar.
+if(typeof document!=='undefined'){
+  try{ setInterval(()=>{ try{ _cargaDraftSave(); }catch(_){} }, 30000); }catch(_){}
+  const _bootDraft=()=>{ try{ _cargaDraftRestore(); }catch(_){} };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', ()=>setTimeout(_bootDraft,200));
+  else setTimeout(_bootDraft,200);
+}
 function _cargaMarkUnsaved(){ _cargaDatosSaved=false; }
 // Cablear los inputs de datos para detectar cambios sin guardar (una sola vez).
 function _cargaWireDirty(){
@@ -425,6 +514,7 @@ async function _cargaSaveDatos(btn){
     if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
     try{ if(typeof renderHistory==='function') await renderHistory(); }catch(_){}
     _cargaDatosSaved=true;   // marca que los datos del Paso 1 ya están guardados
+    try{ _cargaDraftClear(); }catch(_){}
     if(typeof showToast==='function') showToast('✅ Datos de la prueba guardados. Puedes seguir otro día y cargarla desde el histórico.','ok',4000);
     if(st){ st.textContent='✅ Guardado'; st.style.color='#15803d'; setTimeout(()=>{ if(st&&st.textContent==='✅ Guardado') st.textContent=''; },5000); }
   }catch(e){
@@ -456,6 +546,9 @@ function _collapseLoadPanel(){
 }
 
 function openLoadPanelForNew(){
+  // Prueba nueva = empezar de cero → descartar borrador y avisos de validación.
+  try{ _cargaDraftClear(); const b=document.getElementById('cargaDraftBanner'); if(b){ b.style.display='none'; b.innerHTML=''; } }catch(_){}
+  try{ ['raceName','raceDate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('err'); }); const e1=document.getElementById('raceNameErr'); if(e1) e1.textContent=''; const e2=document.getElementById('raceDateErr'); if(e2) e2.textContent=''; }catch(_){}
   // Limpiar todos los campos del formulario
   ['raceName','raceDate','raceKm','raceAvg','raceLocalidad','raceCircuitType','pastedText','pastedInscritos'].forEach(id=>{
     const el=$(id); if(el) el.value='';
@@ -1157,6 +1250,8 @@ function showView(viewId){
       if(bar) bar.classList.add('load-bar-open');
     }
   }
+  // Carga: ofrecer recuperar el borrador si el formulario está vacío.
+  if(viewId==='view-carga'){ setTimeout(()=>{ try{ if(typeof _cargaDraftRestore==='function') _cargaDraftRestore(); }catch(_){} }, 60); }
   setTimeout(()=>{
     try{
       if(riders && riders.length){
@@ -14281,7 +14376,7 @@ async function loadHistoryEntry(id){
   const hist = _cachedHistory || await _sbLoadHistory();
   const h = hist.find(x=>x.id===id);
   if(!h){alert('No se encontró la carrera seleccionada.');return;}
-  try{ _cargaDatosSaved=true; _inscritosSaved=true; _clasifSaved=true; }catch(_){}  // viene de la BD → ya guardado
+  try{ _cargaDatosSaved=true; _inscritosSaved=true; _clasifSaved=true; _cargaDraftClear&&_cargaDraftClear(); }catch(_){}  // viene de la BD → ya guardado
   riders = h.riders||[];
   const hasInscritosOnly = Array.isArray(h.inscritos) && h.inscritos.length > 0;
   // Pre-inscripción (sin clasificación todavía): permitimos cargar para editar inscritos
@@ -14792,6 +14887,7 @@ async function saveHistory(){
   await renderHistory();
   _clasifSaved=true;   // clasificación guardada en la BD
   _cargaLastSaveOk=true;   // éxito → el Paso 4 mostrará el panel de éxito
+  try{ _cargaDraftClear(); }catch(_){}
   // Opción A · Mejora #3: toast clickable con enlace al Historial (en vez de alert)
   if(typeof _cargaShowSaveToast === 'function'){
     _cargaShowSaveToast(accion);
@@ -25880,7 +25976,7 @@ function _fillFromPlanned(id){
   if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
   // Scroll al nombre
   setTimeout(()=>{ $('raceName')?.scrollIntoView({behavior:'smooth', block:'center'}); }, 50);
-  try{ _cargaDatosSaved=true; }catch(_){}  // viene de una planificada guardada
+  try{ _cargaDatosSaved=true; _cargaDraftClear&&_cargaDraftClear(); }catch(_){}  // viene de una planificada guardada
 }
 // ===== FIN TRAER DATOS DESDE PRUEBA PLANIFICADA =====
 
