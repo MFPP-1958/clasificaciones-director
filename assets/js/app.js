@@ -24483,6 +24483,7 @@ function toggleInscritosPanel(){
   const open = body.style.display !== 'none';
   body.style.display = open ? 'none' : 'block';
   if(chev) chev.textContent = open ? '▶' : '▼';
+  try{ _updateInscritosUI(); }catch(_){}   // refrescar el indicador del contador (plegado/abierto)
   // Al ABRIR el panel, poblar el selector de próximas pruebas (si está vacío).
   if(!open){
     const sel=document.getElementById('inscritosRaceSelect');
@@ -24987,12 +24988,36 @@ function _showInscritosEnrichmentReport(arr, source){
   } else {
     filterLine = `\n\n⚠️ Sin filtro de categoría: se han importado TODAS las categorías. Si solo quieres una (p.ej. Cadetes), selecciónala en el filtro principal y vuelve a procesar.`;
   }
+  // Revisión de posibles errores de parseo (para revisar ANTES de guardar)
+  const sinDorsal=arr.filter(i=>!(String(i.bib||'').trim())).length;
+  const sinEquipo=arr.filter(i=>!(String(i.team||'').trim())).length;
+  const sinCat=arr.filter(i=>!(String(i.cat||'').trim())).length;
+  let revisaLine='';
+  if(sinDorsal||sinEquipo||sinCat){
+    revisaLine = `\n\n👀 REVISA antes de guardar (posibles errores de lectura):`+
+      (sinDorsal?`\n   • ${sinDorsal} sin dorsal`:'')+
+      (sinEquipo?`\n   • ${sinEquipo} sin equipo`:'')+
+      (sinCat?`\n   • ${sinCat} sin categoría`:'')+
+      `\n   Compruébalos en la lista de abajo; puedes corregir o quitar (×) antes de Guardar.`;
+  } else {
+    revisaLine = `\n\n👀 Revisa la lista de abajo y, si todo está correcto, pulsa "Guardar inscritos".`;
+  }
   const msg = `✅ ${arr.length} inscritos cargados desde ${source}.\n\n`+
               `🔍 Enriquecidos desde el histórico del año: ${enriched}\n`+
               `🆕 Sin coincidencia (probablemente nuevos corredores): ${newRiders}\n`+
               `🏷️ Con dorsal asignado: ${withBib} / ${arr.length}`+
-              filterLine;
+              filterLine + revisaLine;
   alert(msg);
+}
+// Contador informativo del textarea de inscritos (sin límite que bloquee).
+function _inscPastedCounter(){
+  const ta=document.getElementById('pastedInscritos'); const out=document.getElementById('pastedInscritosCount');
+  if(!ta || !out) return;
+  const t=ta.value||''; const chars=t.length; const lines=t.trim()?t.trim().split(/\r?\n/).length:0;
+  let msg=`${lines} línea${lines!==1?'s':''} · ${chars.toLocaleString('es-ES')} caracteres`;
+  if(chars>60000){ out.style.color='#b45309'; msg+=' · ⚠️ texto muy largo: comprueba que no hayas pegado contenido de más'; }
+  else { out.style.color='#94a3b8'; msg+=' · admite listas largas (180+ corredores)'; }
+  out.textContent=msg;
 }
 
 async function handleFileInscritos(file){
@@ -25080,7 +25105,13 @@ function _updateInscritosUI(){
   const btnShow = document.getElementById('btnShowInscritos');
   const listWrap = document.getElementById('inscritosListWrap');
   const n = inscritos.length;
-  if(counter) counter.textContent = n ? `${n} inscritos cargados` : '0 inscritos cargados';
+  if(counter){
+    if(n){
+      const collapsed = (document.getElementById('inscritosBody')?.style.display==='none');
+      counter.textContent = collapsed ? `📋 ${n} inscritos · pulsa para ver` : `📋 ${n} inscritos cargados`;
+      counter.style.color='#0369a1'; counter.style.fontWeight='800';
+    } else { counter.textContent='0 inscritos cargados'; counter.style.color=''; counter.style.fontWeight=''; }
+  }
   if(btnClear) btnClear.style.display = n ? 'inline-block' : 'none';
   const btnSave = document.getElementById('btnSaveInscritos');
   if(btnSave) btnSave.style.display = n ? 'inline-block' : 'none';
