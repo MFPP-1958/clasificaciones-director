@@ -14390,6 +14390,11 @@ async function loadHistoryEntry(id, opts){
   const hist = _cachedHistory || await _sbLoadHistory();
   const h = hist.find(x=>x.id===id);
   if(!h){alert('No se encontró la carrera seleccionada.');return;}
+  // ¿Venimos del Historial? Si es así, guardamos sus filtros locales para
+  // restaurarlos al volver e indicamos que hay que inyectar el botón "Volver".
+  const _fromHist = !!document.getElementById('view-historial')?.classList.contains('active');
+  window._histCameFromHistorial = _fromHist;
+  if(_fromHist){ try{ window._histSavedFilters = _histSnapshotFilters(); }catch(_){} }
   try{ _cargaDatosSaved=true; _inscritosSaved=true; _clasifSaved=true; _cargaDraftClear&&_cargaDraftClear(); }catch(_){}  // viene de la BD → ya guardado
   riders = h.riders||[];
   const hasInscritosOnly = Array.isArray(h.inscritos) && h.inscritos.length > 0;
@@ -14431,6 +14436,7 @@ async function loadHistoryEntry(id, opts){
       selectedCompare = [];
       try{ populateFilters(); applyFilters(); }catch(_){}
       showView('view-tabla');
+      try{ _histInjectBackButton(); }catch(_){}
       closeHistoryModal();
       return;
     }
@@ -14467,8 +14473,42 @@ async function loadHistoryEntry(id, opts){
   if(_silent){ closeHistoryModal(); return; }   // carga silenciosa: datos listos, sin cambiar de vista
   setTimeout(_collapseLoadPanel, 80);
   showView('view-tabla');
+  try{ _histInjectBackButton(); }catch(_){}
   showSuccessBanner();
   closeHistoryModal();
+}
+
+// ── Navegación Historial → detalle de prueba ───────────────────────────────
+// Snapshot de los filtros LOCALES del Historial (no toca el filtro global
+// superior). Se guarda al abrir una prueba para poder restaurarlo al volver.
+function _histSnapshotFilters(){
+  const g=(id)=>{ const el=document.getElementById(id); if(!el) return undefined; return el.type==='checkbox'?el.checked:el.value; };
+  return {
+    search:g('histSearch'), rider:g('histRiderFilter'), year:g('histYearFilter'),
+    type:g('histTypeFilter'), cat:g('histCatFilter'), favs:g('histOnlyFavs'),
+    preinsc:g('histOnlyPreInsc'), group:g('histGroup'), sort:g('histSort'),
+    viewMode:(window._histState&&window._histState.viewMode)||'cards',
+    scrollY: (typeof window!=='undefined' && window.scrollY) || 0
+  };
+}
+// Inyecta (o retira) el botón grande "⬅ Volver al Historial" en el detalle.
+function _histInjectBackButton(){
+  const view=document.getElementById('view-tabla'); if(!view) return;
+  let banner=document.getElementById('histBackBanner');
+  if(!window._histCameFromHistorial){ if(banner) banner.remove(); return; }
+  if(!banner){
+    banner=document.createElement('div');
+    banner.id='histBackBanner';
+    banner.style.cssText='margin:0 0 12px';
+    banner.innerHTML=`<button onclick="_histReturnToHistorial()" style="display:inline-flex;align-items:center;gap:8px;background:#0b2f6b;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:800;font-size:14px;cursor:pointer;min-height:44px;box-shadow:0 2px 8px rgba(11,47,107,.25)">⬅ Volver al Historial</button>`;
+    view.insertBefore(banner, view.firstChild);
+  }
+}
+// Vuelve al Historial; renderHistory restaurará los filtros guardados.
+function _histReturnToHistorial(){
+  const banner=document.getElementById('histBackBanner'); if(banner) banner.remove();
+  window._histCameFromHistorial=false;
+  showView('view-historial');
 }
 // ===== FIN BLOQUE 1: MODAL =====
 
@@ -17112,12 +17152,10 @@ async function renderHistory(){
             ${insBadge}
             ${myInPodium?`<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px">🏆 Podio del equipo</span>`:''}
           </div>
-          <div style="font-size:12px;color:#667085;margin-top:3px">
-            📅 ${escapeHtml(h.raceDate||'Sin fecha')}
-            ${h.localidad?` · 📍 ${escapeHtml(h.localidad)}`:''}
-            ${h.km?` · 📏 ${_fmtKm(h.km)}`:''}
-            ${h.avg?` · ⚡ ${h.avg}`:''}
-            · 👥 ${riders.length} corredores
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">
+            <span style="display:inline-flex;align-items:center;gap:4px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;padding:3px 9px;font-size:12px;font-weight:800">📅 ${escapeHtml(h.raceDate||'Sin fecha')}</span>
+            ${h.km?`<span style="display:inline-flex;align-items:center;gap:4px;background:#ecfdf5;color:#15803d;border:1px solid #a7f3d0;border-radius:8px;padding:3px 9px;font-size:12px;font-weight:800">📏 ${_fmtKm(h.km)}</span>`:''}
+            <span style="font-size:12px;color:#667085">${h.localidad?`📍 ${escapeHtml(h.localidad)} · `:''}${h.avg?`⚡ ${h.avg} · `:''}👥 ${riders.length} corredores</span>
           </div>
           ${isMyTeamIn?`<div style="margin-top:6px"><span style="background:#eff8ff;color:#0b2f6b;font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px">🔵 ${escapeHtml(myTeam)}: ${myRiders.length} corredor${myRiders.length!==1?'es':''}</span></div>`:''}
         </div>
@@ -17379,13 +17417,28 @@ async function renderHistory(){
     const yEl = $('histYearFilter'); if(yEl && [...yEl.options].some(o=>o.value===gfYear)) yEl.value = gfYear;
     const yEl2= $('histCiclistaYear'); if(yEl2 && [...yEl2.options].some(o=>o.value===gfYear)) yEl2.value = gfYear;
   }
+  // Si volvemos del detalle de una prueba, restaurar los filtros LOCALES que el
+  // usuario tenía aplicados (snapshot tomado al abrir la prueba). No afecta al
+  // filtro global superior, que se gestiona aparte.
+  const _savedHF = window._histSavedFilters;
+  if(_savedHF){
+    const setV=(id,v)=>{ const el=$(id); if(el!=null && v!=null){ if(el.type==='checkbox') el.checked=!!v; else el.value=v; } };
+    setV('histSearch',_savedHF.search); setV('histRiderFilter',_savedHF.rider);
+    setV('histYearFilter',_savedHF.year); setV('histTypeFilter',_savedHF.type);
+    setV('histCatFilter',_savedHF.cat); setV('histOnlyFavs',_savedHF.favs);
+    setV('histOnlyPreInsc',_savedHF.preinsc); setV('histGroup',_savedHF.group); setV('histSort',_savedHF.sort);
+  }
   // Guardar estado para el renderizado dinámico (vista/orden/grupo/export)
   window._histState = {
     sorted,                       // lista filtrada por filtros globales
     buildCards,                   // función que crea HTML de un array de pruebas
     myTeam,
-    viewMode: (window._histState?.viewMode) || 'cards',  // 'cards' | 'table'
+    viewMode: (_savedHF && _savedHF.viewMode) || (window._histState?.viewMode) || 'cards',  // 'cards' | 'table'
   };
+  if(_savedHF){
+    window._histSavedFilters = null;
+    if(_savedHF.scrollY!=null){ setTimeout(()=>{ try{ window.scrollTo(0,_savedHF.scrollY); }catch(_){} }, 80); }
+  }
   // Aplicar el filtro inicial (también dispara la nueva vista/orden/grupo)
   filterHistoryCards();
   // Ejecutar búsqueda inicial (con mi equipo + mejor ciclista ya prefijados)
@@ -42682,6 +42735,7 @@ async function _routeRenderContent(){
         <button class="route-btn route-btn-danger" onclick="_routeDeleteRoute()">🗑️ Quitar recorrido</button>
       </div>
       <div class="route-map-wrap">
+        <button class="route-map-close" onclick="_routeCloseModal()" aria-label="Cerrar visor del recorrido" title="Cerrar">✕</button>
         <div id="routeMap" class="route-map"></div>
       </div>
       ${(r.has_altitude && course && course.points && course.points.some(p=>p.ele!=null)) ? '<div class="route-profile-wrap"><canvas id="routeProfile" class="route-profile"></canvas></div>' : '<div class="route-no-altitude">⚠️ Este archivo no trae altimetría por punto. Sube otro (Wahoo, GPX del organizador…) si quieres ver el perfil altimétrico.</div>'}
@@ -42983,10 +43037,10 @@ function _routeInjectStyles(){
   st.textContent = `
     .route-overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px}
     .route-modal{background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
-    .route-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid #e5e7eb}
+    .route-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 18px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;background:#fff;z-index:5;border-radius:14px 14px 0 0}
     .route-header h2{margin:0;font-size:18px;color:#0b2f6b}
     .route-meta{font-size:12px;color:#475569;margin-top:3px}
-    .route-close{background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:4px 10px;font-weight:700;cursor:pointer;font-size:14px}
+    .route-close{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;background:#fff;color:#b91c1c;border:1.5px solid #fecaca;border-radius:10px;font-weight:800;cursor:pointer;font-size:18px;flex-shrink:0}
     .route-content{padding:16px 20px;min-height:200px}
     .route-loading{padding:50px 20px;text-align:center;color:#6b7280;font-size:14px}
     .route-empty{text-align:center;padding:40px 20px}
@@ -43005,8 +43059,10 @@ function _routeInjectStyles(){
     .rm-v{font-size:20px;font-weight:900;color:#0b2f6b;line-height:1.1}
     .rm-l{font-size:10px;color:#6b7280;margin-top:3px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
     .route-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .route-map-wrap{background:#f3f4f6;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb}
+    .route-map-wrap{position:relative;background:#f3f4f6;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb}
     .route-map{height:360px;width:100%}
+    .route-map-close{position:absolute;top:10px;right:10px;z-index:1200;width:44px;height:44px;border:none;border-radius:10px;background:rgba(15,23,42,.85);color:#fff;font-size:20px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+    .route-map-close:hover{background:#b91c1c}
     .route-profile-wrap{background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:8px;height:200px}
     .route-profile{width:100%;height:100%}
     .route-no-altitude{background:#fef9c3;border:1px solid #fcd34d;color:#92400e;font-size:12px;padding:10px 14px;border-radius:10px}
