@@ -1054,7 +1054,7 @@ function _gfPopulateRegions(){
   }
   const sorted = [...regions].filter(Boolean).sort((a,b)=>a.localeCompare(b));
   const currentValue = _globalFilters.region || '';
-  sel.innerHTML = '<option value="">Todas las CCAA</option>' + sorted.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  sel.innerHTML = '<option value="">Todas las regiones</option>' + sorted.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
   if([...sel.options].some(o=>o.value===currentValue)) sel.value = currentValue;
 }
 
@@ -8472,12 +8472,30 @@ const _REGION_MAP_GLOBAL={
   'pv':'País Vasco','pais vasco':'País Vasco','euskadi':'País Vasco','euskal herria':'País Vasco',
   'ceu':'Ceuta','mel':'Melilla'
 };
+// Normalización de PAÍSES (el filtro "Región / País" mezcla CCAA españolas con
+// países internacionales). Las claves van en minúsculas y SIN tildes (igual que
+// las normaliza canonicalRegion); el valor es la forma canónica bien escrita.
+// Solo se pintan en el <select> los países que aparezcan realmente en los datos.
+const _REGION_COUNTRY_NORM={
+  'belgica':'Bélgica','belgium':'Bélgica',
+  'paises bajos':'Países Bajos','holanda':'Países Bajos','netherlands':'Países Bajos','nederland':'Países Bajos',
+  'francia':'Francia','france':'Francia',
+  'portugal':'Portugal',
+  'italia':'Italia','italy':'Italia',
+  'alemania':'Alemania','germany':'Alemania','deutschland':'Alemania',
+  'andorra':'Andorra',
+  'reino unido':'Reino Unido','uk':'Reino Unido','gran bretana':'Reino Unido','inglaterra':'Reino Unido',
+  'suiza':'Suiza','switzerland':'Suiza',
+  'luxemburgo':'Luxemburgo','austria':'Austria','dinamarca':'Dinamarca','irlanda':'Irlanda',
+  'polonia':'Polonia','eslovenia':'Eslovenia','noruega':'Noruega','suecia':'Suecia',
+  'estados unidos':'Estados Unidos','colombia':'Colombia','marruecos':'Marruecos'
+};
 function canonicalRegion(r){
   if(!r) return '';
   const k=String(r).toLowerCase().trim()
     .replace(/\./g,'').replace(/\s+/g,' ')
     .normalize('NFD').replace(/[̀-ͯ]/g,'');
-  return _REGION_MAP_GLOBAL[k] || String(r).trim();
+  return _REGION_MAP_GLOBAL[k] || _REGION_COUNTRY_NORM[k] || String(r).trim();
 }
 function teamKey(name){
   return (name||'').trim().toLowerCase()
@@ -9892,7 +9910,7 @@ function populateFilters(){
       cats.map(c=>`<div class="chip ${selectedCatChips.has(c)?'active':''}" onclick="selectCatChip('${escapeHtml(c)}')">${escapeHtml(c)}</div>`).join('');
   }
 
-  if($('regionFilter'))$('regionFilter').innerHTML='<option value="">Todas las CCAA</option>'+regions.map(r=>`<option>${escapeHtml(r)}</option>`).join('');
+  if($('regionFilter'))$('regionFilter').innerHTML='<option value="">Todas las regiones</option>'+regions.map(r=>`<option>${escapeHtml(r)}</option>`).join('');
   
   // Desplegable de equipos del buscador de Análisis Individual
   // Incluye equipos de la carrera actual + equipos del histórico (inscritos o clasificados),
@@ -16971,8 +16989,9 @@ async function renderHistory(){
   // ── HEATMAP de actividad por mes (K) ──
   // Cuenta cuántas pruebas hay cada mes. Usamos las 12 columnas (Ene-Dic).
   // Si hay varios años, se agregan TODOS los años filtrados (en la misma fila).
-  const _mesesAbbr = ['E','F','M','A','M','J','J','A','S','O','N','D'];
+  const _mesesAbbr = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const _mesesFull = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const _mesActualIdx = new Date().getMonth();   // resaltar el mes en curso
   const monthCounts = new Array(12).fill(0);
   sorted.forEach(h=>{
     const iso = _parseSpanishDate(h.raceDate)||'';
@@ -16985,8 +17004,9 @@ async function renderHistory(){
     const fg = intensity>0.5 ? '#fff' : '#0b2f6b';
     const cursor = n>0 ? 'cursor:pointer;' : '';
     const onclick = n>0 ? `onclick="_histShowMonthRaces(${i})"` : '';
-    return `<div ${onclick} title="${_mesesFull[i]}: ${n} prueba${n!==1?'s':''}${n>0?' (clic para ver lista)':''}" style="flex:1;min-width:0;background:${bg};color:${fg};border-radius:6px;padding:8px 2px;text-align:center;font-weight:800;${cursor}transition:transform .12s">
-      <div style="font-size:11px;opacity:.85">${_mesesAbbr[i]}</div>
+    const esActual = i===_mesActualIdx;
+    return `<div ${onclick} class="hist-mes-cell${esActual?' mes-actual':''}" title="${_mesesFull[i]}: ${n} prueba${n!==1?'s':''}${esActual?' · mes actual':''}${n>0?' (clic para ver lista)':''}" style="flex:1;min-width:0;background:${bg};color:${fg};border-radius:6px;padding:8px 2px;text-align:center;font-weight:800;${cursor}transition:transform .12s">
+      <div style="font-size:10.5px;opacity:.85">${_mesesAbbr[i]}</div>
       <div style="font-size:15px;margin-top:2px">${n||''}</div>
     </div>`;
   }).join('');
@@ -21710,7 +21730,7 @@ async function exportPowerRankingImg(){
   try{
     // ── Recopilar valores de filtros activos ──────────────────────────────
     const year    = $('prYearFilter')?.value  || 'Todos los años';
-    const region  = $('prRegionFilter')?.value || 'Todas las CCAA';
+    const region  = $('prRegionFilter')?.value || 'Todas las regiones';
     const genderRaw = $('prGenderFilter')?.value || '';
     const genderLabel = genderRaw==='M' ? 'Masculino' : genderRaw==='F' ? 'Femenino' : 'Todos los géneros';
     const selCatsArr = [..._prSelectedCats];
@@ -21910,7 +21930,7 @@ function _initTrendFilters(history){
   const rSel = $('trendRegionFilter');
   if(rSel){
     const hasVLC = regions.includes('VLC');
-    rSel.innerHTML = '<option value="">Todas las CCAA</option>' +
+    rSel.innerHTML = '<option value="">Todas las regiones</option>' +
       regions.map(r=>`<option value="${r}"${(!rSel.value && r==='VLC' && hasVLC)?' selected':''}>${r}</option>`).join('');
   }
   // Cats pills
@@ -23208,7 +23228,7 @@ function _initSelFilters(history){
     const hasRealVlc = regions.some(_isVlcRegion);
     let opts = regions;
     if(!hasRealVlc) opts = ['Comunitat Valenciana', ...regions];
-    rSel.innerHTML = '<option value="">Todas las CCAA</option>' +
+    rSel.innerHTML = '<option value="">Todas las regiones</option>' +
       opts.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
     // Seleccionar siempre VLC por defecto
     const vlcOpt = [...rSel.options].find(o=>_isVlcRegion(o.value));
@@ -23237,7 +23257,7 @@ function _initSelFilters(history){
 
   const trSel = $('selTeamRegionFilter');
   if(trSel && trSel.options.length<=1){
-    trSel.innerHTML = '<option value="">Todas las CCAA</option>' +
+    trSel.innerHTML = '<option value="">Todas las regiones</option>' +
       regions.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
     // Por defecto "Todas" en Mi Equipo (el equipo puede tener corredores de varias CCAA)
   }

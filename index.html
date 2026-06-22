@@ -187,9 +187,9 @@
         </select>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
-        <label style="font-size:12px;font-weight:700;color:#475569">🗺️ CCAA:</label>
+        <label style="font-size:12px;font-weight:700;color:#475569">🗺️ Región / País:</label>
         <select id="gfRegion" onchange="_gfOnChange()" style="border:1.5px solid #93c5fd;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;background:#fff;color:#0b2f6b;min-width:170px">
-          <option value="">Todas las CCAA</option>
+          <option value="">Todas las regiones</option>
         </select>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
@@ -662,7 +662,7 @@
       <span id="hmIcon">⚪</span> Modo histórico
     </button>
     <select id="teamFilter" onchange="_onTeamFilterChange()"><option value="">Todos los equipos</option></select>
-    <select id="regionFilter"><option value="">Todas las CCAA</option></select>
+    <select id="regionFilter"><option value="">Todas las regiones</option></select>
     <select id="topFilter"><option value="">Toda la clasificación</option><option value="10">Top 10</option><option value="20">Top 20</option><option value="50">Top 50</option></select>
     <select id="topCatFilter"><option value="">Toda la cat.</option><option value="3">Top 3 por cat.</option><option value="5">Top 5 por cat.</option><option value="10">Top 10 por cat.</option></select>
   </div>
@@ -1265,7 +1265,7 @@
             </select>
           </div>
           <div class="pr-filter-group">
-            <label>🗺️ CCAA:</label>
+            <label>🗺️ Región / País:</label>
             <select id="prRegionFilter" class="pr-select" onchange="renderPowerRanking()">
               <option value="">Todas</option>
             </select>
@@ -1343,9 +1343,9 @@
             </select>
           </div>
           <div class="trend-filter-group">
-            <label>🗺️ CCAA:</label>
+            <label>🗺️ Región / País:</label>
             <select id="trendRegionFilter" class="trend-select" onchange="renderTendencias()">
-              <option value="">Todas las CCAA</option>
+              <option value="">Todas las regiones</option>
             </select>
           </div>
           <div class="trend-filter-group">
@@ -1491,7 +1491,7 @@
               </select>
             </div>
             <div class="sel-filter-group">
-              <label>🗺️ CCAA:</label>
+              <label>🗺️ Región / País:</label>
               <select id="selRegionFilter" class="sel-select" onchange="renderSeleccion()">
                 <option value="">Todas</option>
               </select>
@@ -1525,7 +1525,7 @@
               </select>
             </div>
             <div class="sel-filter-group">
-              <label>🗺️ CCAA:</label>
+              <label>🗺️ Región / País:</label>
               <select id="selTeamRegionFilter" class="sel-select" onchange="renderSeleccion()">
                 <option value="">Todas</option>
               </select>

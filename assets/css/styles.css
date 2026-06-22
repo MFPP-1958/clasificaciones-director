@@ -624,6 +624,9 @@ th.th-edit{width:36px;min-width:36px;text-align:center}
 /* Historial: en móvil la vista de Tabla rompe el layout → ocultar el interruptor
    y forzar siempre Tarjetas (la lógica JS de _histRender también lo fuerza). */
 @media(max-width:768px){.hist-view-switch{display:none!important}}
+/* Mini-calendario del Historial: resaltar el mes en curso para orientar al usuario. */
+.hist-mes-cell.mes-actual{outline:2px solid #f59e0b;outline-offset:1px;border-radius:6px;box-shadow:0 0 0 3px rgba(245,158,11,.18)}
+.hist-mes-cell.mes-actual > div:first-child{color:#b45309;opacity:1;font-weight:900}
 /* ===== FIN BLOQUE EVOLUCIÓN CSS ===== */
 
 /* ===== DARK MODE & UX POLISH CSS ===== */
