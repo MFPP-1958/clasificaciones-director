@@ -25238,10 +25238,34 @@ function _inscritosOnFilter(val){
 function _inscritoRemove(idx){
   if(!Number.isInteger(idx) || idx<0 || idx>=inscritos.length) return;
   const r = inscritos[idx];
-  if(!confirm(`¿Quitar a "${r.name||'?'}" de la lista de inscritos?\n\nSe eliminará solo de esta lista, no del histórico.`)) return;
+  if(!confirm(`¿Quitar a "${r.name||'?'}" de la lista de inscritos?\n\nSe quitará de la lista Y de los cálculos del resto de la app (Simulador, etc.).`)) return;
   inscritos.splice(idx,1);
   _updateInscritosUI();
-  _inscritosSaved=false;   // se ha modificado la lista → pendiente de guardar
+  _inscritosSaved=false;
+  _inscritosPersistRemoval();   // propagar a la prueba guardada + invalidar cachés
+}
+// Tras editar (p. ej. quitar) un inscrito, actualizar la lista en la PRUEBA YA
+// GUARDADA para que el cambio se refleje en el resto de la app (simulador…).
+// Si la prueba aún no está guardada en la BD, no hace nada (queda en memoria).
+async function _inscritosPersistRemoval(){
+  try{
+    if(!_sb) return;
+    const name=($('raceName')?.value||'').trim();
+    const iso=(typeof _parseSpanishDate==='function')?_parseSpanishDate(($('raceDate')?.value||'').trim()):'';
+    if(!name || !iso) return;
+    const {data}=await _sb.from('races').select('id,name,notes').eq('date',iso);
+    const row=(data||[]).find(rr=>_sameRaceName(rr.name,name));
+    if(!row) return;   // no está guardada → nada que actualizar (queda en memoria hasta que guardes)
+    let extra={}; try{ extra=JSON.parse(row.notes||'{}'); }catch(_){ extra={}; }
+    extra.inscritos = Array.isArray(inscritos)?inscritos.slice():[];
+    const {error}=await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',row.id);
+    if(error) return;
+    _cachedHistory=null;   // forzar recarga del histórico
+    if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
+    try{ _simCurrentData=null; }catch(_){}   // el simulador reconstruirá sin el eliminado
+    _inscritosSaved=true;
+    if(typeof showToast==='function') showToast('Inscrito eliminado y actualizado en la prueba guardada.','ok',2800);
+  }catch(_){}
 }
 
 // Modal con lista de inscritos y estado (Acabó / DNF)
