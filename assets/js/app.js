@@ -15349,7 +15349,7 @@ function _inicioRenderQuickActions(){
     {id:'view-carga',          ic:'📋', lbl:'Añadir lista de inscritos', handler:'_inicioGoInscritos()'},
     {id:'view-carga',          ic:'📥', lbl:'Cargar clasificación'},
     {id:'view-disponibilidad', ic:'🚴', lbl:'Disponibilidad'},
-    {id:'view-fccv-docs',      ic:'🏷️', lbl:'Inscribir FCCV'},
+    {id:'view-fccv-docs',      ic:'🏷️', lbl:'Crear documentos FCCV'},
     {id:'view-simulador',      ic:'🔮', lbl:'Simulador'},
     {id:'view-radiovuelta',    ic:'📻', lbl:'Radio Vuelta'}
   ].filter(a=>can(a.id));
