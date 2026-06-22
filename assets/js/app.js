@@ -15344,6 +15344,16 @@ function _inicioRenderQuickActions(){
   if(!wrap||!panel) return;
   const perms=(typeof _rbacPerms!=='undefined' && _rbacPerms && _rbacPerms.size) ? _rbacPerms : null;
   const can=(id)=> !perms || perms.has(id);
+  // CICLISTA (o vista previa como ciclista): la fila de acciones de gestión le
+  // queda casi vacía (no tiene permisos), así que la sustituimos por un único
+  // botón grande que le lleva directo a su próxima carrera. El staff/beta/super
+  // mantiene la fila completa.
+  const isCic = (typeof _rbacUser!=='undefined' && _rbacUser && _rbacUser.role==='CICLISTA') || document.body.classList.contains('preview-ciclista');
+  if(isCic){
+    panel.style.display='';
+    wrap.innerHTML=`<button onclick="_inicioTuProximaCarrera()" style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:14px;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border:none;border-radius:14px;padding:22px 16px;cursor:pointer;font-weight:900;font-size:18px;width:100%;box-shadow:0 4px 14px rgba(37,99,235,.35)"><span style="font-size:32px">🏁</span>Tu próxima carrera</button>`;
+    return;
+  }
   const actions=[
     {id:'view-historial',      ic:'📁', lbl:'Historial'},
     {id:'view-carga',          ic:'📋', lbl:'Añadir lista de inscritos', handler:'_inicioGoInscritos()'},
@@ -15359,6 +15369,20 @@ function _inicioRenderQuickActions(){
     const onclick = a.handler ? a.handler : `showView('${a.id}')`;
     return `<button onclick="${onclick}" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border:1.5px solid #dbeafe;border-radius:12px;padding:16px 10px;cursor:pointer;font-weight:800;color:#0b2f6b;font-size:13px;transition:background .12s" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#fff'"><span style="font-size:26px">${a.ic}</span>${a.lbl}</button>`;
   }).join('');
+}
+
+// CICLISTA: el botón grande "Tu próxima carrera" lleva al bloque de próxima
+// prueba del propio Inicio (#inicioLastRace) y lo resalta brevemente.
+function _inicioTuProximaCarrera(){
+  try{
+    const box=document.getElementById('inicioLastRace');
+    if(!box) return;
+    box.scrollIntoView({behavior:'smooth',block:'center'});
+    const old=box.style.boxShadow;
+    box.style.transition='box-shadow .3s';
+    box.style.boxShadow='0 0 0 3px #2563eb';
+    setTimeout(()=>{ box.style.boxShadow=old||''; },1700);
+  }catch(_){}
 }
 
 // Accesos directos COMPLETOS en Inicio: se generan desde ALL_VIEWS, agrupados
@@ -15572,12 +15596,19 @@ async function renderInicio(){
   if(elHT) elHT.textContent = heroTitle.replace(/<[^>]+>/g,'');
   if(elHS) elHS.innerHTML = heroSub;
   if(elHC){
+    // Chip de rol legible para humanos (no "SUPERADMIN" en crudo).
+    const roleMap = {SUPERADMIN:'Director', ADMIN:'Director', DIRECTOR:'Director', CICLISTA:'Ciclista', BETA_TESTER:'Beta tester', LECTOR:'Beta tester'};
+    const friendlyRole = roleMap[role] || role;
+    const isCic = role === 'CICLISTA' || document.body.classList.contains('preview-ciclista');
     const chips = [
-      `<span class="inicio-chip">🎫 ${escapeHtml(role)}</span>`,
-      sbOk ? `<span class="inicio-chip" style="background:rgba(16,185,129,.25)">🟢 Conectado a Supabase</span>`
-           : `<span class="inicio-chip" style="background:rgba(239,68,68,.4)">🔴 Sin conexión</span>`,
-      `<span class="inicio-chip">📅 ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'})}</span>`
+      `<span class="inicio-chip">🎫 ${escapeHtml(friendlyRole)} · ${escapeHtml(displayName)}</span>`
     ];
+    // El chip técnico "Conectado a Supabase" no le aporta nada al ciclista; se oculta.
+    if(!isCic){
+      chips.push(sbOk ? `<span class="inicio-chip" style="background:rgba(16,185,129,.25)">🟢 Conectado a Supabase</span>`
+                      : `<span class="inicio-chip" style="background:rgba(239,68,68,.4)">🔴 Sin conexión</span>`);
+    }
+    chips.push(`<span class="inicio-chip">📅 ${new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'})}</span>`);
     elHC.innerHTML = chips.join('');
   }
 
