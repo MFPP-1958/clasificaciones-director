@@ -16337,7 +16337,15 @@ async function renderInicio(){
   // ─── 6. Pulso del equipo (sparkline) — protegido con try/catch ──────
   try{
     const pulsoBox = document.getElementById('inicioPulso');
-    if(pulsoBox){
+    if(pulsoBox && !team && !isCyclistView){
+      // Director SIN equipo configurado → estado vacío con acceso directo a configurar.
+      pulsoBox.innerHTML = `<div class="inicio-empty" style="text-align:center;padding:22px 14px">
+        <div style="font-size:40px;color:#cbd5e1;margin-bottom:8px">📉</div>
+        <div style="font-weight:700;color:#374151">Configura tu equipo para ver la evolución</div>
+        <div style="font-size:12px;margin-top:4px;color:#6b7280">El pulso muestra cómo evoluciona el rendimiento de tu equipo carrera a carrera.</div>
+        <button onclick="document.getElementById('gfMyTeam')?.focus()" style="margin-top:12px;background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;font-size:12px;cursor:pointer">⚙️ Configurar mi equipo</button>
+      </div>`;
+    } else if(pulsoBox){
       const hasTeam = !!team;
       const sortedByDateAsc = (history||[]).slice().sort((a,b) => {
         const da = (typeof _parseSpanishDate==='function' ? _parseSpanishDate(a.raceDate) : '') || '';
@@ -16433,7 +16441,67 @@ async function renderInicio(){
   // ─── 7. Tu próximo objetivo — protegido con try/catch ──────────────
   try{
     const objBox = document.getElementById('inicioObjetivo');
-    if(objBox){
+    // Título dinámico: ciclista → "Tu reto personal"; director → "Tu próximo objetivo".
+    const objTitle = document.getElementById('inicioObjetivoTitle');
+    if(objTitle){
+      objTitle.textContent = isCyclistView ? '🔥 Tu reto personal' : '🎯 Tu próximo objetivo';
+      // La ayuda actual habla del ranking de EQUIPOS; no aplica al ciclista.
+      const _hb = objTitle.parentElement && objTitle.parentElement.querySelector('.help-btn');
+      if(_hb) _hb.style.display = isCyclistView ? 'none' : '';
+    }
+    // ── CICLISTA · RETO PERSONAL: rival justo un puesto por encima en el ranking
+    //    individual de su categoría (filtro global ya aplicado en `history`). ──
+    if(objBox && isCyclistView){
+      const verBtn = `<button onclick="showView('view-tendencias')" style="background:#0b2f6b;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:800;font-size:12px;cursor:pointer">📊 Ver ranking completo →</button>`;
+      if(!myRiderKey){
+        objBox.innerHTML = `<div class="inicio-empty" style="text-align:center"><div style="font-size:34px;margin-bottom:6px">🔥</div><div style="font-weight:700;color:#374151">Tu reto aparecerá aquí</div><div style="font-size:12px;margin-top:4px;color:#6b7280">En cuanto tengas resultados, te diremos a quién tienes que adelantar.</div><div style="margin-top:12px">${verBtn}</div></div>`;
+      } else {
+        // Ranking individual por puesto medio (composite); menos = mejor.
+        const rstats = new Map();
+        (history||[]).forEach(race => (race.riders||[]).forEach(r=>{
+          if(!_gfMatchesCatGender(r.cat||'', race.raceName||'')) return;
+          if(!r.pos || r.pos<=0) return;
+          const nm = normalizeRiderName(r.name||'').trim(); if(!nm) return;
+          const key = nm.toLowerCase();
+          if(!rstats.has(key)) rstats.set(key, {key, name:r.name||nm, positions:[], raceHistory:[]});
+          const e=rstats.get(key); e.positions.push(r.pos);
+          e.raceHistory.push({raceName:race.raceName, raceDate:race.raceDate, pos:r.pos, total:(race.riders||[]).length});
+        }));
+        const arr = [...rstats.values()].map(e=>{
+          const n=e.positions.length, avg=e.positions.reduce((s,v)=>s+v,0)/n;
+          const stats = typeof _computeSelectionStats==='function'
+            ? _computeSelectionStats({positions:e.positions, races:n, avgPos:avg, raceHistory:e.raceHistory})
+            : {composite:avg};
+          return {key:e.key, name:e.name, n, avg, composite:stats.composite};
+        }).sort((a,b)=>a.composite-b.composite);
+        const myIdx = arr.findIndex(e=>e.key===myRiderKey);
+        if(myIdx < 0){
+          objBox.innerHTML = `<div class="inicio-empty" style="text-align:center"><div style="font-size:34px;margin-bottom:6px">🔥</div><div style="font-weight:700;color:#374151">Aún no estás en el ranking</div><div style="font-size:12px;margin-top:4px;color:#6b7280">Corre tu primera carrera clasificada y aquí verás tu reto.</div><div style="margin-top:12px">${verBtn}</div></div>`;
+        } else if(myIdx === 0){
+          const me=arr[0], second=arr[1];
+          const ventaja = second ? (second.composite - me.composite) : 0;
+          objBox.innerHTML = `<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:12px;padding:16px;text-align:center">
+            <div style="font-size:36px;margin-bottom:4px">👑</div>
+            <div style="font-size:16px;font-weight:900;color:#78350f">¡Eres el nº1 de tu categoría!</div>
+            <div style="font-size:13px;color:#92400e;margin-top:6px">Posición media: <strong>${me.avg.toFixed(1)}º</strong> en ${me.n} carrera${me.n!==1?'s':''}</div>
+            ${second?`<div style="font-size:12px;color:#92400e;margin-top:4px">Te persigue <strong>${escapeHtml((second.name||'').split(',')[0].trim())}</strong> · mantén <strong>${ventaja.toFixed(1)} pts</strong> de ventaja 💪</div>`:''}
+            <div style="margin-top:14px">${verBtn}</div>
+          </div>`;
+        } else {
+          const me=arr[myIdx], rival=arr[myIdx-1];
+          const diff = me.composite - rival.composite;   // puntos que te faltan
+          const rivalName = (rival.name||'').split(',')[0].trim() || rival.name;
+          objBox.innerHTML = `<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px;text-align:center">
+            <div style="font-size:11px;color:#1d4ed8;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">🔥 Tu reto · vas ${myIdx+1}º de ${arr.length}</div>
+            <div style="font-size:40px;margin-bottom:4px">🎯</div>
+            <div style="font-size:15px;color:#0b2f6b;line-height:1.45">Estás a <strong style="color:#1d4ed8;font-size:18px">${diff.toFixed(1)} puntos</strong> de superar a<br><strong style="font-size:16px">${escapeHtml(rivalName)}</strong></div>
+            <div style="font-size:12px;color:#475569;margin-top:8px">Tú: <strong>${me.avg.toFixed(1)}º</strong> de media · ${escapeHtml(rivalName)}: <strong>${rival.avg.toFixed(1)}º</strong></div>
+            <div style="margin-top:14px">${verBtn}</div>
+          </div>`;
+        }
+      }
+    }
+    if(objBox && !isCyclistView){
       const yearStr = String((typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.year) || new Date().getFullYear());
       const regionFilter = ((typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.region) || '').trim();
       const canon = typeof canonicalRegion==='function' ? canonicalRegion : (s=>s);
