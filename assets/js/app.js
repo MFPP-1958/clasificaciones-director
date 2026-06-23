@@ -11846,23 +11846,25 @@ function _notasLoad(){
 let _eqCurrentClub = '';
 
 function _eqSetTab(tab){
-  const prueba   = $('eqPanelPrueba');
-  const explorer = $('eqPanelExplorer');
-  const btnP     = $('eqTabPruebaBtn');
-  const btnE     = $('eqTabExplorerBtn');
-  if(tab==='prueba'){
-    if(prueba)   prueba.style.display   = '';
-    if(explorer) explorer.style.display = 'none';
-    if(btnP)     btnP.classList.add('eq-tab-active');
-    if(btnE)     btnE.classList.remove('eq-tab-active');
-  } else {
-    if(prueba)   prueba.style.display   = 'none';
-    if(explorer) explorer.style.display = '';
-    if(btnP)     btnP.classList.remove('eq-tab-active');
-    if(btnE)     btnE.classList.add('eq-tab-active');
-    // Init year filter if empty
+  // 3 pestañas: clasificacion | comparativa | explorador. Solo cambia la
+  // visibilidad de los contenedores; los cálculos/gráficos no se tocan.
+  const panels = [
+    ['clasificacion', $('eqPanelClasif'),       $('eqTabClasifBtn')],
+    ['comparativa',   $('eqPanelComparativa'),  $('eqTabComparativaBtn')],
+    ['explorador',    $('eqPanelExplorer'),     $('eqTabExplorerBtn')],
+  ];
+  panels.forEach(([name, panel, btn])=>{
+    const on = name === tab;
+    if(panel) panel.style.display = on ? '' : 'none';
+    if(btn)   btn.classList.toggle('eq-tab-active', on);
+  });
+  if(tab === 'explorador'){
+    // Inicializa el filtro de años del Explorador si está vacío
     _eqInitYearFilter();
   }
+  // Red de seguridad: al revelar un panel, los gráficos responsive de Chart.js
+  // recalculan su tamaño (un canvas oculto puede haberse medido a 0px).
+  try{ window.dispatchEvent(new Event('resize')); }catch(_){}
 }
 
 async function _eqInitYearFilter(){

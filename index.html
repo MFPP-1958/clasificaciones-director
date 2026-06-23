@@ -980,12 +980,13 @@
     <div id="view-equipos" class="spa-view equipos-view">
       <!-- ── Sub-tabs Equipos ── -->
       <div class="eq-tab-nav">
-        <button id="eqTabPruebaBtn" class="eq-tab-btn eq-tab-active" onclick="_eqSetTab('prueba')">🏁 En esta prueba</button>
+        <button id="eqTabClasifBtn" class="eq-tab-btn eq-tab-active" onclick="_eqSetTab('clasificacion')">🏆 Clasificación por Equipos</button>
+        <button id="eqTabComparativaBtn" class="eq-tab-btn" onclick="_eqSetTab('comparativa')">⚔️ Comparativa Visual</button>
         <button id="eqTabExplorerBtn" class="eq-tab-btn" onclick="_eqSetTab('explorador')">🔍 Explorador de Clubes</button>
       </div>
 
-      <!-- Panel: En esta prueba (contenido existente sin tocar) -->
-      <div id="eqPanelPrueba">
+      <!-- TAB 1: Clasificación por Equipos (ranking + resumen) -->
+      <div id="eqPanelClasif">
       <section class="panel team-ranking-full">
   <div class="section-title">
     <div style="display:flex;align-items:center;gap:10px">
@@ -1010,6 +1011,21 @@
   <div id="teamCategoryFilter" class="team-cat-filter"></div>
   <div id="teamTimeRanking" class="result-box">Carga una clasificación para calcular la clasificación por equipos.</div>
 </section>
+      <section class="team-summary-layout">
+  <div class="panel team-summary-panel">
+    <div class="section-title"><h2>Resumen por equipos</h2></div>
+    <div id="teamSummary"></div>
+  </div>
+  <div class="panel chart-card chart-tall">
+    <div class="section-title"><h2>Corredores clasificados por equipo</h2><span class="small">Participación total</span></div>
+    <canvas id="teamFinishersChart"></canvas>
+    <div class="chart-help">Gráfico de barras con el número de ciclistas clasificados por cada equipo.</div>
+  </div>
+</section>
+      </div><!-- /eqPanelClasif -->
+
+      <!-- TAB 2: Comparativa Visual (comparación + contribución individual) -->
+      <div id="eqPanelComparativa" style="display:none">
       <section class="panel team-compare-section">
   <div class="section-title">
     <h2>Comparativa visual entre equipos</h2>
@@ -1033,17 +1049,6 @@
     <div id="teamCompareSummary" class="result-box">Selecciona dos equipos para ver una comparativa clara.</div>
   </div>
 </section>
-      <section class="team-summary-layout">
-  <div class="panel team-summary-panel">
-    <div class="section-title"><h2>Resumen por equipos</h2></div>
-    <div id="teamSummary"></div>
-  </div>
-  <div class="panel chart-card chart-tall">
-    <div class="section-title"><h2>Corredores clasificados por equipo</h2><span class="small">Participación total</span></div>
-    <canvas id="teamFinishersChart"></canvas>
-    <div class="chart-help">Gráfico de barras con el número de ciclistas clasificados por cada equipo.</div>
-  </div>
-</section>
       <!-- Contribución individual al equipo -->
       <section class="panel team-contrib-section" id="teamContribSection" style="display:none">
         <div class="section-title">
@@ -1061,7 +1066,7 @@
         </div>
         <div class="team-contrib-grid" id="teamContribGrid"></div>
       </section>
-      </div><!-- /eqPanelPrueba -->
+      </div><!-- /eqPanelComparativa -->
 
       <!-- ══════════════════════════════════════════════════════
            Panel: Explorador de Clubes (histórico)

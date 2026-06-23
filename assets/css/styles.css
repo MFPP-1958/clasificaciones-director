@@ -794,7 +794,7 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 .sel-filter-group{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#374151}
 .sel-select{border:1.5px solid #d0d5dd;border-radius:8px;padding:7px 10px;font-size:13px;background:#fff;cursor:pointer;color:#111827}
 /* ── Equipos sub-tabs ────────────────────────────────── */
-.eq-tab-nav{display:flex;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:18px}
+.eq-tab-nav{display:flex;flex-wrap:wrap;gap:0;border-bottom:2px solid #e5e7eb;margin-bottom:18px}
 .eq-tab-btn{padding:11px 22px;font-size:13px;font-weight:700;border:none;background:none;color:#9ca3af;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;white-space:nowrap}
 .eq-tab-btn.eq-tab-active{color:#0b2f6b;border-bottom-color:#0b2f6b;background:none}
 .eq-tab-btn:hover:not(.eq-tab-active){color:#374151;background:#f9fafb}
