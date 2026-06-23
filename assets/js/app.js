@@ -24761,15 +24761,22 @@ const valueLabelsPlugin = {
     }
   });
 
-  document.addEventListener('mouseover', function(e){
-    const btn = e.target.closest('.help-btn');
-    if(btn){ _pop._src=btn; _showHelp(btn, btn.dataset.help||''); }
-  });
+  // Hover solo en dispositivos con puntero real. En táctil, el navegador emite
+  // un 'mouseover' sintético ANTES del 'click': abría el tooltip y el click
+  // inmediato lo volvía a cerrar (parecía que "solo iba con hover"). Saltándonos
+  // el hover en táctil, el tap (click) abre/cierra limpio.
+  const _canHover = !(window.matchMedia && window.matchMedia('(hover: none)').matches);
+  if(_canHover){
+    document.addEventListener('mouseover', function(e){
+      const btn = e.target.closest('.help-btn');
+      if(btn){ _pop._src=btn; _showHelp(btn, btn.dataset.help||''); }
+    });
 
-  document.addEventListener('mouseout', function(e){
-    const btn = e.target.closest('.help-btn');
-    if(btn && !_pop.contains(e.relatedTarget)){ _hideHelp(); }
-  });
+    document.addEventListener('mouseout', function(e){
+      const btn = e.target.closest('.help-btn');
+      if(btn && !_pop.contains(e.relatedTarget)){ _hideHelp(); }
+    });
+  }
 })();
 
 // ===== INSCRITOS / STARTLIST (Tier 1) =====
@@ -39366,6 +39373,13 @@ function _aiOpenDNFModal(){
       return;
     }
     const typed = _aiResolveRiderNameFromInputs();
+    if(!typed){
+      // Input vacío → no abrir nada; guiar al usuario.
+      if(typeof showToast==='function') showToast('Busca un ciclista primero','warn',2600);
+      const inp = document.getElementById('analysisSearchInput') || document.getElementById('searchInput');
+      if(inp){ try{ inp.focus(); }catch(_){} }
+      return;
+    }
     if(typed){
       const data = _aiBuildDNFList(typed);
       if(data.inscritoIn.length){
@@ -39522,6 +39536,15 @@ function _aiCloseDNFModal(){
   if(ov) ov.remove();
   document.body.style.overflow = '';
 }
+
+// Cierre con la tecla Escape del modal de abandonos y de su picker (además del
+// clic en el fondo oscuro, que ya estaba). Si ambos están abiertos, el picker
+// (que va por encima) se cierra primero.
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape' && e.key !== 'Esc') return;
+  if(document.getElementById('aiDnfPickerOverlay')){ try{ _aiCloseDNFPicker(); }catch(_){}; return; }
+  if(document.getElementById('aiDnfOverlay')){ try{ _aiCloseDNFModal(); }catch(_){} }
+});
 
 function _aiDnfChangeYear(val){
   _aiDnfState.yearFilter = val || '';
