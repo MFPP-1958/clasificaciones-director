@@ -10226,10 +10226,10 @@ function renderTable(){
     const timeText=formatHMS(r.totalSeconds);
     const isOwnTeam = isMyTeam(r);
     
-    // Medallas (Absolutas y por Categoría)
+    // Medallas SOLO por posición ABSOLUTA: 🥇 1º · 🥈 2º · 🥉 3º. Del 4º en
+    // adelante, número desnudo (el podio por categoría ya se ve en "Pos. Cat.").
     let medal = '';
     if(r.pos===1) medal='🥇'; else if(r.pos===2) medal='🥈'; else if(r.pos===3) medal='🥉';
-    else if(r.catPos===1) medal='🥇'; else if(r.catPos===2) medal='🥈'; else if(r.catPos===3) medal='🥉';
     
     const rkey=escapeAttr(getRiderKey(r));
     // Opción B #4: codificación de color por posición
@@ -10246,13 +10246,17 @@ function renderTable(){
       <td>${escapeHtml(r.name)}${isOwnTeam?' <small>(Mi Equipo)</small>':''}</td>
       <td>${timeText}</td>
       <td>${gapText}</td>
-      <td>${r.secPerKm!=null?r.secPerKm.toFixed(1):'—'}</td>
+      <td class="col-seckm">${r.secPerKm!=null?r.secPerKm.toFixed(1):''}</td>
       <td><span class="pill"><span class="cat-dot" style="background:${getColorForCategory(r.cat)}"></span>${escapeHtml(r.cat)}</span></td>
       <td class="pos-cat-val">${r.catPos}º</td>
       <td>${escapeHtml(r.region||'—')}</td>
       <td>${escapeHtml(r.team)}</td>
     </tr>`;
   }).join(''):'<tr><td colspan="11" class="empty">No hay resultados con esos filtros.</td></tr>';
+  // Seg/km: si NINGÚN corredor filtrado tiene el dato, ocultamos la columna
+  // entera (cabecera + celdas) en vez de pintar una hilera de guiones vacíos.
+  const _wrapSecKm = document.getElementById('captureTable');
+  if(_wrapSecKm) _wrapSecKm.classList.toggle('hide-seckm', !filtered.some(r=>r.secPerKm!=null));
 }
 
 // ─── Edición inline de filas ──────────────────────────────────────────────────
@@ -10284,7 +10288,7 @@ function editTableRow(key){
     <td><input class="edit-input" id="eri-name" value="${escapeAttr(r.name)}" style="width:150px"></td>
     <td><input class="edit-input" id="eri-time" value="${escapeAttr(r.time||formatSeconds(r.totalSeconds)||'')}" style="width:68px" placeholder="h:mm:ss"></td>
     <td><input class="edit-input" id="eri-gap" value="${escapeAttr(formatSeconds(r.gapSeconds)||'')}" style="width:60px" placeholder="h:mm:ss"></td>
-    <td style="color:#999;font-size:11px;text-align:center">${r.secPerKm!=null?r.secPerKm.toFixed(1):'—'}</td>
+    <td class="col-seckm" style="color:#999;font-size:11px;text-align:center">${r.secPerKm!=null?r.secPerKm.toFixed(1):''}</td>
     <td><input class="edit-input" id="eri-cat" value="${escapeAttr(r.cat||'')}" style="width:62px"></td>
     <td><input class="edit-input" id="eri-catpos" type="number" value="${r.catPos||''}" style="width:42px"></td>
     <td><input class="edit-input" id="eri-region" value="${escapeAttr(r.region||'')}" style="width:68px" placeholder="CCAA"></td>
@@ -15841,7 +15845,7 @@ async function renderInicio(){
     const posSpark = sparkline(fin.slice(-8).map(r=>r.pos), '#1d4ed8');
     const medalFor = (p)=> p===1?'🥇 ':p===2?'🥈 ':p===3?'🥉 ':'';
     kpiBox.innerHTML = `
-      <div class="evol-kpi"><div class="ek-label">🏁 Tus carreras</div><div class="ek-value">${myResults.length}</div><div class="ek-sub">${fin.length} con clasificación${myResults.length>fin.length?` · ${myResults.length-fin.length} DNF`:''}</div></div>
+      <div class="evol-kpi"><div class="ek-label">🏁 Tus carreras</div><div class="ek-value">${myResults.length}</div><div class="ek-sub">${fin.length} con clasificación${myResults.length>fin.length?` · ${myResults.length-fin.length} abandono${myResults.length-fin.length!==1?'s':''}`:''}</div></div>
       <div class="evol-kpi" style="background:linear-gradient(135deg,#eff6ff,#fff);border-left:3px solid #2563eb"><div class="ek-label">📊 Tu posición media</div><div class="ek-value" style="color:#1d4ed8">${avgPos!=null?avgPos.toFixed(1)+'º':'—'}${posSpark}</div><div class="ek-sub">${fin.length?`en ${fin.length} carrera${fin.length!==1?'s':''}`:'Aún sin resultados'}</div></div>
       <div class="evol-kpi" style="background:linear-gradient(135deg,#fef9c3,#fff);border-left:3px solid #f59e0b"><div class="ek-label">⭐ Tu mejor resultado</div><div class="ek-value" style="color:#92400e">${best!=null?medalFor(best)+best+'º':'—'}</div><div class="ek-sub">${bestRace?escapeHtml(bestRace.slice(0,28)):'Aún sin resultados'}</div></div>
       <div class="evol-kpi" style="background:linear-gradient(135deg,#ecfdf5,#fff);border-left:3px solid #16a34a"><div class="ek-label">🏆 Podios conseguidos</div><div class="ek-value" style="color:#15803d">${podios}</div><div class="ek-sub">${podios?'¡Sigue así! 💪':'Tu próximo objetivo 🎯'}</div></div>`;
@@ -16738,7 +16742,7 @@ async function renderInicio(){
               const p=mine.pos, ic=p===1?'🥇':p===2?'🥈':p===3?'🥉':'🟢';
               myBadge=`<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;margin-left:8px;white-space:nowrap">${ic} Tu puesto: ${p}º</span>`;
             } else if(mine){
-              myBadge=`<span style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;margin-left:8px;white-space:nowrap">DNF</span>`;
+              myBadge=`<span title="No finalizaste esta carrera" style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;margin-left:8px;white-space:nowrap">Abandono</span>`;
             } else {
               myBadge=`<span style="color:#9ca3af;font-size:11px;font-weight:600;margin-left:8px;white-space:nowrap">No participaste</span>`;
             }

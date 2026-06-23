@@ -627,6 +627,8 @@ th.th-edit{width:36px;min-width:36px;text-align:center}
 /* Mini-calendario del Historial: resaltar el mes en curso para orientar al usuario. */
 .hist-mes-cell.mes-actual{outline:2px solid #f59e0b;outline-offset:1px;border-radius:6px;box-shadow:0 0 0 3px rgba(245,158,11,.18)}
 .hist-mes-cell.mes-actual > div:first-child{color:#b45309;opacity:1;font-weight:900}
+/* Tabla y filtros: ocultar la columna Seg/km cuando no hay ningún dato. */
+#captureTable.hide-seckm .col-seckm{display:none!important}
 /* ===== FIN BLOQUE EVOLUCIÓN CSS ===== */
 
 /* ===== DARK MODE & UX POLISH CSS ===== */
