@@ -484,6 +484,18 @@ th.th-edit{width:36px;min-width:36px;text-align:center}
 .comp-slot-empty-label{font-size:11px;color:#b0b7c3;text-align:center;margin-top:auto;padding-bottom:4px}
 @media(max-width:1100px){.comp-slot-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:600px){.comp-slot-grid{grid-template-columns:repeat(2,1fr)}}
+/* Comparativo móvil (<768px): mostrar solo los slots con ciclista + UN único slot
+   vacío para añadir. Los slots vacíos van sin .filled y son contiguos al final,
+   así que ocultamos todo vacío precedido por otro vacío. Al llenarse uno, se
+   regenera el grid y aparece el siguiente vacío automáticamente. */
+@media(max-width:768px){
+  .comp-slot-grid .comp-slot:not(.filled) ~ .comp-slot:not(.filled){display:none}
+}
+/* Comparativo: scroll horizontal de la tabla + indicador sutil de "desliza" */
+.comp-table-scroll{position:relative}
+.comp-table-scroll .comp-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.comp-table-scroll::after{content:"";position:absolute;top:0;bottom:0;right:0;width:26px;pointer-events:none;background:linear-gradient(to left,rgba(2,6,23,.18),rgba(2,6,23,0));opacity:0;transition:opacity .2s;border-radius:0 14px 14px 0}
+.comp-table-scroll.can-scroll-right::after{opacity:1}
 .comp-empty-hint{text-align:center;padding:40px 20px;color:#9ca3af;font-size:15px}
 .cat-filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px}
 .cat-filter-chips .chip{border:1px solid #b2ddff;background:#f0f8ff;color:#175cd3;border-radius:999px;padding:5px 12px;font-weight:700;font-size:12px;cursor:pointer;transition:all .15s}

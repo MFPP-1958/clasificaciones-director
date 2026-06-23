@@ -18883,14 +18883,35 @@ function renderComparativoTable(){
   if(!el)return;
   const sorted=_compFilled().slice().sort((a,b)=>a.pos-b.pos);
   const best=sorted[0];
-  el.innerHTML=`<div class="table-wrap" style="max-height:none;margin-bottom:16px"><table class="compare-table"><thead><tr><th></th><th>Ciclista</th><th>Equipo</th><th>Pos. General</th><th>Categoría</th><th>Pos. Cat.</th><th>Tiempo</th><th>Diferencia</th><th>Seg/km</th><th>Percentil</th><th>CCAA</th></tr></thead><tbody>${sorted.map(r=>{
+  el.innerHTML=`<div class="comp-table-scroll"><div class="table-wrap comp-table-wrap" style="max-height:none;margin-bottom:16px"><table class="compare-table"><thead><tr><th></th><th>Ciclista</th><th>Equipo</th><th>Pos. General</th><th>Categoría</th><th>Pos. Cat.</th><th>Tiempo</th><th>Diferencia</th><th>Seg/km</th><th>Percentil</th><th>CCAA</th></tr></thead><tbody>${sorted.map(r=>{
     const isLeader=getRiderKey(r)===getRiderKey(best);
     const pct=((riders.length-r.pos)/Math.max(1,riders.length-1)*100);
     const sameCat=riders.filter(x=>x.cat===r.cat).sort((a,b)=>a.pos-b.pos);
     const catPos=sameCat.findIndex(x=>getRiderKey(x)===getRiderKey(r))+1;
     const c=COMP_COLORS[comparativoRiders.findIndex(x=>x&&getRiderKey(x)===getRiderKey(r))]||'#475467';
     return `<tr class="${isLeader?'compare-leader':''}"><td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${c};flex-shrink:0"></span></td><td><b>${escapeHtml(r.name)}</b>${isLeader?' ✅':''}</td><td>${escapeHtml(r.team)}</td><td><b>${r.pos}º</b> de ${riders.length}</td><td><span class="pill"><span class="cat-dot" style="background:${getColorForCategory(r.cat)}"></span>${escapeHtml(r.cat)}</span></td><td>${catPos}º de ${sameCat.length}</td><td>${formatSeconds(r.totalSeconds)}</td><td>${formatSeconds(r.gapSeconds)}</td><td>${r.secPerKm!=null?r.secPerKm.toFixed(1)+' s/km':'—'}</td><td>${pct.toFixed(1)}%</td><td>${escapeHtml(r.region||'—')}</td></tr>`;
-  }).join('')}</tbody></table></div>`;
+  }).join('')}</tbody></table></div></div>`;
+  _compInitTableScrollHint();
+}
+
+// Indicador de scroll horizontal de la tabla comparativa (móvil): muestra una
+// sombra a la derecha mientras quede tabla por deslizar; se oculta al llegar al
+// final. Pequeña lógica JS; no toca cálculos, Chart.js ni la cascada Equipo→Ciclista.
+let _compScrollHintBound=false;
+function _compUpdateTableScrollHint(){
+  const inner=document.querySelector('#compTable .comp-table-wrap');
+  const outer=document.querySelector('#compTable .comp-table-scroll');
+  if(!inner||!outer)return;
+  const more=(inner.scrollWidth - inner.clientWidth - inner.scrollLeft) > 4;
+  outer.classList.toggle('can-scroll-right', more);
+}
+function _compInitTableScrollHint(){
+  const inner=document.querySelector('#compTable .comp-table-wrap');
+  if(inner){
+    inner.addEventListener('scroll', _compUpdateTableScrollHint, {passive:true});
+    requestAnimationFrame(_compUpdateTableScrollHint);
+  }
+  if(!_compScrollHintBound){ window.addEventListener('resize', _compUpdateTableScrollHint, {passive:true}); _compScrollHintBound=true; }
 }
 
 function renderComparativoCharts(){
