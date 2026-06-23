@@ -496,6 +496,12 @@ th.th-edit{width:36px;min-width:36px;text-align:center}
 .comp-table-scroll .comp-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .comp-table-scroll::after{content:"";position:absolute;top:0;bottom:0;right:0;width:26px;pointer-events:none;background:linear-gradient(to left,rgba(2,6,23,.18),rgba(2,6,23,0));opacity:0;transition:opacity .2s;border-radius:0 14px 14px 0}
 .comp-table-scroll.can-scroll-right::after{opacity:1}
+/* Comparativo · visualización progresiva: revelar/ocultar paneles con suavidad */
+.comp-fade-in{animation:compFadeIn .35s ease both}
+.comp-fade-out{animation:compFadeOut .26s ease forwards;pointer-events:none;overflow:hidden}
+@keyframes compFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes compFadeOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(8px)}}
+@media(prefers-reduced-motion:reduce){.comp-fade-in,.comp-fade-out{animation:none}}
 .comp-empty-hint{text-align:center;padding:40px 20px;color:#9ca3af;font-size:15px}
 .cat-filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px}
 .cat-filter-chips .chip{border:1px solid #b2ddff;background:#f0f8ff;color:#175cd3;border-radius:999px;padding:5px 12px;font-weight:700;font-size:12px;cursor:pointer;transition:all .15s}

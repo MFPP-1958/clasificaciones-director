@@ -36278,16 +36278,35 @@ function _compBuildGroupMetricsHtml(filledRiders){
 // ─── INYECTA los bloques del Tier ALTO al DOM tras renderComparativo ─────────
 // Llamado DIRECTAMENTE desde renderComparativo() (no por wrap, que no funciona
 // con function declarations globales — el callsite usa el binding local).
+// Retira un panel inyectado del comparativo. Con animateOut=true hace un fundido
+// de salida antes de eliminarlo, para que ocultar un panel no sea un salto brusco.
+function _compRemoveInjected(id, animateOut){
+  const n = document.getElementById(id);
+  if(!n) return;
+  if(animateOut){
+    n.classList.add('comp-fade-out');
+    setTimeout(()=>{ try{ n.remove(); }catch(_){} }, 280);
+  } else {
+    n.remove();
+  }
+}
+
 function _compInjectTierA(){
   const compResults = document.getElementById('compResults');
   if(!compResults) return;
-  // Limpiar inyecciones previas (importante al re-renderizar)
-  document.getElementById('compRankingPanel')?.remove();
-  document.getElementById('compGroupMetrics')?.remove();
-  document.getElementById('compH2HMatrix')?.remove();
-  document.getElementById('compExportBar')?.remove();
 
   const filled = _compFilled();
+  // Visualización progresiva: los paneles de grupo (Ranking/Métricas y matriz
+  // H2H) solo aportan valor estadístico con 3+ corredores. Con 1-2 se ocultan.
+  const showGroupPanels = filled.length >= 3;
+
+  // Limpiar inyecciones previas. Si pasamos a <3 (vamos a ocultarlos), salida
+  // con fundido; si se van a re-inyectar, retirada directa.
+  _compRemoveInjected('compRankingPanel', !showGroupPanels);
+  _compRemoveInjected('compGroupMetrics', !showGroupPanels);
+  _compRemoveInjected('compH2HMatrix',    !showGroupPanels);
+  document.getElementById('compExportBar')?.remove();
+
   if(!filled.length) return;
 
   const sorted = filled.slice().sort((a,b)=>a.pos-b.pos);
@@ -36331,7 +36350,8 @@ function _compInjectTierA(){
   // Crear los bloques nuevos como elementos
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <div id="compRankingPanel" class="panel" style="margin-top:14px;border-left:4px solid #f59e0b">
+    ${showGroupPanels ? `
+    <div id="compRankingPanel" class="panel comp-fade-in" style="margin-top:14px;border-left:4px solid #f59e0b">
       <div class="section-title">
         <h2 style="margin:0;color:#92400e">🥇 Ranking interno + Δ vs grupo</h2>
         <span class="small">Medallas por métrica · Δ respecto a la media del grupo</span>
@@ -36354,14 +36374,14 @@ function _compInjectTierA(){
       </div>
       <p class="small" style="margin:8px 0 0;color:#6b7280">🥇🥈🥉 = ranking interno del grupo en esa métrica · <b>Δ</b> en verde = mejor que la media del grupo · rojo = peor</p>
     </div>
-    <div id="compGroupMetrics">${_compBuildGroupMetricsHtml(filled)}</div>
-    <div id="compH2HMatrix" class="panel" style="margin-top:14px;border-left:4px solid #9a3412">
+    <div id="compGroupMetrics" class="comp-fade-in">${_compBuildGroupMetricsHtml(filled)}</div>
+    <div id="compH2HMatrix" class="panel comp-fade-in" style="margin-top:14px;border-left:4px solid #9a3412">
       <div class="section-title">
         <h2 style="margin:0;color:#9a3412">⚔️ H2H entre seleccionados</h2>
         <span class="small">Récord directo en histórico</span>
       </div>
       ${filled.length >= 2 ? _compBuildH2HMatrixHtml(filled, _compH2HMatrix(filled)) : '<p class="small" style="color:#9ca3af">Selecciona al menos 2 corredores.</p>'}
-    </div>
+    </div>` : ''}
     <div id="compExportBar" class="panel" style="margin-top:14px;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
         <div>
