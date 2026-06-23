@@ -17143,7 +17143,7 @@ async function renderHistory(){
     if(isPreInsc){
       insBadge = `<span title="Pre-inscripción guardada (${insN} inscritos). La prueba aún no se ha disputado o no se ha subido la clasificación." style="display:inline-flex;align-items:center;gap:4px;background:#eef2ff;color:#1e3a8a;border:1.5px solid #c7d2fe;border-radius:999px;font-size:11px;font-weight:800;padding:2px 9px">📋 ${insN} pre-inscritos</span>`;
     } else if(insN){
-      insBadge = `<span title="Esta prueba tiene startlist (${insN} inscritos · ${insDnf} DNF)" style="display:inline-flex;align-items:center;gap:4px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:999px;font-size:11px;font-weight:800;padding:2px 9px">📋 ${insN} ins · ${insDnf} DNF</span>`;
+      insBadge = `<span title="Esta prueba tiene startlist (${insN} inscritos · ${insDnf} no finalizaron / abandono)" style="display:inline-flex;align-items:center;gap:4px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:999px;font-size:11px;font-weight:800;padding:2px 9px">📋 ${insN} ins · ${insDnf} aband.</span>`;
     } else {
       insBadge = `<span title="Sin startlist. Cárgala desde el botón ✏️ Añadir startlist" style="display:inline-flex;align-items:center;gap:4px;background:#fff7ed;color:#9a3412;border:1px dashed #fdba74;border-radius:999px;font-size:11px;font-weight:700;padding:2px 9px">❌ Sin startlist</span>`;
     }
@@ -39646,7 +39646,7 @@ function _aiRenderDNFModal(){
           </div>
         </div>`:''}
       <div class="ai-dnf-footer">
-        Informe generado por <b>Dashboard Director · MFPP Cycling Specialist</b> · ${new Date().toLocaleString('es-ES')}
+        Informe generado por <b>MFPP Cycling Specialist</b> · ${new Date().toLocaleString('es-ES')}
       </div>
     </div>`;
 
