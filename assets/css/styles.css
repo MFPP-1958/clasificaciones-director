@@ -502,6 +502,18 @@ th.th-edit{width:36px;min-width:36px;text-align:center}
 @keyframes compFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes compFadeOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(8px)}}
 @media(prefers-reduced-motion:reduce){.comp-fade-in,.comp-fade-out{animation:none}}
+/* Comparativo · leyendas permanentes (radar y colores H2H) */
+.comp-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0 0;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:12px;color:#475569;line-height:1.45;list-style:none}
+.comp-legend li{margin:0}
+.comp-legend b{color:#0b2f6b}
+.comp-legend-inline{align-items:center}
+.comp-legend-inline span{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.cl-sw{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.08);flex-shrink:0}
+.cl-win{background:#dcfce7;border-color:#86efac}
+.cl-loss{background:#fee2e2;border-color:#fca5a5}
+.cl-draw{background:#f1f5f9;border-color:#cbd5e1}
+body.dark-mode .comp-legend{background:#161b22;border-color:#30363d;color:#9da7b3}
+body.dark-mode .comp-legend b{color:#e6edf3}
 .comp-empty-hint{text-align:center;padding:40px 20px;color:#9ca3af;font-size:15px}
 .cat-filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px}
 .cat-filter-chips .chip{border:1px solid #b2ddff;background:#f0f8ff;color:#175cd3;border-radius:999px;padding:5px 12px;font-weight:700;font-size:12px;cursor:pointer;transition:all .15s}

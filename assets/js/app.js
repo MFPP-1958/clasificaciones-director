@@ -36380,6 +36380,11 @@ function _compInjectTierA(){
         <h2 style="margin:0;color:#9a3412">⚔️ H2H entre seleccionados</h2>
         <span class="small">Récord directo en histórico</span>
       </div>
+      <div class="comp-legend comp-legend-inline" aria-label="Leyenda de colores del enfrentamiento">
+        <span><i class="cl-sw cl-win"></i> Verde = Victoria</span>
+        <span><i class="cl-sw cl-loss"></i> Rojo = Derrota</span>
+        <span><i class="cl-sw cl-draw"></i> Gris = Empate</span>
+      </div>
       ${filled.length >= 2 ? _compBuildH2HMatrixHtml(filled, _compH2HMatrix(filled)) : '<p class="small" style="color:#9ca3af">Selecciona al menos 2 corredores.</p>'}
     </div>` : ''}
     <div id="compExportBar" class="panel" style="margin-top:14px;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe">
@@ -36670,8 +36675,8 @@ function _compBuildSuggestions(){
         .slice(0, 2);
       mates.forEach(m => {
         suggestions.push({
-          label: `🚴 ${m.name.split(',')[0]} (compañero de ${lastRider.name.split(',')[0]})`,
-          tooltip: `${m.team} · ${m.pos}º`,
+          label: `🚴 ${m.name.split(',')[0]} (Compañero)`,
+          tooltip: `Compañero de ${lastRider.name.split(',')[0]} · ${m.team} · ${m.pos}º`,
           rider: m,
           color: '#1e40af'
         });
@@ -36685,12 +36690,15 @@ function _compBuildSuggestions(){
     [-2, -1, 1, 2].forEach(offset => {
       const target = riders.find(r => r.pos === first.pos + offset && !selectedKeys.has(_compRiderId(r)));
       if(target){
+        const dirTxt = offset < 0
+          ? `${Math.abs(offset)} puesto${Math.abs(offset)>1?'s':''} por delante`
+          : `${offset} puesto${offset>1?'s':''} por detrás`;
         const label = offset < 0
-          ? `⬆️ ${target.name.split(',')[0]} (${Math.abs(offset)} puesto${Math.abs(offset)>1?'s':''} por delante)`
-          : `⬇️ ${target.name.split(',')[0]} (${offset} puesto${offset>1?'s':''} por detrás)`;
+          ? `⬆️ ${target.name.split(',')[0]} (Rival directo)`
+          : `⬇️ ${target.name.split(',')[0]} (Rival directo)`;
         suggestions.push({
           label: label,
-          tooltip: `${target.team} · ${target.pos}º`,
+          tooltip: `Rival directo · ${dirTxt} · ${target.team} · ${target.pos}º`,
           rider: target,
           color: '#92400e'
         });
@@ -36710,8 +36718,8 @@ function _compBuildSuggestions(){
       .slice(0, 2);
     myRiders.forEach(m => {
       suggestions.push({
-        label: `🔵 ${m.name.split(',')[0]} (mi equipo · ${m.pos}º)`,
-        tooltip: `${m.team}`,
+        label: `🔵 ${m.name.split(',')[0]} (Mi equipo)`,
+        tooltip: `Mi equipo · ${m.team} · ${m.pos}º`,
         rider: m,
         color: '#15803d'
       });
@@ -36724,8 +36732,8 @@ function _compBuildSuggestions(){
     top3.forEach(r => {
       const medal = r.pos===1?'🥇':r.pos===2?'🥈':'🥉';
       suggestions.push({
-        label: `${medal} ${r.name.split(',')[0]} (podio)`,
-        tooltip: `${r.team} · ${r.pos}º`,
+        label: `${medal} ${r.name.split(',')[0]} (Podio)`,
+        tooltip: `Podio · ${r.team} · ${r.pos}º`,
         rider: r,
         color: '#92400e'
       });
