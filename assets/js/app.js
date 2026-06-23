@@ -13423,9 +13423,9 @@ function analyseSelectedRider(){
       <div id="aiH2HBlock">${_aiBuildH2HBlock(_aiFindRivals(r.name, histEntries, 5))}</div>
       <p class="small" style="margin:6px 0 0;color:#6b7280">Récord directo de este corredor/a vs cada rival · Solo rivales con ≥2 encuentros</p>
     </div>
-    <!-- Opción B #7: Notas manuales del director -->
-    ${_aiBuildNotesBlock(r)}`:
-    (hist.length>0?'<div class="small" style="margin-top:8px;color:#9ca3af">💡 Guarda más carreras en el histórico para ver la evolución de este ciclista.</div>':_aiBuildNotesBlock(r));
+    <!-- Notas del director: bloque unificado (riderNotesBox, con estrellas) más abajo -->
+    `:
+    (hist.length>0?'<div class="small" style="margin-top:8px;color:#9ca3af">💡 Guarda más carreras en el histórico para ver la evolución de este ciclista.</div>':'');
 
   // ── Perfil de Rendimiento IA ─────────────────────────────────────────────
   let iaProfile='—', iaColor='#667085', iaIcon='📊', iaDesc='Datos insuficientes (min. 3 carreras)';
@@ -35886,6 +35886,10 @@ function _aiReadRiderNote(name){
   return entry;
 }
 
+// [OBSOLETO] Bloque 2 de notas (textarea local _ai_rider_notes_v1). Ya NO se
+// renderiza: las notas del director se unificaron en riderNotesBox (Supabase +
+// estrellas). Se conservan estas funciones y el localStorage para una posible
+// migración futura de notas antiguas; no llamar desde la UI.
 // Handler del botón Guardar
 function _aiSaveNoteFromInput(safeName){
   const ta = document.getElementById('aiRiderNoteTextarea');
