@@ -489,6 +489,17 @@ th.th-edit{width:36px;min-width:36px;text-align:center}
 .cat-filter-chips .chip.active{background:#1f6feb;color:#fff;border-color:#1f6feb}
 .cat-filter-chips .chip:hover{background:#dbeafe}
 .cat-filter-chips .chip.active:hover{background:#1557c0}
+/* ── Tabla · menú "⚙️ Opciones avanzadas" (agrupa toggles de vista) ── */
+.adv-options{position:relative;display:inline-block;margin:4px}
+.adv-options>summary{list-style:none;cursor:pointer;user-select:none;white-space:nowrap;margin:0;width:100%;text-align:center}
+.adv-options>summary::-webkit-details-marker{display:none}
+.adv-options>summary::marker{content:""}
+.adv-options[open]>summary,.adv-options.has-active>summary{background:#dbeafe;border-color:#1f6feb;color:#1e40af}
+.adv-options-badge{display:none;margin-left:6px;background:#1f6feb;color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 7px;line-height:1.4}
+.adv-options.has-active .adv-options-badge{display:inline-block}
+.adv-options-panel{position:absolute;z-index:60;top:calc(100% + 6px);left:0;display:flex;flex-direction:column;gap:8px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 34px rgba(15,23,42,.18);padding:10px;min-width:210px;max-width:calc(100vw - 36px)}
+.adv-options-panel .btn-toggle-team{width:100%;justify-content:flex-start;text-align:left;margin:0}
+@media(max-width:900px){.adv-options{display:block}.adv-options-panel{left:0;right:0;min-width:0}}
 @media(max-width:900px){.comp-charts-grid{grid-template-columns:1fr}}
 
 /* ===== BLOQUE TÁCTICA Y VALIDACIÓN CSS ===== */

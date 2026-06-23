@@ -26614,6 +26614,7 @@ function _tablaRestoreFilters(){
     if(p.teamRankingOpen){
       const sec = document.getElementById('teamRankingMini');
       if(sec){ sec.style.display = 'block'; const ic = document.getElementById('trIcon'); if(ic) ic.textContent = '🟢'; }
+      if(typeof _advOptionsSync==='function') _advOptionsSync();
     }
     if(p.dnfOpen){
       const sec = document.getElementById('dnfPanel');
@@ -26798,6 +26799,7 @@ function toggleTeamRankingPanel(){
   const open = sec.style.display !== 'none';
   sec.style.display = open ? 'none' : 'block';
   if(ic) ic.textContent = open ? '⚪' : '🟢';
+  _advOptionsSync();
   if(!open) _renderTeamRankingMini();
   _tablaSaveFilters();
 }
@@ -27180,7 +27182,19 @@ function toggleHistoryMode(){
   localStorage.setItem('tabla_historyMode', _historyMode?'1':'0');
   const ic = document.getElementById('hmIcon');
   if(ic) ic.textContent = _historyMode ? '🟢' : '⚪';
+  _advOptionsSync();
   if(typeof renderTable==='function') renderTable();
+}
+// Refleja en el botón "⚙️ Opciones avanzadas" cuántos toggles de su interior
+// están activos, para que no se olviden cuando el desplegable está plegado.
+function _advOptionsSync(){
+  const det = document.getElementById('advOptions');
+  if(!det) return;
+  const ids = ['trIcon','gbtIcon','hmIcon'];
+  const active = ids.reduce((n,id)=>{ const el=document.getElementById(id); return n + (el && el.textContent==='🟢' ? 1 : 0); }, 0);
+  det.classList.toggle('has-active', active>0);
+  const badge = document.getElementById('advOptionsBadge');
+  if(badge) badge.textContent = active>0 ? String(active) : '';
 }
 // Cache de medias históricas por nombre normalizado
 let _riderMeanCache = null;
@@ -27237,6 +27251,7 @@ function toggleGroupByTeam(){
   localStorage.setItem('tabla_groupByTeam', _groupByTeam?'1':'0');
   const ic = document.getElementById('gbtIcon');
   if(ic) ic.textContent = _groupByTeam ? '🟢' : '⚪';
+  _advOptionsSync();
   if(typeof renderTable==='function') renderTable();
 }
 
@@ -27588,6 +27603,7 @@ if(_origRenderAll){
     // Restaurar estado de iconos toggle
     const gbtIc = document.getElementById('gbtIcon'); if(gbtIc) gbtIc.textContent = _groupByTeam?'🟢':'⚪';
     const hmIc  = document.getElementById('hmIcon');  if(hmIc)  hmIc.textContent  = _historyMode?'🟢':'⚪';
+    _advOptionsSync();
   };
 }
 

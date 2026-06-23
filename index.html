@@ -652,15 +652,20 @@
     <button id="toggleDnf" class="btn light btn-toggle-team" onclick="toggleDnfView()" style="display:none" title="Ver inscritos que no aparecen en clasificación (DNF/DNS)">
       <span id="dnfIcon">⚪</span> Ver DNF
     </button>
-    <button id="toggleTeamRanking" class="btn light btn-toggle-team" onclick="toggleTeamRankingPanel()" title="Mostrar/ocultar ranking compacto por equipos">
-      <span id="trIcon">⚪</span> Ranking equipos
-    </button>
-    <button id="toggleGroupByTeam" class="btn light btn-toggle-team" onclick="toggleGroupByTeam()" title="Agrupar filas por equipo en la tabla">
-      <span id="gbtIcon">⚪</span> Agrupar por equipo
-    </button>
-    <button id="toggleHistoryMode" class="btn light btn-toggle-team" onclick="toggleHistoryMode()" title="Mostrar columna Δ vs media histórica del corredor">
-      <span id="hmIcon">⚪</span> Modo histórico
-    </button>
+    <details id="advOptions" class="adv-options">
+      <summary class="btn light adv-options-summary" title="Opciones de vista avanzadas">⚙️ Opciones avanzadas<span id="advOptionsBadge" class="adv-options-badge"></span></summary>
+      <div class="adv-options-panel">
+        <button id="toggleTeamRanking" class="btn light btn-toggle-team" onclick="toggleTeamRankingPanel()" title="Mostrar/ocultar ranking compacto por equipos">
+          <span id="trIcon">⚪</span> Ranking equipos
+        </button>
+        <button id="toggleGroupByTeam" class="btn light btn-toggle-team" onclick="toggleGroupByTeam()" title="Agrupar filas por equipo en la tabla">
+          <span id="gbtIcon">⚪</span> Agrupar por equipo
+        </button>
+        <button id="toggleHistoryMode" class="btn light btn-toggle-team" onclick="toggleHistoryMode()" title="Mostrar columna Δ vs media histórica del corredor">
+          <span id="hmIcon">⚪</span> Modo histórico
+        </button>
+      </div>
+    </details>
     <select id="teamFilter" onchange="_onTeamFilterChange()"><option value="">Todos los equipos</option></select>
     <select id="regionFilter"><option value="">Todas las regiones</option></select>
     <select id="topFilter"><option value="">Toda la clasificación</option><option value="10">Top 10</option><option value="20">Top 20</option><option value="50">Top 50</option></select>
