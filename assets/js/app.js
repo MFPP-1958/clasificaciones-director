@@ -13137,7 +13137,7 @@ function _aiNoClassifiedTeamCard(team){
   let extra;
   if(dnf.length){
     const names = dnf.map(i=>escapeHtml(_evolNormName?_evolNormName(i.name):i.name)).join(' · ');
-    extra = `Participaron pero <b>no terminó ninguno (DNF)</b>:<br><span style="color:#7c2d12">${names}</span>`;
+    extra = `Participaron pero <b>no finalizó ninguno (abandono)</b>:<br><span style="color:#7c2d12">${names}</span>`;
   } else {
     extra = `No constan inscritos de este equipo en los datos de esta prueba, así que no podemos confirmar si tomaron la salida.`;
   }
@@ -13310,10 +13310,10 @@ function _aiDnfThisRaceCard(ins){
     <div style="color:#6b7280;font-size:13px;margin-bottom:12px">${[bib,team].filter(Boolean).join(' · ')}</div>
     <div style="display:inline-block;text-align:left;max-width:560px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:12px;padding:14px 16px;color:#9a3412;line-height:1.55;font-size:14px">
       <b>Estaba inscrito en «${raceNm}» pero no aparece en la clasificación.</b><br>
-      Es decir, <b>no terminó (DNF)</b> o no tomó la salida (DNS). Por eso no hay datos de su resultado en esta prueba.
+      Es decir, <b>abandonó o no finalizó</b> la prueba, o no tomó la salida. Por eso no hay datos de su resultado en esta prueba.
     </div>
     <div style="margin-top:14px">
-      <button class="btn" onclick="_aiOpenDNFModal()" style="background:#dc2626;color:#fff;border:0;font-weight:800;padding:9px 16px">🚫 Ver sus DNFs de la temporada</button>
+      <button class="btn" onclick="_aiOpenDNFModal()" style="background:#dc2626;color:#fff;border:0;font-weight:800;padding:9px 16px">🚫 Ver sus abandonos de la temporada</button>
     </div>
   </div>`;
 }
@@ -39553,7 +39553,7 @@ function _aiRenderDNFModal(){
           <td>${e.bib?'<span class="ai-dnf-bib">'+escapeHtml(String(e.bib))+'</span>':'—'}</td>
           <td>${e.totalAcabaron}/${e.totalInscritos}</td>
         </tr>`).join('')
-    : `<tr><td colspan="9" style="text-align:center;padding:20px;color:#6b7280">🎉 No se han encontrado DNFs${yearFilter?' en '+yearFilter:''}. ¡Ha terminado todas las pruebas en las que se inscribió!</td></tr>`;
+    : `<tr><td colspan="9" style="text-align:center;padding:20px;color:#6b7280">🎉 No se han encontrado abandonos${yearFilter?' en '+yearFilter:''}. ¡Ha terminado todas las pruebas en las que se inscribió!</td></tr>`;
 
   const finishedRows = finishedF.length
     ? finishedF.map((e,i)=>`
@@ -39591,7 +39591,7 @@ function _aiRenderDNFModal(){
         <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
           ${_pdfLogoSrc?`<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="ai-dnf-logo">`:''}
           <div style="min-width:0">
-            <h2 class="ai-dnf-title" style="margin:0;color:#0b2f6b">🚫 DNFs de la temporada</h2>
+            <h2 class="ai-dnf-title" style="margin:0;color:#0b2f6b">🚫 Abandonos de la temporada</h2>
             <div class="ai-dnf-rider">
               <span class="ai-dnf-rider-label">Ciclista:</span>
               <span class="ai-dnf-rider-name">${escapeHtml(riderName)}</span>
@@ -39609,8 +39609,8 @@ function _aiRenderDNFModal(){
       <div class="ai-dnf-kpis">
         <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:#0b2f6b">${totalIns}</div><div class="ai-dnf-kpi-l">Pruebas<br><span class="small">inscrito</span></div></div>
         <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:#16a34a">${totalAcab}</div><div class="ai-dnf-kpi-l">Terminadas</div></div>
-        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:${dnfColor}">${totalDnf}</div><div class="ai-dnf-kpi-l">DNF</div></div>
-        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:${dnfColor}">${dnfPct}%</div><div class="ai-dnf-kpi-l">% DNF<br><span class="small">(s/disputadas)</span></div></div>
+        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:${dnfColor}">${totalDnf}</div><div class="ai-dnf-kpi-l">Abandonos</div></div>
+        <div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:${dnfColor}">${dnfPct}%</div><div class="ai-dnf-kpi-l">% Abandono<br><span class="small">(s/disputadas)</span></div></div>
         ${pendientes?`<div class="ai-dnf-kpi"><div class="ai-dnf-kpi-v" style="color:#9333ea">${pendientes}</div><div class="ai-dnf-kpi-l">Pendientes<br><span class="small">no disputadas</span></div></div>`:''}
       </div>
       <div class="ai-dnf-section">
@@ -39660,11 +39660,11 @@ function _aiCopyDNF(){
     const yearFilterFn = (e) => !yearFilter || _aiYearOfDate(e.raceDate) === yearFilter;
     const dnf = data.dnfIn.filter(yearFilterFn);
     const fin = data.finishedIn.filter(yearFilterFn);
-    let text = `DNFs DE LA TEMPORADA — ${riderName}${yearFilter?' ('+yearFilter+')':''}\n`;
+    let text = `ABANDONOS DE LA TEMPORADA — ${riderName}${yearFilter?' ('+yearFilter+')':''}\n`;
     text += `Generado: ${new Date().toLocaleString('es-ES')}\n\n`;
-    text += `RESUMEN: inscrito en ${data.inscritoIn.filter(yearFilterFn).length} pruebas · terminó ${fin.length} · DNF ${dnf.length}\n\n`;
-    text += `🚫 DNFs (${dnf.length}):\n`;
-    if(!dnf.length) text += '  (Sin DNFs en este filtro)\n';
+    text += `RESUMEN: inscrito en ${data.inscritoIn.filter(yearFilterFn).length} pruebas · terminó ${fin.length} · abandonó ${dnf.length}\n\n`;
+    text += `🚫 Abandonos / no finalizadas (${dnf.length}):\n`;
+    if(!dnf.length) text += '  (Sin abandonos en este filtro)\n';
     else dnf.forEach((e,i)=>{
       text += `  ${i+1}. ${e.raceDate} · ${e.raceName}${e.localidad?' · '+e.localidad:''}${e.categoria?' · '+e.categoria:''}${e.team?' · '+e.team:''}${e.bib?' · dorsal '+e.bib:''}\n`;
     });
