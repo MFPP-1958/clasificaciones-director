@@ -798,6 +798,23 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 .eq-tab-btn{padding:11px 22px;font-size:13px;font-weight:700;border:none;background:none;color:#9ca3af;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;white-space:nowrap}
 .eq-tab-btn.eq-tab-active{color:#0b2f6b;border-bottom-color:#0b2f6b;background:none}
 .eq-tab-btn:hover:not(.eq-tab-active){color:#374151;background:#f9fafb}
+/* ── Filtros globales colapsables en móvil (acordeón) ── */
+.gf-mobile-toggle{display:none;width:100%;justify-content:center;align-items:center;gap:8px;background:#0b2f6b;color:#fff;border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:800;cursor:pointer}
+#gfControls{display:contents}
+@media(max-width:768px){
+  #globalFilterBar{flex-direction:column;align-items:stretch!important}
+  .gf-mobile-toggle{display:inline-flex}
+  #gfControls{display:block;overflow:hidden;max-height:0;opacity:0;transition:max-height .3s ease,opacity .25s ease}
+  #globalFilterBar.gf-open #gfControls{max-height:1200px;opacity:1;margin-top:10px;overflow:visible}
+  #gfControls > div,#gfControls > span{margin-bottom:8px}
+}
+/* ── Equipos: tablas con scroll horizontal + sombra y columnas no críticas ocultas en móvil ── */
+.eq-scroll{position:relative}
+.eq-scroll-inner{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:768px){
+  .eq-scroll::after{content:"";position:absolute;top:0;bottom:0;right:0;width:22px;pointer-events:none;background:linear-gradient(to left,rgba(2,6,23,.15),rgba(2,6,23,0));border-radius:0 12px 12px 0}
+  .eq-hide-mobile{display:none!important}
+}
 /* Club Explorer */
 .club-search-wrap{position:relative;flex:1}
 .club-search-input{width:100%;padding:10px 36px 10px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box;cursor:pointer}

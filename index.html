@@ -177,6 +177,8 @@
          Sincroniza con los filtros locales existentes en cada vista.
          ═══════════════════════════════════════════════════════════════ -->
     <div id="globalFilterBar" style="display:none;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1.5px solid #bae6fd;border-radius:12px;padding:10px 14px;margin-bottom:14px;align-items:center;gap:14px;flex-wrap:wrap">
+      <button id="gfMobileToggle" class="gf-mobile-toggle" type="button" onclick="_gfToggleMobile()" aria-expanded="false">⚙️ Mostrar Filtros</button>
+      <div id="gfControls">
       <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#0b2f6b;font-size:13px;letter-spacing:.3px">
         <span style="font-size:16px">🎛️</span> FILTROS GLOBALES
       </div>
@@ -239,6 +241,7 @@
       </div>
       <button class="admin-only" onclick="_gfReset()" style="background:#fff;border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#475569;cursor:pointer" title="Restablecer ambos filtros">✖ Limpiar</button>
       <span id="gfStatus" style="font-size:11px;color:#0369a1;font-weight:600;margin-left:auto"></span>
+      </div><!-- /gfControls -->
     </div>
     <!-- ═══════════════════════════════════════════════════════════════
          VISTA INICIO — Dashboard de entrada al producto

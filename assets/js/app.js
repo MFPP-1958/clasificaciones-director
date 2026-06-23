@@ -1148,6 +1148,15 @@ function _gfUpdateStatus(){
   st.textContent = parts.length ? `Filtrando por ${parts.join(' · ')}` : '(sin filtros aplicados)';
 }
 
+// Acordeón de la barra de filtros global en móvil. Solo alterna una clase;
+// no toca la lógica de mostrar/ocultar por vista ni los onchange (filtro cruzado).
+function _gfToggleMobile(){
+  const bar=document.getElementById('globalFilterBar');
+  if(!bar) return;
+  const open=bar.classList.toggle('gf-open');
+  const btn=document.getElementById('gfMobileToggle');
+  if(btn){ btn.textContent = open ? '✖ Ocultar Filtros' : '⚙️ Mostrar Filtros'; btn.setAttribute('aria-expanded', open?'true':'false'); }
+}
 function _gfShowHideBar(viewId){
   const bar = document.getElementById('globalFilterBar');
   if(!bar) return;
@@ -11754,12 +11763,12 @@ function renderTeamSummary(){
   }).sort((a,b)=>a.rank - b.rank || a.avg - b.avg);
 
   const valHeader = teamRankingMode === 'time' ? 'Tiempo (3)' : 'Puntos (3)';
-  $('teamSummary').innerHTML='<div class="table-wrap" style="max-height:420px"><table><thead><tr><th>Pos.</th><th>Equipo</th><th>'+valHeader+'</th><th>N.º Clas.</th><th>Top Pos.</th><th>Media</th><th>Dispersión</th></tr></thead><tbody>'+
+  $('teamSummary').innerHTML='<div class="eq-scroll"><div class="table-wrap eq-scroll-inner" style="max-height:420px"><table><thead><tr><th>Pos.</th><th>Equipo</th><th>'+valHeader+'</th><th>N.º Clas.</th><th>Top Pos.</th><th class="eq-hide-mobile">Media</th><th class="eq-hide-mobile">Dispersión</th></tr></thead><tbody>'+
     rows.map(x=>{
       const valTxt = x.val == null ? '—' : (teamRankingMode === 'time' ? formatTeamTotalSeconds(x.val) : x.val);
-      return `<tr><td><b>${x.rank===999?'—':x.rank+'º'}</b></td><td>${escapeHtml(x.team)}</td><td>${valTxt}</td><td>${x.count}</td><td>${x.best}</td><td>${x.avg.toFixed(1)}</td><td class="${spreadClass(x.spread)}">${x.spread==null?'—':x.spread}</td></tr>`
+      return `<tr><td><b>${x.rank===999?'—':x.rank+'º'}</b></td><td>${escapeHtml(x.team)}</td><td>${valTxt}</td><td>${x.count}</td><td>${x.best}</td><td class="eq-hide-mobile">${x.avg.toFixed(1)}</td><td class="eq-hide-mobile ${spreadClass(x.spread)}">${x.spread==null?'—':x.spread}</td></tr>`
     }).join('')+
-    '</tbody></table></div><div class="chart-help">El ranking (Pos.) se basa estrictamente en el <b>'+valHeader+'</b> (suma de los 3 mejores). La <b>Media</b> y <b>Dispersión</b> describen el comportamiento del resto del equipo (bloque vs individualidades). En ambos casos, <b>cuanto más bajo sea el valor, mejor</b> es el rendimiento global o la cohesión.</div>';
+    '</tbody></table></div></div><div class="chart-help">El ranking (Pos.) se basa estrictamente en el <b>'+valHeader+'</b> (suma de los 3 mejores). La <b>Media</b> y <b>Dispersión</b> describen el comportamiento del resto del equipo (bloque vs individualidades). En ambos casos, <b>cuanto más bajo sea el valor, mejor</b> es el rendimiento global o la cohesión.</div>';
 }
 function miniTable(list){return '<div class="table-wrap" style="max-height:360px"><table><thead><tr><th>Pos.</th><th>Ciclista</th><th>Tiempo / diferencia</th><th>Cat.</th><th>CCAA</th><th>Equipo</th></tr></thead><tbody>'+list.map(r=>`<tr><td>${r.pos}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.time||'—')}</td><td>${escapeHtml(r.cat)}</td><td>${escapeHtml(r.region||'—')}</td><td>${escapeHtml(r.team)}</td></tr>`).join('')+'</tbody></table></div>'}
 
@@ -12040,7 +12049,7 @@ async function _eqLoadClub(){
         <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#1286c7">${riders.reduce((s,r)=>s+r.top10,0)}</div><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af">Top 10</div></div>
       </div>
     </div>
-    <div style="overflow-x:auto">
+    <div class="eq-scroll"><div class="eq-scroll-inner" style="overflow-x:auto">
     <table class="club-roster-table">
       <thead><tr>
         <th>#</th><th>Ciclista</th><th>Cat.</th><th>ADN IA</th>
@@ -12072,7 +12081,7 @@ async function _eqLoadClub(){
       }).join('')}
       </tbody>
     </table>
-    </div>
+    </div></div>
     <div style="font-size:10px;color:#9ca3af;margin-top:10px">💡 Haz clic en cualquier ciclista para ver su historial completo de pruebas.</div>`;
 }
 
