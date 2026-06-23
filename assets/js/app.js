@@ -13421,7 +13421,7 @@ function analyseSelectedRider(){
     <div class="rider-history-block" style="margin-top:14px">
       <div class="rider-history-title">⚔️ Rivales más enfrentados (Top 5)</div>
       <div id="aiH2HBlock">${_aiBuildH2HBlock(_aiFindRivals(r.name, histEntries, 5))}</div>
-      <p class="small" style="margin:6px 0 0;color:#6b7280">Récord directo de esta corredora vs cada rival · Solo rivales con ≥2 encuentros</p>
+      <p class="small" style="margin:6px 0 0;color:#6b7280">Récord directo de este corredor/a vs cada rival · Solo rivales con ≥2 encuentros</p>
     </div>
     <!-- Opción B #7: Notas manuales del director -->
     ${_aiBuildNotesBlock(r)}`:
@@ -13448,7 +13448,7 @@ function analyseSelectedRider(){
       iaProfile='Rising Star 🌱'; iaColor='#12b76a'; iaIcon='📈';
       iaDesc=`Mejora del ${improvePct.toFixed(0)}% entre la primera y segunda mitad del histórico`;
     } else {
-      iaProfile='Regular'; iaColor='#667085'; iaIcon='📊';
+      iaProfile='Versátil'; iaColor='#667085'; iaIcon='📊';
       iaDesc=`Media ${hMean.toFixed(1)}º · desv. ${hStd.toFixed(1)} · sin patrón dominante`;
     }
   }
@@ -13491,7 +13491,7 @@ function analyseSelectedRider(){
       <div class="rider-card-name">${isOwn?'🟢 ':''}${escapeHtml(r.name)} ${adnHtml}</div>
       <div class="rider-card-sub">${escapeHtml(r.team)} · ${escapeHtml(r.cat)}${r.region?' · '+escapeHtml(r.region):''}</div>
     </div>
-    <button class="rider-card-export" onclick="exportRiderFichaPDF('${key}')">📄 Exportar ficha PDF</button>
+    <button class="rider-card-export" onclick="exportRiderFichaPDF('${key}')">📄 Descargar informe PDF</button>
   </div>
 
   <!-- Stats principales -->

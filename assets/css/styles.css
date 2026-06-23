@@ -214,7 +214,8 @@ body.dark-mode .myteam-rider-card{background:#1c2128!important}
 .analysis-search-row input{flex:1;min-width:260px;padding:11px;border:1px solid var(--border);border-radius:12px;background:#fff}
 
 
-.rival-link{color:#175cd3;font-weight:800;text-decoration:underline;cursor:pointer}
+.rival-link{color:#175cd3;font-weight:800;text-decoration:underline;text-underline-offset:2px;cursor:pointer;transition:color .12s}
+.rival-link:hover,.rival-link:focus{color:#0b3a8f;text-decoration-thickness:2px;background:#eaf2ff;border-radius:4px}
 .group-analysis-box{margin-top:12px;padding:12px;border:1px solid #dbeafe;border-radius:14px;background:#fff}
 .podium-ref-box{margin-top:12px;padding:12px;border:1px solid #fedf89;border-radius:14px;background:#fffbeb}
 .sim-result-card{margin-top:10px;background:#fff;border:1px solid #b2ddff;border-radius:14px;padding:12px;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
