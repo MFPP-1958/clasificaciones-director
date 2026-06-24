@@ -27598,7 +27598,23 @@ function _updateInlineCompareBar(){
   if(n>0){
     bar.style.display='flex';
     if(info) info.textContent = `${n} ciclista${n===1?'':'s'} seleccionado${n===1?'':'s'}: ` + selectedCompare.map(r=>r.name).join(' · ');
-    if(btn) btn.disabled = (n<2);
+    if(btn){
+      const ready = n>=2;
+      btn.disabled = !ready;
+      if(ready){
+        btn.textContent = `⚔️ Comparar (${n})`;
+        btn.style.background = '#16a34a';
+        btn.style.borderColor = '#16a34a';
+        btn.style.boxShadow = '';
+        btn.classList.add('cmp-ready');
+      } else {
+        btn.textContent = '⚔️ Comparar · marca 1 más';
+        btn.style.background = '#94a3b8';
+        btn.style.borderColor = '#94a3b8';
+        btn.style.boxShadow = 'none';
+        btn.classList.remove('cmp-ready');
+      }
+    }
   } else {
     bar.style.display='none';
   }

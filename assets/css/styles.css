@@ -1125,7 +1125,11 @@ body.dark-mode .success-banner{background:#0d1117;border-color:#12b76a}
 .stat-vs-mean.much-worse {background:#fed7aa;color:#9a3412;border:1px solid #fb923c}
 /* Checkbox comparador inline en filas */
 .compare-cell{width:28px;text-align:center}
-.compare-cell input{cursor:pointer;width:16px;height:16px}
+.compare-cell input{cursor:pointer;width:17px;height:17px;accent-color:#1e40af}
+/* Botón "Comparar" listo (2+ seleccionados): glow verde pulsante para feedback claro */
+#inlineCompareGo.cmp-ready{animation:cmpPulse 1.4s ease-in-out infinite}
+@keyframes cmpPulse{0%,100%{box-shadow:0 0 0 3px rgba(22,163,74,.28)}50%{box-shadow:0 0 0 7px rgba(22,163,74,.10)}}
+@media(prefers-reduced-motion:reduce){#inlineCompareGo.cmp-ready{animation:none;box-shadow:0 0 0 3px rgba(22,163,74,.28)}}
 
 /* ═══════════════════════════════════════════════════════════════════
    SIMULADOR DE CARRERAS — Predicción Fase 1
