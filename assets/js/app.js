@@ -646,7 +646,7 @@ if(document.readyState==='loading'){
 // ═══════════════════════════════════════════════════════════════════════════
 // FILTROS GLOBALES (Paso 2 del rediseño UX)
 // ═══════════════════════════════════════════════════════════════════════════
-const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter','resumenYear'];
+const _GF_YEAR_IDS   = ['evolYearFilter','prYearFilter','trendYearFilter','selYearFilter','selTeamYearFilter'];
 const _GF_REGION_IDS = ['prRegionFilter','trendRegionFilter','selRegionFilter','selTeamRegionFilter'];
 const _GF_VIEWS_USING_HISTORY = ['view-inicio','view-evolucion','view-powerranking','view-laboratorio','view-tendencias','view-seleccion','view-resumen','view-historial','view-calendario','view-informe-plantilla','view-challenge','view-equipos-ccaa','view-ciclistas-cat','view-tabla','view-analisis','view-comparativo','view-equipos','view-graficos','view-top10','view-tactica','view-simulador'];
 
@@ -6277,7 +6277,9 @@ async function renderResumen(){
   }).filter(Boolean))].sort((a,b)=>b-a);
 
   // Guardar valor seleccionado
-  const selYear = yearSel ? yearSel.value : '';
+  // El rango temporal lo manda el filtro global de Año (se eliminó el selector
+  // local redundante). Fallback al selector si aún existiera.
+  const selYear = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.year) || (yearSel ? yearSel.value : '');
   if(yearSel && yearSel.options.length <= 1){
     years.forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent='Temporada '+y; yearSel.appendChild(o); });
   }
@@ -6431,8 +6433,8 @@ async function renderResumen(){
         <thead><tr style="background:#f3f4f6">
           <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Carrera</th>
           <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Fecha</th>
-          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Km</th>
-          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Vel. media</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151" title="— = datos no registrados">Km</th>
+          <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151" title="— = datos no registrados">Vel. media</th>
           <th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Corredores</th>
           ${hasTeam?'<th style="padding:10px 14px;text-align:center;font-weight:800;color:#374151">Mejor pos. equipo</th>':''}
         </tr></thead>
@@ -6446,8 +6448,8 @@ async function renderResumen(){
             return `<tr style="border-bottom:1px solid #f3f4f6;background:${i%2===0?'#fff':'#fafafa'}">
               <td style="padding:10px 14px;font-weight:600">${escapeHtml(race.raceName||'—')}</td>
               <td style="padding:10px 14px;text-align:center;color:#6b7280">${escapeHtml(race.raceDate||'—')}</td>
-              <td style="padding:10px 14px;text-align:center">${_fmtKm(race.km)}</td>
-              <td style="padding:10px 14px;text-align:center">${_fmtAvg(race.avg)}</td>
+              <td style="padding:10px 14px;text-align:center">${_resStatCell(race.km,'km')}</td>
+              <td style="padding:10px 14px;text-align:center">${_resStatCell(race.avg,'km/h')}</td>
               <td style="padding:10px 14px;text-align:center">${(race.riders||[]).length}</td>
               ${hasTeam?`<td style="padding:10px 14px;text-align:center">${myBest?`<span style="font-weight:800;color:${myBest.pos<=3?'#b45309':myBest.pos<=10?'#1d4ed8':'#374151'}">${myBest.pos}º ${escapeHtml(myBest.name)}</span>`:'<span style="color:#9ca3af">—</span>'}</td>`:''}
             </tr>`;
@@ -6583,6 +6585,12 @@ const _RES_HEAT_LEGEND = [
   ['#16a34a','Gran actuación'], ['#f59e0b','Media'], ['#dc2626','Baja / DNF'], ['#e5e7eb','No participó']
 ];
 function _resHeatModeLabel(){ return _resHeatMode==='top10' ? 'Verde = Top 10' : 'Por percentil (podio/25%)'; }
+// Barra de leyenda estática para el mapa de calor en pantalla (misma escala que el PDF).
+function _resHeatLegendBar(){
+  return `<div class="res-heat-legend"><span class="rhl-title">Leyenda:</span>`+
+    _RES_HEAT_LEGEND.map(([c,l])=>`<span><i class="rhl-sw" style="background:${c}"></i> ${escapeHtml(l)}</span>`).join('')+
+    `</div>`;
+}
 
 async function _resRenderHeat(){
   const body = document.getElementById('resHeatBody');
@@ -6629,6 +6637,7 @@ async function _resRenderHeat(){
         <button onclick="_resHeatExportPDF()" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:800;cursor:pointer">📄 PDF</button>
       </div>
     </div>
+    ${_resHeatLegendBar()}
     <div style="overflow:auto;max-height:70vh;border:1px solid #e5e7eb;border-radius:12px">
       <table class="heat-table" style="border-collapse:collapse;background:#fff;min-width:100%">
         <thead><tr>
@@ -7193,8 +7202,8 @@ function _resDestacado(icon, label, name, sub, bg, color){
 
 function _resumenExportPDF(){
   const body = document.getElementById('resumenBody');
-  const yearSel = document.getElementById('resumenYear');
-  const yearLabel = yearSel && yearSel.value ? 'Temporada '+yearSel.value : 'Historial completo';
+  const _ry = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.year) || (document.getElementById('resumenYear')?.value || '');
+  const yearLabel = _ry ? 'Temporada '+_ry : 'Historial completo';
   if(!body) return;
   const w = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -8337,6 +8346,12 @@ function updateMyTeamSuggestions(){
 function _stripUnit(v){ return String(v==null?'':v).replace(/km\/?\s*h?/gi,'').replace(/[^0-9.,]/g,'').trim(); }
 function _fmtKm(v){ const n=_stripUnit(v); return n? (n+' km') : '—'; }
 function _fmtAvg(v){ const n=_stripUnit(v); return n? (n+' km/h') : '—'; }
+// Celda de Estadísticas para datos opcionales (km/vel): valor o guion gris sutil
+// con tooltip "Datos no registrados" (evita que parezca un error del sistema).
+function _resStatCell(v, unit){
+  const n=_stripUnit(v);
+  return n ? (n+' '+unit) : '<span style="color:#cbd5e1;cursor:help" title="Datos no registrados">—</span>';
+}
 
 function formatKmValue(v){
   // COMENTARIO: formato robusto de kilómetros; limpia texto y conserva un único separador decimal.
