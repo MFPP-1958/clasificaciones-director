@@ -11800,7 +11800,7 @@ function _renderTopTeamChart(){
         const r=rows[ctx.dataIndex];
         return isPct
           ? `${ctx.dataset.label}: ${ctx.raw}% (${r.vals[cutoffs.indexOf(parseInt(ctx.dataset.label.replace('Top ','').replace(' %','')))]||0} de ${r.total})`
-          : `${ctx.dataset.label}: ${ctx.raw} corredores`;
+          : `${ctx.dataset.label}: ${ctx.raw} de ${r.total} corredores`;
       },afterLabel:()=>'Clic para filtrar este equipo'}}},
       scales:{x:{beginAtZero:true,ticks:{precision:0,callback:(v)=>isPct?v+'%':v},title:{display:true,text:isPct?'% de corredores del equipo':'Número de corredores'}},y:{ticks:{autoSkip:false,font:{size:11}}}},
       onClick:(evt,els)=>{if(els.length){$('teamFilter').value=rows[els[0].index].team;applyFilters();}}}
@@ -13085,14 +13085,21 @@ function renderCharts(){
   if(!window.Chart || !riders.length){return}
   destroyCharts();
   const selectedTeam=$('teamFilter')?.value ?? '';
+  const _myCanon = (typeof myTeam!=='undefined' && myTeam && typeof getCanonicalTeam==='function') ? getCanonicalTeam(myTeam).toLowerCase() : '';
   const teamRows=Object.entries(riders.reduce((m,r)=>{(m[r.team]=m[r.team]||[]).push(r);return m},{}))
-    .map(([team,rs])=>({team,count:rs.length,avg:rs.reduce((s,r)=>s+r.pos,0)/rs.length,best:Math.min(...rs.map(r=>r.pos))}))
+    .map(([team,rs])=>{
+      const avg=rs.reduce((s,r)=>s+r.pos,0)/rs.length;
+      const std=Math.sqrt(rs.reduce((s,r)=>s+Math.pow(r.pos-avg,2),0)/rs.length);
+      const top3=rs.slice().sort((a,b)=>a.pos-b.pos).slice(0,3).map(r=>`${r.pos}. ${(r.name||'').split(',')[0]}`);
+      const isMine=!!_myCanon && typeof getCanonicalTeam==='function' && getCanonicalTeam(team).toLowerCase()===_myCanon;
+      return {team,count:rs.length,avg,best:Math.min(...rs.map(r=>r.pos)),std,top3,isMine};
+    })
     .sort((a,b)=>a.avg-b.avg).slice(0,12);
   const globalAvg = riders.length ? (riders.reduce((s,r)=>s+r.pos,0)/riders.length) : null;
-  const teamColors=teamRows.map((x,i)=>selectedTeam?(x.team===selectedTeam?'#1f6feb':'#d0d5dd'):(i===0?'#f59e0b':'#1f6feb'));
+  const teamColors=teamRows.map((x,i)=>selectedTeam?(x.team===selectedTeam?'#1f6feb':'#d0d5dd'):(x.isMine?'#16a34a':(i===0?'#f59e0b':'#1f6feb')));
   if($('teamAvgRef') && globalAvg) $('teamAvgRef').innerHTML = `· Media general: <b>${globalAvg.toFixed(1)}</b>`;
   const _refLinePlugin={id:'refLine',afterDraw(chart){const avg=chart.options._refAvg;if(!avg)return;const ctx=chart.ctx;const xsc=chart.scales.x;const ysc=chart.scales.y;const xpx=xsc.getPixelForValue(avg);ctx.save();ctx.beginPath();ctx.setLineDash([5,4]);ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.moveTo(xpx,ysc.top);ctx.lineTo(xpx,ysc.bottom);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#ef4444';ctx.font='bold 9px Arial';ctx.textAlign='center';ctx.fillText('Media: '+avg.toFixed(1),xpx,ysc.top-3);ctx.restore();}};
-  chartTeam=new Chart($('teamChart'),{plugins:[valueLabelsPlugin,_refLinePlugin],type:'bar',data:{labels:teamRows.map(x=>x.team),datasets:[{label:'Posición media',data:teamRows.map(x=>Number(x.avg.toFixed(1))),backgroundColor:teamColors,borderWidth:0,borderRadius:8}]},options:{_refAvg:globalAvg,responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:(ctx)=>{const x=teamRows[ctx.dataIndex];const diff=globalAvg?(x.avg-globalAvg).toFixed(1):null;return ['Corredores: '+x.count,'Mejor puesto: '+x.best,diff!=null?(diff<0?'✅ '+Math.abs(diff)+' puntos mejor que la media':'⚠️ '+diff+' puntos peor que la media'):'','Clic para filtrar este equipo'];},}}}  ,scales:{x:{title:{display:true,text:'Posición media'}},y:{ticks:{autoSkip:false,font:{size:11}}}},onClick:(evt,els)=>{if(els.length){$('teamFilter').value=teamRows[els[0].index].team;applyFilters();}}}});
+  chartTeam=new Chart($('teamChart'),{plugins:[valueLabelsPlugin,_refLinePlugin],type:'bar',data:{labels:teamRows.map(x=>x.team),datasets:[{label:'Posición media',data:teamRows.map(x=>Number(x.avg.toFixed(1))),backgroundColor:teamColors,borderWidth:0,borderRadius:8}]},options:{_refAvg:globalAvg,responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:(ctx)=>{const x=teamRows[ctx.dataIndex];const diff=globalAvg?(x.avg-globalAvg).toFixed(1):null;const out=[];if(x.isMine)out.push('⭐ Tu equipo');out.push('Corredores: '+x.count,'Mejor puesto: '+x.best,'Regularidad (σ): '+x.std.toFixed(1)+(x.std<=5?' · muy consistente':x.std<=12?' · normal':' · irregular'));if(diff!=null)out.push(diff<0?'✅ '+Math.abs(diff)+' puntos mejor que la media':'⚠️ '+diff+' puntos peor que la media');if(x.top3&&x.top3.length)out.push('Top 3: '+x.top3.join(' · '));out.push('Clic para filtrar este equipo');return out;},}}}  ,scales:{x:{title:{display:true,text:'Posición media'}},y:{ticks:{autoSkip:false,font:{size:11}}}},onClick:(evt,els)=>{if(els.length){$('teamFilter').value=teamRows[els[0].index].team;applyFilters();}}}});
   $('teamChart').closest('.chart-card').classList.toggle('active-chart',!!selectedTeam);
 
   const catRows=Object.entries(riders.reduce((m,r)=>{m[r.cat]=(m[r.cat]||0)+1;return m},{})).sort((a,b)=>b[1]-a[1]);
@@ -13102,8 +13109,8 @@ function renderCharts(){
 
   // COMENTARIO: scatter siempre usa todos los ciclistas; los que no coinciden con el filtro aparecen en gris.
   const filteredKeys=new Set(filtered.map(r=>r.pos+'|'+r.bib+'|'+r.name));
-  const scatterData=riders.map(r=>({x:Number(r.bib)||r.pos,y:r.pos,r,active:filteredKeys.has(r.pos+'|'+r.bib+'|'+r.name)}));
-  chartScatter=new Chart($('scatterChart'),{type:'scatter',data:{datasets:[{label:'Ciclistas',data:scatterData,backgroundColor:scatterData.map(p=>p.active?getColorForCategory(p.r.cat):'#d0d5dd'),pointRadius:scatterData.map(p=>p.active?5:4),pointHoverRadius:7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{const r=ctx.raw.r;return `${r.pos}. ${r.name} · ${r.team} · ${r.cat} · ${r.time||'—'}`;}}}},scales:{x:{title:{display:true,text:'Dorsal'}},y:{reverse:true,title:{display:true,text:'Posición'},ticks:{precision:0}}},onClick:(evt,els)=>{if(els.length){const r=scatterData[els[0].index].r;selectAndAnalyzeRiderByKey(getRiderKey(r));}}}});
+  const scatterData=riders.map(r=>({x:Number(r.bib)||r.pos,y:r.pos,r,active:filteredKeys.has(r.pos+'|'+r.bib+'|'+r.name),mine:!!_myCanon && typeof getCanonicalTeam==='function' && getCanonicalTeam(r.team).toLowerCase()===_myCanon}));
+  chartScatter=new Chart($('scatterChart'),{type:'scatter',data:{datasets:[{label:'Ciclistas',data:scatterData,backgroundColor:scatterData.map(p=>p.active?getColorForCategory(p.r.cat):'#d0d5dd'),pointRadius:scatterData.map(p=>p.mine?7:(p.active?5:4)),pointHoverRadius:9,pointBorderColor:scatterData.map(p=>p.mine?'#0b2f6b':'transparent'),pointBorderWidth:scatterData.map(p=>p.mine?2:0)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{const r=ctx.raw.r;return `${ctx.raw.mine?'⭐ ':''}${r.pos}. ${r.name} · ${r.team} · ${r.cat} · ${r.time||'—'}`;}}}},scales:{x:{title:{display:true,text:'Dorsal'}},y:{reverse:true,title:{display:true,text:'Posición'},ticks:{precision:0}}},onClick:(evt,els)=>{if(els.length){const r=scatterData[els[0].index].r;selectAndAnalyzeRiderByKey(getRiderKey(r));}}}});
 
   const cutoffs=[10,20,50];
   const teams=[...new Set(riders.map(r=>r.team))];
