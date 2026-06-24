@@ -151,6 +151,10 @@ body.dark-mode .load-bar:hover{background:#21262d}
 .top10-table td.t-name{font-weight:600;cursor:pointer;color:#0b2f6b}
 .top10-table td.t-name:hover{text-decoration:underline}
 .top10-table td.t-team{font-size:12px}
+.top10-trend-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:11.5px;color:#475569;line-height:1.4}
+.top10-trend-legend .ttl-title{font-weight:800;color:#0b2f6b;text-transform:uppercase;letter-spacing:.3px}
+body.dark-mode .top10-trend-legend{background:#161b22;border-color:#30363d;color:#9da7b3}
+body.dark-mode .top10-trend-legend .ttl-title{color:#e6edf3}
 /* ── Top 10 móvil (<768px): podio compacto + tabla simplificada (escritorio intacto) ── */
 @media(max-width:768px){
   /* Podio: tarjetas de altura reducida, priorizando medalla/pos · nombre · equipo · tiempo */

@@ -11252,6 +11252,11 @@ function renderTop10(){
   if(chartTop10Teams){chartTop10Teams.destroy();chartTop10Teams=null;}
   if(chartTop10Cat){chartTop10Cat.destroy();chartTop10Cat=null;}
 
+  // Título con contexto dinámico: nombre de la carrera cargada o "Toda la temporada"
+  const _t10Race = (($('raceName')&&$('raceName').value) || (typeof _activeRace!=='undefined' && _activeRace && _activeRace.name) || '').trim();
+  const _t10Title = $('top10Title');
+  if(_t10Title) _t10Title.innerHTML = '🏁 Top 10 General' + (_t10Race ? ' — '+escapeHtml(_t10Race) : ' — Toda la temporada');
+
   const base = getTeamRankingFilteredRiders();
   const top  = base.slice().sort((a,b)=>a.pos-b.pos).slice(0,10);
 
@@ -11365,7 +11370,14 @@ function renderTop10(){
     <table class="top10-table">
       <thead><tr><th>Pos.</th><th>Ciclista</th><th>Tiempo</th><th>Cat.</th><th>CCAA</th><th>Equipo</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
-    </table></div>`;
+    </table></div>
+    <div class="top10-trend-legend">
+      <span class="ttl-title">Tendencia (junto al nombre):</span>
+      <span><b style="color:#b91c1c">🔥 En racha</b> — mejora en sus últimas carreras</span>
+      <span><b style="color:#166534">📈 +N</b> — sube respecto a su media histórica</span>
+      <span><b style="color:#3730a3">▬ Regular</b> — en su nivel habitual</span>
+      <span><b style="color:#1e40af">🌱 Debutante</b> — pocos o ningún dato previo</span>
+    </div>`;
 
   // ── COMENTARIO DIRECTOR ────────────────────────────────────────────────
   const commentEl=$('top10Commentary');
@@ -11476,8 +11488,10 @@ function renderTop10(){
   const myEl=$('top10MyTeam');
   if(myEl){
     const myRiders=top.filter(r=>isMyTeam(r));
-    if(!myRiders.length){
-      myEl.innerHTML=`<div style="color:#9ca3af;font-size:13px;padding:8px 0">Ningún corredor de tu equipo en el Top 10${myTeam?' ('+escapeHtml(myTeam)+')':`<br><span style="font-size:11px">Configura tu equipo en el filtro superior.</span>`}.</div>`;
+    if(!myTeam){
+      myEl.innerHTML=`<div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:14px 16px;font-size:13px;color:#1e3a8a;line-height:1.5;display:flex;gap:10px;align-items:flex-start"><span style="font-size:20px;flex-shrink:0">⭐</span><div>Aún no has configurado tu equipo. Para ver cómo se posicionan tus corredores, selecciona tu equipo en los ajustes de perfil.</div></div>`;
+    } else if(!myRiders.length){
+      myEl.innerHTML=`<div style="color:#9ca3af;font-size:13px;padding:8px 0">Ningún corredor de tu equipo (${escapeHtml(myTeam)}) en el Top 10.</div>`;
     } else {
       myEl.innerHTML=myRiders.map(r=>{
         const ci=teamIdx[r.team]||0;
