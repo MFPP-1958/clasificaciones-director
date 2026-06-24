@@ -1210,6 +1210,18 @@ async function _autoLoadLastClassified(targetView){
 }
 
 function showView(viewId){
+  // Salvaguarda UI: al cambiar de vista, cerrar el modal/overlay de detalle de
+  // carrera del calendario y restaurar el scroll del body. Evita que, al
+  // navegar desde el detalle hacia Carga/Evolución, quede el overlay gris o el
+  // body bloqueado (overflow:hidden).
+  try{
+    const _crm=document.getElementById('calRaceModal');
+    if(_crm && _crm.style.display!=='none'){
+      _crm.style.display='none';
+      document.body.style.overflow='';
+      if(typeof _calRaceModalCurrentId!=='undefined') _calRaceModalCurrentId=null;
+    }
+  }catch(_){}
   // RBAC: check permission
   if(_rbacUser && !_rbacPerms.has(viewId)){
     // En vez de una pantalla brusca de "acceso denegado", llevamos al usuario a
@@ -2254,6 +2266,18 @@ function _calToday(){
   const now = new Date();
   _calYear = now.getFullYear(); _calMonth = now.getMonth();
   _calRender();
+}
+// Alterna en MÓVIL entre 'Ver Lista' (por defecto) y 'Ver Cuadrícula'. En
+// escritorio (>768px) el CSS muestra ambas y este toggle queda oculto.
+function _calMobileView(mode){
+  const body=document.getElementById('calBody');
+  if(!body) return;
+  const grid = mode==='grid';
+  body.classList.toggle('cal-show-grid', grid);
+  try{ localStorage.setItem('cal_mobile_view', grid?'grid':'list'); }catch(_){}
+  const lb=document.getElementById('calViewListBtn'), gb=document.getElementById('calViewGridBtn');
+  if(lb) lb.classList.toggle('active', !grid);
+  if(gb) gb.classList.toggle('active', grid);
 }
 function _calSetView(v){
   _calView = v;
@@ -3432,6 +3456,8 @@ function _calRender(){
     body.innerHTML = emptyBanner + _calBuildMonth(_calYear, _calMonth);
   }
   _calBindTooltips();
+  // Re-aplicar la preferencia móvil lista/cuadrícula (solo afecta en <768px)
+  if(_calView==='monthly'){ try{ _calMobileView(localStorage.getItem('cal_mobile_view')||'list'); }catch(_){} }
 }
 
 /* ═══════════════ TOOLTIP LIGERO (hover ratón / pulsación táctil) ══════════
@@ -3517,7 +3543,11 @@ function _calBuildMonth(y, m){
   let startDow = firstDay.getDay()-1; if(startDow<0) startDow=6;
   const daysInMonth = new Date(y, m+1, 0).getDate();
 
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">`;
+  let html = `<div class="cal-mobile-toggle">
+    <button id="calViewListBtn" onclick="_calMobileView('list')">📋 Ver Lista</button>
+    <button id="calViewGridBtn" onclick="_calMobileView('grid')">🗓️ Ver Cuadrícula</button>
+  </div>`;
+  html += `<div class="cal-grid-wrap"><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px">`;
   _CAL_DAYS_ES.forEach(d=>{ html+=`<div style="text-align:center;font-size:12px;font-weight:800;color:#6b7280;padding:6px 0">${d}</div>`; });
   html += '</div><div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px">';
 
@@ -3557,6 +3587,7 @@ function _calBuildMonth(y, m){
     </div>`;
   }
   html += '</div>';
+  html += '</div><div class="cal-list-wrap">'; // cierra cal-grid-wrap, abre cal-list-wrap
 
   // Lista de carreras del mes
   const monthRaces = [..._calPast, ..._calPlanned].filter(r=>{
@@ -3604,6 +3635,7 @@ function _calBuildMonth(y, m){
       <button class="admin-only" onclick="_calOpenModal(null)" style="background:#10b981;color:#fff;border:none;border-radius:10px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer">➕ Añadir carrera planificada</button>
     </div>`;
   }
+  html += '</div>'; // /cal-list-wrap
   return html;
 }
 

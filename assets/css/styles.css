@@ -159,6 +159,16 @@ body.dark-mode .load-bar:hover{background:#21262d}
 #calFab{position:fixed;right:18px;bottom:18px;z-index:8000;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:999px;padding:14px 20px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(5,150,105,.4);transition:transform .15s,filter .15s}
 #calFab:hover{filter:brightness(1.06);transform:translateY(-1px)}
 @media(max-width:768px){#calFab{right:14px;bottom:14px;padding:13px 18px;font-size:14px}}
+/* Calendario · vista móvil: lista por defecto + toggle a cuadrícula (escritorio intacto) */
+.cal-mobile-toggle{display:none;gap:6px;margin-bottom:12px}
+.cal-mobile-toggle button{flex:1;padding:9px 12px;border:1.5px solid #d0d5dd;background:#fff;color:#475569;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer}
+.cal-mobile-toggle button.active{background:#0b2f6b;color:#fff;border-color:#0b2f6b}
+@media(max-width:768px){
+  .cal-mobile-toggle{display:flex}
+  #calBody .cal-grid-wrap{display:none}
+  #calBody.cal-show-grid .cal-grid-wrap{display:block}
+  #calBody.cal-show-grid .cal-list-wrap{display:none}
+}
 .scout-table thead th{position:sticky;top:0;z-index:10;background:#f3f4f6}
 .heat-table thead th{position:sticky;top:0;z-index:10;background:#f8fafc}
 /* Mapa de calor: leyenda estática de la escala de colores */
