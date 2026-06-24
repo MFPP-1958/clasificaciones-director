@@ -5415,6 +5415,39 @@ function _fccvShowRawHtml(){
   if(ifr) ifr.srcdoc = html;
 }
 
+// Modal de confirmación (estética de la app) antes de sincronizar con la FCCV.
+// Reemplaza al window.confirm nativo; explica qué se descarga. Mantiene intacta
+// la función _fccvSync (que también se usa desde otros flujos).
+function _calFccvSyncConfirm(){
+  const year = document.getElementById('fccvYear')?.value || new Date().getFullYear();
+  const cat  = document.getElementById('fccvCat')?.value || '';
+  const mod  = document.getElementById('fccvMod')?.value || '';
+  const gen  = document.getElementById('fccvGen')?.value || '';
+  const filtros = [cat&&('categoría '+cat), mod&&('modalidad '+mod), gen&&('género '+gen)].filter(Boolean).join(' · ');
+  const old = document.getElementById('_fccvSyncDialog'); if(old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = '_fccvSyncDialog';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9100;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.onclick = e=>{ if(e.target===ov) ov.remove(); };
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:18px;padding:24px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:10px">🔄 Sincronizar con la Federación (FCCV)</div>
+      <div style="font-size:13.5px;color:#374151;line-height:1.55">
+        Se descargará el <b>calendario oficial de la FCCV</b> de la temporada <b>${escapeHtml(String(year))}</b>${filtros?` (${escapeHtml(filtros)})`:''}.
+        <ul style="margin:8px 0 0;padding-left:18px">
+          <li>Actualiza la lista de pruebas oficiales para poder añadirlas o consultarlas.</li>
+          <li><b>No modifica</b> tus pruebas guardadas, clasificaciones ni inscritos.</li>
+          <li>Puede tardar unos segundos (consulta a fccv.es vía proxy).</li>
+        </ul>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+        <button onclick="document.getElementById('_fccvSyncDialog')?.remove()" style="padding:9px 18px;border-radius:9px;border:1.5px solid #d0d5dd;background:#fff;color:#374151;font-weight:700;cursor:pointer">Cancelar</button>
+        <button onclick="document.getElementById('_fccvSyncDialog')?.remove();_fccvSync()" style="padding:9px 18px;border-radius:9px;border:none;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;font-weight:800;cursor:pointer">🔄 Sincronizar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
 async function _fccvSync(){
   // Marcador de versión para verificar que el JS nuevo se ha cargado.
   // Si aparece en la consola, la corrección del bug _fccvParseDate está activa.

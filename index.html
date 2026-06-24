@@ -3031,7 +3031,7 @@
                 <option value="mixto">Mixto (M+F)</option>
               </select>
             </div>
-            <button onclick="_fccvSync()" id="fccvSyncBtn" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,.35);white-space:nowrap">🔄 Sincronizar con Federación</button>
+            <button onclick="_calFccvSyncConfirm()" id="fccvSyncBtn" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,.35);white-space:nowrap">🔄 Sincronizar con Federación</button>
             <button onclick="_fccvResetCache()" title="Borra el scrape acumulado y los modales en caché para empezar de cero" style="background:#fff;color:#dc2626;border:1.5px solid #fca5a5;border-radius:9px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer">🗑️ Limpiar caché</button>
           </div>
 
@@ -3136,6 +3136,8 @@
           </div>
         </div>
       </div>
+      <!-- FAB: crear nueva prueba (solo staff; oculto a ciclistas vía .admin-only) -->
+      <button id="calFab" class="admin-only" onclick="_calOpenModal(null)" title="Añadir una nueva prueba" aria-label="Nueva prueba">+ Nueva Prueba</button>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════

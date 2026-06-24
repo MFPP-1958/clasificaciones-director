@@ -155,6 +155,10 @@ body.dark-mode .load-bar:hover{background:#21262d}
 .top10-trend-legend .ttl-title{font-weight:800;color:#0b2f6b;text-transform:uppercase;letter-spacing:.3px}
 /* Resumen · Seguimiento y Mapa de calor: cabeceras fijas al hacer scroll vertical */
 .scout-table{min-width:720px}
+/* Calendario · botón flotante (FAB) para crear nueva prueba */
+#calFab{position:fixed;right:18px;bottom:18px;z-index:8000;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:999px;padding:14px 20px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(5,150,105,.4);transition:transform .15s,filter .15s}
+#calFab:hover{filter:brightness(1.06);transform:translateY(-1px)}
+@media(max-width:768px){#calFab{right:14px;bottom:14px;padding:13px 18px;font-size:14px}}
 .scout-table thead th{position:sticky;top:0;z-index:10;background:#f3f4f6}
 .heat-table thead th{position:sticky;top:0;z-index:10;background:#f8fafc}
 /* Mapa de calor: leyenda estática de la escala de colores */
