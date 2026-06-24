@@ -154,6 +154,7 @@ body.dark-mode .load-bar:hover{background:#21262d}
 .top10-trend-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:11.5px;color:#475569;line-height:1.4}
 .top10-trend-legend .ttl-title{font-weight:800;color:#0b2f6b;text-transform:uppercase;letter-spacing:.3px}
 /* Resumen · Seguimiento y Mapa de calor: cabeceras fijas al hacer scroll vertical */
+.scout-table{min-width:720px}
 .scout-table thead th{position:sticky;top:0;z-index:10;background:#f3f4f6}
 .heat-table thead th{position:sticky;top:0;z-index:10;background:#f8fafc}
 /* Mapa de calor: leyenda estática de la escala de colores */
