@@ -11781,6 +11781,40 @@ function chartColors(n){
 let _grafTopTeamRows=[];
 let _grafTopTeamCutoffs=[10,20,50];
 let _grafTopTeamCurrentMode='abs';
+let chartCatPerf=null;
+let _grafCatPerfRows=[];
+let _grafCatPerfMode='abs';
+
+/* ── Gráficos: render Rendimiento por categoría (franjas de puesto) ── */
+function _renderCatPerfChart(){
+  if(!window.Chart || !$('catPerfChart')) return;
+  if(chartCatPerf){chartCatPerf.destroy();chartCatPerf=null;}
+  const rows=_grafCatPerfRows; if(!rows.length) return;
+  const isPct=_grafCatPerfMode==='pct';
+  const bandLabels=['Top 10','11–20','21–50','51+'];
+  const bandColors=['#12b76a','#1f6feb','#f79009','#cbd5e1'];
+  const datasets=bandLabels.map((lbl,bi)=>({
+    label:lbl,
+    data:rows.map(x=> isPct ? +(x.bands[bi]/Math.max(1,x.total)*100).toFixed(1) : x.bands[bi]),
+    backgroundColor:bandColors[bi],
+    borderRadius:4,
+    stack:'cat'
+  }));
+  chartCatPerf=new Chart($('catPerfChart'),{type:'bar',
+    data:{labels:rows.map(x=>x.cat),datasets},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},usePointStyle:true}},
+        tooltip:{callbacks:{label:(ctx)=>{const x=rows[ctx.dataIndex];const n=x.bands[ctx.datasetIndex];return isPct?`${ctx.dataset.label}: ${ctx.raw}% (${n} de ${x.total})`:`${ctx.dataset.label}: ${n} de ${x.total}`;},afterLabel:(ctx)=> ctx.datasetIndex===0?'Clic para filtrar esta categoría':''}}},
+      scales:{x:{stacked:true,beginAtZero:true,max:isPct?100:undefined,ticks:{callback:(v)=>isPct?v+'%':v},title:{display:true,text:isPct?'% de la categoría':'Número de ciclistas'}},y:{stacked:true,ticks:{autoSkip:false,font:{size:11}}}},
+      onClick:(evt,els)=>{if(els.length){const cat=rows[els[0].index].cat; if(typeof selectCatChip==='function') selectCatChip(cat);}}}
+  });
+}
+function _catPerfMode(mode){
+  _grafCatPerfMode=mode;
+  $('catPerfAbsBtn')?.classList.toggle('active',mode==='abs');
+  $('catPerfPctBtn')?.classList.toggle('active',mode==='pct');
+  if(_grafCatPerfRows.length) _renderCatPerfChart();
+}
 
 /* ── Gráficos: render Top Equipos (abs / pct) ───────────── */
 function _renderTopTeamChart(){
@@ -13080,7 +13114,7 @@ async function _exportEquiposCompleto(){
   w.document.close();
 }
 
-function destroyCharts(){[chartTeam,chartCat,chartScatter,chartTopTeam,chartTop10Teams,chartTop10Cat,chartTeamFinishers].forEach(c=>{if(c)c.destroy()});chartTeam=chartCat=chartScatter=chartTopTeam=chartTop10Teams=chartTop10Cat=chartTeamFinishers=null;}
+function destroyCharts(){[chartTeam,chartCat,chartScatter,chartTopTeam,chartCatPerf,chartTop10Teams,chartTop10Cat,chartTeamFinishers].forEach(c=>{if(c)c.destroy()});chartTeam=chartCat=chartScatter=chartTopTeam=chartCatPerf=chartTop10Teams=chartTop10Cat=chartTeamFinishers=null;}
 function renderCharts(){
   if(!window.Chart || !riders.length){return}
   destroyCharts();
@@ -13119,6 +13153,19 @@ function renderCharts(){
     .filter(x=>x.vals.some(v=>v>0)).sort((a,b)=>b.vals[0]-a.vals[0]||b.vals[1]-a.vals[1]||b.vals[2]-a.vals[2]).slice(0,12);
   _grafTopTeamRows=rows; _grafTopTeamCutoffs=cutoffs;
   _renderTopTeamChart();
+
+  // Rendimiento por categoría: reparto de cada categoría por franjas de puesto.
+  const _catBands=[[1,10],[11,20],[21,50],[51,Infinity]];
+  const _catPerfMap={};
+  riders.forEach(r=>{
+    const c=r.cat||'—';
+    const e=(_catPerfMap[c]=_catPerfMap[c]||{cat:c,total:0,bands:[0,0,0,0]});
+    e.total++;
+    const bi=_catBands.findIndex(b=>r.pos>=b[0]&&r.pos<=b[1]);
+    if(bi>=0) e.bands[bi]++;
+  });
+  _grafCatPerfRows=Object.values(_catPerfMap).sort((a,b)=>b.total-a.total);
+  _renderCatPerfChart();
 
   // El gráfico de equipos en el Top 10 se genera en renderTop10() con colores por equipo.
 

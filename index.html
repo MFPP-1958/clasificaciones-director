@@ -1198,6 +1198,33 @@
       • <b>¿Qué buscar?</b> Un equipo con alta efectividad en % pero pocos en absoluto tiene corredores muy bien colocados — rival peligroso en escapadas.
     </div>
   </div>
+
+  <!-- 5. Rendimiento por categoría -->
+  <div class="panel chart-card">
+    <div class="section-title">
+      <h2>Rendimiento por categoría</h2>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <button id="catPerfAbsBtn" class="graf-toggle-btn active" onclick="_catPerfMode('abs')">Absoluto</button>
+        <button id="catPerfPctBtn" class="graf-toggle-btn" onclick="_catPerfMode('pct')">% del total</button>
+        <button class="graf-help-btn" onclick="_grafHelp('catPerfHelp')" title="Ayuda interpretación">?</button>
+      </div>
+    </div>
+    <canvas id="catPerfChart"></canvas>
+    <div class="chart-help" id="catPerfLegendTxt">
+      <span style="display:inline-block;width:10px;height:10px;background:#12b76a;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Top 10 &nbsp;
+      <span style="display:inline-block;width:10px;height:10px;background:#1f6feb;border-radius:2px;margin-right:3px;vertical-align:middle"></span>11–20 &nbsp;
+      <span style="display:inline-block;width:10px;height:10px;background:#f79009;border-radius:2px;margin-right:3px;vertical-align:middle"></span>21–50 &nbsp;
+      <span style="display:inline-block;width:10px;height:10px;background:#cbd5e1;border-radius:2px;margin-right:3px;vertical-align:middle"></span>51+ &nbsp;·&nbsp;
+      Reparto de cada categoría por franjas de puesto. Cambia a <b>% del total</b> para ver la proporción dentro de cada categoría. Clic en una barra para filtrar.
+    </div>
+    <div id="catPerfHelp" class="graf-help-panel" style="display:none">
+      <b>📖 Cómo interpretar este gráfico</b><br>
+      • Cada barra es una <b>categoría</b>, dividida por <b>franjas de puesto</b> (Top 10, 11–20, 21–50, 51+).<br>
+      • <b>Absoluto</b>: número de ciclistas de esa categoría en cada franja.<br>
+      • <b>% del total</b>: qué porcentaje de la categoría cayó en cada franja (ej.: «en cadetes, el 30% acabó en Top 10»).<br>
+      • <b>¿Qué buscar?</b> Mucha franja <b style="color:#12b76a">verde</b> = categoría con sus corredores arriba; mucho <b style="color:#94a3b8">gris</b> = cola amplia.
+    </div>
+  </div>
 </section>
 
       <!-- Notas tácticas de carrera -->
