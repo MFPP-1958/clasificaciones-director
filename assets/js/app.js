@@ -11285,7 +11285,10 @@ function renderTop10(){
         ? formatSeconds(r.totalSeconds)
         : (r.gapSeconds===0 ? winnerTime : (r.time||'—'));
       const gapStr=i===0?'':(r.gapSeconds?`<div style="font-size:11px;color:#667085;margin-top:2px">+${formatSeconds(r.gapSeconds)}</div>`:'');
-      return `<div class="top10-podium-card ${podiumClass[i]}"
+      return `<div class="top10-podium-card ${podiumClass[i]}" role="button" tabindex="0"
+          onclick="analyzeRiderByKey('${escapeAttr(getRiderKey(r))}');showView('view-analisis')"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();analyzeRiderByKey('${escapeAttr(getRiderKey(r))}');showView('view-analisis')}"
+          title="Ver análisis individual de ${escapeAttr(r.name)}"
           style="border-color:${_T10_BORDER[ci]};background:linear-gradient(160deg,${_T10_BG[ci]},#fff)">
         <span class="top10-medal">${medals[i]}</span>
         <div class="top10-podium-pos" style="color:${_T10_SOLID[ci]}">${r.pos}º</div>
@@ -11296,7 +11299,7 @@ function renderTop10(){
         <span class="pill" style="font-size:10px;margin-top:6px;display:inline-block">
           <span class="cat-dot" style="background:${getColorForCategory(r.cat)}"></span>${escapeHtml(r.cat)}
         </span>
-        <button onclick="analyzeRiderByKey('${escapeAttr(getRiderKey(r))}');showView('view-analisis')"
+        <button onclick="event.stopPropagation();analyzeRiderByKey('${escapeAttr(getRiderKey(r))}');showView('view-analisis')"
           style="margin-top:8px;font-size:11px;padding:4px 10px;border-radius:20px;border:1.5px solid ${_T10_SOLID[ci]};background:transparent;color:${_T10_SOLID[ci]};cursor:pointer;font-weight:600"
           title="Ir al análisis individual">👤 Ver análisis</button>
       </div>`;
@@ -11343,7 +11346,7 @@ function renderTop10(){
     }
     return `<tr style="background:${rowBg};border-left:4px solid ${_T10_SOLID[ci]}">
       <td>${posBadge(i)}</td>
-      <td class="t-name">${escapeHtml(r.name)}</td>
+      <td class="t-name" onclick="analyzeRiderByKey('${escapeAttr(getRiderKey(r))}');showView('view-analisis')" title="Ver análisis individual">${escapeHtml(r.name)}</td>
       <td class="t-time">${timeDisplay}</td>
       <td><span class="pill"><span class="cat-dot" style="background:${getColorForCategory(r.cat)}"></span>${escapeHtml(r.cat)}</span></td>
       <td>${escapeHtml(r.region||'—')}</td>
