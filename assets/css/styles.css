@@ -151,6 +151,24 @@ body.dark-mode .load-bar:hover{background:#21262d}
 .top10-table td.t-name{font-weight:600;cursor:pointer;color:#0b2f6b}
 .top10-table td.t-name:hover{text-decoration:underline}
 .top10-table td.t-team{font-size:12px}
+/* ── Top 10 móvil (<768px): podio compacto + tabla simplificada (escritorio intacto) ── */
+@media(max-width:768px){
+  /* Podio: tarjetas de altura reducida, priorizando medalla/pos · nombre · equipo · tiempo */
+  .top10-podium-row{gap:6px;align-items:stretch}
+  .top10-podium-card{padding:10px 6px 12px;border-radius:10px}
+  .top10-podium-card.p1,.top10-podium-card.p2,.top10-podium-card.p3{min-height:0}
+  .top10-medal{font-size:22px;margin-bottom:2px}
+  .top10-podium-pos{font-size:22px}
+  .top10-podium-name{font-size:12px;margin-top:2px}
+  .top10-podium-team{font-size:10px;margin-top:1px}
+  .top10-podium-time{font-size:11px;margin-top:3px}
+  .top10-podium-card .pill{display:none}      /* ocultar categoría (dato secundario) */
+  .top10-podium-card>button{display:none}      /* ocultar 'Ver análisis': la tarjeta ya es clicable */
+  /* Tabla: dejar solo Pos · Ciclista · Tiempo · Equipo (ocultar Cat, CCAA y el botón 👤) */
+  .top10-table th:nth-child(4),.top10-table td:nth-child(4),
+  .top10-table th:nth-child(5),.top10-table td:nth-child(5),
+  .top10-table th:nth-child(7),.top10-table td:nth-child(7){display:none}
+}
 /* Category donut */
 .top10-cat-donut{max-height:160px!important}
 /* Dominance panel */
