@@ -6629,10 +6629,10 @@ async function _resRenderHeat(){
         <button onclick="_resHeatExportPDF()" style="background:#7c3aed;color:#fff;border:0;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:800;cursor:pointer">📄 PDF</button>
       </div>
     </div>
-    <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:12px">
-      <table style="border-collapse:collapse;background:#fff;min-width:100%">
+    <div style="overflow:auto;max-height:70vh;border:1px solid #e5e7eb;border-radius:12px">
+      <table class="heat-table" style="border-collapse:collapse;background:#fff;min-width:100%">
         <thead><tr>
-          <th style="position:sticky;left:0;background:#f8fafc;z-index:3;padding:6px 10px;border-bottom:2px solid #e5e7eb;border-right:2px solid #e5e7eb;text-align:left;font-size:11px;font-weight:800;color:#475467;min-width:170px">CICLISTA</th>
+          <th style="position:sticky;left:0;top:0;background:#f8fafc;z-index:12;padding:6px 10px;border-bottom:2px solid #e5e7eb;border-right:2px solid #e5e7eb;text-align:left;font-size:11px;font-weight:800;color:#475467;min-width:170px">CICLISTA</th>
           ${headCols}
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
@@ -6914,6 +6914,15 @@ function _scoutReset(){
   if(body) body.innerHTML='<div style="text-align:center;color:#9ca3af;padding:40px"><div style="font-size:36px">🔍</div><p style="margin-top:8px;font-size:13px">Aplica filtros para buscar ciclistas de cualquier equipo.</p></div>';
 }
 
+// Color de fondo por resultado (posición) para la tabla de Seguimiento:
+// Top3 verde fuerte · Top10 verde claro · Top20 amarillo · resto gris claro.
+function _scoutPosBg(pos){
+  const p=Number(pos)||999;
+  if(p<=3)  return 'background:#16a34a;color:#fff';
+  if(p<=10) return 'background:#86efac;color:#14532d';
+  if(p<=20) return 'background:#fde68a;color:#78350f';
+  return 'background:#f1f5f9;color:#475569';
+}
 async function _scoutRender(){
   const body = document.getElementById('scoutBody');
   if(!body) return;
@@ -6960,8 +6969,8 @@ async function _scoutRender(){
 
   body.innerHTML = `
   <div style="font-size:13px;color:#6b7280;margin-bottom:12px">${riders.length} ciclista${riders.length!==1?'s':''} encontrado${riders.length!==1?'s':''} · ordenados por ${posMax?'mejor posición':'promedio'}</div>
-  <div style="overflow-x:auto;border-radius:12px;border:1px solid #e5e7eb">
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+  <div style="overflow:auto;max-height:70vh;border-radius:12px;border:1px solid #e5e7eb">
+    <table class="scout-table" style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:#f3f4f6">
         <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Ciclista</th>
         <th style="padding:10px 14px;text-align:left;font-weight:800;color:#374151">Equipo</th>
@@ -6993,8 +7002,8 @@ async function _scoutRender(){
             <td style="padding:10px 14px;font-size:12px;color:#374151">${escapeHtml(r.team)}</td>
             <td style="padding:10px 14px;text-align:center"><span style="background:#e0e7ff;color:#3730a3;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700">${escapeHtml(r.cat)}</span></td>
             <td style="padding:10px 14px;text-align:center;font-weight:700">${r.total}</td>
-            <td style="padding:10px 14px;text-align:center;font-weight:700;color:${r.avg<=5?'#b45309':r.avg<=15?'#1d4ed8':'#374151'}">${r.avg.toFixed(1)}</td>
-            <td style="padding:10px 14px;text-align:center"><span style="font-weight:900;font-size:15px;color:${r.best===1?'#b45309':r.best<=3?'#6b7280':'#374151'}">${r.best}º</span></td>
+            <td style="padding:10px 14px;text-align:center;font-weight:800;${_scoutPosBg(r.avg)}">${r.avg.toFixed(1)}</td>
+            <td style="padding:10px 14px;text-align:center;font-weight:900;font-size:15px;${_scoutPosBg(r.best)}">${r.best}º</td>
             <td style="padding:10px 14px;text-align:center;font-weight:700;color:#b45309">${r.top1||'—'}</td>
             <td style="padding:10px 14px;text-align:center;font-weight:700">${r.top3||'—'}</td>
             <td style="padding:10px 14px;text-align:center;font-weight:700">${r.top10||'—'}</td>
