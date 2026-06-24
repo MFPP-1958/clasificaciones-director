@@ -10016,7 +10016,8 @@ function clearAllFilters(){
 }
 function toggleMyTeamFilter(){
   if(!myTeam) {
-    alert("Primero configura 'Mi Equipo' en la pestaña de Carga y Resumen");
+    const _msg='⚠️ Aún no has configurado tu equipo. Ve a los ajustes de tu perfil para asignar tu club.';
+    if(typeof showToast==='function') showToast(_msg,'warn',4500); else alert(_msg);
     return;
   }
   onlyMyTeam = !onlyMyTeam;
@@ -11950,7 +11951,115 @@ function _eqSelectClub(teamName){
   const badge = $('eqClubSelectedBadge');
   if(badge){ badge.textContent = teamName; badge.style.display=''; }
   const pdfBtn = $('eqPdfBtn'); if(pdfBtn) pdfBtn.style.display='';
+  ['eqXlsBtn','eqCsvBtn'].forEach(id=>{ const b=$(id); if(b) b.style.display=''; });
   _eqLoadClub();
+}
+
+// ── Exportación Excel/CSV de Equipos (Clasificación + Explorador) ──────────
+// Usa la librería XLSX ya cargada. Exporta SIEMPRE con los filtros vigentes.
+let _eqClubExportData = null; // roster del Explorador con el filtro actual
+
+function _eqDownloadSheet(rows, meta, baseName, format){
+  if(!rows || !rows.length){
+    if(typeof showToast==='function') showToast('No hay datos que exportar (revisa los filtros)','warn');
+    else alert('No hay datos que exportar.');
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const safe = (baseName||'export').replace(/[^\w\s-]/g,'').replace(/\s+/g,'_');
+  if(format==='csv'){
+    const sep=';';
+    const esc = s => `"${String(s==null?'':s).replace(/"/g,'""')}"`;
+    const lines=[];
+    (meta||[]).forEach(m=>lines.push('# '+m));
+    if(meta && meta.length) lines.push('');
+    lines.push(headers.map(esc).join(sep));
+    rows.forEach(r=>lines.push(headers.map(h=>esc(r[h])).join(sep)));
+    const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}); // BOM para Excel ES
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=safe+'.csv';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  } else {
+    if(typeof XLSX==='undefined'){ alert('La librería XLSX no está disponible. Usa exportación CSV.'); return; }
+    const aoa=[];
+    (meta||[]).forEach(m=>aoa.push([m]));
+    if(meta && meta.length) aoa.push([]);
+    aoa.push(headers);
+    rows.forEach(r=>aoa.push(headers.map(h=>r[h])));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+    XLSX.writeFile(wb, safe+'.xlsx');
+  }
+  if(typeof showToast==='function') showToast('✅ Exportado','ok',1800);
+}
+
+// Clasificación por equipos (respeta categorías del filtro y modo tiempo/puntos)
+function _eqExportRanking(format){
+  if(typeof riders==='undefined' || !riders.length){
+    if(typeof showToast==='function') showToast('Carga una clasificación primero','warn'); else alert('Carga una clasificación primero.');
+    return;
+  }
+  const base = getTeamRankingFilteredRiders();
+  const map={};
+  base.forEach(r=>{ if(!r.team) return; (map[r.team]=map[r.team]||[]).push(r); });
+  const isPoints = teamRankingMode==='points';
+  const valLabel = isPoints ? 'Puntos (3 mejores)' : 'Tiempo total (3 mejores)';
+  const rows = Object.entries(map).map(([team,rs])=>{
+    const sorted = rs.slice().filter(r=> isPoints ? true : r.totalSeconds!=null).sort((a,b)=>a.pos-b.pos);
+    const top3 = sorted.slice(0,3);
+    if(top3.length<3) return null;
+    const value = isPoints ? top3.reduce((s,r)=>s+r.pos,0) : top3.reduce((s,r)=>s+r.totalSeconds,0);
+    const all = map[team]||[];
+    const avg = all.length ? (all.reduce((s,r)=>s+r.pos,0)/all.length) : null;
+    return { team, value, top3, count: all.length, best: top3[0].pos, avg };
+  }).filter(Boolean).sort((a,b)=>a.value-b.value);
+
+  const out = rows.map((x,i)=>({
+    'Pos': i+1,
+    'Equipo': x.team,
+    [valLabel]: isPoints ? x.value : formatTeamTotalSeconds(x.value),
+    'Nº Clasificados': x.count,
+    'Mejor pos.': x.best+'º',
+    'Media pos.': x.avg!=null ? x.avg.toFixed(1) : '—',
+    'Top 3': x.top3.map(r=>`${r.pos}. ${r.name}`).join(' · ')
+  }));
+
+  const raceName = (document.getElementById('raceName')?.value || 'Clasificacion_equipos').trim();
+  const meta = [
+    `Clasificación por equipos — ${raceName}`,
+    `Modo: ${isPoints?'Por puntos':'Por tiempos'} · Categorías: ${getTeamRankingCategoryLabel()}`,
+    `Exportado: ${new Date().toLocaleString('es-ES')} · ${out.length} equipos`
+  ];
+  _eqDownloadSheet(out, meta, raceName+'_clasificacion_equipos', format);
+}
+
+// Explorador de Clubes (usa el roster cacheado con el club/año/categoría actuales)
+function _eqExportClub(format){
+  const d = _eqClubExportData;
+  if(!d || !Array.isArray(d.riders) || !d.riders.length){
+    if(typeof showToast==='function') showToast('Selecciona un club primero','warn'); else alert('Selecciona un club primero.');
+    return;
+  }
+  const out = d.riders.map((r,i)=>({
+    '#': i+1,
+    'Ciclista': r.displayName,
+    'Cat.': r.cat||'',
+    'Media': r.avg!=null ? r.avg.toFixed(1)+'º' : '',
+    'Mejor': r.best!=null ? r.best+'º' : '',
+    'Victorias': r.wins||0,
+    'Podios': r.podiums||0,
+    'Top 10': r.top10||0,
+    'DNF': r.dnf||0,
+    'Fiabilidad': r.relFew ? 'pocos datos' : (r.rel+'%'),
+    'Clasificado': `${r.races}/${r.totalRaces}`
+  }));
+  const meta = [
+    `Explorador de Clubes — ${d.teamName}`,
+    `Período: ${d.year||'Historial completo'} · ${d.totalRaces} carreras · ${out.length} ciclistas`,
+    `Exportado: ${new Date().toLocaleString('es-ES')}`
+  ];
+  _eqDownloadSheet(out, meta, (d.teamName||'club')+'_'+(d.year||'historico'), format);
 }
 
 // Fiabilidad HONESTA: encogimiento bayesiano hacia una media + mínimo de carreras.
@@ -12032,6 +12141,9 @@ async function _eqLoadClub(){
     const adn=_computeADN(rd.positions,rd.raceHistory);
     return {nameKey:nk,displayName:rd.displayName,cat:rd.cat,avg,best,bestField:rd.bestField,wins,podiums,top10,dnf:rd.dnf||0,races:rd.raceIds.size,totalRaces,score,adn,rel:_relInfo.pct,relFew:_relInfo.few};
   }).filter(Boolean).sort((a,b)=>a.score-b.score);
+
+  // Cache para exportación Excel/CSV (mismo orden y filtro que la tabla en pantalla)
+  _eqClubExportData = { teamName, year, riders, totalRaces };
 
   const medalColor = i=>i===0?'#f59e0b':i===1?'#9ca3af':i===2?'#b45309':'#e5e7eb';
   const medalTxt   = i=>i===0?'#fff':i===1?'#fff':i===2?'#fff':'#667085';

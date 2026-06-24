@@ -1001,6 +1001,8 @@
         <button id="teamRankTimeBtn" class="mode-btn active" onclick="setTeamRankingMode('time')">Por tiempos</button>
         <button id="teamRankPointsBtn" class="mode-btn" onclick="setTeamRankingMode('points')">Por puntos</button>
       </div>
+      <button class="btn light" style="font-size:12px;padding:6px 12px" onclick="_eqExportRanking('xlsx')" title="Exportar la clasificación por equipos (con los filtros actuales) a Excel">📊 Excel</button>
+      <button class="btn light" style="font-size:12px;padding:6px 12px" onclick="_eqExportRanking('csv')" title="Exportar la clasificación por equipos (con los filtros actuales) a CSV">📄 CSV</button>
       <button class="btn light" style="font-size:12px;padding:6px 12px" onclick="_exportTeamRanking()">🖨️ Informe completo</button>
     </div>
   </div>
@@ -1082,6 +1084,8 @@
               <button class="help-btn" data-help="&lt;strong&gt;🏢 Explorador de Clubes&lt;/strong&gt;Consolida todos los ciclistas que han competido con ese equipo en el año seleccionado.&lt;ul&gt;&lt;li&gt;No es la plantilla de una sola carrera, sino el acumulado anual.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Clasificado X/Y&lt;/b&gt;: número de carreras en que aparece en los resultados sobre el total de carreras del año.&lt;/li&gt;&lt;li&gt;Haz clic en cualquier ciclista para ver su historial completo.&lt;/li&gt;&lt;/ul&gt;">?</button>
               <span id="eqClubSelectedBadge" style="display:none;padding:3px 10px;background:#0b2f6b;color:#fff;border-radius:20px;font-size:11px;font-weight:800"></span>
             </div>
+            <button id="eqXlsBtn" class="btn light" style="font-size:12px;padding:7px 14px;display:none" onclick="_eqExportClub('xlsx')" title="Exportar la plantilla del club (con el filtro actual) a Excel">📊 Excel</button>
+            <button id="eqCsvBtn" class="btn light" style="font-size:12px;padding:7px 14px;display:none" onclick="_eqExportClub('csv')" title="Exportar la plantilla del club (con el filtro actual) a CSV">📄 CSV</button>
             <button id="eqPdfBtn" class="btn light" style="font-size:12px;padding:7px 14px;display:none" onclick="_eqExportClubPDF()">📄 Informe de Club (PDF)</button>
           </div>
 
