@@ -169,6 +169,8 @@ body.dark-mode .load-bar:hover{background:#21262d}
   #calBody.cal-show-grid .cal-grid-wrap{display:block}
   #calBody.cal-show-grid .cal-list-wrap{display:none}
 }
+/* Calendario · punto de semáforo de completitud de datos (antes del nombre) */
+.cal-status-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;flex-shrink:0;box-shadow:0 0 0 1.5px #fff}
 .scout-table thead th{position:sticky;top:0;z-index:10;background:#f3f4f6}
 .heat-table thead th{position:sticky;top:0;z-index:10;background:#f8fafc}
 /* Mapa de calor: leyenda estática de la escala de colores */

@@ -3536,6 +3536,23 @@ function _calDone(r){
   return d <= t;
 }
 
+// Semáforo de completitud de datos de una prueba (para el calendario):
+//   ⚪ futura planificada (aún no toca tener datos)
+//   🔴 ya disputada pero SIN clasificación cargada
+//   🟡 con clasificación pero faltan métricas clave (km o velocidad media)
+//   🟢 datos completos
+function _calRaceStatus(r){
+  const today=new Date(); today.setHours(0,0,0,0);
+  let d=null; if(r && r.date instanceof Date){ d=new Date(r.date.getTime()); d.setHours(0,0,0,0); }
+  if(d && d>today) return {color:'#94a3b8', label:'Planificada · sin disputar todavía'};
+  const hasClasif = ((r&&(r.finishCount||r.ridersCount))||0) > 0;
+  if(!hasClasif) return {color:'#dc2626', label:'⚠️ Ya disputada pero sin clasificación cargada'};
+  const _u = (v)=> (typeof _stripUnit==='function' ? _stripUnit(v) : String(v||'').trim());
+  const hasKm = !!_u(r.km), hasAvg = !!_u(r.avg);
+  if(!hasKm || !hasAvg) return {color:'#f59e0b', label:'Faltan métricas: '+[!hasKm?'km':'',!hasAvg?'vel. media':''].filter(Boolean).join(' y ')};
+  return {color:'#16a34a', label:'Datos completos'};
+}
+
 function _calBuildMonth(y, m){
   const today = new Date();
   const firstDay = new Date(y, m, 1);
@@ -3576,12 +3593,13 @@ function _calBuildMonth(y, m){
       <div style="font-size:13px;font-weight:${isToday?'900':'700'};color:${dayColor};margin-bottom:4px">${day}</div>
       ${races.map(r=>{
         const done = _calDone(r);
+        const st = _calRaceStatus(r);
         const isPastClickable = done && r.id;
         const onClickAttr = isPastClickable
           ? `onclick="event.stopPropagation();_calOpenRaceDetails('${escapeAttr(String(r.id))}')"`
           : '';
         return `<div ${onClickAttr} style="font-size:10px;font-weight:700;background:${done?'#3b82f6':'#10b981'};color:#fff;border-radius:4px;padding:2px 5px;margin-bottom:2px;overflow:hidden;white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.2;max-width:100%;cursor:${isPastClickable?'pointer':'default'};${isPastClickable?'box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)':''}" title="${escapeHtml(r.name)}${isPastClickable?' — Click para ver participantes':''}">
-          ${!done?'📋 ':''}${escapeHtml(r.name)}
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${st.color};box-shadow:0 0 0 1px rgba(255,255,255,.9);margin-right:3px;vertical-align:middle" title="${escapeAttr(st.label)}"></span>${!done?'📋 ':''}${escapeHtml(r.name)}
         </div>`;
       }).join('')}
     </div>`;
@@ -3599,6 +3617,7 @@ function _calBuildMonth(y, m){
     <div style="display:flex;flex-direction:column;gap:8px">`;
     monthRaces.forEach(r=>{
       const isPlan = !_calDone(r);   // pendiente/próxima si aún no ha llegado su fecha
+      const st = _calRaceStatus(r);
       const canClickPast = !isPlan && r.id;
       const rowClick = canClickPast ? `onclick="_calOpenRaceDetails('${escapeAttr(String(r.id))}')"` : '';
       const rowHover = canClickPast ? 'transition:background .15s' : '';
@@ -3614,7 +3633,7 @@ function _calBuildMonth(y, m){
         ${canClickPast?`onmouseenter="this.style.background='#dbeafe'" onmouseleave="this.style.background='#eff6ff'"`:''}>
         <div style="width:10px;height:10px;border-radius:50%;background:${isPlan?'#10b981':'#3b82f6'};flex-shrink:0"></div>
         <div style="flex:1">
-          <div style="font-weight:700;font-size:13px">${isPlan?'📋 ':''} ${escapeHtml(r.name)}</div>
+          <div style="font-weight:700;font-size:13px"><span class="cal-status-dot" style="background:${st.color}" title="${escapeAttr(st.label)}"></span>${isPlan?'📋 ':''}${escapeHtml(r.name)}</div>
           ${r.localidad?`<div style="font-size:11px;color:#6b7280">${escapeHtml(r.localidad)}</div>`:''}
           ${canClickPast?`<div style="font-size:11px;color:#1d4ed8;font-weight:600;margin-top:2px">👥 ${r.ridersCount||0} corredores · Click para ver detalle</div>`:''}
         </div>
@@ -3625,6 +3644,12 @@ function _calBuildMonth(y, m){
       </div>`;
     });
     html += '</div>';
+  } else {
+    html += `<div style="text-align:center;padding:30px 18px;margin-top:8px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;color:#64748b">
+      <div style="font-size:34px">🗓️</div>
+      <div style="font-size:14px;font-weight:800;color:#475569;margin-top:6px">No hay carreras programadas para este mes.</div>
+      <div style="font-size:12.5px;margin-top:4px">Haz clic en cualquier día para planificar una nueva prueba.</div>
+    </div>`;
   }
 
   // Botón añadir en días futuros del mes
