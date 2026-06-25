@@ -5768,8 +5768,8 @@ function _fccvRenderResults(races){
     return matchInList(existingPlanned, 'planned') || matchInList(existingPast, 'past');
   };
 
-  box.innerHTML = `<div style="background:#fff;border-radius:10px;overflow:hidden;border:1px solid #fcd34d">
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #fcd34d">
+    <table style="width:100%;min-width:820px;border-collapse:collapse;font-size:13px">
       <thead style="background:#fef3c7">
         <tr>
           <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#78350f;width:110px">Fecha</th>
