@@ -4414,6 +4414,12 @@ async function _fccvFetch(url, opts){
   // el HTML del calendario FCCV pesa ~1.6MB, así que cualquier respuesta
   // pequeña significa que el proxy devolvió error o respuesta vacía.
   // Para fichas individuales se puede bajar el mínimo con opts.minBytes.
+  // Marcadores de que el HTML es realmente de fccv.es (y no una página de
+  // error/landing del proxy). En iPad/Safari, con ITP/privacidad, algunos
+  // proxies (p.ej. corsproxy.io) devuelven HTML grande pero ajeno → pasaba el
+  // filtro de tamaño y el parser sacaba 0 carreras ("se recibió HTML pero no se
+  // detectó ninguna carrera"). Validando el contenido saltamos a otro proxy.
+  const looksFccv = (t)=> /fccv|smartweb|calendario|prueba/i.test(t);
   let lastErr = null;
   for(const proxify of _FCCV_PROXIES){
     try{
@@ -4422,10 +4428,17 @@ async function _fccvFetch(url, opts){
       if(r.ok){
         const text = await r.text();
         if(text && text.length >= minBytes){
-          console.log(`[FCCV] proxy OK: ${proxyUrl.slice(0,60)}… (${(text.length/1024).toFixed(0)} KB)`);
-          return text;
+          if(looksFccv(text)){
+            console.log(`[FCCV] proxy OK: ${proxyUrl.slice(0,60)}… (${(text.length/1024).toFixed(0)} KB)`);
+            return text;
+          }
+          console.warn(`[FCCV] proxy devolvió HTML SIN contenido FCCV (${(text.length/1024).toFixed(0)} KB) — probando siguiente proxy:`, proxyUrl.slice(0,60));
+          lastErr = new Error('Proxy devolvió HTML no-FCCV');
+          continue;
         }
         console.warn(`[FCCV] proxy devolvió respuesta corta (${text.length} bytes, mínimo ${minBytes}):`, proxyUrl.slice(0,60));
+        lastErr = new Error('Respuesta demasiado corta');
+        continue;
       }
       lastErr = new Error(`Proxy responded ${r.status}`);
     } catch(e){
