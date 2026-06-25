@@ -4419,7 +4419,14 @@ async function _fccvFetch(url, opts){
   // proxies (p.ej. corsproxy.io) devuelven HTML grande pero ajeno → pasaba el
   // filtro de tamaño y el parser sacaba 0 carreras ("se recibió HTML pero no se
   // detectó ninguna carrera"). Validando el contenido saltamos a otro proxy.
-  const looksFccv = (t)=> /fccv|smartweb|calendario|prueba/i.test(t);
+  const looksFccv = (t)=>{
+    if(!/fccv|smartweb|calendario/i.test(t)) return false;
+    // Además debe contener señales de DATOS reales de carreras (no solo el menú
+    // o una landing del proxy): timestamps FCCV, ids de prueba o muchas filas.
+    return /\b(1[5-9]\d{8}|20\d{8})\b/.test(t)
+        || /id=["']?prueba\d/i.test(t)
+        || (t.match(/<tr[\s>]/gi)||[]).length > 15;
+  };
   let lastErr = null;
   for(const proxify of _FCCV_PROXIES){
     try{
@@ -4430,6 +4437,7 @@ async function _fccvFetch(url, opts){
         if(text && text.length >= minBytes){
           if(looksFccv(text)){
             console.log(`[FCCV] proxy OK: ${proxyUrl.slice(0,60)}… (${(text.length/1024).toFixed(0)} KB)`);
+            try{ window._fccvLastProxyUsed = proxyUrl; }catch(_){}
             return text;
           }
           console.warn(`[FCCV] proxy devolvió HTML SIN contenido FCCV (${(text.length/1024).toFixed(0)} KB) — probando siguiente proxy:`, proxyUrl.slice(0,60));
@@ -4447,6 +4455,17 @@ async function _fccvFetch(url, opts){
     }
   }
   throw lastErr || new Error('Todos los proxies CORS fallaron');
+}
+
+// Copia al portapapeles un diagnóstico del último intento de sincronización
+// FCCV (para depurar problemas que solo ocurren en algún dispositivo, p.ej. iPad).
+function _fccvCopyDiag(){
+  const t = window._fccvDiag || '(sin diagnóstico — pulsa primero Sincronizar)';
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(()=>{
+      try{ showToast('📋 Diagnóstico copiado · pégalo en el chat','ok',3500); }catch(_){ alert('Diagnóstico copiado.'); }
+    }).catch(()=>{ alert(t); });
+  } else { alert(t); }
 }
 
 // Parser FCCV-específico: la FCCV usa Unix timestamps + códigos DDMES
@@ -5636,6 +5655,7 @@ async function _fccvSync(){
       try { localStorage.removeItem('fccvWorkingUrl_'+yyyy); } catch(_){}
       const preview = (html||'').slice(0, 240).replace(/\s+/g,' ').replace(/</g,'&lt;');
       const stats = window._fccvLastStats || {};
+      try{ window._fccvDiag = `FCCV DIAG · ${new Date().toISOString()}\nProxy usado: ${window._fccvLastProxyUsed||'?'}\nURL elegida: ${chosenUrl||'(ninguna)'}\nHTML: ${(html.length/1024).toFixed(1)} KB\nTablas: ${stats.tablesFound ?? '—'}\nTR total: ${stats.rowsTotal ?? '—'}\nTR con TD: ${stats.rowsWithTd ?? '—'}\nTR >=3 celdas: ${stats.rowsWith3plus ?? '—'}\nTR con fecha: ${stats.rowsWithDate ?? '—'}\nTR con nombre: ${stats.rowsWithValidName ?? '—'}\nAceptadas: ${stats.rowsAccepted ?? 0}\n--- Primeros 600 caracteres del HTML ---\n${(html||'').slice(0,600)}`; }catch(_){}
       if(results) results.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b;font-size:13px">
         ⚠️ <b>Se recibió HTML pero no se detectó ninguna carrera con el formato esperado.</b><br>
         <div style="margin-top:8px;font-size:11.5px;color:#7c2d12">
@@ -5654,6 +5674,7 @@ async function _fccvSync(){
           <code style="display:block;background:#fff;padding:6px 8px;border:1px solid #fca5a5;border-radius:6px;margin-top:4px;font-size:10.5px;line-height:1.4;color:#374151;word-break:break-all">${preview || '(vacío)'}</code>
         </div>
         <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="_fccvCopyDiag()" style="background:#0b2f6b;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:12px">📋 Copiar diagnóstico</button>
           <button onclick="_fccvShowRawHtml()" style="background:#dc2626;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px">🧪 Ver HTML recibido</button>
           <button onclick="_fccvSync()" style="background:#fff;color:#7c2d12;border:1px solid #fca5a5;border-radius:6px;padding:6px 12px;font-weight:700;cursor:pointer;font-size:12px">🔄 Reintentar (caché limpia)</button>
           <a href="${fccvUrl}" target="_blank" style="background:#fff;color:#7c2d12;border:1px solid #fca5a5;border-radius:6px;padding:6px 12px;font-weight:700;text-decoration:none;font-size:12px">🌐 Abrir FCCV en nueva pestaña</a>
