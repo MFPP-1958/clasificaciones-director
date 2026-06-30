@@ -3068,6 +3068,8 @@
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;font-weight:700">
           <span><span style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Carrera disputada</span>
           <span><span style="display:inline-block;width:12px;height:12px;background:#10b981;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Carrera planificada</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#f59e0b;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Concentración</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#8b5cf6;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Entrenamiento</span>
           <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:3px;margin-right:4px;vertical-align:middle"></span>Hoy</span>
         </div>
 
@@ -3107,7 +3109,15 @@
           <div id="calModalTitle" style="font-size:18px;font-weight:900;color:#0b2f6b;margin-bottom:18px">➕ Añadir carrera planificada</div>
           <div style="display:flex;flex-direction:column;gap:12px">
             <div>
-              <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOMBRE DE LA CARRERA *</label>
+              <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">TIPO DE ACTIVIDAD</label>
+              <select id="calPlanTipo" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box;background:#fff">
+                <option value="carrera">🏁 Carrera</option>
+                <option value="concentracion">🏕️ Concentración de equipo</option>
+                <option value="entrenamiento">🏋️ Entrenamiento de equipo</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:4px">NOMBRE *</label>
               <input id="calPlanName" type="text" placeholder="Ej: Copa Comunitat Valenciana" style="width:100%;border:1.5px solid #d0d5dd;border-radius:9px;padding:9px 12px;font-size:13px;box-sizing:border-box">
             </div>
             <div style="display:flex;gap:10px">

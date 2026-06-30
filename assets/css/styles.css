@@ -720,6 +720,12 @@ body.dark-mode .comp-legend b{color:#e6edf3}
 .hist-mes-cell.mes-actual > div:first-child{color:#b45309;opacity:1;font-weight:900}
 /* Tabla y filtros: ocultar la columna Seg/km cuando no hay ningún dato. */
 #captureTable.hide-seckm .col-seckm{display:none!important}
+/* Calendario · eventos por tipo de actividad. El color de fondo va inline en
+   cada celda/tarjeta; aquí forzamos que NO se elimine al imprimir/guardar PDF
+   (objetivo: calendario anual a color para enviar a las familias). */
+.evento-carrera-azul,.evento-carrera-verde,.evento-concentracion,.evento-entrenamiento{
+  -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;
+}
 /* ===== FIN BLOQUE EVOLUCIÓN CSS ===== */
 
 /* ===== DARK MODE & UX POLISH CSS ===== */
