@@ -43653,7 +43653,7 @@ function _infLogoSVG(size){
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 310" width="${s}" height="${s}">${_infLogoInner()}</svg>`;
 }
 // Colores configurables de las categorías del calendario anual
-const _INF_CAL_COLORS = { cv:'#2B91C8', fuera:'#f59e0b', challenge:'#dc2626', planned:'#94a3b8' };
+const _INF_CAL_COLORS = { cv:'#2B91C8', fuera:'#f59e0b', challenge:'#dc2626', planned:'#94a3b8', concentracion:'#0d9488', entrenamiento:'#7c3aed' };
 
 // Nombre del equipo a usar en el informe
 function _infTeamName(){
@@ -43942,6 +43942,7 @@ function _infBuildDataByKey(history, opts){
         iso, fecha: iso? iso.split('-').reverse().join('/'):'',
         name: p.name||'', localidad:_infLimpiaLoc(p.localidad),
         prov, ccaa: ccaa||p.ccaa||'', cats:p.cat?[p.cat]:[], tipo,
+        actividadTipo: p.tipo || 'carrera',   // carrera | concentracion | entrenamiento
         challengeCV: !!p.challengeCV,
         km:'', totalParticipantes:0, totalInscritos:null, misCorredores:0, misInscritos:null, nombresMios:[], estado:'planificada'
       });
@@ -44733,6 +44734,10 @@ function _infRaceMatchesCat(r, catSel){
 }
 
 function _infRaceCategoria(r){
+  // Actividades de equipo (NO competiciones): color propio y bandera `actividad`
+  // para que se pinten SÓLIDAS (no como "pendiente" punteado).
+  if(r.actividadTipo==='concentracion') return {cat:1, actividad:true, label:'Concentración', color:_INF_CAL_COLORS.concentracion};
+  if(r.actividadTipo==='entrenamiento') return {cat:1, actividad:true, label:'Entrenamiento', color:_INF_CAL_COLORS.entrenamiento};
   // Challenge CV = SOLO las pruebas con el checkbox "Challenge CV" activado al introducirlas
   if(r.challengeCV) return {cat:3, label:'Challenge CV', color:_INF_CAL_COLORS.challenge};
   // Determina la comunidad por todas las señales (ccaa guardada, provincia, nombre, localidad)
@@ -44758,7 +44763,13 @@ function _infBuildAnnualSVG(year, teamName, races, catLabel){
     const catInfo = r._catInfo;
     const cell = byMonth[mi][day] || (byMonth[mi][day]={color:null, planned:true, items:[], cat:0});
     cell.items.push(r);
-    if(r.estado==='realizada'){
+    if(catInfo.actividad){
+      // Actividad de equipo (concentración/entrenamiento): SIEMPRE coloreada y
+      // sólida. No bumpea `cell.cat`, así una competición disputada el mismo día
+      // mantiene su color (la competición manda en la celda).
+      cell.planned=false;
+      if(cell.cat===0 && cell.color==null) cell.color=catInfo.color;
+    } else if(r.estado==='realizada'){
       cell.planned=false;
       // prioridad: Challenge(3) > Fuera(2) > CV(1)
       if(catInfo.cat >= cell.cat){ cell.cat=catInfo.cat; cell.color=catInfo.color; }
@@ -44788,6 +44799,9 @@ function _infBuildAnnualSVG(year, teamName, races, catLabel){
 
   // Leyenda de colores (bajo cabecera)
   const leg=[['Comunidad Valenciana',_INF_CAL_COLORS.cv],['Fuera Comunidad Valenciana',_INF_CAL_COLORS.fuera],['Challenge CV',_INF_CAL_COLORS.challenge]];
+  // Añadir actividades de equipo a la leyenda solo si aparecen en el calendario.
+  if(races.some(r=>r.actividadTipo==='concentracion')) leg.push(['Concentración',_INF_CAL_COLORS.concentracion]);
+  if(races.some(r=>r.actividadTipo==='entrenamiento')) leg.push(['Entrenamiento',_INF_CAL_COLORS.entrenamiento]);
   let lx=40;
   leg.forEach(([lab,col])=>{
     svg+=`<rect x="${lx}" y="103" width="16" height="16" rx="3" fill="${col}"/>`;
@@ -44848,7 +44862,7 @@ function _infBuildAnnualSVG(year, teamName, races, catLabel){
     if(col>=ncols) return;
     const x=40+col*(colW+colGap), y=listTop+row*lineH;
     const ci=r._catInfo;
-    svg+=`<rect x="${x}" y="${y-7}" width="9" height="9" rx="2" fill="${r.estado==='realizada'?ci.color:_INF_CAL_COLORS.planned}"/>`;
+    svg+=`<rect x="${x}" y="${y-7}" width="9" height="9" rx="2" fill="${(ci.actividad||r.estado==='realizada')?ci.color:_INF_CAL_COLORS.planned}"/>`;
     const fecha=`${(r.iso.split('-')[2])} ${_INF_MES_CORTO[parseInt(r.iso.split('-')[1])-1]}`;
     let txt=`${fecha} · ${r.name}`;
     if(txt.length>maxChars) txt=txt.slice(0,maxChars-1).trimEnd()+'…';
