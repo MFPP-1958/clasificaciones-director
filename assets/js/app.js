@@ -6208,6 +6208,26 @@ async function _fccvAddRace(idx){
   }
 }
 
+// Antes de ESCRIBIR en tablas protegidas por RLS (races…), comprueba que hay
+// sesión de Supabase Auth (JWT). El login es por enlace mágico/Google, así que
+// sin JWT las peticiones van como `anon` y la RLS las rechaza (insert da error,
+// delete falla en silencio). Si el token caducó, intenta refrescarlo una vez.
+// Devuelve true si hay sesión utilizable; false si hay que volver a entrar.
+async function _sbEnsureAuth(){
+  if(!_sb || !_sb.auth) return true;            // sin Supabase → modo local, no bloquea
+  try{
+    const {data} = await _sb.auth.getSession();
+    if(data && data.session && data.session.user) return true;
+    // No hay sesión activa: probar a refrescarla (puede faltar solo renovar token)
+    try{ const r = await _sb.auth.refreshSession(); if(r && r.data && r.data.session) return true; }catch(_){}
+    return false;
+  }catch(_){ return true; }                      // ante un fallo raro, no bloqueamos (se verá el error real)
+}
+// Mensaje único y claro cuando la RLS/sesión impide escribir.
+function _sbAuthErrorMsg(){
+  return '⛔ Tu sesión ha caducado o no tiene permisos.\n\nCierra sesión (botón "Salir") y vuelve a entrar con el enlace mágico o con Google. Después podrás crear/borrar pruebas.';
+}
+
 async function _calSavePlanned(btn){
   if(_calIsReadOnlyUser()) return; // ciclistas: calendario solo de lectura
   const name  = document.getElementById('calPlanName')?.value.trim();
@@ -6231,6 +6251,11 @@ async function _calSavePlanned(btn){
   const effCat = cat || _gLbl;   // categoría efectiva de la prueba
   const notesJson = JSON.stringify({cat:effCat, raceCat:effCat, localidad:loc, notes});
 
+  // Sin sesión Supabase válida, la RLS rechazará la escritura → avisamos claro.
+  if(_sb && !(await _sbEnsureAuth())){
+    if(msg){ msg.textContent='⛔ Sesión caducada. Sal y vuelve a entrar con el enlace mágico o Google para crear/editar pruebas.'; msg.style.color='#dc2626'; }
+    return;
+  }
   try{
     if(_calEditingId){
       // ── MODO EDICIÓN ──
@@ -6244,7 +6269,7 @@ async function _calSavePlanned(btn){
         try{ const {data}=await _sb.from('races').select('notes').eq('id',id).single(); if(data&&data.notes) extra=JSON.parse(data.notes); }catch(_){}
         extra.cat=effCat; extra.raceCat=effCat; extra.localidad=loc; extra.notes=notes;
         const {error} = await _sb.from('races').update({name, date, notes:JSON.stringify(extra)}).eq('id',id);
-        if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
+        if(error){ const rls=/row-level security|policy/i.test(error.message||''); if(msg){msg.textContent= rls?'⛔ Sin permisos para guardar (sesión caducada). Vuelve a entrar con el enlace mágico.':'❌ Error: '+error.message; msg.style.color='#dc2626';} return; }
       }
       // Actualizar en memoria
       const idx = _calPlanned.findIndex(r=>r.id===id);
@@ -6253,7 +6278,7 @@ async function _calSavePlanned(btn){
       // ── MODO AÑADIR ──
       if(_sb){
         const {data, error} = await _sb.from('races').insert({name, date, notes:notesJson, race_type:'planificada'}).select().single();
-        if(error){ if(msg){msg.textContent='❌ Error: '+error.message;msg.style.color='#dc2626';} return; }
+        if(error){ const rls=/row-level security|policy/i.test(error.message||''); if(msg){msg.textContent= rls?'⛔ Sin permisos para guardar (sesión caducada). Vuelve a entrar con el enlace mágico o Google.':'❌ Error: '+error.message; msg.style.color='#dc2626';} return; }
         _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
       } else {
         _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', type:'planned'});
@@ -6272,8 +6297,19 @@ async function _calDeletePlanned(id){
   if(_calIsReadOnlyUser()) return; // ciclistas: calendario solo de lectura
   if(!confirm('¿Eliminar esta carrera planificada?')) return;
   if(_sb && !String(id).startsWith('local-')){
-    await _sb.from('races').delete().eq('id',id);
+    // 1) Sin sesión Supabase válida la RLS rechaza el DELETE → avisar y NO borrar visualmente.
+    if(!(await _sbEnsureAuth())){ alert(_sbAuthErrorMsg()); return; }
+    // 2) Ejecutar el borrado COMPROBANDO el error (antes se ignoraba → borrado fantasma).
+    const {error} = await _sb.from('races').delete().eq('id',id);
+    if(error){
+      const rls=/row-level security|policy/i.test(error.message||'');
+      alert(rls
+        ? '⛔ No se pudo borrar: tu sesión no tiene permisos (caducada).\n\nSal y vuelve a entrar con el enlace mágico o Google, y prueba de nuevo.\n\nLa carrera NO se ha eliminado.'
+        : '❌ No se pudo borrar la prueba en la base de datos:\n\n'+error.message+'\n\nLa carrera NO se ha eliminado.');
+      return; // CLAVE: no la quitamos de _calPlanned → ya no reaparece al refrescar
+    }
   }
+  // Solo llegamos aquí si el borrado en BD fue correcto (o es una prueba local).
   _calPlanned = _calPlanned.filter(r=>r.id!==id);
   _calRender();
 }
