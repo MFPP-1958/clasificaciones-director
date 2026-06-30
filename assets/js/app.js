@@ -2188,13 +2188,36 @@ const _CAL_MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio'
 const _CAL_DAYS_ES   = ['L','M','X','J','V','S','D'];
 
 async function _calInit(){
-  if(!_calInited){
-    _calInited = true;
-    await _calLoadData();
-  }
+  // Recargar SIEMPRE desde Supabase al entrar al calendario, para reflejar
+  // borrados/altas/aplazamientos hechos desde OTRO dispositivo (antes solo se
+  // cargaba una vez por sesión y quedaba desfasado, p.ej. en el móvil).
+  await _calLoadData();
   _calRender();
+  _calSetupAutoRefresh();
   // Inicializar selector de año del lector FCCV (solo la primera vez)
-  if(typeof _fccvInitYears === 'function') _fccvInitYears();
+  if(!_calInited){ _calInited = true; if(typeof _fccvInitYears === 'function') _fccvInitYears(); }
+}
+
+// Vuelve a leer los datos del calendario desde Supabase y re-renderiza. Evita
+// recargas solapadas con un flag.
+let _calRefreshing = false;
+async function _calRefreshData(){
+  if(_calRefreshing) return;
+  _calRefreshing = true;
+  try{ await _calLoadData(); _calRender(); }catch(_){}
+  finally{ _calRefreshing = false; }
+}
+
+// Auto-refresco del calendario al volver a primer plano (cambio de app, desbloqueo
+// del móvil) o al restaurarse desde la bfcache de Safari (iOS no reejecuta el JS).
+// Así una carrera borrada en otro dispositivo desaparece sin tener que recargar.
+let _calAutoRefreshBound = false;
+function _calSetupAutoRefresh(){
+  if(_calAutoRefreshBound) return;
+  _calAutoRefreshBound = true;
+  const isCalActive = ()=>{ const v=document.querySelector('.spa-view.active'); return !!(v && v.id==='view-calendario'); };
+  window.addEventListener('pageshow', e=>{ if(e.persisted && isCalActive()) _calRefreshData(); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && isCalActive()) _calRefreshData(); });
 }
 
 async function _calLoadData(){
