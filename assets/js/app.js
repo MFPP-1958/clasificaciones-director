@@ -17295,7 +17295,8 @@ async function renderHistory(){
             localidad: extra.localidad || '',
             circuitType: extra.circuitType || '',
             km: extra.km || '',
-            cat: extra.cat || ''
+            cat: extra.cat || '',
+            tipo: extra.tipo || 'carrera'   // carrera | concentracion | entrenamiento
           };
         });
       }
@@ -17697,6 +17698,10 @@ async function renderHistory(){
     const todayIso = new Date().toISOString().slice(0,10);
     // Año global aplicado también a planificadas para no saturar
     const _plannedFiltered = _histPlanned.filter(p=>{
+      // ESTRICTO: en "Pruebas planificadas sin inscritos cargados" solo van
+      // CARRERAS reales. Las concentraciones y entrenamientos de equipo no llevan
+      // inscritos, así que se excluyen aquí (siguen viéndose en el Calendario).
+      if((p.tipo || 'carrera') !== 'carrera') return false;
       // Categoría/género globales (aislamiento estricto también en planificadas)
       if((gfCat || gfGen) && typeof _gfMatchesCatGender==='function'){
         if(!_gfMatchesCatGender(p.cat||'', p.raceName||'')) return false;
