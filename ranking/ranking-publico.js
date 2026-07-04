@@ -249,6 +249,7 @@ function rpAdaptarPlanificadas(filas) {
       _tipo: extra.tipo || (/concentraci|entrenamiento/i.test(r.name || '') ? 'actividad' : 'carrera'),
       localidad: extra.localidad || '',
       hora: extra.hora_inicio || '',
+      cat: [extra.cat, extra.raceCat].filter(Boolean).join(' '),
       inscritos: (Array.isArray(extra.inscritos) ? extra.inscritos : []).map(x => ({
         bib: x.bib || '', nombre: x.name || '', equipo: x.team || '', cat: x.cat || ''
       }))
@@ -510,8 +511,10 @@ function rpRenderModo() {
 function rpRenderUltimos() {
   const caja = document.getElementById('rp-ultimos-caja');
   const cont = document.getElementById('rp-ultimos');
+  // Solo carreras de la categoría seleccionada (pestaña activa)
   const conResultados = (rpEstado.carreras || [])
-    .filter(c => c.temporada === rpEstado.temporada && c.resultados.length)
+    .filter(c => c.temporada === rpEstado.temporada && c.resultados.length &&
+                 rpGruposDeCarrera(c).has(rpEstado.categoria))
     .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
   const fechas = [...new Set(conResultados.map(c => c.fecha))].slice(0, 3);
   const recientes = conResultados.filter(c => fechas.includes(c.fecha));
@@ -613,6 +616,41 @@ function rpAbrirSugerencia(tipo, id) {
   else if (tipo === 'planificada') rpAbrirModalPlanificada(id);
 }
 
+// Grupos de categoría de una carrera DISPUTADA, a partir de las categorías de
+// sus resultados. Umbral de significancia como el dashboard (≥3 corredores y
+// ≥15%) para que 1 corredor "colado" de otra categoría no etiquete la prueba;
+// si ninguna alcanza el umbral (pruebas pequeñas), valen todas las vistas.
+function rpGruposDeCarrera(carrera) {
+  const conteo = new Map();
+  for (const r of carrera.resultados) {
+    const g = rpGrupoCategoria(r.cat);
+    if (g) conteo.set(g, (conteo.get(g) || 0) + 1);
+  }
+  const total = carrera.resultados.length || 1;
+  const significativos = [...conteo].filter(([, n]) => n >= 3 && n / total >= 0.15).map(([g]) => g);
+  return new Set(significativos.length ? significativos : [...conteo.keys()]);
+}
+
+// Grupos de una prueba del CALENDARIO: de su campo de categoría (tokens) y,
+// si no lo trae, del nombre ("Copa Catalana Cadete" → cadete). Sin grupo
+// identificable → no se muestra bajo una categoría concreta (estricto).
+function rpGruposDePlanificada(p) {
+  const grupos = new Set();
+  String(p.cat || '').split(/[\s,;]+/).filter(Boolean).forEach(t => {
+    const g = rpGrupoCategoria(t);
+    if (g) grupos.add(g);
+  });
+  (p.inscritos || []).forEach(i => {
+    const g = rpGrupoCategoria(i.cat);
+    if (g) grupos.add(g);
+  });
+  if (!grupos.size) {
+    const g = rpGrupoCategoria(p.nombre || '');
+    if (g) grupos.add(g);
+  }
+  return grupos;
+}
+
 const RP_DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 function rpDiaSemana(fechaISO) {
   const d = new Date(fechaISO + 'T12:00:00');
@@ -625,7 +663,10 @@ function rpDiaSemana(fechaISO) {
 function rpRenderCalendario() {
   const caja = document.getElementById('rp-calendario-caja');
   const cont = document.getElementById('rp-calendario');
-  const proximas = (rpEstado.planificadas || []).slice(0, 10);
+  // Solo las pruebas de la categoría seleccionada (pestaña activa)
+  const proximas = (rpEstado.planificadas || [])
+    .filter(p => rpGruposDePlanificada(p).has(rpEstado.categoria))
+    .slice(0, 10);
   if (!proximas.length) { caja.style.display = 'none'; cont.innerHTML = ''; return; }
   caja.style.display = '';
   cont.innerHTML = proximas.map(p =>
@@ -887,27 +928,36 @@ function rpRenderRegiones() {
     (haySinRegion ? `<option value="${RP_REGION_SIN}"${rpEstado.region === RP_REGION_SIN ? ' selected' : ''}>Sin comunidad asignada</option>` : '');
 }
 
-// Desplegable de subcategoría: se rellena con las etiquetas reales presentes
-// en la pestaña activa (p.ej. en Cadetes: CAD-1, CAD-2, CADETE). Si la pestaña
-// solo tiene una etiqueta (o ninguna), el filtro no aporta nada y se oculta.
+// Desplegable de categoría GLOBAL: lista TODAS las categorías del ranking
+// agrupadas por bloque (Cadetes → CAD-1, CAD-2, CADETE; Juveniles → JUNIOR…).
+// Elegir una etiqueta de otro bloque cambia de pestaña automáticamente.
+// El value codifica "clavePestaña|etiqueta".
 function rpRenderSubcats() {
   const sel = document.getElementById('rp-subcat');
-  const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
-  const etiquetas = cat
-    ? [...new Set(cat.corredores.flatMap(c => c.subcats))].sort((a, b) => a.localeCompare(b, 'es'))
-    : [];
-  if (etiquetas.length < 2) {
+  if (!rpEstado.ranking.categorias.length) {
     rpEstado.subcategoria = '';
     sel.style.display = 'none';
     sel.innerHTML = '';
     return;
   }
-  if (!etiquetas.includes(rpEstado.subcategoria)) rpEstado.subcategoria = '';
+  // Validar la selección actual contra la pestaña activa
+  const catActiva = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
+  const etiquetasActiva = catActiva ? new Set(catActiva.corredores.flatMap(c => c.subcats)) : new Set();
+  if (rpEstado.subcategoria && !etiquetasActiva.has(rpEstado.subcategoria)) rpEstado.subcategoria = '';
+  const seleccion = rpEstado.subcategoria ? `${rpEstado.categoria}|${rpEstado.subcategoria}` : '';
   sel.style.display = '';
   sel.innerHTML = '<option value="">Todas las categorías</option>' +
-    etiquetas.map(e =>
-      `<option value="${rpEscapar(e)}"${e === rpEstado.subcategoria ? ' selected' : ''}>${rpEscapar(e)}</option>`
-    ).join('');
+    rpEstado.ranking.categorias.map(cat => {
+      const etiquetas = [...new Set(cat.corredores.flatMap(c => c.subcats))]
+        .sort((a, b) => a.localeCompare(b, 'es'));
+      if (!etiquetas.length) return '';
+      return `<optgroup label="${rpEscapar(cat.label)}">` +
+        etiquetas.map(e => {
+          const val = `${cat.key}|${e}`;
+          return `<option value="${rpEscapar(val)}"${val === seleccion ? ' selected' : ''}>${rpEscapar(e)}</option>`;
+        }).join('') +
+        '</optgroup>';
+    }).join('');
 }
 
 function rpRenderPestanas() {
@@ -1538,6 +1588,8 @@ async function rpIniciar() {
         rpEstado.categoria = cat.key;
         rpRenderPestanas();
         rpRenderSubcats();
+        rpRenderCalendario();
+        rpRenderUltimos();
         rpRenderTabla();
         rpAbrirModal(clave);
       }
@@ -1566,9 +1618,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = e.target.closest('button[data-cat]');
     if (!btn) return;
     rpEstado.categoria = btn.dataset.cat;
+    rpEstado.subcategoria = ''; // la etiqueta de otra pestaña no aplica aquí
     rpRenderPestanas();
     rpRenderSubcats();
     rpRenderEquipos();
+    rpRenderCalendario();  // próximas pruebas de la nueva categoría
+    rpRenderUltimos();     // últimos resultados de la nueva categoría
     rpRenderTabla();
   });
 
@@ -1578,7 +1633,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('rp-subcat').addEventListener('change', e => {
-    rpEstado.subcategoria = e.target.value;
+    // value = "clavePestaña|etiqueta" o '' (todas). Si la etiqueta es de otro
+    // bloque, cambiamos de pestaña automáticamente.
+    const [catKey, etiqueta] = e.target.value ? e.target.value.split('|') : ['', ''];
+    rpEstado.subcategoria = etiqueta || '';
+    if (catKey && catKey !== rpEstado.categoria) {
+      rpEstado.categoria = catKey;
+      rpRenderPestanas();
+      rpRenderSubcats();
+      rpRenderEquipos();
+      rpRenderCalendario();
+      rpRenderUltimos();
+    }
     rpRenderTabla();
   });
 
