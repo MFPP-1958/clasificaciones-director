@@ -694,7 +694,9 @@ function rpRenderCalendario() {
   const base = (rpEstado.planificadas || [])
     .filter(p => rpGruposDePlanificada(p).has(rpEstado.categoria));
   const global = base.filter(p => p.fccvSync);
-  const equipo = base.filter(p => !p.fccvSync || p._avail || rpEstado.agendaIds.has(String(p.id)));
+  // Agenda del equipo: añadidas a mano, con disponibilidad marcada, o
+  // pre-inscripciones (si el director subió los inscritos, el equipo va).
+  const equipo = base.filter(p => !p.fccvSync || p._avail || p._pre || rpEstado.agendaIds.has(String(p.id)));
   if (!base.length) { caja.style.display = 'none'; cont.innerHTML = ''; return; }
   caja.style.display = '';
   const activa = rpEstado.calVista === 'equipo' ? equipo : global;
@@ -1609,7 +1611,24 @@ async function rpIniciar() {
     ]);
     if (rRanking.error) throw rRanking.error;
     rpEstado.carreras = rpAdaptarCarreras(rRanking.data);
-    rpEstado.planificadas = rCalendario.error ? [] : rpAdaptarPlanificadas(rCalendario.data);
+    // PRE-INSCRIPCIONES: al subir los inscritos de una prueba futura, esta
+    // pasa a race_type='clasificacion' aunque aún no se haya corrido (caso
+    // Trofeo Torrent). Sigue siendo una PRÓXIMA prueba: se fusiona con las
+    // planificadas, sin duplicar (mismo comportamiento que el dashboard).
+    const hoyISO = rpHoyISO();
+    const preinscripciones = rpAdaptarPlanificadas(
+      (rRanking.data || []).filter(r => (r.date || '') >= hoyISO)
+    ).map(p => ({ ...p, _pre: true }));
+    const plan = rCalendario.error ? [] : rpAdaptarPlanificadas(rCalendario.data);
+    const vistosCal = new Set();
+    rpEstado.planificadas = [...preinscripciones, ...plan]
+      .filter(p => {
+        const k = p.fecha + '|' + rpNormalizarTexto(p.nombre);
+        if (vistosCal.has(k)) return false;
+        vistosCal.add(k);
+        return true;
+      })
+      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
     rpEstado.agendaIds = new Set(((rAgenda && rAgenda.data) || []).map(r => String(r.race_id)));
     if (rCalendario.error) console.warn('[ranking-publico] calendario no disponible:', rCalendario.error);
     rpEstado.temporada = null; // → la más reciente con datos
