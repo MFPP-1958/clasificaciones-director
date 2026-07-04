@@ -1030,11 +1030,18 @@ function rpRenderSubcats() {
 function rpRenderPestanas() {
   const nav = document.getElementById('rp-pestanas');
   // El contador refleja el filtro de comunidad (la subcategoría no, porque
-  // sus etiquetas son propias de cada pestaña).
-  const cuenta = cat => cat.corredores.filter(c => {
-    if (rpEstado.region === RP_REGION_SIN) return !c.region;
-    return !rpEstado.region || rpNormalizarTexto(c.region) === rpEstado.region;
-  }).length;
+  // sus etiquetas son propias de cada pestaña). En la vista Equipos cuenta
+  // EQUIPOS ÚNICOS con presencia en la categoría, no corredores.
+  const cuenta = cat => {
+    const visibles = cat.corredores.filter(c => {
+      if (rpEstado.region === RP_REGION_SIN) return !c.region;
+      return !rpEstado.region || rpNormalizarTexto(c.region) === rpEstado.region;
+    });
+    if (rpEstado.vista === 'equipos' && rpEstado.modo !== 'challenge') {
+      return new Set(visibles.map(c => rpNormalizarTexto(c.equipo)).filter(Boolean)).size;
+    }
+    return visibles.length;
+  };
   nav.innerHTML = rpEstado.ranking.categorias.map(c =>
     `<button type="button" role="tab" data-cat="${c.key}"` +
     ` aria-selected="${c.key === rpEstado.categoria}"` +
@@ -1801,6 +1808,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btn || btn.dataset.vista === rpEstado.vista) return;
     rpEstado.vista = btn.dataset.vista;
     rpRenderVista();
+    rpRenderPestanas(); // los contadores cambian: corredores ↔ equipos únicos
     rpRenderTabla();
   });
 
@@ -1810,6 +1818,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btn || btn.dataset.modo === rpEstado.modo) return;
     rpEstado.modo = btn.dataset.modo;
     rpRenderModo();
+    rpRenderPestanas(); // los contadores dependen del modo/vista
     rpRenderTabla();
   });
 
