@@ -928,10 +928,30 @@ function rpRenderRegiones() {
     (haySinRegion ? `<option value="${RP_REGION_SIN}"${rpEstado.region === RP_REGION_SIN ? ' selected' : ''}>Sin comunidad asignada</option>` : '');
 }
 
-// Desplegable de categoría GLOBAL: lista TODAS las categorías del ranking
-// agrupadas por bloque (Cadetes → CAD-1, CAD-2, CADETE; Juveniles → JUNIOR…).
-// Elegir una etiqueta de otro bloque cambia de pestaña automáticamente.
-// El value codifica "clavePestaña|etiqueta".
+// Nombre amigable de una etiqueta de organizador dentro de su bloque.
+// Lo que no esté aquí se muestra tal cual viene de los datos.
+const RP_ETIQUETAS_SUBCAT = {
+  'CAD-1': 'Cadetes 1º Año (CAD-1)',
+  'CAD-2': 'Cadetes 2º Año (CAD-2)',
+  'CADETE': 'Cadetes Genéricos (CADETE)',
+  'JUN-1': 'Juveniles 1º Año (JUN-1)',
+  'JUN-2': 'Juveniles 2º Año (JUN-2)',
+  'JUV-1': 'Juveniles 1º Año (JUV-1)',
+  'JUV-2': 'Juveniles 2º Año (JUV-2)',
+  'JUVENIL': 'Juveniles Genéricos (JUVENIL)',
+  'JUNIOR': 'Juveniles Genéricos (JUNIOR)'
+};
+// "Todos los X" por bloque (con género gramatical correcto).
+const RP_TODOS_LABEL = { fem: 'Todas las Féminas', escuela: 'Todas las Escuelas' };
+function rpEtiquetaTodos(cat) {
+  return RP_TODOS_LABEL[cat.key] || `Todos los ${cat.label}`;
+}
+
+// Desplegable de categoría JERÁRQUICO: cada bloque ofrece primero su opción
+// agrupada ("Todos los Cadetes" = CADETE + CAD-1 + CAD-2) y después sus
+// etiquetas individuales con nombre amigable. Elegir cualquier opción de otro
+// bloque cambia de pestaña automáticamente. Value = "clavePestaña|etiqueta"
+// (etiqueta vacía = todos los del bloque).
 function rpRenderSubcats() {
   const sel = document.getElementById('rp-subcat');
   if (!rpEstado.ranking.categorias.length) {
@@ -944,20 +964,23 @@ function rpRenderSubcats() {
   const catActiva = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   const etiquetasActiva = catActiva ? new Set(catActiva.corredores.flatMap(c => c.subcats)) : new Set();
   if (rpEstado.subcategoria && !etiquetasActiva.has(rpEstado.subcategoria)) rpEstado.subcategoria = '';
-  const seleccion = rpEstado.subcategoria ? `${rpEstado.categoria}|${rpEstado.subcategoria}` : '';
+  const seleccion = `${rpEstado.categoria}|${rpEstado.subcategoria || ''}`;
   sel.style.display = '';
-  sel.innerHTML = '<option value="">Todas las categorías</option>' +
-    rpEstado.ranking.categorias.map(cat => {
-      const etiquetas = [...new Set(cat.corredores.flatMap(c => c.subcats))]
-        .sort((a, b) => a.localeCompare(b, 'es'));
-      if (!etiquetas.length) return '';
-      return `<optgroup label="${rpEscapar(cat.label)}">` +
-        etiquetas.map(e => {
-          const val = `${cat.key}|${e}`;
-          return `<option value="${rpEscapar(val)}"${val === seleccion ? ' selected' : ''}>${rpEscapar(e)}</option>`;
-        }).join('') +
-        '</optgroup>';
-    }).join('');
+  sel.innerHTML = rpEstado.ranking.categorias.map(cat => {
+    // Solo etiquetas que pertenecen al bloque: un juvenil con un resultado
+    // suelto etiquetado "CADETE" no debe meter esa opción en Juveniles.
+    const etiquetas = [...new Set(cat.corredores.flatMap(c => c.subcats))]
+      .filter(e => rpGrupoCategoria(e) === cat.key)
+      .sort((a, b) => a.localeCompare(b, 'es'));
+    const opcion = (val, texto) =>
+      `<option value="${rpEscapar(val)}"${val === seleccion ? ' selected' : ''}>${rpEscapar(texto)}</option>`;
+    return `<optgroup label="${rpEscapar(cat.label)}">` +
+      opcion(`${cat.key}|`, rpEtiquetaTodos(cat)) +
+      (etiquetas.length > 1
+        ? etiquetas.map(e => opcion(`${cat.key}|${e}`, RP_ETIQUETAS_SUBCAT[e.toUpperCase()] || e)).join('')
+        : '') +
+      '</optgroup>';
+  }).join('');
 }
 
 function rpRenderPestanas() {
@@ -1513,7 +1536,11 @@ function rpRecalcular() {
     rpEstado.ranking.categorias.flatMap(c => c.corredores.map(x => x.clave)));
   rpEstado.indiceBusqueda = rpConstruirIndice();
   const cats = rpEstado.ranking.categorias;
-  if (!cats.find(c => c.key === rpEstado.categoria)) rpEstado.categoria = cats[0]?.key || null;
+  if (!cats.find(c => c.key === rpEstado.categoria)) {
+    // Estado inicial por defecto: "Todos los Cadetes". Si un año no hubiera
+    // cadetes, cae a la primera categoría con corredores.
+    rpEstado.categoria = (cats.find(c => c.key === 'cadete') || cats[0])?.key || null;
+  }
   if (!cats.length) rpMostrarVacio(); else rpMostrarEstado('');
 }
 
