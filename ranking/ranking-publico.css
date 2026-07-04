@@ -105,6 +105,35 @@ body { margin: 0; background: var(--rp-color-fondo); }
 }
 .rp-enlace:hover, .rp-enlace:focus-visible { text-decoration: underline; outline: none; }
 
+/* Enlace discreto (equipos dentro de tablas): color de texto normal */
+.rp-enlace-suave { color: var(--rp-color-texto); font-weight: inherit; }
+
+/* ── Conmutador Corredores / Equipos ── */
+#rp-vista {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.rp-vista-btn {
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--rp-color-suave);
+  background: var(--rp-color-fondo);
+  border: none;
+  padding: 9px 18px;
+  cursor: pointer;
+  min-height: 42px;
+}
+.rp-vista-btn.rp-activa {
+  color: #fff;
+  background: var(--rp-color-primario);
+}
+.rp-vista-btn:focus-visible { outline: 2px solid var(--rp-color-acento); outline-offset: -2px; }
+
 /* ── Últimos resultados (plegable) ── */
 #rp-ultimos-caja {
   border: 1px solid var(--rp-color-borde);
@@ -411,6 +440,7 @@ th.rp-c { text-align: center; }
 .rp-equipo-sub { display: none; }
 @media (max-width: 640px) {
   #rp-app { padding: 10px; }
+  #rp-tabla .rp-col-vict { display: none; }  /* victorias solo en pantalla grande */
   /* Móvil: año + categoría comparten fila; comunidad y buscador a ancho completo */
   #rp-temporada { flex: 1 1 30%; }
   #rp-subcat { flex: 1 1 55%; }

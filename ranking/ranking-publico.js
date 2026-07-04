@@ -387,6 +387,8 @@ const rpEstado = {
   // tuviera corredores CV, cae a '' (todas). La URL ?comunidad=... lo cambia.
   region: 'comunitat valenciana', // normalizada; '' = todas; RP_REGION_SIN = sin dato
   equipo: '',         // equipo normalizado; '' = todos
+  vista: 'corredores',// 'corredores' | 'equipos' (ranking individual o por equipos)
+  modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
   busqueda: '',
   ranking: null       // salida de calcularRankingPublico
 };
@@ -432,12 +434,21 @@ function rpRenderSubtitulo() {
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   const partes = [];
   if (cat) partes.push(cat.label);
+  if (rpEstado.vista === 'equipos') partes.push('Equipos');
   if (rpEstado.region === RP_REGION_SIN) partes.push('Sin comunidad asignada');
   else if (rpEstado.region) partes.push(rpEstado.regionDisplay || '');
   partes.push('Temporada ' + rpEstado.temporada);
   const texto = partes.filter(Boolean).join(' · ');
   el.textContent = texto;
   document.title = 'Ranking MFPP Cycling — ' + texto;
+}
+
+// Conmutador de vista Corredores / Equipos: marca el botón activo.
+function rpRenderVista() {
+  document.querySelectorAll('#rp-vista button[data-vista]').forEach(b => {
+    b.classList.toggle('rp-activa', b.dataset.vista === rpEstado.vista);
+    b.setAttribute('aria-pressed', String(b.dataset.vista === rpEstado.vista));
+  });
 }
 
 // Bloque "Últimos resultados" (estilo portada de FirstCycling): las carreras
@@ -506,6 +517,33 @@ function rpPoblacion(cat) {
     if (rpEstado.equipo && rpNormalizarTexto(c.equipo) !== rpEstado.equipo) return false;
     return true;
   });
+}
+
+// Ranking por equipos de una población filtrada. Los puntos del equipo son la
+// suma de sus 3 MEJORES corredores (evita que gane el club con más licencias
+// en vez del más fuerte); las estadísticas cuentan toda la plantilla.
+const RP_EQUIPO_TOP_N = 3;
+function rpCalcularEquipos(poblacion) {
+  const porEquipo = new Map();
+  for (const c of poblacion) {
+    const clave = rpNormalizarTexto(c.equipo);
+    if (!clave) continue;
+    if (!porEquipo.has(clave)) porEquipo.set(clave, { clave, nombre: c.equipo, corredores: [] });
+    porEquipo.get(clave).corredores.push(c);
+  }
+  const equipos = [...porEquipo.values()].map(e => {
+    e.corredores.sort((a, b) => b.puntosTotales - a.puntosTotales);
+    e.puntos = Math.round(e.corredores.slice(0, RP_EQUIPO_TOP_N)
+      .reduce((s, c) => s + c.puntosTotales, 0) * 100) / 100;
+    const posValidas = e.corredores.flatMap(c => c.resultados.map(r => r.pos).filter(p => p >= 1));
+    e.victorias = posValidas.filter(p => p === 1).length;
+    e.podios = posValidas.filter(p => p <= 3).length;
+    e.top10 = posValidas.filter(p => p <= 10).length;
+    return e;
+  });
+  equipos.sort((a, b) =>
+    (b.puntos - a.puntos) || (b.victorias - a.victorias) || a.nombre.localeCompare(b.nombre, 'es'));
+  return equipos;
 }
 
 // Desplegable de equipo: equipos presentes en la pestaña activa, alfabético.
@@ -696,6 +734,7 @@ function rpAbrirModal(clave) {
   }
   if (!c) return;
   rpEstado.modalClave = c.clave;
+  rpEstado.modalEquipo = null;
   // Estadísticas de la temporada completa (incluye resultados descartados:
   // una victoria es una victoria aunque no cuente para el total).
   const posValidas = c.resultados.map(r => r.pos).filter(p => p >= 1);
@@ -705,7 +744,7 @@ function rpAbrirModal(clave) {
   document.getElementById('rp-modal-contenido').innerHTML =
     '<header class="rp-ficha-cabecera">' +
     `<h2 id="rp-modal-titulo">${rpEscapar(c.nombre)}</h2>` +
-    `<p class="rp-ficha-equipo">${rpEscapar(c.equipo)}</p>` +
+    `<p class="rp-ficha-equipo"><button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button></p>` +
     '<div class="rp-ficha-datos">' +
     `<span class="rp-chip">${rpEscapar(rpEtiquetaCategoria(c.categoria))}</span>` +
     (c.region ? `<span class="rp-chip">${rpEscapar(c.region)}</span>` : '') +
@@ -745,7 +784,8 @@ function rpCarreraPorId(id) {
 function rpAbrirModalCarrera(raceId) {
   const carrera = rpCarreraPorId(raceId);
   if (!carrera) return;
-  rpEstado.modalClave = null; // las flechas ‹ › solo navegan entre corredores
+  rpEstado.modalClave = null; // desde una carrera las flechas ‹ › no navegan
+  rpEstado.modalEquipo = null;
   const ordenados = [...carrera.resultados].sort((a, b) => {
     const pa = parseInt(a.pos, 10), pb = parseInt(b.pos, 10);
     const va = Number.isFinite(pa) && pa > 0, vb = Number.isFinite(pb) && pb > 0;
@@ -794,10 +834,72 @@ function rpAbrirModalCarrera(raceId) {
   else modal.querySelector('.rp-modal-cuadro').scrollTop = 0;
 }
 
-// Abre la ficha del corredor adyacente (dir = -1 anterior, +1 siguiente).
+// ── Ficha de equipo (modal) ──
+// Plantilla ordenada por puntos (los que suman, destacados), estadísticas del
+// equipo completo y navegación ‹ › entre equipos del ranking filtrado.
+function rpAbrirModalEquipo(claveEquipo) {
+  const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
+  if (!cat) return;
+  const equipos = rpCalcularEquipos(rpPoblacion(cat));
+  const idx = equipos.findIndex(e => e.clave === claveEquipo);
+  if (idx < 0) return;
+  const e = equipos[idx];
+  rpEstado.modalClave = null;
+  rpEstado.modalEquipo = e.clave;
+  const filas = e.corredores.map((c, i) => {
+    const badge = rpBadgeRegion(c.region);
+    return `<tr class="${i < RP_EQUIPO_TOP_N ? 'rp-podio' : ''}">` +
+      `<td class="rp-c">${i + 1}</td>` +
+      `<td><button type="button" class="rp-enlace" data-corredor="${rpEscapar(c.clave)}">${rpEscapar(c.nombre)}</button>` +
+      `${badge ? `<span class="rp-badge-region" title="${rpEscapar(c.region)}">${rpEscapar(badge)}</span>` : ''}</td>` +
+      `<td class="rp-c">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
+      `<td class="rp-c rp-pts">${rpFormatearPuntos(c.puntosTotales)}</td>` +
+      `</tr>`;
+  }).join('');
+  document.getElementById('rp-modal-contenido').innerHTML =
+    '<header class="rp-ficha-cabecera">' +
+    `<h2 id="rp-modal-titulo">${rpEscapar(e.nombre)}</h2>` +
+    '<div class="rp-ficha-datos">' +
+    `<span class="rp-chip">${rpEscapar(rpEtiquetaCategoria(rpEstado.categoria))}</span>` +
+    `<span class="rp-chip">Temporada ${rpEscapar(rpEstado.temporada)}</span>` +
+    `<span class="rp-chip">Puesto ${idx + 1}º</span>` +
+    `<span class="rp-chip rp-chip-puntos">${rpFormatearPuntos(e.puntos)} pts</span>` +
+    '</div>' +
+    '<div class="rp-ficha-stats">' +
+    `<span class="rp-stat">🥇 <b>${e.victorias}</b> victorias</span>` +
+    `<span class="rp-stat">🏆 <b>${e.podios}</b> podios</span>` +
+    `<span class="rp-stat">🔟 <b>${e.top10}</b> top-10</span>` +
+    `<span class="rp-stat">🚴 <b>${e.corredores.length}</b> corredores</span>` +
+    '</div></header>' +
+    '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
+    '<thead><tr><th>#</th><th>Corredor</th><th>Pruebas</th><th>Puntos</th></tr></thead>' +
+    `<tbody>${filas}</tbody></table></div>` +
+    `<p class="rp-nota">En verde, los ${RP_EQUIPO_TOP_N} corredores cuyos puntos suman el total del equipo. Las estadísticas cuentan toda la plantilla.</p>`;
+  const btnAnt = document.getElementById('rp-modal-ant');
+  const btnSig = document.getElementById('rp-modal-sig');
+  btnAnt.disabled = idx <= 0;
+  btnSig.disabled = idx >= equipos.length - 1;
+  const modal = document.getElementById('rp-modal');
+  const yaAbierto = !modal.hidden;
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (!yaAbierto) document.getElementById('rp-modal-cerrar').focus();
+  else modal.querySelector('.rp-modal-cuadro').scrollTop = 0;
+}
+
+// Abre la ficha adyacente (dir = -1 anterior, +1 siguiente): corredores o
+// equipos según qué ficha esté abierta.
 function rpNavegarModal(dir) {
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
-  if (!cat || !rpEstado.modalClave) return;
+  if (!cat) return;
+  if (rpEstado.modalEquipo) {
+    const equipos = rpCalcularEquipos(rpPoblacion(cat));
+    const idx = equipos.findIndex(e => e.clave === rpEstado.modalEquipo);
+    const destino = equipos[idx + dir];
+    if (idx >= 0 && destino) rpAbrirModalEquipo(destino.clave);
+    return;
+  }
+  if (!rpEstado.modalClave) return;
   const poblacion = rpPoblacion(cat);
   const idx = poblacion.findIndex(c => c.clave === rpEstado.modalClave);
   const destino = poblacion[idx + dir];
@@ -806,14 +908,56 @@ function rpNavegarModal(dir) {
 
 function rpCerrarModal() {
   rpEstado.modalClave = null;
+  rpEstado.modalEquipo = null;
   document.getElementById('rp-modal').hidden = true;
   document.body.style.overflow = '';
+}
+
+// Tabla del ranking por equipos (vista "Equipos" de la pestaña activa).
+function rpRenderTablaEquipos(cat) {
+  const cont = document.querySelector('.rp-tabla-scroll');
+  const equipos = rpCalcularEquipos(rpPoblacion(cat));
+  const posPrevias = new Map();
+  const catPrev = rpEstado.rankingPrevio &&
+    rpEstado.rankingPrevio.categorias.find(x => x.key === rpEstado.categoria);
+  if (catPrev) rpCalcularEquipos(rpPoblacion(catPrev)).forEach((e, i) => posPrevias.set(e.clave, i + 1));
+  const filtro = rpNormalizarTexto(rpEstado.busqueda);
+  const filas = [];
+  equipos.forEach((e, i) => {
+    if (filtro && !rpNormalizarTexto(e.nombre).includes(filtro)) return;
+    const previa = posPrevias.get(e.clave);
+    let evo;
+    if (!previa) evo = '<span class="rp-evo rp-evo-nuevo" title="Nuevo en el ranking">N</span>';
+    else if (previa > i + 1) evo = `<span class="rp-evo rp-evo-sube" title="Sube desde el puesto ${previa}">▲${previa - i - 1}</span>`;
+    else if (previa < i + 1) evo = `<span class="rp-evo rp-evo-baja" title="Baja desde el puesto ${previa}">▼${i + 1 - previa}</span>`;
+    else evo = '<span class="rp-evo rp-evo-igual" title="Mantiene el puesto">=</span>';
+    filas.push(
+      `<tr class="rp-fila" data-equipo="${rpEscapar(e.clave)}" tabindex="0" aria-label="Ver ficha del equipo ${rpEscapar(e.nombre)}">` +
+      `<td class="rp-c rp-rank">${i + 1}</td>` +
+      `<td class="rp-c rp-col-evo">${evo}</td>` +
+      `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(e.nombre)}</span></td>` +
+      `<td class="rp-c">${e.corredores.length}</td>` +
+      `<td class="rp-c rp-col-vict">${e.victorias ? '🥇 ' + e.victorias : '—'}</td>` +
+      `<td class="rp-c rp-pts">${rpFormatearPuntos(e.puntos)}</td>` +
+      `</tr>`
+    );
+  });
+  rpRenderSubtitulo();
+  rpGuardarPrefs();
+  cont.innerHTML =
+    '<table id="rp-tabla"><thead><tr>' +
+    '<th class="rp-c">#</th><th class="rp-c rp-col-evo" title="Evolución respecto a la jornada anterior">±</th>' +
+    '<th>Equipo</th><th class="rp-c">Corredores</th><th class="rp-c rp-col-vict">Victorias</th>' +
+    `<th class="rp-c" title="Suma de los ${RP_EQUIPO_TOP_N} mejores corredores del equipo">Puntos</th>` +
+    '</tr></thead>' +
+    `<tbody>${filas.join('') || '<tr><td colspan="6" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>`;
 }
 
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (!cat) { cont.innerHTML = ''; return; }
+  if (rpEstado.vista === 'equipos') { rpRenderTablaEquipos(cat); return; }
 
   const filtro = rpNormalizarTexto(rpEstado.busqueda);
 
@@ -854,7 +998,7 @@ function rpRenderTabla() {
       `${badge ? `<span class="rp-badge-region" title="${rpEscapar(c.region)}">${rpEscapar(badge)}</span>` : ''}` +
       `<span class="rp-equipo-sub">${rpEscapar(c.equipo)}</span>` +
       `${medallas ? `<span class="rp-medallas">${medallas}</span>` : ''}</td>` +
-      `<td class="rp-col-equipo">${rpEscapar(c.equipo)}</td>` +
+      `<td class="rp-col-equipo">${c.equipo ? `<button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}</td>` +
       `<td class="rp-c">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
       `<td class="rp-c rp-pts">${rpFormatearPuntos(c.puntosTotales)}</td>` +
       `</tr>`
@@ -874,6 +1018,7 @@ function rpRenderTabla() {
 
 function rpRenderTodo() {
   rpRenderTemporadas();
+  rpRenderVista();
   rpRenderUltimos();    // depende solo de la temporada
   rpRenderRegiones();   // antes que las pestañas: valida el filtro de comunidad
   rpRenderPestanas();   // y sus contadores dependen de él
@@ -892,7 +1037,8 @@ function rpGuardarPrefs() {
       categoria: rpEstado.categoria,
       region: rpEstado.region,
       subcategoria: rpEstado.subcategoria,
-      equipo: rpEstado.equipo
+      equipo: rpEstado.equipo,
+      vista: rpEstado.vista
     }));
   } catch (_) { /* almacenamiento no disponible */ }
 }
@@ -905,6 +1051,7 @@ function rpCargarPrefs() {
     if (typeof p.region === 'string') rpEstado.region = p.region;
     if (typeof p.subcategoria === 'string') rpEstado.subcategoria = p.subcategoria;
     if (typeof p.equipo === 'string') rpEstado.equipo = p.equipo;
+    if (p.vista === 'corredores' || p.vista === 'equipos') rpEstado.vista = p.vista;
   } catch (_) { /* almacenamiento no disponible o corrupto */ }
 }
 
@@ -953,6 +1100,13 @@ async function rpIniciar() {
       rpEstado.region = rpNormalizarTexto(comunidad);
       rpRenderRegiones();   // valida contra los datos (si no existe, la resetea)
       rpRenderPestanas();
+      rpRenderTabla();
+    }
+    // Vista inicial por URL: ?vista=equipos (o corredores).
+    const vistaParam = new URLSearchParams(location.search).get('vista');
+    if (vistaParam === 'equipos' || vistaParam === 'corredores') {
+      rpEstado.vista = vistaParam;
+      rpRenderVista();
       rpRenderTabla();
     }
     // Enlace directo a una carrera: ?carrera=<id de la prueba>.
@@ -1027,15 +1181,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 150);
   });
 
-  // Abrir la ficha del ciclista (clic o teclado en la fila)
-  document.querySelector('.rp-tabla-scroll').addEventListener('click', e => {
+  // Abrir fichas desde la tabla (clic o teclado): el botón de equipo de una
+  // celda tiene prioridad sobre la fila; la fila abre corredor o equipo según
+  // la vista activa.
+  const alAccionarFila = e => {
+    const bEquipo = e.target.closest('button[data-equipo]');
+    if (bEquipo) { rpAbrirModalEquipo(bEquipo.dataset.equipo); return; }
     const fila = e.target.closest('tr.rp-fila');
-    if (fila) rpAbrirModal(fila.dataset.clave);
-  });
+    if (!fila) return;
+    if (fila.dataset.equipo) rpAbrirModalEquipo(fila.dataset.equipo);
+    else rpAbrirModal(fila.dataset.clave);
+  };
+  document.querySelector('.rp-tabla-scroll').addEventListener('click', alAccionarFila);
   document.querySelector('.rp-tabla-scroll').addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    const fila = e.target.closest('tr.rp-fila');
-    if (fila) { e.preventDefault(); rpAbrirModal(fila.dataset.clave); }
+    e.preventDefault();
+    alAccionarFila(e);
+  });
+
+  // Conmutador Corredores / Equipos
+  document.getElementById('rp-vista').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-vista]');
+    if (!btn || btn.dataset.vista === rpEstado.vista) return;
+    rpEstado.vista = btn.dataset.vista;
+    rpRenderVista();
+    rpRenderTabla();
   });
 
   // Enlaces cruzados: clic en un corredor o una carrera (dentro del modal o
@@ -1044,7 +1214,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const bCorredor = e.target.closest('[data-corredor]');
     if (bCorredor) { rpAbrirModal(bCorredor.dataset.corredor); return; }
     const bCarrera = e.target.closest('[data-carrera]');
-    if (bCarrera) rpAbrirModalCarrera(bCarrera.dataset.carrera);
+    if (bCarrera) { rpAbrirModalCarrera(bCarrera.dataset.carrera); return; }
+    const bEquipo = e.target.closest('button[data-equipo]');
+    if (bEquipo) rpAbrirModalEquipo(bEquipo.dataset.equipo);
   };
   document.getElementById('rp-modal-contenido').addEventListener('click', alClicEnlace);
   document.getElementById('rp-ultimos').addEventListener('click', alClicEnlace);
