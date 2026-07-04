@@ -270,16 +270,39 @@ body { margin: 0; background: var(--rp-color-fondo); }
   font-size: 0.92rem;
   color: var(--rp-color-primario);
 }
-.rp-cal-inscritos {
+/* Pestañitas Global / Agenda dentro de Próximas pruebas */
+.rp-cal-tabs { display: flex; gap: 6px; margin: 8px 0 4px; flex-wrap: wrap; }
+.rp-cal-tab {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--rp-color-suave);
+  background: var(--rp-color-fondo);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  padding: 6px 14px;
+  cursor: pointer;
+  min-height: 36px;
+}
+.rp-cal-tab.rp-activa { color: #fff; background: var(--rp-color-primario); border-color: var(--rp-color-primario); }
+.rp-cal-tab.rp-activa .rp-num { background: rgba(255, 255, 255, 0.25); color: #fff; }
+
+/* Chips de documentación en las tarjetas del calendario */
+.rp-cal-chip {
+  font: inherit;
   font-size: 0.72rem;
   font-weight: 800;
   color: var(--rp-color-primario);
   background: var(--rp-color-fondo);
   border: 1px solid var(--rp-color-borde);
   border-radius: 99px;
-  padding: 2px 9px;
+  padding: 3px 10px;
   white-space: nowrap;
+  cursor: pointer;
 }
+.rp-cal-chip:hover, .rp-cal-chip:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+.rp-cal-chip-off { color: var(--rp-color-suave); cursor: default; font-weight: 600; }
+.rp-cal-chip-ok { color: #065f46; background: #d1fae5; border-color: #6ee7b7; }
 .rp-ultimo {
   display: flex;
   flex-wrap: wrap;

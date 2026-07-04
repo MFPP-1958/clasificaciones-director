@@ -229,13 +229,20 @@ function rpAdaptarCarreras(filas) {
   }).filter(c => c.temporada !== null);
 }
 
-// Pruebas del calendario (race_type='planificada'): solo las futuras, con su
-// startlist (notes.inscritos). El resto de notes (GPX, meteo…) se descarta.
-function rpAdaptarPlanificadas(filas) {
+// Fecha de HOY en ISO local (no UTC): una prueba de hoy sigue visible hasta
+// que acabe la jornada a las 00:00.
+function rpHoyISO() {
   const hoy = new Date();
-  const hoyISO = hoy.getFullYear() + '-' +
+  return hoy.getFullYear() + '-' +
     String(hoy.getMonth() + 1).padStart(2, '0') + '-' +
     String(hoy.getDate()).padStart(2, '0');
+}
+
+// Pruebas del calendario (race_type='planificada'): solo las de HOY en
+// adelante (fecha >= hoy), con su startlist (notes.inscritos). El resto de
+// notes (GPX, meteo…) se descarta.
+function rpAdaptarPlanificadas(filas) {
+  const hoyISO = rpHoyISO();
   return (filas || []).map(r => {
     let extra = {};
     try { extra = JSON.parse(r.notes || '{}') || {}; } catch (_) { extra = {}; }
@@ -250,6 +257,10 @@ function rpAdaptarPlanificadas(filas) {
       localidad: extra.localidad || '',
       hora: extra.hora_inicio || '',
       cat: [extra.cat, extra.raceCat].filter(Boolean).join(' '),
+      // Origen: sincronizada del calendario oficial FCCV (calendario global
+      // de la CV) o añadida a mano por el equipo (agenda propia).
+      fccvSync: !!(extra.fccvSync || extra.fccvId),
+      _avail: !!extra.availability,
       inscritos: (Array.isArray(extra.inscritos) ? extra.inscritos : []).map(x => ({
         bib: x.bib || '', nombre: x.name || '', equipo: x.team || '', cat: x.cat || ''
       }))
@@ -420,6 +431,8 @@ const rpEstado = {
   modo: 'mfpp',       // 'mfpp' (rendimiento) | 'challenge' (Challenge CV oficial)
   modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
   planificadas: [],   // próximas pruebas del calendario (con startlist)
+  calVista: 'global', // apartado activo del calendario: 'global' | 'equipo'
+  agendaIds: new Set(), // race_ids con disponibilidad del equipo (race_availability)
   clavesRanking: new Set(), // claves de todos los corredores puntuados (para enlazar startlists)
   indiceBusqueda: [], // índice del buscador global (corredores, equipos, pruebas)
   busqueda: '',
@@ -657,26 +670,55 @@ function rpDiaSemana(fechaISO) {
   return Number.isNaN(d.getTime()) ? '' : RP_DIAS_SEMANA[d.getDay()];
 }
 
-// Bloque "Próximas pruebas" (el "What's on?" de FirstCycling): calendario de
-// pruebas planificadas con localidad, hora y nº de inscritos. Cada prueba es
-// clicable → ficha con su startlist.
+// Clasificación ya cargada de una prueba planificada (misma fecha y nombre
+// equivalente): permite enlazar "🏆 Clasificación disponible" el mismo día.
+function rpClasificacionDe(p) {
+  const n = rpNormalizarTexto(p.nombre);
+  if (!n) return null;
+  return (rpEstado.carreras || []).find(c => {
+    if (c.fecha !== p.fecha || !c.resultados.length) return false;
+    const m = rpNormalizarTexto(c.nombre);
+    return m === n || m.includes(n) || n.includes(m);
+  }) || null;
+}
+
+// Bloque "Próximas pruebas" en dos apartados:
+//  🌍 Calendario Global CV (por defecto): TODAS las pruebas sincronizadas del
+//     calendario oficial FCCV, sin filtrar por equipo.
+//  🚴 Agenda TBG-WIXUM: las que el equipo tiene previsto correr (añadidas a
+//     mano por el director o con disponibilidad marcada en race_availability).
+// Ambos respetan estrictamente el filtro de categoría y muestran fecha>=HOY.
 function rpRenderCalendario() {
   const caja = document.getElementById('rp-calendario-caja');
   const cont = document.getElementById('rp-calendario');
-  // Solo las pruebas de la categoría seleccionada (pestaña activa)
-  const proximas = (rpEstado.planificadas || [])
-    .filter(p => rpGruposDePlanificada(p).has(rpEstado.categoria))
-    .slice(0, 10);
-  if (!proximas.length) { caja.style.display = 'none'; cont.innerHTML = ''; return; }
+  const base = (rpEstado.planificadas || [])
+    .filter(p => rpGruposDePlanificada(p).has(rpEstado.categoria));
+  const global = base.filter(p => p.fccvSync);
+  const equipo = base.filter(p => !p.fccvSync || p._avail || rpEstado.agendaIds.has(String(p.id)));
+  if (!base.length) { caja.style.display = 'none'; cont.innerHTML = ''; return; }
   caja.style.display = '';
-  cont.innerHTML = proximas.map(p =>
-    '<div class="rp-ultimo">' +
-    `<span class="rp-ultimo-fecha">${rpEscapar(rpDiaSemana(p.fecha))} ${rpEscapar(rpFormatearFecha(p.fecha))}${p.hora ? ' · ' + rpEscapar(p.hora) : ''}</span>` +
-    `<button type="button" class="rp-enlace rp-ultimo-nombre" data-planificada="${rpEscapar(p.id)}">${rpEscapar(p.nombre)}</button>` +
-    (p.localidad ? `<span class="rp-ultimo-equipo">📍 ${rpEscapar(p.localidad)}</span>` : '') +
-    (p.inscritos.length ? `<span class="rp-cal-inscritos">${p.inscritos.length} inscritos</span>` : '') +
-    '</div>'
-  ).join('');
+  const activa = rpEstado.calVista === 'equipo' ? equipo : global;
+  const hoyISO = rpHoyISO();
+  const tarjeta = p => {
+    const clasif = p.fecha === hoyISO ? rpClasificacionDe(p) : null; // solo el día de la prueba
+    return '<div class="rp-ultimo">' +
+      `<span class="rp-ultimo-fecha">${rpEscapar(rpDiaSemana(p.fecha))} ${rpEscapar(rpFormatearFecha(p.fecha))}${p.hora ? ' · ' + rpEscapar(p.hora) : ''}</span>` +
+      `<button type="button" class="rp-enlace rp-ultimo-nombre" data-planificada="${rpEscapar(p.id)}">${rpEscapar(p.nombre)}</button>` +
+      (p.localidad ? `<span class="rp-ultimo-equipo">📍 ${rpEscapar(p.localidad)}</span>` : '') +
+      (p.inscritos.length
+        ? `<button type="button" class="rp-cal-chip" data-planificada="${rpEscapar(p.id)}">📋 Lista de inscritos (${p.inscritos.length})</button>`
+        : '<span class="rp-cal-chip rp-cal-chip-off">Sin inscritos</span>') +
+      (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación disponible</button>` : '') +
+      '</div>';
+  };
+  cont.innerHTML =
+    '<div class="rp-cal-tabs">' +
+    `<button type="button" data-calvista="global" class="rp-cal-tab${rpEstado.calVista !== 'equipo' ? ' rp-activa' : ''}">🌍 Calendario Global CV <span class="rp-num">${global.length}</span></button>` +
+    `<button type="button" data-calvista="equipo" class="rp-cal-tab${rpEstado.calVista === 'equipo' ? ' rp-activa' : ''}">🚴 Agenda TBG-WIXUM <span class="rp-num">${equipo.length}</span></button>` +
+    '</div>' +
+    (activa.length
+      ? activa.slice(0, 10).map(tarjeta).join('')
+      : '<p class="rp-vacio">No hay próximas pruebas en este apartado para la categoría seleccionada.</p>');
 }
 
 // Ficha de una prueba del calendario: datos y startlist. Los inscritos que ya
@@ -1550,7 +1592,7 @@ async function rpIniciar() {
     // Dos lecturas en paralelo: clasificaciones (ranking) y calendario
     // (pruebas planificadas con startlist). Si el calendario falla, el
     // ranking sigue funcionando sin él.
-    const [rRanking, rCalendario] = await Promise.all([
+    const [rRanking, rCalendario, rAgenda] = await Promise.all([
       rpLeer(
         'races',
         'id, name, date, notes, race_results(pos, name, team, cat)',
@@ -1560,11 +1602,15 @@ async function rpIniciar() {
         'races',
         'id, name, date, notes',
         q => q.eq('race_type', 'planificada').order('date', { ascending: true })
-      ).catch(e => ({ data: null, error: e }))
+      ).catch(e => ({ data: null, error: e })),
+      // Disponibilidad del equipo (voy/no voy): marca qué pruebas del
+      // calendario oficial están también en la agenda del equipo.
+      rpLeer('race_availability', 'race_id').catch(e => ({ data: null, error: e }))
     ]);
     if (rRanking.error) throw rRanking.error;
     rpEstado.carreras = rpAdaptarCarreras(rRanking.data);
     rpEstado.planificadas = rCalendario.error ? [] : rpAdaptarPlanificadas(rCalendario.data);
+    rpEstado.agendaIds = new Set(((rAgenda && rAgenda.data) || []).map(r => String(r.race_id)));
     if (rCalendario.error) console.warn('[ranking-publico] calendario no disponible:', rCalendario.error);
     rpEstado.temporada = null; // → la más reciente con datos
     // Preferencias guardadas del visitante (la URL manda sobre ellas después).
@@ -1751,6 +1797,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enlaces cruzados: clic en un corredor o una carrera (dentro del modal o
   // en "Últimos resultados") abre la ficha correspondiente.
   const alClicEnlace = e => {
+    const bVista = e.target.closest('[data-calvista]');
+    if (bVista) { rpEstado.calVista = bVista.dataset.calvista; rpRenderCalendario(); return; }
     const bCorredor = e.target.closest('[data-corredor]');
     if (bCorredor) { rpAbrirModal(bCorredor.dataset.corredor); return; }
     const bCarrera = e.target.closest('[data-carrera]');
