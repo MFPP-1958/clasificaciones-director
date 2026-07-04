@@ -134,19 +134,29 @@ body { margin: 0; background: var(--rp-color-fondo); }
 }
 .rp-vista-btn:focus-visible { outline: 2px solid var(--rp-color-acento); outline-offset: -2px; }
 
-/* ── Últimos resultados (plegable) ── */
-#rp-ultimos-caja {
+/* ── Bloques plegables: Últimos resultados y Próximas pruebas ── */
+#rp-ultimos-caja, #rp-calendario-caja {
   border: 1px solid var(--rp-color-borde);
   border-radius: 10px;
   padding: 10px 14px;
   margin-bottom: 12px;
   background: var(--rp-color-fondo-alt);
 }
-#rp-ultimos-caja summary {
+#rp-ultimos-caja summary, #rp-calendario-caja summary {
   cursor: pointer;
   font-weight: 700;
   font-size: 0.92rem;
   color: var(--rp-color-primario);
+}
+.rp-cal-inscritos {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--rp-color-primario);
+  background: var(--rp-color-fondo);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  padding: 2px 9px;
+  white-space: nowrap;
 }
 .rp-ultimo {
   display: flex;

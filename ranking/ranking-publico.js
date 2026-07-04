@@ -229,6 +229,34 @@ function rpAdaptarCarreras(filas) {
   }).filter(c => c.temporada !== null);
 }
 
+// Pruebas del calendario (race_type='planificada'): solo las futuras, con su
+// startlist (notes.inscritos). El resto de notes (GPX, meteo…) se descarta.
+function rpAdaptarPlanificadas(filas) {
+  const hoy = new Date();
+  const hoyISO = hoy.getFullYear() + '-' +
+    String(hoy.getMonth() + 1).padStart(2, '0') + '-' +
+    String(hoy.getDate()).padStart(2, '0');
+  return (filas || []).map(r => {
+    let extra = {};
+    try { extra = JSON.parse(r.notes || '{}') || {}; } catch (_) { extra = {}; }
+    return {
+      id: r.id,
+      nombre: r.name || '',
+      fecha: r.date || '',
+      // Solo CARRERAS en el calendario público: concentraciones y
+      // entrenamientos del equipo (notes.tipo) son actividad interna. Algunas
+      // filas antiguas no llevan tipo pero se delatan por el nombre.
+      _tipo: extra.tipo || (/concentraci|entrenamiento/i.test(r.name || '') ? 'actividad' : 'carrera'),
+      localidad: extra.localidad || '',
+      hora: extra.hora_inicio || '',
+      inscritos: (Array.isArray(extra.inscritos) ? extra.inscritos : []).map(x => ({
+        bib: x.bib || '', nombre: x.name || '', equipo: x.team || '', cat: x.cat || ''
+      }))
+    };
+  }).filter(p => p.fecha >= hoyISO && p._tipo === 'carrera')
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+}
+
 /* ============================================================
    MOTOR DE CÁLCULO (puro, sin DOM)
    ============================================================ */
@@ -389,6 +417,8 @@ const rpEstado = {
   equipo: '',         // equipo normalizado; '' = todos
   vista: 'corredores',// 'corredores' | 'equipos' (ranking individual o por equipos)
   modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
+  planificadas: [],   // próximas pruebas del calendario (con startlist)
+  clavesRanking: new Set(), // claves de todos los corredores puntuados (para enlazar startlists)
   busqueda: '',
   ranking: null       // salida de calcularRankingPublico
 };
@@ -475,6 +505,75 @@ function rpRenderUltimos() {
         : '') +
       '</div>';
   }).join('');
+}
+
+const RP_DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+function rpDiaSemana(fechaISO) {
+  const d = new Date(fechaISO + 'T12:00:00');
+  return Number.isNaN(d.getTime()) ? '' : RP_DIAS_SEMANA[d.getDay()];
+}
+
+// Bloque "Próximas pruebas" (el "What's on?" de FirstCycling): calendario de
+// pruebas planificadas con localidad, hora y nº de inscritos. Cada prueba es
+// clicable → ficha con su startlist.
+function rpRenderCalendario() {
+  const caja = document.getElementById('rp-calendario-caja');
+  const cont = document.getElementById('rp-calendario');
+  const proximas = (rpEstado.planificadas || []).slice(0, 10);
+  if (!proximas.length) { caja.style.display = 'none'; cont.innerHTML = ''; return; }
+  caja.style.display = '';
+  cont.innerHTML = proximas.map(p =>
+    '<div class="rp-ultimo">' +
+    `<span class="rp-ultimo-fecha">${rpEscapar(rpDiaSemana(p.fecha))} ${rpEscapar(rpFormatearFecha(p.fecha))}${p.hora ? ' · ' + rpEscapar(p.hora) : ''}</span>` +
+    `<button type="button" class="rp-enlace rp-ultimo-nombre" data-planificada="${rpEscapar(p.id)}">${rpEscapar(p.nombre)}</button>` +
+    (p.localidad ? `<span class="rp-ultimo-equipo">📍 ${rpEscapar(p.localidad)}</span>` : '') +
+    (p.inscritos.length ? `<span class="rp-cal-inscritos">${p.inscritos.length} inscritos</span>` : '') +
+    '</div>'
+  ).join('');
+}
+
+// Ficha de una prueba del calendario: datos y startlist. Los inscritos que ya
+// puntúan en el ranking son clicables hacia su ficha.
+function rpAbrirModalPlanificada(id) {
+  const p = (rpEstado.planificadas || []).find(x => String(x.id) === String(id));
+  if (!p) return;
+  rpEstado.modalClave = null;
+  rpEstado.modalEquipo = null;
+  const inscritos = [...p.inscritos].sort((a, b) =>
+    (a.equipo || '').localeCompare(b.equipo || '', 'es') ||
+    (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  const filas = inscritos.map(x => {
+    const clave = rpNormalizarClave(x.nombre);
+    const enRanking = rpEstado.clavesRanking.has(clave);
+    const nombre = enRanking
+      ? `<button type="button" class="rp-enlace" data-corredor="${rpEscapar(clave)}">${rpEscapar(x.nombre)}</button>`
+      : rpEscapar(x.nombre);
+    return `<tr><td class="rp-c">${rpEscapar(x.bib)}</td><td>${nombre}</td>` +
+      `<td>${rpEscapar(x.equipo)}</td><td class="rp-c">${rpEscapar(x.cat)}</td></tr>`;
+  }).join('');
+  document.getElementById('rp-modal-contenido').innerHTML =
+    '<header class="rp-ficha-cabecera">' +
+    `<h2 id="rp-modal-titulo">${rpEscapar(p.nombre)}</h2>` +
+    `<p class="rp-ficha-equipo">${rpEscapar(rpDiaSemana(p.fecha))} ${rpEscapar(rpFormatearFecha(p.fecha))}${p.localidad ? ' · ' + rpEscapar(p.localidad) : ''}</p>` +
+    '<div class="rp-ficha-datos">' +
+    '<span class="rp-chip">Próxima prueba</span>' +
+    (p.hora ? `<span class="rp-chip">🕐 ${rpEscapar(p.hora)}</span>` : '') +
+    `<span class="rp-chip rp-chip-puntos">${p.inscritos.length} inscritos</span>` +
+    '</div></header>' +
+    (inscritos.length
+      ? '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
+        '<thead><tr><th>Dorsal</th><th>Corredor</th><th>Equipo</th><th>Cat.</th></tr></thead>' +
+        `<tbody>${filas}</tbody></table></div>` +
+        '<p class="rp-nota">Startlist provisional. Los corredores que ya puntúan en el ranking están enlazados a su ficha.</p>'
+      : '<p class="rp-nota">Aún no hay inscritos publicados para esta prueba.</p>');
+  document.getElementById('rp-modal-ant').disabled = true;
+  document.getElementById('rp-modal-sig').disabled = true;
+  const modal = document.getElementById('rp-modal');
+  const yaAbierto = !modal.hidden;
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (!yaAbierto) document.getElementById('rp-modal-cerrar').focus();
+  else modal.querySelector('.rp-modal-cuadro').scrollTop = 0;
 }
 
 function rpRenderTemporadas() {
@@ -1019,6 +1118,7 @@ function rpRenderTabla() {
 function rpRenderTodo() {
   rpRenderTemporadas();
   rpRenderVista();
+  rpRenderCalendario(); // próximas pruebas (independiente de los filtros)
   rpRenderUltimos();    // depende solo de la temporada
   rpRenderRegiones();   // antes que las pestañas: valida el filtro de comunidad
   rpRenderPestanas();   // y sus contadores dependen de él
@@ -1068,6 +1168,10 @@ function rpRecalcular() {
     ? calcularRankingPublico(rpEstado.carreras, { temporada: rpEstado.temporada, hastaFecha: ultimaFecha })
     : null;
   rpCerrarModal();
+  // Corredores puntuados de cualquier categoría: para saber si un inscrito
+  // de una startlist tiene ficha que enlazar.
+  rpEstado.clavesRanking = new Set(
+    rpEstado.ranking.categorias.flatMap(c => c.corredores.map(x => x.clave)));
   const cats = rpEstado.ranking.categorias;
   if (!cats.find(c => c.key === rpEstado.categoria)) rpEstado.categoria = cats[0]?.key || null;
   if (!cats.length) rpMostrarVacio(); else rpMostrarEstado('');
@@ -1076,13 +1180,25 @@ function rpRecalcular() {
 async function rpIniciar() {
   rpMostrarCargando();
   try {
-    const { data, error } = await rpLeer(
-      'races',
-      'id, name, date, notes, race_results(pos, name, team, cat)',
-      q => q.eq('race_type', 'clasificacion').order('date', { ascending: false })
-    );
-    if (error) throw error;
-    rpEstado.carreras = rpAdaptarCarreras(data);
+    // Dos lecturas en paralelo: clasificaciones (ranking) y calendario
+    // (pruebas planificadas con startlist). Si el calendario falla, el
+    // ranking sigue funcionando sin él.
+    const [rRanking, rCalendario] = await Promise.all([
+      rpLeer(
+        'races',
+        'id, name, date, notes, race_results(pos, name, team, cat)',
+        q => q.eq('race_type', 'clasificacion').order('date', { ascending: false })
+      ),
+      rpLeer(
+        'races',
+        'id, name, date, notes',
+        q => q.eq('race_type', 'planificada').order('date', { ascending: true })
+      ).catch(e => ({ data: null, error: e }))
+    ]);
+    if (rRanking.error) throw rRanking.error;
+    rpEstado.carreras = rpAdaptarCarreras(rRanking.data);
+    rpEstado.planificadas = rCalendario.error ? [] : rpAdaptarPlanificadas(rCalendario.data);
+    if (rCalendario.error) console.warn('[ranking-publico] calendario no disponible:', rCalendario.error);
     rpEstado.temporada = null; // → la más reciente con datos
     // Preferencias guardadas del visitante (la URL manda sobre ellas después).
     rpCargarPrefs();
@@ -1109,9 +1225,12 @@ async function rpIniciar() {
       rpRenderVista();
       rpRenderTabla();
     }
-    // Enlace directo a una carrera: ?carrera=<id de la prueba>.
+    // Enlace directo a una prueba: ?carrera=<id> (disputada o del calendario).
     const carreraParam = new URLSearchParams(location.search).get('carrera');
-    if (carreraParam) rpAbrirModalCarrera(carreraParam);
+    if (carreraParam) {
+      if (rpCarreraPorId(carreraParam)) rpAbrirModalCarrera(carreraParam);
+      else rpAbrirModalPlanificada(carreraParam);
+    }
     // Enlace directo a una ficha: ?ficha=Apellido, Nombre (se normaliza igual
     // que la identidad, así que admite variantes de mayúsculas/acentos).
     const ficha = new URLSearchParams(location.search).get('ficha');
@@ -1216,10 +1335,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const bCarrera = e.target.closest('[data-carrera]');
     if (bCarrera) { rpAbrirModalCarrera(bCarrera.dataset.carrera); return; }
     const bEquipo = e.target.closest('button[data-equipo]');
-    if (bEquipo) rpAbrirModalEquipo(bEquipo.dataset.equipo);
+    if (bEquipo) { rpAbrirModalEquipo(bEquipo.dataset.equipo); return; }
+    const bPlanificada = e.target.closest('[data-planificada]');
+    if (bPlanificada) rpAbrirModalPlanificada(bPlanificada.dataset.planificada);
   };
   document.getElementById('rp-modal-contenido').addEventListener('click', alClicEnlace);
   document.getElementById('rp-ultimos').addEventListener('click', alClicEnlace);
+  document.getElementById('rp-calendario').addEventListener('click', alClicEnlace);
 
   // Cerrar la ficha: botón X, toque fuera del cuadro, o tecla Escape.
   // Navegar entre fichas: botones ‹ › o flechas del teclado.
