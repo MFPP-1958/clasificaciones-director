@@ -388,12 +388,27 @@ function calcularRankingPublico(carreras, { temporada, hastaFecha } = {}) {
     // Etiquetas de categoría tal cual las escribe el organizador (CAD-1,
     // CAD-2, CADETE…): alimentan el filtro de subcategoría de la UI.
     const subcats = [...new Set(resultados.map(r => String(r._cat || '').trim().toUpperCase()).filter(Boolean))];
+    // Etiqueta principal del corredor: la más repetida en sus resultados
+    // (empate → la del más reciente). Se muestra como columna en el ranking.
+    const votosSub = new Map();
+    for (const r of resultados) {
+      const s = String(r._cat || '').trim().toUpperCase();
+      if (s) votosSub.set(s, (votosSub.get(s) || 0) + 1);
+    }
+    let subcatPrincipal = '';
+    if (votosSub.size) {
+      const maxSub = Math.max(...votosSub.values());
+      subcatPrincipal = resultados
+        .map(r => String(r._cat || '').trim().toUpperCase())
+        .find(s => s && votosSub.get(s) === maxSub) || '';
+    }
     corredores.push({
       clave,
       nombre: masReciente._nombre,
       equipo: masReciente._equipo,
       categoria,
       subcats,
+      subcatPrincipal,
       region,
       puntosTotales,
       pruebasContadas: contados.length,
@@ -445,8 +460,11 @@ function rpEscapar(s) {
   ));
 }
 
+// Los puntos se muestran SIEMPRE redondeados al entero superior (los
+// decimales de los coeficientes quedan feos en pantalla). El cálculo interno
+// mantiene los decimales: solo se redondea al pintar.
 function rpFormatearPuntos(n) {
-  return (Math.round(n * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+  return Math.ceil(Math.round(n * 100) / 100).toLocaleString('es-ES');
 }
 
 function rpFormatearFecha(iso) {
@@ -1172,6 +1190,7 @@ function rpAbrirModal(clave) {
     `<p class="rp-ficha-equipo"><button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button></p>` +
     '<div class="rp-ficha-datos">' +
     `<span class="rp-chip">${rpEscapar(rpEtiquetaCategoria(c.categoria))}</span>` +
+    (c.subcatPrincipal ? `<span class="rp-chip">${rpEscapar(c.subcatPrincipal)}</span>` : '') +
     (c.region ? `<span class="rp-chip">${rpEscapar(c.region)}</span>` : '') +
     `<span class="rp-chip">Temporada ${rpEscapar(rpEstado.temporada)}</span>` +
     (idx >= 0 ? `<span class="rp-chip">Puesto ${idx + 1}º</span>` : '') +
@@ -1507,6 +1526,7 @@ function rpRenderTabla() {
       `${badge ? `<span class="rp-badge-region" title="${rpEscapar(c.region)}">${rpEscapar(badge)}</span>` : ''}` +
       `<span class="rp-equipo-sub">${rpEscapar(c.equipo)}</span>` +
       `${medallas ? `<span class="rp-medallas">${medallas}</span>` : ''}</td>` +
+      `<td class="rp-c rp-col-cat">${c.subcatPrincipal ? `<span class="rp-badge-cat">${rpEscapar(c.subcatPrincipal)}</span>` : '—'}</td>` +
       `<td class="rp-col-equipo">${c.equipo ? `<button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}</td>` +
       `<td class="rp-c">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
       `<td class="rp-c rp-pts">${rpFormatearPuntos(c.puntosTotales)}</td>` +
@@ -1519,10 +1539,10 @@ function rpRenderTabla() {
   cont.innerHTML =
     '<table id="rp-tabla"><thead><tr>' +
     '<th class="rp-c">#</th><th class="rp-c rp-col-evo" title="Evolución respecto a la jornada anterior">±</th>' +
-    '<th>Corredor</th><th class="rp-col-equipo">Equipo</th>' +
+    '<th>Corredor</th><th class="rp-c rp-col-cat" title="Categoría del corredor">Cat.</th><th class="rp-col-equipo">Equipo</th>' +
     '<th class="rp-c" title="Pruebas que puntúan / pruebas disputadas">Pruebas</th><th class="rp-c">Puntos</th>' +
     '</tr></thead>' +
-    `<tbody>${filas.join('') || '<tr><td colspan="6" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>`;
+    `<tbody>${filas.join('') || '<tr><td colspan="7" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>`;
 }
 
 function rpRenderTodo() {

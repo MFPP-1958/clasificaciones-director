@@ -418,6 +418,21 @@ th.rp-c { text-align: center; }
   padding: 1px 5px;
 }
 
+/* Insignia de categoría del corredor (columna Cat.) */
+.rp-col-cat { width: 70px; }
+.rp-badge-cat {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--rp-color-primario);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 5px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
 /* Insignia de comunidad/país junto al nombre */
 .rp-badge-region {
   display: inline-block;
