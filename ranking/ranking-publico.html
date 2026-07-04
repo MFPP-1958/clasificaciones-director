@@ -35,9 +35,15 @@
         </div>
       </div>
 
-      <div id="rp-vista" role="group" aria-label="Tipo de ranking">
-        <button type="button" data-vista="corredores" class="rp-vista-btn rp-activa" aria-pressed="true">👤 Corredores</button>
-        <button type="button" data-vista="equipos" class="rp-vista-btn" aria-pressed="false">👥 Equipos</button>
+      <div class="rp-conmutadores">
+        <div id="rp-modo" role="group" aria-label="Sistema de puntuación">
+          <button type="button" data-modo="mfpp" class="rp-vista-btn rp-activa" aria-pressed="true">🏆 Ranking Rendimiento MFPP</button>
+          <button type="button" data-modo="challenge" class="rp-vista-btn" aria-pressed="false">🔥 Challenge CV Oficial</button>
+        </div>
+        <div id="rp-vista" role="group" aria-label="Tipo de ranking">
+          <button type="button" data-vista="corredores" class="rp-vista-btn rp-activa" aria-pressed="true">👤 Corredores</button>
+          <button type="button" data-vista="equipos" class="rp-vista-btn" aria-pressed="false">👥 Equipos</button>
+        </div>
       </div>
 
       <details id="rp-calendario-caja" style="display:none">
@@ -54,6 +60,8 @@
 
       <div id="rp-estado"><p class="rp-cargando">Cargando ranking…</p></div>
 
+      <div id="rp-challenge-info" style="display:none"></div>
+
       <div class="rp-tabla-scroll"></div>
 
       <footer class="rp-pie">
@@ -67,6 +75,7 @@
             <li>✂️ <b>Corte de resultados:</b> solo suman los <b>12 mejores resultados</b> de cada corredor por temporada; el resto se muestran descartados en su ficha.</li>
             <li>📈 <b>Columna ±:</b> posiciones ganadas (▲) o perdidas (▼) respecto a la jornada anterior; <b>N</b> = nuevo en el ranking.</li>
             <li>👥 <b>Ranking de equipos:</b> los puntos de cada equipo son la suma de sus <b>3 mejores corredores</b>; las estadísticas cuentan toda la plantilla.</li>
+            <li>🔥 <b>Challenge CV Oficial:</b> sistema de puntuación oficial FCCV — 45, 42, 40, 38, 36 para los 5 primeros; del 6º al 39º, 41−puesto; 1 punto del 40º en adelante. Suma pura de todas las pruebas Challenge, sin coeficientes ni descartes. Empates resueltos por más 1ºs, 2ºs… y mejor puesto en la última prueba.</li>
           </ul>
           <p>Pulsa sobre cualquier corredor para abrir su ficha: historial completo, estadísticas y evolución de puntos de la temporada.</p>
         </details>

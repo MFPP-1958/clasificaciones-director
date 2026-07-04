@@ -150,15 +150,95 @@ body { margin: 0; background: var(--rp-color-fondo); }
 /* Enlace discreto (equipos dentro de tablas): color de texto normal */
 .rp-enlace-suave { color: var(--rp-color-texto); font-weight: inherit; }
 
-/* ── Conmutador Corredores / Equipos ── */
+/* ── Conmutadores (modo de puntuación y tipo de ranking) ── */
+.rp-conmutadores { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.rp-conmutadores > div { margin-bottom: 0 !important; }
+#rp-modo {
+  display: inline-flex;
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  overflow: hidden;
+}
+#rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { background: #b45309; }
+
 #rp-vista {
   display: inline-flex;
   gap: 0;
   border: 1px solid var(--rp-color-borde);
   border-radius: 99px;
   overflow: hidden;
+}
+
+/* ── Challenge CV oficial (formato del dashboard, tema ámbar) ── */
+.rp-ch-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.4rem;
+  background: #fef3c7;
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  padding: 12px 16px;
   margin-bottom: 12px;
 }
+.rp-ch-banner b { display: block; font-size: 1.05rem; color: #92400e; }
+.rp-ch-banner span { display: block; font-size: 0.82rem; color: #b45309; }
+.rp-ch-tarjetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.rp-ch-tarjeta {
+  flex: 1 1 150px;
+  text-align: center;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 12px 10px;
+}
+.rp-ch-tarjeta b { display: block; font-size: 1.25rem; color: var(--rp-color-texto); }
+.rp-ch-tarjeta span { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--rp-color-suave); }
+.rp-ch-lider { background: #fef3c7; border-color: #fbbf24; }
+.rp-ch-lider b { font-size: 1.05rem; color: #92400e; }
+
+.rp-tabla-challenge .rp-ch-total {
+  font-weight: 800;
+  font-size: 1.05rem;
+  background: #fef3c7;
+  color: #92400e;
+}
+.rp-tabla-challenge .rp-ch-pts { color: var(--rp-color-texto); font-weight: 600; }
+.rp-tabla-challenge th .rp-ch-loc {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--rp-color-suave);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-ch-podio td { background: #fffbeb; }
+.rp-ch-podio .rp-ch-total { background: #fde68a; }
+.rp-ch-desempate {
+  display: inline-block;
+  margin-left: 7px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 5px;
+  padding: 1px 5px;
+  vertical-align: 1px;
+}
+/* En la tabla Challenge, "CAT · EQUIPO" va SIEMPRE como subtítulo bajo el
+   nombre (también en escritorio, como en el dashboard) */
+#rp-tabla .rp-ch-sub { display: block; font-size: 0.76rem; color: var(--rp-color-suave); font-weight: 400; }
 .rp-vista-btn {
   font: inherit;
   font-size: 0.88rem;
@@ -533,6 +613,7 @@ th.rp-c { text-align: center; }
 @media (max-width: 640px) {
   #rp-app { padding: 10px; }
   #rp-tabla .rp-col-vict { display: none; }  /* victorias solo en pantalla grande */
+  #rp-tabla .rp-col-extra { display: none; } /* medallas/top10 Challenge solo en grande */
   /* Móvil: año + categoría comparten fila; comunidad y buscador a ancho completo */
   #rp-temporada { flex: 1 1 30%; }
   #rp-subcat { flex: 1 1 55%; }

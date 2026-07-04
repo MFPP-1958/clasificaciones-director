@@ -416,6 +416,7 @@ const rpEstado = {
   region: 'comunitat valenciana', // normalizada; '' = todas; RP_REGION_SIN = sin dato
   equipo: '',         // equipo normalizado; '' = todos
   vista: 'corredores',// 'corredores' | 'equipos' (ranking individual o por equipos)
+  modo: 'mfpp',       // 'mfpp' (rendimiento) | 'challenge' (Challenge CV oficial)
   modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
   planificadas: [],   // próximas pruebas del calendario (con startlist)
   clavesRanking: new Set(), // claves de todos los corredores puntuados (para enlazar startlists)
@@ -465,7 +466,8 @@ function rpRenderSubtitulo() {
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   const partes = [];
   if (cat) partes.push(cat.label);
-  if (rpEstado.vista === 'equipos') partes.push('Equipos');
+  if (rpEstado.modo === 'challenge') partes.push('Challenge CV Oficial');
+  else if (rpEstado.vista === 'equipos') partes.push('Equipos');
   if (rpEstado.region === RP_REGION_SIN) partes.push('Sin comunidad asignada');
   else if (rpEstado.region) partes.push(rpEstado.regionDisplay || '');
   partes.push('Temporada ' + rpEstado.temporada);
@@ -480,6 +482,26 @@ function rpRenderVista() {
     b.classList.toggle('rp-activa', b.dataset.vista === rpEstado.vista);
     b.setAttribute('aria-pressed', String(b.dataset.vista === rpEstado.vista));
   });
+}
+
+// Conmutador de modo: Ranking Rendimiento MFPP / Challenge CV Oficial.
+// En modo Challenge el toggle Corredores/Equipos se oculta (la Challenge
+// oficial es individual).
+function rpRenderModo() {
+  document.querySelectorAll('#rp-modo button[data-modo]').forEach(b => {
+    b.classList.toggle('rp-activa', b.dataset.modo === rpEstado.modo);
+    b.setAttribute('aria-pressed', String(b.dataset.modo === rpEstado.modo));
+  });
+  document.getElementById('rp-vista').style.display =
+    rpEstado.modo === 'challenge' ? 'none' : '';
+  // La Challenge oficial no filtra por comunidad: se oculta el desplegable
+  // (rpRenderRegiones lo re-muestra al volver al modo MFPP).
+  if (rpEstado.modo === 'challenge') {
+    document.getElementById('rp-region').style.display = 'none';
+  } else if (rpEstado.ranking) {
+    rpRenderRegiones();
+    rpRenderPestanas();
+  }
 }
 
 // Bloque "Últimos resultados" (estilo portada de FirstCycling): las carreras
@@ -700,6 +722,84 @@ function rpPoblacion(cat) {
     if (rpEstado.equipo && rpNormalizarTexto(c.equipo) !== rpEstado.equipo) return false;
     return true;
   });
+}
+
+/* ── CHALLENGE COMUNITAT VALENCIANA (sistema oficial FCCV) ──
+   Los puntos Challenge NO están persistidos en Supabase: el dashboard los
+   deriva en runtime. Réplica exacta de calcularPuntosChallenge
+   (assets/js/app.js:9369) y del desempate oficial _compararChallengeRiders
+   (app.js:9401) — mantener sincronizado a mano si el dashboard cambia. */
+function rpPuntosChallenge(pos) {
+  const p = parseInt(pos, 10);
+  if (!Number.isFinite(p) || p <= 0) return 0;
+  if (p === 1) return 45;
+  if (p === 2) return 42;
+  if (p === 3) return 40;
+  if (p === 4) return 38;
+  if (p === 5) return 36;
+  if (p <= 39) return 41 - p;
+  return 1;
+}
+
+// Pruebas Challenge de la temporada activa, en orden cronológico (una columna
+// por prueba en la clasificación, como en el dashboard).
+function rpPruebasChallenge() {
+  return (rpEstado.carreras || [])
+    .filter(c => c.temporada === rpEstado.temporada && c.tipo === 'challenge')
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+}
+
+// Clasificación Challenge de la pestaña activa. Sin coeficientes, sin corte
+// de 12, sin bono: suma pura del sistema oficial. OJO: el filtro de comunidad
+// NO se aplica (igual que en el dashboard) — es una clasificación oficial
+// abierta y filtrar por CCAA cambiaría al líder real. Subcategoría y equipo
+// sí actúan como zoom.
+function rpCalcularChallenge(cat) {
+  const pruebas = rpPruebasChallenge();
+  const ultimaId = pruebas.length ? pruebas[pruebas.length - 1].id : null;
+  const poblacion = cat.corredores.filter(c => {
+    if (rpEstado.subcategoria && !c.subcats.includes(rpEstado.subcategoria)) return false;
+    if (rpEstado.equipo && rpNormalizarTexto(c.equipo) !== rpEstado.equipo) return false;
+    return true;
+  });
+  const lista = [];
+  for (const c of poblacion) {
+    const res = c.resultados.filter(r => r.tipo === 'challenge' && r.pos);
+    if (!res.length) continue;
+    const porCarrera = {};
+    const conteo = new Array(20).fill(0);
+    let total = 0, top10 = 0;
+    for (const r of res) {
+      const pts = rpPuntosChallenge(r.pos);
+      porCarrera[r.raceId] = { pts, pos: r.pos };
+      total += pts;
+      if (r.pos <= 20) conteo[r.pos - 1]++;
+      if (r.pos <= 10) top10++;
+    }
+    if (!total) continue;
+    lista.push({
+      corredor: c, total, porCarrera, conteo, top10,
+      disputadas: res.length,
+      ultimaPos: res[0].pos, // resultados van en orden cronológico desc
+      posEnUltimaPrueba: ultimaId && porCarrera[ultimaId] ? porCarrera[ultimaId].pos : Infinity,
+      desempate: false
+    });
+  }
+  // Desempate oficial: más 1ºs, luego 2ºs, 3ºs… y mejor puesto en la última
+  // prueba Challenge de la temporada.
+  lista.sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total;
+    for (let i = 0; i < 20; i++) {
+      if (b.conteo[i] !== a.conteo[i]) return b.conteo[i] - a.conteo[i];
+    }
+    if (a.posEnUltimaPrueba !== b.posEnUltimaPrueba) return a.posEnUltimaPrueba - b.posEnUltimaPrueba;
+    return a.corredor.nombre.localeCompare(b.corredor.nombre, 'es');
+  });
+  lista.forEach((x, i) => {
+    x.desempate = (i > 0 && lista[i - 1].total === x.total) ||
+                  (i < lista.length - 1 && lista[i + 1].total === x.total);
+  });
+  return { pruebas, lista };
 }
 
 // Ranking por equipos de una población filtrada. Los puntos del equipo son la
@@ -1165,10 +1265,83 @@ function rpRenderTablaEquipos(cat) {
     `<tbody>${filas.join('') || '<tr><td colspan="6" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>`;
 }
 
+// Vista Challenge CV oficial: cabecera, tarjetas de resumen y clasificación
+// general acumulada con una columna por prueba (formato del dashboard).
+function rpRenderTablaChallenge(cat) {
+  const cont = document.querySelector('.rp-tabla-scroll');
+  const info = document.getElementById('rp-challenge-info');
+  const { pruebas, lista } = rpCalcularChallenge(cat);
+
+  // Cabecera + tarjetas de resumen (sobre la lista filtrada de la pestaña)
+  const lider = lista[0];
+  info.style.display = '';
+  info.innerHTML =
+    '<div class="rp-ch-banner">🏆 <div><b>Challenge Comunitat Valenciana</b>' +
+    '<span>Clasificación general acumulada · Sistema oficial de puntuación FCCV</span></div></div>' +
+    '<div class="rp-ch-tarjetas">' +
+    `<div class="rp-ch-tarjeta"><b>${pruebas.length}</b><span>pruebas Challenge</span></div>` +
+    `<div class="rp-ch-tarjeta"><b>${lista.length}</b><span>corredores con puntos</span></div>` +
+    (lider
+      ? `<div class="rp-ch-tarjeta rp-ch-lider"><b>🥇 ${rpEscapar(lider.corredor.nombre)}</b><span>${rpFormatearPuntos(lider.total)} pts · líder actual</span></div>`
+      : '') +
+    '</div>';
+
+  const filtro = rpNormalizarTexto(rpEstado.busqueda);
+  const medalla = i => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}º`;
+  const filas = [];
+  lista.forEach((x, i) => {
+    const c = x.corredor;
+    if (filtro &&
+        !rpNormalizarTexto(c.nombre).includes(filtro) &&
+        !rpNormalizarTexto(c.equipo).includes(filtro)) return;
+    const celdasPruebas = pruebas.map(p => {
+      const r = x.porCarrera[p.id];
+      return `<td class="rp-c rp-ch-pts">${r ? rpFormatearPuntos(r.pts) : '—'}</td>`;
+    }).join('');
+    filas.push(
+      `<tr class="rp-fila${i < 3 ? ' rp-ch-podio' : ''}" data-clave="${rpEscapar(c.clave)}" tabindex="0" aria-label="Ver ficha de ${rpEscapar(c.nombre)}">` +
+      `<td class="rp-c rp-rank">${medalla(i)}</td>` +
+      `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(c.nombre)}</span>` +
+      `${x.desempate ? '<span class="rp-ch-desempate" title="Empate a puntos resuelto por el sistema oficial (más 1ºs, 2ºs… y mejor puesto en la última prueba)">desempate</span>' : ''}` +
+      `<span class="rp-ch-sub">${rpEscapar([c.subcats[0], c.equipo].filter(Boolean).join(' · '))}</span></td>` +
+      `<td class="rp-c rp-ch-total">${rpFormatearPuntos(x.total)}</td>` +
+      celdasPruebas +
+      `<td class="rp-c rp-col-extra">${x.conteo[0] ? '🥇 ' + x.conteo[0] : '—'}</td>` +
+      `<td class="rp-c rp-col-extra">${(x.conteo[1] + x.conteo[2]) ? '🏆 ' + (x.conteo[1] + x.conteo[2]) : '—'}</td>` +
+      `<td class="rp-c rp-col-extra">${x.top10 || '—'}</td>` +
+      `<td class="rp-c">${x.disputadas}</td>` +
+      `<td class="rp-c">${x.ultimaPos}º</td>` +
+      `</tr>`
+    );
+  });
+
+  rpRenderSubtitulo();
+  rpGuardarPrefs();
+  const cabecerasPruebas = pruebas.map(p =>
+    `<th class="rp-c" title="${rpEscapar(p.nombre)}">${rpEscapar(rpFormatearFecha(p.fecha).slice(0, 5))}` +
+    `${p.localidad ? `<span class="rp-ch-loc">${rpEscapar(p.localidad)}</span>` : ''}</th>`
+  ).join('');
+  cont.innerHTML = pruebas.length
+    ? '<table id="rp-tabla" class="rp-tabla-challenge"><thead><tr>' +
+      '<th class="rp-c">#</th><th>Ciclista</th><th class="rp-c">Total</th>' +
+      cabecerasPruebas +
+      '<th class="rp-c rp-col-extra" title="Victorias">🥇</th><th class="rp-c rp-col-extra" title="2º y 3º puestos">🏆</th>' +
+      '<th class="rp-c rp-col-extra" title="Puestos entre los 10 primeros">Top 10</th>' +
+      '<th class="rp-c" title="Pruebas Challenge disputadas">Pruebas</th>' +
+      '<th class="rp-c" title="Puesto en su última prueba Challenge">Última</th>' +
+      '</tr></thead>' +
+      `<tbody>${filas.join('') || `<tr><td colspan="${8 + pruebas.length}" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>`}</tbody></table>`
+    : '<p class="rp-vacio">No hay pruebas Challenge en la temporada seleccionada.</p>';
+}
+
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
+  const info = document.getElementById('rp-challenge-info');
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
-  if (!cat) { cont.innerHTML = ''; return; }
+  if (!cat) { cont.innerHTML = ''; info.style.display = 'none'; return; }
+  if (rpEstado.modo === 'challenge') { rpRenderTablaChallenge(cat); return; }
+  info.style.display = 'none';
+  info.innerHTML = '';
   if (rpEstado.vista === 'equipos') { rpRenderTablaEquipos(cat); return; }
 
   const filtro = rpNormalizarTexto(rpEstado.busqueda);
@@ -1230,6 +1403,7 @@ function rpRenderTabla() {
 
 function rpRenderTodo() {
   rpRenderTemporadas();
+  rpRenderModo();
   rpRenderVista();
   rpRenderCalendario(); // próximas pruebas (independiente de los filtros)
   rpRenderUltimos();    // depende solo de la temporada
@@ -1251,7 +1425,8 @@ function rpGuardarPrefs() {
       region: rpEstado.region,
       subcategoria: rpEstado.subcategoria,
       equipo: rpEstado.equipo,
-      vista: rpEstado.vista
+      vista: rpEstado.vista,
+      modo: rpEstado.modo
     }));
   } catch (_) { /* almacenamiento no disponible */ }
 }
@@ -1265,6 +1440,7 @@ function rpCargarPrefs() {
     if (typeof p.subcategoria === 'string') rpEstado.subcategoria = p.subcategoria;
     if (typeof p.equipo === 'string') rpEstado.equipo = p.equipo;
     if (p.vista === 'corredores' || p.vista === 'equipos') rpEstado.vista = p.vista;
+    if (p.modo === 'mfpp' || p.modo === 'challenge') rpEstado.modo = p.modo;
   } catch (_) { /* almacenamiento no disponible o corrupto */ }
 }
 
@@ -1330,6 +1506,13 @@ async function rpIniciar() {
       rpEstado.region = rpNormalizarTexto(comunidad);
       rpRenderRegiones();   // valida contra los datos (si no existe, la resetea)
       rpRenderPestanas();
+      rpRenderTabla();
+    }
+    // Modo inicial por URL: ?modo=challenge (o mfpp).
+    const modoParam = new URLSearchParams(location.search).get('modo');
+    if (modoParam === 'challenge' || modoParam === 'mfpp') {
+      rpEstado.modo = modoParam;
+      rpRenderModo();
       rpRenderTabla();
     }
     // Vista inicial por URL: ?vista=equipos (o corredores).
@@ -1460,6 +1643,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btn || btn.dataset.vista === rpEstado.vista) return;
     rpEstado.vista = btn.dataset.vista;
     rpRenderVista();
+    rpRenderTabla();
+  });
+
+  // Conmutador Ranking MFPP / Challenge CV Oficial
+  document.getElementById('rp-modo').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-modo]');
+    if (!btn || btn.dataset.modo === rpEstado.modo) return;
+    rpEstado.modo = btn.dataset.modo;
+    rpRenderModo();
     rpRenderTabla();
   });
 
