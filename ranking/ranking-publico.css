@@ -1,0 +1,433 @@
+/* ============================================================
+   RANKING PÚBLICO — Comunidad Valenciana
+   Hoja de estilos independiente. NO compartir con el dashboard
+   de administración (assets/css/styles.css).
+   Pensada para embed en iframe: sin alturas fijas, body sin margen.
+   ============================================================ */
+
+/* Paleta alineada con www.mfppcycling.com: fondo claro minimalista con
+   acentos turquesa/cian. Retocar aquí si la web cambia de colores. */
+:root {
+  --rp-color-primario: #0e7490;   /* cian oscuro: marca, enlaces, activos */
+  --rp-color-acento: #0891b2;     /* cian medio: puntos, chips destacados */
+  --rp-color-texto: #1f2937;
+  --rp-color-suave: #6b7280;
+  --rp-color-borde: #e5e7eb;
+  --rp-color-fondo: #ffffff;
+  --rp-color-fondo-alt: #f8fafc;
+  --rp-color-sube: #059669;       /* evolución: gana posiciones */
+  --rp-color-baja: #dc2626;       /* evolución: pierde posiciones */
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--rp-color-fondo); }
+
+#rp-app, #rp-modal {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--rp-color-texto);
+}
+#rp-app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.rp-header h1 {
+  color: var(--rp-color-texto);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  margin: 0 0 2px;
+}
+.rp-marca {
+  color: var(--rp-color-primario);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+.rp-marca:hover { text-decoration: underline; }
+.rp-titulo-sep { color: var(--rp-color-borde); margin: 0 10px; font-weight: 400; }
+#rp-subtitulo {
+  margin: 0 0 14px;
+  color: var(--rp-color-suave);
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-height: 1.2em;
+}
+
+/* ── Controles ── */
+.rp-controles {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+#rp-temporada, #rp-region, #rp-subcat, #rp-equipo, #rp-buscador {
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 10px 12px;
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 10px;
+  background: var(--rp-color-fondo);
+  color: var(--rp-color-texto);
+  min-height: 44px;              /* táctil */
+  transition: border-color .15s, box-shadow .15s;
+}
+#rp-temporada:focus, #rp-region:focus, #rp-subcat:focus, #rp-equipo:focus, #rp-buscador:focus {
+  outline: none;
+  border-color: var(--rp-color-primario);
+  box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.14);
+}
+#rp-buscador { flex: 2 1 220px; min-width: 0; }
+/* Selects minimalistas: sin flecha nativa, chevron propio */
+#rp-temporada, #rp-region, #rp-subcat, #rp-equipo {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+#rp-temporada { font-weight: 700; }
+#rp-region { flex: 1 1 190px; min-width: 0; }
+#rp-subcat { flex: 1 1 150px; min-width: 0; }
+
+/* ── Enlaces internos (corredor ↔ carrera) ── */
+.rp-enlace {
+  font: inherit;
+  color: var(--rp-color-primario);
+  font-weight: 700;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.rp-enlace:hover, .rp-enlace:focus-visible { text-decoration: underline; outline: none; }
+
+/* ── Últimos resultados (plegable) ── */
+#rp-ultimos-caja {
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--rp-color-fondo-alt);
+}
+#rp-ultimos-caja summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--rp-color-primario);
+}
+.rp-ultimo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rp-color-borde);
+  font-size: 0.9rem;
+}
+.rp-ultimo:last-child { border-bottom: none; }
+.rp-ultimo-fecha { color: var(--rp-color-suave); font-size: 0.8rem; white-space: nowrap; }
+.rp-ultimo-ganador { color: var(--rp-color-texto); }
+.rp-ultimo-equipo { color: var(--rp-color-suave); font-size: 0.85em; }
+
+/* ── Pestañas de categoría ── */
+#rp-pestanas {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--rp-color-borde);
+  margin-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.rp-pestana {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--rp-color-suave);
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 10px 14px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.rp-pestana.rp-activa {
+  color: var(--rp-color-primario);
+  border-bottom-color: var(--rp-color-primario);
+}
+.rp-num {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--rp-color-suave);
+  background: var(--rp-color-fondo-alt);
+  border-radius: 99px;
+  padding: 2px 7px;
+}
+
+/* ── Estados ── */
+#rp-estado { padding: 6px 0; }
+.rp-cargando, .rp-vacio { color: var(--rp-color-suave); font-style: italic; }
+.rp-cargando-caja { display: flex; align-items: center; gap: 12px; padding: 18px 0; }
+.rp-spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--rp-color-borde);
+  border-top-color: var(--rp-color-primario);
+  border-radius: 50%;
+  animation: rp-girar 0.8s linear infinite;
+  flex: none;
+}
+@keyframes rp-girar { to { transform: rotate(360deg); } }
+.rp-error { color: #b91c1c; font-weight: 600; }
+.rp-reintentar {
+  font: inherit;
+  font-weight: 700;
+  color: #fff;
+  background: var(--rp-color-primario);
+  border: none;
+  border-radius: 9px;
+  padding: 9px 18px;
+  cursor: pointer;
+}
+
+/* ── Tabla principal ── */
+.rp-tabla-scroll { overflow-x: auto; }
+#rp-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+#rp-tabla th {
+  text-align: left;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--rp-color-suave);
+  padding: 10px 8px;
+  border-bottom: 2px solid var(--rp-color-borde);
+}
+#rp-tabla td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--rp-color-borde);
+  vertical-align: middle;
+}
+.rp-c { text-align: center; }
+th.rp-c { text-align: center; }
+.rp-rank { font-weight: 800; color: var(--rp-color-primario); width: 44px; }
+
+/* Evolución respecto a la jornada anterior */
+.rp-col-evo { width: 40px; }
+.rp-evo { font-size: 0.75rem; font-weight: 800; white-space: nowrap; }
+.rp-evo-sube { color: var(--rp-color-sube); }
+.rp-evo-baja { color: var(--rp-color-baja); }
+.rp-evo-igual { color: var(--rp-color-borde); }
+.rp-evo-nuevo {
+  color: var(--rp-color-primario);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+/* Insignia de comunidad/país junto al nombre */
+.rp-badge-region {
+  display: inline-block;
+  margin-left: 7px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--rp-color-suave);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 5px;
+  padding: 1px 5px;
+  vertical-align: 1px;
+}
+/* El nombre es el enlace a la ficha: color distintivo y subrayado al pasar */
+.rp-nombre { font-weight: 700; color: var(--rp-color-primario); }
+.rp-fila:hover .rp-nombre, .rp-fila:focus-visible .rp-nombre { text-decoration: underline; }
+.rp-pts { font-weight: 800; color: var(--rp-color-acento); white-space: nowrap; }
+.rp-medallas { margin-left: 6px; font-size: 0.85em; }
+
+.rp-fila { cursor: pointer; min-height: 44px; }
+.rp-fila:hover, .rp-fila:focus-visible { background: var(--rp-color-fondo-alt); outline: none; }
+
+/* Los primeros puestos, destacados */
+.rp-fila:nth-child(1 of .rp-fila) .rp-rank { color: #b45309; }
+
+/* ── Modal ficha del ciclista ── */
+#rp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+#rp-modal[hidden] { display: none; }
+.rp-modal-cuadro {
+  position: relative;
+  background: var(--rp-color-fondo);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 760px;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+.rp-modal-nav {
+  position: sticky;               /* siempre visible aunque se haga scroll */
+  top: 0;
+  float: right;
+  display: flex;
+  gap: 6px;
+  z-index: 1;
+}
+.rp-modal-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--rp-color-texto);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  cursor: pointer;
+}
+.rp-modal-btn:hover:not(:disabled), .rp-modal-btn:focus-visible { background: var(--rp-color-borde); outline: none; }
+.rp-modal-btn:disabled { opacity: 0.35; cursor: default; }
+#rp-modal-ant, #rp-modal-sig { font-size: 1.5rem; padding-bottom: 4px; }
+.rp-ficha-cabecera { margin-bottom: 14px; }
+.rp-ficha-cabecera h2 {
+  margin: 4px 0 2px;
+  font-size: 1.3rem;
+  color: var(--rp-color-primario);
+}
+.rp-ficha-equipo { margin: 0 0 10px; color: var(--rp-color-suave); font-weight: 600; }
+.rp-ficha-datos { display: flex; flex-wrap: wrap; gap: 6px; }
+.rp-chip {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--rp-color-texto);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  padding: 5px 12px;
+}
+.rp-chip-puntos { color: #fff; background: var(--rp-color-acento); border-color: var(--rp-color-acento); }
+.rp-ficha-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+  font-size: 0.88rem;
+  color: var(--rp-color-suave);
+}
+.rp-stat b { color: var(--rp-color-texto); font-weight: 800; }
+.rp-tabla-historial { overflow-x: auto; }
+
+/* Mini-gráfico de evolución de puntos */
+.rp-spark { margin: 6px 0 14px; }
+.rp-spark svg { display: block; width: 100%; height: auto; }
+.rp-spark-titulo {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--rp-color-suave);
+  margin-bottom: 4px;
+}
+.rp-spark-valor {
+  font: 700 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  fill: var(--rp-color-texto);
+}
+.rp-spark-punto { cursor: help; }
+.rp-subtabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.87rem;
+}
+.rp-subtabla th {
+  text-align: center;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--rp-color-suave);
+  padding: 6px;
+  border-bottom: 1px solid var(--rp-color-borde);
+}
+.rp-subtabla th:first-child, .rp-subtabla th:nth-child(2) { text-align: left; }
+.rp-subtabla td { padding: 6px; border-bottom: 1px solid var(--rp-color-borde); }
+.rp-col-carrera { min-width: 180px; }
+.rp-tipo {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 1px 8px;
+  vertical-align: middle;
+  background: var(--rp-color-borde);
+  color: var(--rp-color-suave);
+}
+.rp-tipo-challenge { background: #fef3c7; color: #92400e; }
+.rp-tipo-fuera_cv  { background: #dbeafe; color: #1e40af; }
+.rp-tipo-etapa     { background: #ede9fe; color: #5b21b6; }
+
+/* Podios (1º-3º) en el historial: fondo verde suave y posición destacada */
+.rp-podio td { background: #ecfdf5; }
+.rp-podio .rp-posicion {
+  display: inline-block;
+  min-width: 24px;
+  font-weight: 800;
+  color: #065f46;
+  background: #d1fae5;
+  border-radius: 99px;
+  padding: 2px 6px;
+}
+
+/* Resultados descartados: en gris, puntos tachados */
+.rp-descartado td { color: #9ca3af; }
+.rp-descartado .rp-pts { color: #9ca3af; font-weight: 600; text-decoration: line-through; }
+
+.rp-nota { font-size: 0.78rem; color: var(--rp-color-suave); margin: 8px 0 0; }
+
+/* ── Pie / leyenda ── */
+.rp-pie { margin-top: 18px; font-size: 0.85rem; color: var(--rp-color-suave); }
+.rp-pie summary { cursor: pointer; font-weight: 700; color: var(--rp-color-primario); }
+.rp-pie ul { padding-left: 20px; }
+.rp-pie li { margin: 4px 0; }
+
+/* ── Móvil ── */
+.rp-equipo-sub { display: none; }
+@media (max-width: 640px) {
+  #rp-app { padding: 10px; }
+  /* Móvil: año + categoría comparten fila; comunidad y buscador a ancho completo */
+  #rp-temporada { flex: 1 1 30%; }
+  #rp-subcat { flex: 1 1 55%; }
+  #rp-region { flex: 1 1 100%; }
+  #rp-buscador { flex: 1 1 100%; }
+  /* Modal como hoja inferior: más natural con el pulgar */
+  #rp-modal { padding: 12px 0 0; align-items: flex-end; }
+  .rp-modal-cuadro { max-height: 94dvh; border-radius: 16px 16px 0 0; padding: 14px; }
+  /* En el historial móvil priorizamos Fecha/Prueba/Pos./Puntos: el desglose
+     matemático (base, coef., bono) solo se muestra en pantallas grandes */
+  .rp-col-mat { display: none; }
+  #rp-tabla .rp-col-equipo { display: none; }   /* equipo pasa a subtítulo */
+  .rp-equipo-sub {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--rp-color-suave);
+    font-weight: 400;
+  }
+  #rp-tabla { font-size: 0.9rem; }
+}

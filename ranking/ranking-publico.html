@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ranking MFPP Cycling</title>
+
+  <!-- Librería oficial de Supabase (solo cliente; el modo lectura lo garantiza ranking-publico.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <link rel="stylesheet" href="ranking-publico.css">
+
+  <!-- Para incrustar este ranking en www.mfppcycling.com:
+       <iframe src="https://TU-DOMINIO/ranking/ranking-publico.html"
+               style="width:100%;height:900px;border:0" loading="lazy"
+               title="Ranking MFPP Cycling"></iframe> -->
+</head>
+<body>
+
+  <main id="rp-app">
+    <header class="rp-header">
+      <h1><a class="rp-marca" href="https://www.mfppcycling.com" target="_blank" rel="noopener">MFPP CYCLING</a><span class="rp-titulo-sep">·</span>Ranking</h1>
+      <p id="rp-subtitulo"></p>
+    </header>
+
+    <section id="rp-contenido">
+      <div class="rp-controles">
+        <select id="rp-temporada" aria-label="Temporada"></select>
+        <select id="rp-region" aria-label="Comunidad autónoma" style="display:none"></select>
+        <select id="rp-subcat" aria-label="Categoría" style="display:none"></select>
+        <select id="rp-equipo" aria-label="Equipo" style="display:none"></select>
+        <input id="rp-buscador" type="search" placeholder="Buscar corredor o equipo…" aria-label="Buscar corredor o equipo">
+      </div>
+
+      <details id="rp-ultimos-caja" style="display:none">
+        <summary>🏁 Últimos resultados</summary>
+        <div id="rp-ultimos"></div>
+      </details>
+
+      <nav id="rp-pestanas" role="tablist" aria-label="Categorías"></nav>
+
+      <div id="rp-estado"><p class="rp-cargando">Cargando ranking…</p></div>
+
+      <div class="rp-tabla-scroll"></div>
+
+      <footer class="rp-pie">
+        <details>
+          <summary>Cómo se calculan los puntos</summary>
+          <ul class="rp-leyenda">
+            <li>🏁 <b>Puntos por posición (top-20):</b> 100, 80, 65, 55, 48, 42, 36, 32, 28, 24, 21, 18, 15, 13, 11, 9, 7, 5, 3, 1.</li>
+            <li>⚖️ <b>Coeficiente por tipo de prueba:</b> Ordinaria CV ×1.00 · Challenge CV ×1.30 · Fuera de la CV ×1.35.</li>
+            <li>⛰️ <b>Etapas sueltas:</b> puntuación directa top-10 (25, 20, 16, 13, 11, 9, 7, 5, 3, 1), sin coeficiente.</li>
+            <li>💪 <b>Bono de regularidad:</b> +3 puntos por terminar cada prueba.</li>
+            <li>✂️ <b>Corte de resultados:</b> solo suman los <b>12 mejores resultados</b> de cada corredor por temporada; el resto se muestran descartados en su ficha.</li>
+            <li>📈 <b>Columna ±:</b> posiciones ganadas (▲) o perdidas (▼) respecto a la jornada anterior; <b>N</b> = nuevo en el ranking.</li>
+          </ul>
+          <p>Pulsa sobre cualquier corredor para abrir su ficha: historial completo, estadísticas y evolución de puntos de la temporada.</p>
+        </details>
+      </footer>
+    </section>
+  </main>
+
+  <!-- Ficha del ciclista (modal). Se cierra con la X, tocando fuera o con
+       Escape; se navega entre corredores con ‹ › o las flechas del teclado. -->
+  <div id="rp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="rp-modal-titulo">
+    <div class="rp-modal-cuadro">
+      <div class="rp-modal-nav">
+        <button type="button" id="rp-modal-ant" class="rp-modal-btn" aria-label="Corredor anterior">‹</button>
+        <button type="button" id="rp-modal-sig" class="rp-modal-btn" aria-label="Corredor siguiente">›</button>
+        <button type="button" id="rp-modal-cerrar" class="rp-modal-btn" aria-label="Cerrar ficha">✕</button>
+      </div>
+      <div id="rp-modal-contenido"></div>
+    </div>
+  </div>
+
+  <script src="ranking-publico.js"></script>
+</body>
+</html>
