@@ -77,7 +77,49 @@ body { margin: 0; background: var(--rp-color-fondo); }
   border-color: var(--rp-color-primario);
   box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.14);
 }
-#rp-buscador { flex: 2 1 220px; min-width: 0; }
+.rp-buscador-caja { position: relative; flex: 2 1 220px; min-width: 0; }
+#rp-buscador { width: 100%; }
+
+/* Sugerencias del buscador global */
+#rp-sugerencias {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 500;
+  background: var(--rp-color-fondo);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+.rp-sug {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--rp-color-fondo-alt);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.rp-sug:last-child { border-bottom: none; }
+.rp-sug:hover, .rp-sug:focus-visible { background: var(--rp-color-fondo-alt); outline: none; }
+.rp-sug-icono { flex: none; }
+.rp-sug-texto { font-weight: 700; color: var(--rp-color-primario); min-width: 0; }
+.rp-sug-sub {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--rp-color-suave);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
 /* Selects minimalistas: sin flecha nativa, chevron propio */
 #rp-temporada, #rp-region, #rp-subcat, #rp-equipo {
   appearance: none;
@@ -364,6 +406,46 @@ th.rp-c { text-align: center; }
   padding: 5px 12px;
 }
 .rp-chip-puntos { color: #fff; background: var(--rp-color-acento); border-color: var(--rp-color-acento); }
+/* Highlights: mejores resultados de la temporada */
+.rp-highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 14px;
+}
+.rp-highlights-titulo {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--rp-color-suave);
+  margin-bottom: 2px;
+}
+.rp-highlight {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.rp-highlight:hover, .rp-highlight:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+.rp-highlight-pos {
+  flex: none;
+  min-width: 30px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--rp-color-texto);
+}
+.rp-highlight-podio { color: #065f46; background: #d1fae5; border-radius: 99px; padding: 1px 6px; }
+.rp-highlight-nombre { font-weight: 600; color: var(--rp-color-primario); min-width: 0; }
+.rp-highlight-fecha { margin-left: auto; font-size: 0.75rem; color: var(--rp-color-suave); white-space: nowrap; }
+
 .rp-ficha-stats {
   display: flex;
   flex-wrap: wrap;
@@ -455,7 +537,7 @@ th.rp-c { text-align: center; }
   #rp-temporada { flex: 1 1 30%; }
   #rp-subcat { flex: 1 1 55%; }
   #rp-region { flex: 1 1 100%; }
-  #rp-buscador { flex: 1 1 100%; }
+  .rp-buscador-caja { flex: 1 1 100%; }
   /* Modal como hoja inferior: más natural con el pulgar */
   #rp-modal { padding: 12px 0 0; align-items: flex-end; }
   .rp-modal-cuadro { max-height: 94dvh; border-radius: 16px 16px 0 0; padding: 14px; }

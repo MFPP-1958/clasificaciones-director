@@ -419,6 +419,7 @@ const rpEstado = {
   modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
   planificadas: [],   // próximas pruebas del calendario (con startlist)
   clavesRanking: new Set(), // claves de todos los corredores puntuados (para enlazar startlists)
+  indiceBusqueda: [], // índice del buscador global (corredores, equipos, pruebas)
   busqueda: '',
   ranking: null       // salida de calcularRankingPublico
 };
@@ -505,6 +506,89 @@ function rpRenderUltimos() {
         : '') +
       '</div>';
   }).join('');
+}
+
+// ── Buscador global (estilo FirstCycling): corredores, equipos y pruebas ──
+// El índice se reconstruye en cada recálculo (temporada). Cada entrada:
+// { tipo, id, etiqueta, sub, norm } — norm es el texto normalizado buscable.
+function rpConstruirIndice() {
+  const idx = [];
+  for (const cat of rpEstado.ranking.categorias) {
+    for (const c of cat.corredores) {
+      idx.push({ tipo: 'corredor', id: c.clave, etiqueta: c.nombre,
+        sub: c.equipo, norm: rpNormalizarTexto(c.nombre + ' ' + c.equipo) });
+    }
+  }
+  const equiposVistos = new Set();
+  for (const cat of rpEstado.ranking.categorias) {
+    for (const c of cat.corredores) {
+      const k = rpNormalizarTexto(c.equipo);
+      if (!k || equiposVistos.has(k)) continue;
+      equiposVistos.add(k);
+      idx.push({ tipo: 'equipo', id: k, etiqueta: c.equipo, sub: 'Equipo', norm: k });
+    }
+  }
+  for (const c of (rpEstado.carreras || [])) {
+    if (c.temporada !== rpEstado.temporada) continue;
+    idx.push({ tipo: 'carrera', id: c.id, etiqueta: c.nombre,
+      sub: rpFormatearFecha(c.fecha), norm: rpNormalizarTexto(c.nombre) });
+  }
+  for (const p of (rpEstado.planificadas || [])) {
+    idx.push({ tipo: 'planificada', id: p.id, etiqueta: p.nombre,
+      sub: rpFormatearFecha(p.fecha) + ' · próxima', norm: rpNormalizarTexto(p.nombre) });
+  }
+  return idx;
+}
+
+const RP_ICONO_SUGERENCIA = { corredor: '👤', equipo: '👥', carrera: '🏁', planificada: '📅' };
+
+function rpBuscarSugerencias(texto) {
+  const q = rpNormalizarTexto(texto);
+  if (q.length < 2) return [];
+  // Cupos por tipo para que un equipo o una prueba no queden enterrados bajo
+  // los corredores que coinciden por llevar ese equipo en su texto buscable.
+  const porTipo = { corredor: [], equipo: [], carrera: [], planificada: [] };
+  for (const e of rpEstado.indiceBusqueda) {
+    const i = e.norm.indexOf(q);
+    if (i < 0) continue;
+    porTipo[e.tipo].push({ e, peso: e.norm.startsWith(q) ? 0 : i });
+  }
+  for (const t in porTipo) porTipo[t].sort((a, b) => a.peso - b.peso);
+  const cupos = [['corredor', 4], ['equipo', 2], ['carrera', 1], ['planificada', 1]];
+  const resultado = [];
+  for (const [tipo, n] of cupos) resultado.push(...porTipo[tipo].splice(0, n));
+  // rellenar hasta 8 con lo que sobre, en el mismo orden de tipos
+  for (const [tipo] of cupos) {
+    while (resultado.length < 8 && porTipo[tipo].length) resultado.push(porTipo[tipo].shift());
+  }
+  return resultado.sort((a, b) => a.peso - b.peso).map(x => x.e).slice(0, 8);
+}
+
+function rpRenderSugerencias() {
+  const caja = document.getElementById('rp-sugerencias');
+  const sugerencias = rpBuscarSugerencias(rpEstado.busqueda);
+  if (!sugerencias.length) { caja.hidden = true; caja.innerHTML = ''; return; }
+  caja.innerHTML = sugerencias.map(s =>
+    `<button type="button" class="rp-sug" data-sug-tipo="${s.tipo}" data-sug-id="${rpEscapar(s.id)}">` +
+    `<span class="rp-sug-icono">${RP_ICONO_SUGERENCIA[s.tipo] || ''}</span>` +
+    `<span class="rp-sug-texto">${rpEscapar(s.etiqueta)}</span>` +
+    `<span class="rp-sug-sub">${rpEscapar(s.sub || '')}</span></button>`
+  ).join('');
+  caja.hidden = false;
+}
+
+function rpOcultarSugerencias() {
+  const caja = document.getElementById('rp-sugerencias');
+  caja.hidden = true;
+  caja.innerHTML = '';
+}
+
+function rpAbrirSugerencia(tipo, id) {
+  rpOcultarSugerencias();
+  if (tipo === 'corredor') rpAbrirModal(id);
+  else if (tipo === 'equipo') rpAbrirModalEquipo(id);
+  else if (tipo === 'carrera') rpAbrirModalCarrera(id);
+  else if (tipo === 'planificada') rpAbrirModalPlanificada(id);
 }
 
 const RP_DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -777,6 +861,24 @@ function rpRenderHistorial(corredor) {
     '<p class="rp-nota">* Resultado descartado: solo suman los 12 mejores de la temporada. En gris también los resultados sin posición válida (0 puntos). En verde, los podios.</p>';
 }
 
+// Highlights de la ficha: los mejores resultados de la temporada (por puntos),
+// clicables hacia la ficha de la carrera.
+function rpRenderHighlights(corredor) {
+  const mejores = corredor.resultados
+    .filter(r => r.pos && r.puntos > 0)
+    .sort((a, b) => (b.puntos - a.puntos) || (a.pos - b.pos))
+    .slice(0, 3);
+  if (!mejores.length) return '';
+  return '<div class="rp-highlights">' +
+    '<span class="rp-highlights-titulo">⭐ Mejores resultados</span>' +
+    mejores.map(r =>
+      `<button type="button" class="rp-highlight" data-carrera="${rpEscapar(r.raceId)}">` +
+      `<span class="rp-highlight-pos${r.pos <= 3 ? ' rp-highlight-podio' : ''}">${r.pos}º</span>` +
+      `<span class="rp-highlight-nombre">${rpEscapar(r.carrera)}</span>` +
+      `<span class="rp-highlight-fecha">${rpEscapar(rpFormatearFecha(r.fecha))}</span></button>`
+    ).join('') + '</div>';
+}
+
 // Mini-gráfico SVG de evolución: puntos acumulados carrera a carrera (solo
 // suman los resultados contados, así el final coincide con el total del
 // ranking; las carreras descartadas aparecen como tramo plano con marcador
@@ -857,6 +959,7 @@ function rpAbrirModal(clave) {
     `<span class="rp-stat">🔟 <b>${top10}</b> top-10</span>` +
     `<span class="rp-stat">🚴 <b>${c.pruebasTotales}</b> pruebas</span>` +
     '</div></header>' +
+    rpRenderHighlights(c) +
     rpSparkline(c) +
     rpRenderHistorial(c);
   // Navegación ‹ › sobre el ranking filtrado actual
@@ -941,8 +1044,18 @@ function rpAbrirModalEquipo(claveEquipo) {
   if (!cat) return;
   const equipos = rpCalcularEquipos(rpPoblacion(cat));
   const idx = equipos.findIndex(e => e.clave === claveEquipo);
-  if (idx < 0) return;
-  const e = equipos[idx];
+  let e = idx >= 0 ? equipos[idx] : null;
+  let catFicha = rpEstado.categoria;
+  if (!e) {
+    // El equipo puede quedar fuera del ranking filtrado (otra comunidad,
+    // otra categoría…): buscarlo sin filtros, primero en la pestaña activa
+    // y luego en el resto. Sin puesto ni navegación en ese caso.
+    for (const g of [cat, ...rpEstado.ranking.categorias.filter(x => x !== cat)]) {
+      e = rpCalcularEquipos(g.corredores).find(x => x.clave === claveEquipo);
+      if (e) { catFicha = g.key; break; }
+    }
+  }
+  if (!e) return;
   rpEstado.modalClave = null;
   rpEstado.modalEquipo = e.clave;
   const filas = e.corredores.map((c, i) => {
@@ -959,9 +1072,9 @@ function rpAbrirModalEquipo(claveEquipo) {
     '<header class="rp-ficha-cabecera">' +
     `<h2 id="rp-modal-titulo">${rpEscapar(e.nombre)}</h2>` +
     '<div class="rp-ficha-datos">' +
-    `<span class="rp-chip">${rpEscapar(rpEtiquetaCategoria(rpEstado.categoria))}</span>` +
+    `<span class="rp-chip">${rpEscapar(rpEtiquetaCategoria(catFicha))}</span>` +
     `<span class="rp-chip">Temporada ${rpEscapar(rpEstado.temporada)}</span>` +
-    `<span class="rp-chip">Puesto ${idx + 1}º</span>` +
+    (idx >= 0 ? `<span class="rp-chip">Puesto ${idx + 1}º</span>` : '') +
     `<span class="rp-chip rp-chip-puntos">${rpFormatearPuntos(e.puntos)} pts</span>` +
     '</div>' +
     '<div class="rp-ficha-stats">' +
@@ -977,7 +1090,7 @@ function rpAbrirModalEquipo(claveEquipo) {
   const btnAnt = document.getElementById('rp-modal-ant');
   const btnSig = document.getElementById('rp-modal-sig');
   btnAnt.disabled = idx <= 0;
-  btnSig.disabled = idx >= equipos.length - 1;
+  btnSig.disabled = idx < 0 || idx >= equipos.length - 1;
   const modal = document.getElementById('rp-modal');
   const yaAbierto = !modal.hidden;
   modal.hidden = false;
@@ -1172,6 +1285,7 @@ function rpRecalcular() {
   // de una startlist tiene ficha que enlazar.
   rpEstado.clavesRanking = new Set(
     rpEstado.ranking.categorias.flatMap(c => c.corredores.map(x => x.clave)));
+  rpEstado.indiceBusqueda = rpConstruirIndice();
   const cats = rpEstado.ranking.categorias;
   if (!cats.find(c => c.key === rpEstado.categoria)) rpEstado.categoria = cats[0]?.key || null;
   if (!cats.length) rpMostrarVacio(); else rpMostrarEstado('');
@@ -1292,12 +1406,34 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   let tBusqueda = null;
-  document.getElementById('rp-buscador').addEventListener('input', e => {
+  const buscador = document.getElementById('rp-buscador');
+  buscador.addEventListener('input', e => {
     clearTimeout(tBusqueda);
     tBusqueda = setTimeout(() => {
       rpEstado.busqueda = e.target.value;
       rpRenderTabla();
+      rpRenderSugerencias();
     }, 150);
+  });
+  buscador.addEventListener('focus', () => rpRenderSugerencias());
+  buscador.addEventListener('blur', () => setTimeout(rpOcultarSugerencias, 150));
+  buscador.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { rpOcultarSugerencias(); return; }
+    if (e.key === 'Enter') {
+      // Enter abre la primera sugerencia visible
+      const primera = document.querySelector('#rp-sugerencias .rp-sug');
+      if (primera) {
+        e.preventDefault();
+        rpAbrirSugerencia(primera.dataset.sugTipo, primera.dataset.sugId);
+      }
+    }
+  });
+  // mousedown (no click) para ganar al blur del input
+  document.getElementById('rp-sugerencias').addEventListener('mousedown', e => {
+    const btn = e.target.closest('.rp-sug');
+    if (!btn) return;
+    e.preventDefault();
+    rpAbrirSugerencia(btn.dataset.sugTipo, btn.dataset.sugId);
   });
 
   // Abrir fichas desde la tabla (clic o teclado): el botón de equipo de una
