@@ -97,5 +97,58 @@
   </div>
 
   <script src="ranking-publico.js"></script>
+
+  <!-- Modo embebido (iframe en mfppcycling.com).
+       1) Avisa al padre de la altura del contenido ('mfpp-rp-altura') para
+          que redimensione el iframe: en móvil se ve todo el ranking con una
+          sola barra de scroll (la de la página), sin scroll interno.
+       2) Recibe del padre la zona visible ('mfpp-rp-vista') para colocar la
+          ficha modal del corredor dentro de la pantalla, no en el centro
+          geométrico del iframe (que puede medir miles de píxeles).
+       Solo se intercambian números (alturas/posiciones), nunca datos. -->
+  <script>
+  (function(){
+    if (window.parent === window) return; // no está embebido
+    document.documentElement.classList.add('rp-embebido');
+
+    // ── 1. Informar de la altura del contenido ──
+    var ultimaAltura = 0;
+    function avisarAltura(){
+      var h = Math.ceil(document.documentElement.scrollHeight);
+      if (h !== ultimaAltura) {
+        ultimaAltura = h;
+        window.parent.postMessage({ tipo: 'mfpp-rp-altura', altura: h }, '*');
+      }
+    }
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(avisarAltura).observe(document.documentElement);
+    } else {
+      setInterval(avisarAltura, 600);
+    }
+    window.addEventListener('load', avisarAltura);
+    avisarAltura();
+
+    // ── 2. Colocar la modal en la zona visible que informa el padre ──
+    var vista = null; // {top, alto} de la parte del iframe visible en pantalla
+    var modal = document.getElementById('rp-modal');
+    function colocarModal(){
+      if (!vista || !modal || modal.hidden) return;
+      modal.style.alignItems = 'flex-start';
+      modal.style.paddingTop = (vista.top + 12) + 'px';
+      var cuadro = modal.querySelector('.rp-modal-cuadro');
+      if (cuadro) cuadro.style.maxHeight = Math.max(vista.alto - 24, 200) + 'px';
+    }
+    window.addEventListener('message', function(ev){
+      var d = ev.data;
+      if (ev.source !== window.parent || !d || d.tipo !== 'mfpp-rp-vista') return;
+      vista = { top: Math.max(0, d.top | 0), alto: Math.max(200, d.alto | 0) };
+      colocarModal();
+    });
+    if (modal && 'MutationObserver' in window) {
+      new MutationObserver(colocarModal)
+        .observe(modal, { attributes: true, attributeFilter: ['hidden'] });
+    }
+  })();
+  </script>
 </body>
 </html>

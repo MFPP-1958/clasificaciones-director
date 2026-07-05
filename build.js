@@ -41,6 +41,24 @@ function copyDirRecursive(src, dst){
 }
 copyDirRecursive(path.join(__dirname, 'assets'), path.join(__dirname, 'dist', 'assets'));
 
+// ── Publicar el ranking público (widget embebible en mfppcycling.com) ──
+// Se copian solo los 3 archivos del widget (nunca ranking/backups/) y se
+// aplica el mismo cache busting ?v=HASH que al resto de assets.
+const rpDir = path.join(__dirname, 'ranking');
+if (fs.existsSync(path.join(rpDir, 'ranking-publico.html'))) {
+  const rpDst = path.join(__dirname, 'dist', 'ranking');
+  fs.mkdirSync(rpDst, { recursive: true });
+  const rpCssHash = shortHash(path.join(rpDir, 'ranking-publico.css'));
+  const rpJsHash  = shortHash(path.join(rpDir, 'ranking-publico.js'));
+  let rpHtml = fs.readFileSync(path.join(rpDir, 'ranking-publico.html'), 'utf8');
+  rpHtml = rpHtml.replace('ranking-publico.css"', `ranking-publico.css?v=${rpCssHash}"`);
+  rpHtml = rpHtml.replace('ranking-publico.js"',  `ranking-publico.js?v=${rpJsHash}"`);
+  fs.writeFileSync(path.join(rpDst, 'ranking-publico.html'), rpHtml, 'utf8');
+  fs.copyFileSync(path.join(rpDir, 'ranking-publico.css'), path.join(rpDst, 'ranking-publico.css'));
+  fs.copyFileSync(path.join(rpDir, 'ranking-publico.js'),  path.join(rpDst, 'ranking-publico.js'));
+  console.log(`✅ Ranking público → dist/ranking/ (css=${rpCssHash}, js=${rpJsHash})`);
+}
+
 // Copiar el archivo _headers de Netlify (control de cabeceras HTTP, más
 // predecible que netlify.toml para reglas de Cache-Control).
 const headersSrc = path.join(__dirname, '_headers');

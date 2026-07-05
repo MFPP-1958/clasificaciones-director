@@ -32,3 +32,12 @@
   for = "/assets/js/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# ─── Ranking público embebible ────────────────────────────────────────────
+# Solo mfppcycling.com (y este propio dominio) pueden incrustarlo en iframe.
+# frame-ancestors sustituye a X-Frame-Options: cuando ambos llegan al
+# navegador, este obedece frame-ancestors e ignora XFO.
+[[headers]]
+  for = "/ranking/*"
+  [headers.values]
+    Content-Security-Policy = "frame-ancestors 'self' https://mfppcycling.com https://www.mfppcycling.com"
