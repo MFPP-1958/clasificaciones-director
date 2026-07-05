@@ -660,6 +660,8 @@ th.rp-c { text-align: center; }
   #rp-tabla th, #rp-tabla td { padding: 9px 5px; }
   #rp-tabla .rp-col-vict { display: none; }  /* victorias solo en pantalla grande */
   #rp-tabla .rp-col-extra { display: none; } /* medallas/top10 Challenge solo en grande */
+  #rp-tabla .rp-col-cat { display: none; }   /* categoría solo en pantalla grande:
+                                                en móvil deja sitio a los puntos */
   /* Móvil: año + categoría comparten fila; comunidad y buscador a ancho completo */
   #rp-temporada { flex: 1 1 30%; }
   #rp-subcat { flex: 1 1 55%; }
@@ -672,6 +674,12 @@ th.rp-c { text-align: center; }
      matemático (base, coef., bono) solo se muestra en pantallas grandes */
   .rp-col-mat { display: none; }
   #rp-tabla .rp-col-equipo { display: none; }   /* equipo pasa a subtítulo */
+  /* Historial dentro de la ficha: compactar para que Fecha/Prueba/Pos./
+     Puntos quepan a lo ancho sin cortarse */
+  .rp-subtabla { font-size: 0.8rem; }
+  .rp-subtabla th, .rp-subtabla td { padding: 6px 3px; }
+  .rp-col-carrera { min-width: 0; }
+  .rp-subtabla .rp-tipo { display: block; margin: 2px 0 0; width: fit-content; }
   .rp-equipo-sub {
     display: block;
     font-size: 0.78rem;

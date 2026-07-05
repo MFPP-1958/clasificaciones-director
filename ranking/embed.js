@@ -32,28 +32,45 @@
       programarVista();
     });
 
-    // ── ¿Dónde empieza la parte del iframe que se ve de verdad? ──
-    // Recorre puntos verticales sobre el iframe; el primero en el que
-    // elementFromPoint devuelve el propio iframe no está tapado por
-    // ninguna barra fija (menú sticky, barra de admin, avisos...).
-    function topeVisible(r) {
+    // ── ¿Qué parte del iframe se ve de verdad? ──
+    // Muestrea puntos verticales sobre el iframe con elementFromPoint y
+    // se queda con el TRAMO LIBRE MÁS GRANDE (donde el punto devuelve el
+    // propio iframe). No vale el primer punto libre: el menú sticky del
+    // sitio deja un pequeño hueco por encima y la ficha acabaría ahí,
+    // con los botones de cerrar escondidos detrás del menú.
+    var PASO = 8;
+    function zonaVisible(r) {
       var x = Math.max(1, Math.min(window.innerWidth - 2, r.left + r.width / 2));
       var maxY = Math.min(r.bottom, window.innerHeight);
       var y0 = Math.max(r.top, 0);
-      for (var y = y0 + 1; y < maxY; y += 10) {
-        if (document.elementFromPoint(x, y) === iframe) return y;
+      var ys = [], vis = [];
+      for (var y = y0 + 2; y < maxY; y += PASO) {
+        ys.push(y);
+        vis.push(document.elementFromPoint(x, y) === iframe);
       }
-      return y0;
+      var mejorIni = -1, mejorFin = -1, ini = -1;
+      for (var i = 0; i <= vis.length; i++) {
+        if (i < vis.length && vis[i]) {
+          if (ini < 0) ini = i;
+        } else if (ini >= 0) {
+          if (mejorIni < 0 || ys[i - 1] - ys[ini] > ys[mejorFin] - ys[mejorIni]) {
+            mejorIni = ini;
+            mejorFin = i - 1;
+          }
+          ini = -1;
+        }
+      }
+      if (mejorIni < 0) return { top: y0, alto: maxY - y0 };
+      return { top: ys[mejorIni] - 2, alto: ys[mejorFin] - ys[mejorIni] + PASO };
     }
 
     function avisarVista() {
       if (!iframe.contentWindow) return;
       var r = iframe.getBoundingClientRect();
       if (r.height === 0) return;
-      var tope = topeVisible(r);
-      var alto = Math.min(r.bottom, window.innerHeight) - tope;
+      var zona = zonaVisible(r);
       iframe.contentWindow.postMessage(
-        { tipo: 'mfpp-rp-vista', top: Math.round(tope - r.top), alto: Math.round(alto) },
+        { tipo: 'mfpp-rp-vista', top: Math.round(zona.top - r.top), alto: Math.round(zona.alto) },
         ORIGEN
       );
     }
