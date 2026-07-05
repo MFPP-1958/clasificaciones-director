@@ -21,6 +21,10 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--rp-color-fondo); }
+/* Nada puede desbordar horizontalmente el documento: si lo hiciera, iOS
+   ensancharía el iframe más allá de la pantalla del móvil (las tablas ya
+   tienen sus propios contenedores con scroll horizontal) */
+html, body { overflow-x: hidden; }
 
 #rp-app, #rp-modal {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -29,7 +33,9 @@ body { margin: 0; background: var(--rp-color-fondo); }
 #rp-app {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px;
+  /* Más aire arriba: en mfppcycling.com el menú del sitio queda justo
+     encima del iframe y el título no debe nacer pegado a él */
+  padding: 34px 16px 16px;
 }
 
 .rp-header h1 {
@@ -649,7 +655,9 @@ th.rp-c { text-align: center; }
 /* ── Móvil ── */
 .rp-equipo-sub { display: none; }
 @media (max-width: 640px) {
-  #rp-app { padding: 10px; }
+  #rp-app { padding: 24px 10px 10px; }
+  /* Celdas más compactas para que la tabla quepa sin scroll lateral */
+  #rp-tabla th, #rp-tabla td { padding: 9px 5px; }
   #rp-tabla .rp-col-vict { display: none; }  /* victorias solo en pantalla grande */
   #rp-tabla .rp-col-extra { display: none; } /* medallas/top10 Challenge solo en grande */
   /* Móvil: año + categoría comparten fila; comunidad y buscador a ancho completo */
@@ -669,6 +677,18 @@ th.rp-c { text-align: center; }
     font-size: 0.78rem;
     color: var(--rp-color-suave);
     font-weight: 400;
+    overflow-wrap: anywhere;  /* nombres de equipo largos: partir, no desbordar */
   }
   #rp-tabla { font-size: 0.9rem; }
+}
+
+/* Pantallas muy estrechas (móviles pequeños): apurar un poco más */
+@media (max-width: 430px) {
+  #rp-tabla { font-size: 0.86rem; }
+  #rp-tabla th, #rp-tabla td { padding: 8px 4px; }
+  .rp-rank { width: 34px; }
+  .rp-col-evo { width: 30px; }
+  .rp-col-cat { width: 56px; }
+  .rp-badge-cat { font-size: 0.64rem; padding: 2px 5px; }
+  .rp-medallas { font-size: 0.78em; }
 }

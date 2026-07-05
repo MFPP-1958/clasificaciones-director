@@ -56,6 +56,9 @@ if (fs.existsSync(path.join(rpDir, 'ranking-publico.html'))) {
   fs.writeFileSync(path.join(rpDst, 'ranking-publico.html'), rpHtml, 'utf8');
   fs.copyFileSync(path.join(rpDir, 'ranking-publico.css'), path.join(rpDst, 'ranking-publico.css'));
   fs.copyFileSync(path.join(rpDir, 'ranking-publico.js'),  path.join(rpDst, 'ranking-publico.js'));
+  // Script que ejecuta mfppcycling.com (URL estable, sin ?v=: se sirve
+  // con no-cache, así los cambios llegan sin tocar el bloque de WordPress)
+  fs.copyFileSync(path.join(rpDir, 'embed.js'), path.join(rpDst, 'embed.js'));
   console.log(`✅ Ranking público → dist/ranking/ (css=${rpCssHash}, js=${rpJsHash})`);
 }
 
