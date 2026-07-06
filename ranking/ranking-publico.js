@@ -157,6 +157,19 @@ function rpEsFueraCV(ccaa) {
   return !RP_CCAA_CV.has(rpNormalizarTexto(ccaa));
 }
 
+// ¿La carrera pertenece a la comunidad seleccionada en el filtro?
+// Convención del dashboard: notes.ccaa vacío = Comunitat Valenciana.
+// "Sin comunidad asignada" (RP_REGION_SIN) es un filtro de CORREDORES sin
+// dato, no de carreras: para las tarjetas de la portada equivale a "todas".
+function rpCarreraEnRegion(c) {
+  const region = rpEstado.region;
+  if (!region || region === RP_REGION_SIN) return true;
+  if (region === 'comunitat valenciana' || region === 'comunidad valenciana') {
+    return !rpEsFueraCV(c.ccaa);
+  }
+  return rpNormalizarTexto(c.ccaa) === region;
+}
+
 // Tipología de la carrera. Precedencia: etapa > challenge > fuera_cv >
 // ordinaria. Etapa primero porque su tabla anula el coeficiente; challenge
 // antes que fuera_cv porque challengeCV es un flag manual explícito y
@@ -601,7 +614,11 @@ function rpTarjetaCarrera(c, reciente) {
     `<span class="rp-tipo rp-tipo-${c.tipo}">${rpEscapar(RP_ETIQUETAS_TIPO[c.tipo] || c.tipo)}</span>` +
     '</header>' +
     `<h3 class="rp-carrera-nombre"><button type="button" class="rp-enlace" data-carrera="${rpEscapar(c.id)}">${rpEscapar(c.nombre)}</button></h3>` +
-    (c.localidad ? `<p class="rp-carrera-loc">📍 ${rpEscapar(c.localidad)}</p>` : '') +
+    // En carreras de fuera de la CV, la comunidad acompaña a la localidad:
+    // con "Todas las comunidades" se entiende de dónde es cada prueba
+    ((c.localidad || (rpEsFueraCV(c.ccaa) && c.ccaa))
+      ? `<p class="rp-carrera-loc">📍 ${[c.localidad, rpEsFueraCV(c.ccaa) ? c.ccaa : ''].filter(Boolean).map(rpEscapar).join(' · ')}</p>`
+      : '') +
     (lineas ? `<ul class="rp-podio-lista">${lineas}</ul>` : '') +
     `<button type="button" class="rp-carrera-cta" data-carrera="${rpEscapar(c.id)}">Ver clasificación completa ➔</button>` +
     '</article>';
@@ -609,18 +626,18 @@ function rpTarjetaCarrera(c, reciente) {
 
 function rpRenderUltimos() {
   const cont = document.getElementById('rp-ultimos');
-  // Al cambiar de temporada o de pestaña, el "Ver más" se reinicia
-  const clave = rpEstado.temporada + '|' + rpEstado.categoria;
+  // Al cambiar de temporada, pestaña o comunidad, el "Ver más" se reinicia
+  const clave = rpEstado.temporada + '|' + rpEstado.categoria + '|' + rpEstado.region;
   if (rpEstado._ultimosClave !== clave) {
     rpEstado._ultimosClave = clave;
     rpEstado.ultimosVisibles = 10;
   }
   const todas = (rpEstado.carreras || [])
     .filter(c => c.temporada === rpEstado.temporada && c.resultados.length &&
-                 rpGruposDeCarrera(c).has(rpEstado.categoria))
+                 rpGruposDeCarrera(c).has(rpEstado.categoria) && rpCarreraEnRegion(c))
     .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
   if (!todas.length) {
-    cont.innerHTML = '<p class="rp-vacio">Aún no hay carreras disputadas de esta categoría en la temporada seleccionada.</p>';
+    cont.innerHTML = '<p class="rp-vacio">Aún no hay carreras disputadas de esta categoría con la temporada y comunidad seleccionadas.</p>';
     return;
   }
   const hace7 = new Date(Date.now() - 7 * 864e5);
@@ -1119,9 +1136,16 @@ function rpRenderSubcats() {
 function rpRenderPestanas() {
   const nav = document.getElementById('rp-pestanas');
   // El contador refleja el filtro de comunidad (la subcategoría no, porque
-  // sus etiquetas son propias de cada pestaña). En la vista Equipos cuenta
-  // EQUIPOS ÚNICOS con presencia en la categoría, no corredores.
+  // sus etiquetas son propias de cada pestaña) y depende de la vista
+  // principal: en la portada cuenta PRUEBAS DISPUTADAS de la categoría; en
+  // el ranking, corredores (o EQUIPOS ÚNICOS en la vista Equipos).
+  const esPortada = rpEstado.pantalla === 'carreras';
   const cuenta = cat => {
+    if (esPortada) {
+      return (rpEstado.carreras || []).filter(c =>
+        c.temporada === rpEstado.temporada && c.resultados.length &&
+        rpGruposDeCarrera(c).has(cat.key) && rpCarreraEnRegion(c)).length;
+    }
     const visibles = cat.corredores.filter(c => {
       if (rpEstado.region === RP_REGION_SIN) return !c.region;
       return !rpEstado.region || rpNormalizarTexto(c.region) === rpEstado.region;
@@ -1131,12 +1155,17 @@ function rpRenderPestanas() {
     }
     return visibles.length;
   };
-  nav.innerHTML = rpEstado.ranking.categorias.map(c =>
-    `<button type="button" role="tab" data-cat="${c.key}"` +
-    ` aria-selected="${c.key === rpEstado.categoria}"` +
-    ` class="rp-pestana${c.key === rpEstado.categoria ? ' rp-activa' : ''}">` +
-    `${rpEscapar(c.label)} <span class="rp-num">${cuenta(c)}</span></button>`
-  ).join('');
+  const titulo = (c, n) => esPortada
+    ? `${n} pruebas disputadas de ${c.label} (temporada ${rpEstado.temporada}${rpEstado.regionDisplay ? ' · ' + rpEstado.regionDisplay : ''})`
+    : `${n} ${rpEstado.vista === 'equipos' && rpEstado.modo !== 'challenge' ? 'equipos' : 'corredores'} de ${c.label} en el ranking`;
+  nav.innerHTML = rpEstado.ranking.categorias.map(c => {
+    const n = cuenta(c);
+    return `<button type="button" role="tab" data-cat="${c.key}"` +
+      ` aria-selected="${c.key === rpEstado.categoria}"` +
+      ` title="${rpEscapar(titulo(c, n))}"` +
+      ` class="rp-pestana${c.key === rpEstado.categoria ? ' rp-activa' : ''}">` +
+      `${rpEscapar(c.label)} <span class="rp-num">${n}</span></button>`;
+  }).join('');
 }
 
 const RP_MOTIVOS = {
@@ -2088,7 +2117,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('rp-region').addEventListener('change', e => {
     rpEstado.region = e.target.value;
+    // Nombre para mostrar (títulos/subtítulo); '' = todas → sin etiqueta
+    rpEstado.regionDisplay = (e.target.value && e.target.value !== RP_REGION_SIN && e.target.selectedOptions[0])
+      ? e.target.selectedOptions[0].textContent
+      : '';
     rpRenderPestanas();
+    rpRenderUltimos(); // la portada de carreras también respeta la comunidad
     rpRenderTabla();
   });
 
@@ -2147,6 +2181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btn || btn.dataset.pantalla === rpEstado.pantalla) return;
     rpEstado.pantalla = btn.dataset.pantalla;
     rpRenderPantalla();
+    rpRenderPestanas(); // los contadores cambian de significado (pruebas ↔ corredores)
     if (rpEstado.pantalla === 'ranking') rpRenderTabla();
     else rpRenderUltimos();
   });
