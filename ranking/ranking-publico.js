@@ -221,7 +221,10 @@ function rpAdaptarCarreras(filas) {
       km: extra.km || '',
       regiones,
       resultados: (r.race_results || []).map(x => ({
-        pos: x.pos, nombre: x.name || '', equipo: x.team || '', cat: x.cat || ''
+        pos: x.pos, nombre: x.name || '', equipo: x.team || '', cat: x.cat || '',
+        // Datos de la clasificación oficial (pueden faltar en pruebas antiguas)
+        bib: x.bib ?? '', tiempo: x.time || '',
+        gap: Number.isFinite(x.gap_seconds) ? x.gap_seconds : null
       }))
     };
     carrera.tipo = rpTipoCarrera(carrera);
@@ -444,6 +447,12 @@ const rpEstado = {
   equipo: '',         // equipo normalizado; '' = todos
   vista: 'corredores',// 'corredores' | 'equipos' (ranking individual o por equipos)
   modo: 'mfpp',       // 'mfpp' (rendimiento) | 'challenge' (Challenge CV oficial)
+  // Vista principal: al entrar se muestran las últimas carreras con sus
+  // podios (portada estilo FirstCycling); el ranking queda a un toque.
+  // A propósito NO se guarda en preferencias: cada visita arranca aquí.
+  pantalla: 'carreras',   // 'carreras' | 'ranking'
+  ultimosVisibles: 10,    // tarjetas de carrera mostradas ("Ver más" amplía)
+  _ultimosClave: null,    // temporada|categoría del último render de tarjetas
   modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
   planificadas: [],   // próximas pruebas del calendario (con startlist)
   calVista: 'global', // apartado activo del calendario: 'global' | 'equipo'
@@ -470,6 +479,13 @@ function rpFormatearPuntos(n) {
 function rpFormatearFecha(iso) {
   const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '');
+}
+
+// Diferencia de tiempo en segundos → "m:ss" (u "h:mm:ss" si llega a la hora)
+function rpFormatearGap(segundos) {
+  const t = Math.round(segundos);
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return (h ? `${h}:${String(m).padStart(2, '0')}` : String(m)) + ':' + String(s).padStart(2, '0');
 }
 
 function rpMostrarEstado(html) {
@@ -539,29 +555,77 @@ function rpRenderModo() {
 // Bloque "Últimos resultados" (estilo portada de FirstCycling): las carreras
 // de las últimas jornadas de la temporada activa, con su ganador y equipo.
 // Carrera y ganador son clicables → ficha correspondiente.
+// Conmutador de vista principal: portada de carreras ↔ ranking. Enseña u
+// oculta los bloques que pertenecen a cada una (los conmutadores MFPP/
+// Challenge y Corredores/Equipos solo tienen sentido en el ranking).
+function rpRenderPantalla() {
+  document.querySelectorAll('#rp-pantalla button[data-pantalla]').forEach(b => {
+    b.classList.toggle('rp-activa', b.dataset.pantalla === rpEstado.pantalla);
+    b.setAttribute('aria-pressed', String(b.dataset.pantalla === rpEstado.pantalla));
+  });
+  const esRanking = rpEstado.pantalla === 'ranking';
+  document.getElementById('rp-solo-ranking').hidden = !esRanking;
+  document.getElementById('rp-ultimos').style.display = esRanking ? 'none' : '';
+  document.querySelector('.rp-tabla-scroll').style.display = esRanking ? '' : 'none';
+  document.querySelector('.rp-pie').style.display = esRanking ? '' : 'none';
+  // El aviso del modo Challenge lo gestiona rpRenderTabla dentro del ranking
+  if (!esRanking) document.getElementById('rp-challenge-info').style.display = 'none';
+}
+
+// ── Portada "Últimas carreras": tarjetas con podio (estilo FirstCycling) ──
+// Filtradas por temporada y pestaña de categoría activa, de más reciente a
+// más antigua. Las de los últimos 7 días se destacan; "Ver más" amplía.
+const RP_MEDALLAS_PODIO = ['🥇', '🥈', '🥉'];
+
+function rpTarjetaCarrera(c, reciente) {
+  const lineas = [1, 2, 3].map((p, i) => {
+    const r = c.resultados.find(x => parseInt(x.pos, 10) === p);
+    if (!r) return '';
+    const clave = rpNormalizarClave(r.nombre);
+    const nombre = rpEstado.clavesRanking.has(clave)
+      ? `<button type="button" class="rp-enlace" data-corredor="${rpEscapar(clave)}">${rpEscapar(r.nombre)}</button>`
+      : `<span class="rp-podio-nombre">${rpEscapar(r.nombre)}</span>`;
+    return `<li>${RP_MEDALLAS_PODIO[i]} ${nombre}` +
+      (r.equipo ? `<span class="rp-podio-equipo"> — ${rpEscapar(r.equipo)}</span>` : '') + '</li>';
+  }).join('');
+  return `<article class="rp-carrera${reciente ? ' rp-carrera-reciente' : ''}" data-carrera="${rpEscapar(c.id)}">` +
+    '<header class="rp-carrera-cab">' +
+    `<span class="rp-carrera-fecha">${rpEscapar(rpDiaSemana(c.fecha))} ${rpEscapar(rpFormatearFecha(c.fecha))}</span>` +
+    (reciente ? '<span class="rp-chip-reciente">Reciente</span>' : '') +
+    `<span class="rp-tipo rp-tipo-${c.tipo}">${rpEscapar(RP_ETIQUETAS_TIPO[c.tipo] || c.tipo)}</span>` +
+    '</header>' +
+    `<h3 class="rp-carrera-nombre"><button type="button" class="rp-enlace" data-carrera="${rpEscapar(c.id)}">${rpEscapar(c.nombre)}</button></h3>` +
+    (c.localidad ? `<p class="rp-carrera-loc">📍 ${rpEscapar(c.localidad)}</p>` : '') +
+    (lineas ? `<ul class="rp-podio-lista">${lineas}</ul>` : '') +
+    `<button type="button" class="rp-carrera-cta" data-carrera="${rpEscapar(c.id)}">Ver clasificación completa ➔</button>` +
+    '</article>';
+}
+
 function rpRenderUltimos() {
-  const caja = document.getElementById('rp-ultimos-caja');
   const cont = document.getElementById('rp-ultimos');
-  // Solo carreras de la categoría seleccionada (pestaña activa)
-  const conResultados = (rpEstado.carreras || [])
+  // Al cambiar de temporada o de pestaña, el "Ver más" se reinicia
+  const clave = rpEstado.temporada + '|' + rpEstado.categoria;
+  if (rpEstado._ultimosClave !== clave) {
+    rpEstado._ultimosClave = clave;
+    rpEstado.ultimosVisibles = 10;
+  }
+  const todas = (rpEstado.carreras || [])
     .filter(c => c.temporada === rpEstado.temporada && c.resultados.length &&
                  rpGruposDeCarrera(c).has(rpEstado.categoria))
     .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
-  const fechas = [...new Set(conResultados.map(c => c.fecha))].slice(0, 3);
-  const recientes = conResultados.filter(c => fechas.includes(c.fecha));
-  if (!recientes.length) { caja.style.display = 'none'; cont.innerHTML = ''; return; }
-  caja.style.display = '';
-  cont.innerHTML = recientes.map(c => {
-    const ganador = c.resultados.find(r => parseInt(r.pos, 10) === 1);
-    return '<div class="rp-ultimo">' +
-      `<span class="rp-ultimo-fecha">${rpEscapar(rpFormatearFecha(c.fecha))}</span>` +
-      `<button type="button" class="rp-enlace rp-ultimo-nombre" data-carrera="${rpEscapar(c.id)}">${rpEscapar(c.nombre)}</button>` +
-      (ganador
-        ? `<span class="rp-ultimo-ganador">🏆 <button type="button" class="rp-enlace" data-corredor="${rpEscapar(rpNormalizarClave(ganador.nombre))}">${rpEscapar(ganador.nombre)}</button>` +
-          `${ganador.equipo ? ` <span class="rp-ultimo-equipo">(${rpEscapar(ganador.equipo)})</span>` : ''}</span>`
-        : '') +
-      '</div>';
-  }).join('');
+  if (!todas.length) {
+    cont.innerHTML = '<p class="rp-vacio">Aún no hay carreras disputadas de esta categoría en la temporada seleccionada.</p>';
+    return;
+  }
+  const hace7 = new Date(Date.now() - 7 * 864e5);
+  const corteISO = hace7.getFullYear() + '-' +
+    String(hace7.getMonth() + 1).padStart(2, '0') + '-' +
+    String(hace7.getDate()).padStart(2, '0');
+  const visibles = todas.slice(0, rpEstado.ultimosVisibles);
+  cont.innerHTML = visibles.map(c => rpTarjetaCarrera(c, c.fecha >= corteISO)).join('') +
+    (todas.length > visibles.length
+      ? `<button type="button" class="rp-ver-mas">Ver más carreras (${todas.length - visibles.length} anteriores)</button>`
+      : '');
 }
 
 // ── Buscador global (estilo FirstCycling): corredores, equipos y pruebas ──
@@ -1241,6 +1305,17 @@ function rpAbrirModalCarrera(raceId) {
   const coefTxt = carrera.tipo === 'etapa'
     ? 'Tabla de etapa (25…1)'
     : `Coef. ×${(RP_COEFICIENTES[carrera.tipo] ?? 1).toFixed(2)}`;
+  // Dorsal y tiempos: solo si la clasificación de esta prueba los trae
+  // (pruebas antiguas pueden no tenerlos). El tiempo se muestra al estilo
+  // ciclista: absoluto para el ganador, "+diferencia" para el resto y
+  // "m.t." (mismo tiempo) cuando la diferencia es cero.
+  const hayDorsal = ordenados.some(r => r.bib !== '' && r.bib !== null);
+  const hayTiempos = ordenados.some(r => r.tiempo);
+  const celdaTiempo = (r, pos) => {
+    if (pos === 1) return r.tiempo ? rpEscapar(r.tiempo) : '—';
+    if (r.gap === null) return r.tiempo ? rpEscapar(r.tiempo) : '—';
+    return r.gap > 0 ? '+' + rpFormatearGap(r.gap) : 'm.t.';
+  };
   const filas = ordenados.map(r => {
     const pos = parseInt(r.pos, 10) > 0 ? parseInt(r.pos, 10) : null;
     const pts = rpPuntosResultado(r.pos, carrera.tipo);
@@ -1249,9 +1324,11 @@ function rpAbrirModalCarrera(raceId) {
     if (pos && pos <= 3) clases.push('rp-podio');
     return `<tr class="${clases.join(' ')}">` +
       `<td class="rp-c"><span class="rp-posicion">${pos ?? '—'}</span></td>` +
+      (hayDorsal ? `<td class="rp-c rp-col-dorsal">${rpEscapar(String(r.bib ?? ''))}</td>` : '') +
       `<td><button type="button" class="rp-enlace" data-corredor="${rpEscapar(rpNormalizarClave(r.nombre))}">${rpEscapar(r.nombre)}</button></td>` +
       `<td>${rpEscapar(r.equipo)}</td>` +
-      `<td class="rp-c">${rpEscapar(r.cat)}</td>` +
+      `<td class="rp-c rp-col-mat">${rpEscapar(r.cat)}</td>` +
+      (hayTiempos ? `<td class="rp-c rp-col-tiempo">${pos ? celdaTiempo(r, pos) : '—'}</td>` : '') +
       `<td class="rp-c rp-pts">${pts.puntos ? rpFormatearPuntos(pts.puntos) : '—'}</td>` +
       `</tr>`;
   }).join('');
@@ -1266,9 +1343,15 @@ function rpAbrirModalCarrera(raceId) {
     `<span class="rp-chip rp-chip-puntos">${nClasificados} clasificados</span>` +
     '</div></header>' +
     '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
-    '<thead><tr><th>Pos.</th><th>Corredor</th><th>Equipo</th><th>Cat.</th><th>Puntos</th></tr></thead>' +
+    '<thead><tr><th>Pos.</th>' +
+    (hayDorsal ? '<th class="rp-col-dorsal" title="Dorsal">Dor.</th>' : '') +
+    '<th>Corredor</th><th>Equipo</th><th class="rp-col-mat">Cat.</th>' +
+    (hayTiempos ? '<th class="rp-col-tiempo">Tiempo</th>' : '') +
+    '<th>Puntos</th></tr></thead>' +
     `<tbody>${filas}</tbody></table></div>` +
-    '<p class="rp-nota">Puntos que otorga cada puesto según el sistema del ranking (bono de +3 por terminar incluido). En verde, el podio; en gris, sin posición válida.</p>';
+    '<p class="rp-nota">' +
+    (hayTiempos ? 'Tiempo del ganador y diferencia del resto (m.t. = mismo tiempo). ' : '') +
+    'Puntos que otorga cada puesto según el sistema del ranking (bono de +3 por terminar incluido). En verde, el podio; en gris, sin posición válida.</p>';
   document.getElementById('rp-modal-ant').disabled = true;
   document.getElementById('rp-modal-sig').disabled = true;
   const modal = document.getElementById('rp-modal');
@@ -1547,6 +1630,7 @@ function rpRenderTabla() {
 
 function rpRenderTodo() {
   rpRenderTemporadas();
+  rpRenderPantalla();
   rpRenderModo();
   rpRenderVista();
   rpRenderCalendario(); // próximas pruebas (independiente de los filtros)
@@ -1624,7 +1708,7 @@ async function rpIniciar() {
     const [rRanking, rCalendario, rAgenda] = await Promise.all([
       rpLeer(
         'races',
-        'id, name, date, notes, race_results(pos, name, team, cat)',
+        'id, name, date, notes, race_results(pos, bib, name, team, cat, time, gap_seconds)',
         q => q.eq('race_type', 'clasificacion').order('date', { ascending: false })
       ),
       rpLeer(
@@ -1687,9 +1771,19 @@ async function rpIniciar() {
     // Vista inicial por URL: ?vista=equipos (o corredores).
     const vistaParam = new URLSearchParams(location.search).get('vista');
     if (vistaParam === 'equipos' || vistaParam === 'corredores') {
+      // Pedir una vista del ranking implica entrar directamente al ranking
+      rpEstado.pantalla = 'ranking';
       rpEstado.vista = vistaParam;
+      rpRenderPantalla();
       rpRenderVista();
       rpRenderTabla();
+    }
+    // Enlace directo a la vista principal: ?pantalla=ranking|carreras
+    const pantallaParam = new URLSearchParams(location.search).get('pantalla');
+    if (pantallaParam === 'ranking' || pantallaParam === 'carreras') {
+      rpEstado.pantalla = pantallaParam;
+      rpRenderPantalla();
+      if (pantallaParam === 'ranking') rpRenderTabla();
     }
     // Enlace directo a una prueba: ?carrera=<id> (disputada o del calendario).
     const carreraParam = new URLSearchParams(location.search).get('carrera');
@@ -1820,6 +1914,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
     alAccionarFila(e);
+  });
+
+  // Conmutador de vista principal: Últimas carreras ↔ Ranking
+  document.getElementById('rp-pantalla').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-pantalla]');
+    if (!btn || btn.dataset.pantalla === rpEstado.pantalla) return;
+    rpEstado.pantalla = btn.dataset.pantalla;
+    rpRenderPantalla();
+    if (rpEstado.pantalla === 'ranking') rpRenderTabla();
+    else rpRenderUltimos();
+  });
+
+  // "Ver más carreras" de la portada (los enlaces de las tarjetas van por
+  // la delegación general de alClicEnlace)
+  document.getElementById('rp-ultimos').addEventListener('click', e => {
+    if (e.target.closest('.rp-ver-mas')) {
+      rpEstado.ultimosVisibles += 10;
+      rpRenderUltimos();
+    }
   });
 
   // Conmutador Corredores / Equipos
