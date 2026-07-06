@@ -947,6 +947,20 @@ function rpBadgeRegion(region) {
   return RP_BADGE_REGION[k] || k.slice(0, 3).toUpperCase();
 }
 
+// Insignia de región junto al nombre del corredor: bandera PNG si es una
+// comunidad con bandera en ranking/banderas/; si no (países, valores sin
+// mapear), la etiqueta de texto de siempre (o bandera emoji del país).
+function rpInsigniaRegion(region) {
+  if (!region) return '';
+  const archivo = RP_BANDERAS[rpNormalizarTexto(region)];
+  if (archivo) {
+    return `<img class="rp-bandera rp-bandera-mini" src="banderas/${archivo}"` +
+      ` alt="${rpEscapar(region)}" title="${rpEscapar(region)}" loading="lazy" onerror="this.remove()">`;
+  }
+  const badge = rpBadgeRegion(region);
+  return badge ? `<span class="rp-badge-region" title="${rpEscapar(region)}">${rpEscapar(badge)}</span>` : '';
+}
+
 // Población de la pestaña activa tras aplicar los filtros de comunidad y
 // subcategoría. Estos filtros REDEFINEN el ranking (las posiciones se
 // renumeran 1..n sobre la población filtrada); el buscador, en cambio, solo
@@ -1338,7 +1352,7 @@ function rpAbrirModal(clave) {
     '<div class="rp-ficha-datos">' +
     `<span class="rp-chip">${rpEscapar(rpEtiquetaCategoria(c.categoria))}</span>` +
     (c.subcatPrincipal ? `<span class="rp-chip">${rpEscapar(c.subcatPrincipal)}</span>` : '') +
-    (c.region ? `<span class="rp-chip">${rpEscapar(c.region)}</span>` : '') +
+    (c.region ? `<span class="rp-chip">${rpBanderaCCAA(c.region)} ${rpEscapar(c.region)}</span>` : '') +
     `<span class="rp-chip">Temporada ${rpEscapar(rpEstado.temporada)}</span>` +
     (idx >= 0 ? `<span class="rp-chip">Puesto ${idx + 1}º</span>` : '') +
     `<span class="rp-chip rp-chip-puntos">${rpFormatearPuntos(c.puntosTotales)} pts</span>` +
@@ -1686,11 +1700,11 @@ function rpAbrirModalEquipo(claveEquipo) {
   rpEstado.modalClave = null;
   rpEstado.modalEquipo = e.clave;
   const filas = e.corredores.map((c, i) => {
-    const badge = rpBadgeRegion(c.region);
+    const badge = rpInsigniaRegion(c.region);
     return `<tr class="${i < RP_EQUIPO_TOP_N ? 'rp-podio' : ''}">` +
       `<td class="rp-c">${i + 1}</td>` +
       `<td><button type="button" class="rp-enlace" data-corredor="${rpEscapar(c.clave)}">${rpEscapar(c.nombre)}</button>` +
-      `${badge ? `<span class="rp-badge-region" title="${rpEscapar(c.region)}">${rpEscapar(badge)}</span>` : ''}</td>` +
+      `${badge}</td>` +
       `<td class="rp-c">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
       `<td class="rp-c rp-pts">${rpFormatearPuntos(c.puntosTotales)}</td>` +
       `</tr>`;
@@ -1902,13 +1916,13 @@ function rpRenderTabla() {
     } else {
       evo = '<span class="rp-evo rp-evo-igual" title="Mantiene el puesto">=</span>';
     }
-    const badge = rpBadgeRegion(c.region);
+    const badge = rpInsigniaRegion(c.region);
     filas.push(
       `<tr class="rp-fila" data-clave="${rpEscapar(c.clave)}" tabindex="0" aria-label="Ver ficha de ${rpEscapar(c.nombre)}">` +
       `<td class="rp-c rp-rank">${i + 1}</td>` +
       `<td class="rp-c rp-col-evo">${evo}</td>` +
       `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(c.nombre)}</span>` +
-      `${badge ? `<span class="rp-badge-region" title="${rpEscapar(c.region)}">${rpEscapar(badge)}</span>` : ''}` +
+      `${badge}` +
       `<span class="rp-equipo-sub">${rpEscapar(c.equipo)}</span>` +
       `${medallas ? `<span class="rp-medallas">${medallas}</span>` : ''}</td>` +
       `<td class="rp-c rp-col-cat">${c.subcatPrincipal ? `<span class="rp-badge-cat">${rpEscapar(c.subcatPrincipal)}</span>` : '—'}</td>` +
