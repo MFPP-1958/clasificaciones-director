@@ -937,6 +937,9 @@ th.rp-c { text-align: center; }
      matemático (base, coef., bono) solo se muestra en pantallas grandes */
   .rp-col-mat { display: none; }
   #rp-tabla .rp-col-equipo { display: none; }   /* equipo pasa a subtítulo */
+  /* Clasificación de carrera: el equipo baja a sublínea bajo el nombre
+     (como en la tabla del ranking) para que quepa la bandera del corredor */
+  .rp-subtabla .rp-col-eqmodal { display: none; }
   /* Historial dentro de la ficha: compactar para que Fecha/Prueba/Pos./
      Puntos quepan a lo ancho sin cortarse */
   .rp-subtabla { font-size: 0.8rem; }

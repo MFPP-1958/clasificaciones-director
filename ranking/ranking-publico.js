@@ -1624,11 +1624,18 @@ function rpAbrirModalCarrera(raceId) {
     const clases = [];
     if (!pos) clases.push('rp-descartado');
     if (pos && pos <= 3) clases.push('rp-podio');
+    const clave = rpNormalizarClave(r.nombre);
+    // Bandera PERSONAL del corredor (no la de la prueba): comunidad anotada
+    // en esta clasificación o, si falta, la conocida por el ranking
+    const regionCorredor = carrera.regiones[clave] || rpEstado.regionPorClave.get(clave) || '';
     return `<tr class="${clases.join(' ')}">` +
       `<td class="rp-c"><span class="rp-posicion">${pos ?? '—'}</span></td>` +
       (hayDorsal ? `<td class="rp-c rp-col-dorsal">${rpEscapar(String(r.bib ?? ''))}</td>` : '') +
-      `<td><button type="button" class="rp-enlace" data-corredor="${rpEscapar(rpNormalizarClave(r.nombre))}">${rpEscapar(r.nombre)}</button></td>` +
-      `<td>${rpEscapar(r.equipo)}</td>` +
+      // En móvil el equipo baja a sublínea (.rp-equipo-sub) y su columna se
+      // oculta: con la bandera del corredor no cabía todo a lo ancho
+      `<td><button type="button" class="rp-enlace" data-corredor="${rpEscapar(clave)}">${rpEscapar(r.nombre)}</button>${rpInsigniaRegion(regionCorredor)}` +
+      `<span class="rp-equipo-sub">${rpEscapar(r.equipo)}</span></td>` +
+      `<td class="rp-col-eqmodal">${rpEscapar(r.equipo)}</td>` +
       `<td class="rp-c rp-col-mat">${rpEscapar(r.cat)}</td>` +
       (hayTiempos ? `<td class="rp-c rp-col-tiempo">${pos ? celdaTiempo(r, pos) : '—'}</td>` : '') +
       `<td class="rp-c rp-pts">${pts.puntos ? rpFormatearPuntos(pts.puntos) : '—'}</td>` +
@@ -1657,7 +1664,7 @@ function rpAbrirModalCarrera(raceId) {
     '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
     '<thead><tr><th>Pos.</th>' +
     (hayDorsal ? '<th class="rp-col-dorsal" title="Dorsal">Dor.</th>' : '') +
-    '<th>Corredor</th><th>Equipo</th><th class="rp-col-mat">Cat.</th>' +
+    '<th>Corredor</th><th class="rp-col-eqmodal">Equipo</th><th class="rp-col-mat">Cat.</th>' +
     (hayTiempos ? '<th class="rp-col-tiempo">Tiempo</th>' : '') +
     '<th>Puntos</th></tr></thead>' +
     `<tbody>${filas}</tbody></table></div>` +
@@ -2005,6 +2012,16 @@ function rpRecalcular() {
   // de una startlist tiene ficha que enlazar.
   rpEstado.clavesRanking = new Set(
     rpEstado.ranking.categorias.flatMap(c => c.corredores.map(x => x.clave)));
+  // Comunidad conocida de cada corredor (respaldo para la clasificación de
+  // una prueba cuando esa prueba no trae la región anotada en notes.regions)
+  rpEstado.regionPorClave = new Map();
+  for (const cat of rpEstado.ranking.categorias) {
+    for (const c of cat.corredores) {
+      if (c.region && !rpEstado.regionPorClave.has(c.clave)) {
+        rpEstado.regionPorClave.set(c.clave, c.region);
+      }
+    }
+  }
   rpEstado.indiceBusqueda = rpConstruirIndice();
   const cats = rpEstado.ranking.categorias;
   if (!cats.find(c => c.key === rpEstado.categoria)) {
