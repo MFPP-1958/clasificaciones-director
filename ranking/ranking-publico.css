@@ -67,6 +67,14 @@ html, body { overflow-x: hidden; }
   flex-wrap: wrap;
   margin-bottom: 12px;
 }
+/* Botón Filtros y panel plegable: solo actúan en móvil. En escritorio el
+   botón no se muestra y el panel/las cajas son transparentes al layout
+   (display:contents), así el aspecto de siempre no cambia. */
+#rp-filtros-btn { display: none; }
+#rp-filtros, .rp-filtros-int, .rp-cajas { display: contents; }
+.rp-controles .rp-buscador-caja { order: 1; } /* escritorio: buscador al final */
+.rp-lbl-corto { display: none; }              /* etiquetas cortas: solo móvil */
+#rp-filtros-num { color: #fff; background: var(--rp-color-acento); }
 #rp-temporada, #rp-region, #rp-subcat, #rp-equipo, #rp-buscador {
   font: inherit;
   font-size: 0.95rem;
@@ -662,11 +670,120 @@ th.rp-c { text-align: center; }
   #rp-tabla .rp-col-extra { display: none; } /* medallas/top10 Challenge solo en grande */
   #rp-tabla .rp-col-cat { display: none; }   /* categoría solo en pantalla grande:
                                                 en móvil deja sitio a los puntos */
-  /* Móvil: año + categoría comparten fila; comunidad y buscador a ancho completo */
-  #rp-temporada { flex: 1 1 30%; }
-  #rp-subcat { flex: 1 1 55%; }
-  #rp-region { flex: 1 1 100%; }
-  .rp-buscador-caja { flex: 1 1 100%; }
+  /* ── Panel superior compacto: la tabla debe verse sin hacer scroll ── */
+
+  /* Título y subtítulo en mínimo espacio */
+  .rp-header h1 { font-size: 1.02rem; margin-bottom: 0; }
+  .rp-titulo-sep { margin: 0 6px; }
+  #rp-subtitulo { font-size: 0.75rem; margin-bottom: 8px; }
+
+  /* Fila 1: [🎚️ Filtros (n)] + buscador fino */
+  .rp-controles { gap: 8px; margin-bottom: 8px; }
+  #rp-filtros-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--rp-color-primario);
+    background: var(--rp-color-fondo);
+    border: 1px solid var(--rp-color-borde);
+    border-radius: 10px;
+    padding: 0 12px;
+    min-height: 38px;
+    cursor: pointer;
+    flex: none;
+  }
+  #rp-filtros-btn[aria-expanded="true"] {
+    border-color: var(--rp-color-primario);
+    box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
+  }
+  .rp-controles .rp-buscador-caja { order: 0; flex: 1 1 120px; }
+  #rp-buscador { min-height: 38px; padding: 7px 10px; font-size: 0.85rem; }
+
+  /* Panel plegable con los 4 desplegables (cerrado por defecto).
+     Apilado en columna: admite más controles en el futuro sin romperse. */
+  #rp-filtros {
+    order: 2;
+    flex: 1 1 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease;
+  }
+  #rp-filtros.rp-abierto { grid-template-rows: 1fr; }
+  .rp-filtros-int {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    transition: visibility 0s 0.25s;
+  }
+  #rp-filtros.rp-abierto .rp-filtros-int { visibility: visible; transition: visibility 0s; }
+  /* Con #rp-filtros delante para ganar a los "#rp-region { flex:1 1 190px }"
+     de escritorio (ID pesa más que clase): en columna, ese flex sería ALTURA */
+  #rp-filtros select {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 40px;
+    font-size: 0.88rem;
+    padding: 8px 10px;
+  }
+  #rp-filtros.rp-abierto { margin-bottom: 2px; }
+
+  /* Conmutadores como control segmentado nativo, en una sola línea */
+  .rp-conmutadores { gap: 8px; margin-bottom: 8px; }
+  #rp-modo, #rp-vista {
+    flex: 1 1 0;
+    min-width: 140px;
+    display: flex;
+    background: #e9edf1;
+    border: none;
+    border-radius: 10px;
+    padding: 3px;
+    overflow: visible;
+  }
+  .rp-vista-btn {
+    flex: 1 1 0;
+    min-height: 32px;
+    padding: 4px 6px;
+    font-size: 0.78rem;
+    border-radius: 8px;
+    background: transparent;
+    white-space: nowrap;
+  }
+  .rp-vista-btn.rp-activa {
+    color: var(--rp-color-primario);
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  }
+  #rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { background: #fff; color: #b45309; }
+  .rp-lbl-largo { display: none; }
+  .rp-lbl-corto { display: inline; }
+
+  /* Próximas pruebas y Últimos resultados: a mitades en una línea;
+     al abrirse una, ocupa el ancho completo */
+  .rp-cajas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  #rp-ultimos-caja, #rp-calendario-caja {
+    flex: 1 1 45%;
+    min-width: 0;
+    margin-bottom: 0;
+    padding: 8px 10px;
+  }
+  #rp-ultimos-caja summary, #rp-calendario-caja summary {
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #rp-ultimos-caja[open], #rp-calendario-caja[open] { flex-basis: 100%; }
+
+  /* Pestañas de categoría más finas */
+  .rp-pestana { padding: 8px 10px; min-height: 40px; font-size: 0.85rem; }
+
   /* Modal como hoja inferior: más natural con el pulgar */
   #rp-modal { padding: 12px 0 0; align-items: flex-end; }
   .rp-modal-cuadro { max-height: 94dvh; border-radius: 16px 16px 0 0; padding: 14px; }
@@ -688,6 +805,11 @@ th.rp-c { text-align: center; }
     overflow-wrap: anywhere;  /* nombres de equipo largos: partir, no desbordar */
   }
   #rp-tabla { font-size: 0.9rem; }
+}
+
+/* Accesibilidad: sin animación del panel si el sistema lo pide */
+@media (prefers-reduced-motion: reduce) {
+  #rp-filtros, .rp-filtros-int { transition: none; }
 }
 
 /* Pantallas muy estrechas (móviles pequeños): apurar un poco más */
