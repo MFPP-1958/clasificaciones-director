@@ -81,6 +81,46 @@ const RP_ETIQUETAS_TIPO = {
   etapa: 'Etapa'
 };
 
+// ── Coeficiente de participación ──
+// Ganar con un pelotón venido de media España (o de fuera) vale más que
+// ganar un critérium local. Se calcula SOLO a partir de las procedencias
+// que el dashboard anota en cada clasificación (notes.regions):
+//   · internacional ×1.20 → 5+ corredores extranjeros
+//   · nacional      ×1.10 → corredores de 4+ comunidades distintas de la CV
+//                           Y al menos el 25% del pelotón de fuera
+// Se aplica a ordinarias y etapas. Challenge CV (×1.30) y fuera de la CV
+// (×1.35) conservan su coeficiente propio, sin acumular. El modo Challenge
+// CV Oficial no usa coeficientes (sistema FCCV puro).
+const RP_PAISES = new Set([
+  'belgica', 'portugal', 'paises bajos', 'francia', 'italia', 'alemania',
+  'reino unido', 'suiza', 'andorra'
+]);
+const RP_COEF_PARTICIPACION = { internacional: 1.20, nacional: 1.10 };
+const RP_ETIQUETAS_PARTICIPACION = {
+  internacional: { chip: '🌍 Participación internacional ×1.20', corto: '🌍 Internacional' },
+  nacional: { chip: '🇪🇸 Participación nacional ×1.10', corto: '🇪🇸 Nacional' }
+};
+
+function rpNivelParticipacion(carrera) {
+  const total = carrera.resultados.length;
+  if (!total) return { nivel: null, coef: 1 };
+  let fuera = 0;
+  let extranjeros = 0;
+  const ccaas = new Set();
+  for (const r of carrera.resultados) {
+    const region = carrera.regiones[rpNormalizarClave(r.nombre)];
+    if (!region) continue;
+    const k = rpNormalizarTexto(region);
+    if (RP_CCAA_CV.has(k)) continue;
+    fuera++;
+    if (RP_PAISES.has(k)) extranjeros++;
+    else ccaas.add(k);
+  }
+  if (extranjeros >= 5) return { nivel: 'internacional', coef: RP_COEF_PARTICIPACION.internacional };
+  if (ccaas.size >= 4 && fuera / total >= 0.25) return { nivel: 'nacional', coef: RP_COEF_PARTICIPACION.nacional };
+  return { nivel: null, coef: 1 };
+}
+
 // Una etapa suelta se detecta por el nombre (no hay modelo de vueltas en BD).
 const RP_RE_ETAPA = /etapa/i;
 
@@ -226,15 +266,18 @@ function rpTipoCarrera(carrera) {
 
 // Puntos de un resultado. pos null/0 → todo a 0 (no clasificado, sin bono).
 // Posición válida fuera de tabla → base 0 pero el bono de terminar SÍ cuenta.
-function rpPuntosResultado(pos, tipo) {
+// coefPart = coeficiente de participación de la carrera (1 / 1.10 / 1.20).
+// Multiplica ordinarias y etapas; challenge y fuera_cv mantienen el suyo.
+function rpPuntosResultado(pos, tipo, coefPart = 1) {
   const p = parseInt(pos, 10);
   if (!Number.isFinite(p) || p <= 0) return { base: 0, coef: 0, bono: 0, puntos: 0 };
   if (tipo === 'etapa') {
     const base = RP_PUNTOS_ETAPA[p] || 0;
-    return { base, coef: 1, bono: RP_BONO_FINALIZAR, puntos: base + RP_BONO_FINALIZAR };
+    const puntos = Math.round((base * coefPart + RP_BONO_FINALIZAR) * 100) / 100;
+    return { base, coef: coefPart, bono: RP_BONO_FINALIZAR, puntos };
   }
   const base = RP_PUNTOS_BASE[p] || 0;
-  const coef = RP_COEFICIENTES[tipo] ?? 1;
+  const coef = tipo === 'ordinaria' ? coefPart : (RP_COEFICIENTES[tipo] ?? 1);
   // Redondeo a 2 decimales para evitar artefactos float de ×1.35.
   const puntos = Math.round((base * coef + RP_BONO_FINALIZAR) * 100) / 100;
   return { base, coef, bono: RP_BONO_FINALIZAR, puntos };
@@ -289,6 +332,7 @@ function rpAdaptarCarreras(filas) {
       }))
     };
     carrera.tipo = rpTipoCarrera(carrera);
+    carrera.participacion = rpNivelParticipacion(carrera);
     return carrera;
   }).filter(c => c.temporada !== null);
 }
@@ -368,7 +412,7 @@ function calcularRankingPublico(carreras, { temporada, hastaFecha } = {}) {
       const clave = rpNormalizarClave(res.nombre);
       if (!clave) continue;
       if (!porCorredor.has(clave)) porCorredor.set(clave, []);
-      const pts = rpPuntosResultado(res.pos, carrera.tipo);
+      const pts = rpPuntosResultado(res.pos, carrera.tipo, carrera.participacion.coef);
       porCorredor.get(clave).push({
         raceId: carrera.id,
         carrera: carrera.nombre,
@@ -653,6 +697,9 @@ function rpTarjetaCarrera(c, reciente) {
     '<header class="rp-carrera-cab">' +
     `<span class="rp-carrera-fecha">${rpEscapar(rpDiaSemana(c.fecha))} ${rpEscapar(rpFormatearFecha(c.fecha))}</span>` +
     (reciente ? '<span class="rp-chip-reciente">Reciente</span>' : '') +
+    (c.participacion.nivel
+      ? `<span class="rp-chip-part" title="${RP_ETIQUETAS_PARTICIPACION[c.participacion.nivel].chip}">${RP_ETIQUETAS_PARTICIPACION[c.participacion.nivel].corto}</span>`
+      : '') +
     (c.ruta ? '<span class="rp-chip-ruta" title="Esta prueba tiene mapa y perfil del recorrido">🗺️ Mapa y perfil</span>' : '') +
     `<span class="rp-tipo rp-tipo-${c.tipo}">${rpEscapar(RP_ETIQUETAS_TIPO[c.tipo] || c.tipo)}</span>` +
     '</header>' +
@@ -1245,7 +1292,8 @@ function rpRenderHistorial(corredor) {
     const clases = [];
     if (!r.contado) clases.push('rp-descartado');
     if (r.pos >= 1 && r.pos <= 3) clases.push('rp-podio');
-    const coefTxt = r.tipo === 'etapa' ? '—' : `×${r.coef.toFixed(2)}`;
+    // Etapas sin coeficiente muestran '—'; con participación, su multiplicador
+    const coefTxt = (r.tipo === 'etapa' && (!r.coef || r.coef === 1)) ? '—' : `×${(r.coef || 0).toFixed(2)}`;
     const motivo = !r.contado ? ` title="${rpEscapar(RP_MOTIVOS[r.motivoNoContado] || '')}"` : '';
     return `<tr class="${clases.join(' ')}"${motivo}>` +
       `<td>${rpEscapar(rpFormatearFecha(r.fecha))}</td>` +
@@ -1620,7 +1668,7 @@ function rpAbrirModalCarrera(raceId) {
   };
   const filas = ordenados.map(r => {
     const pos = parseInt(r.pos, 10) > 0 ? parseInt(r.pos, 10) : null;
-    const pts = rpPuntosResultado(r.pos, carrera.tipo);
+    const pts = rpPuntosResultado(r.pos, carrera.tipo, carrera.participacion.coef);
     const clases = [];
     if (!pos) clases.push('rp-descartado');
     if (pos && pos <= 3) clases.push('rp-podio');
@@ -1650,7 +1698,11 @@ function rpAbrirModalCarrera(raceId) {
     '<div class="rp-ficha-datos">' +
     `<span class="rp-chip">${rpEscapar(RP_ETIQUETAS_TIPO[carrera.tipo] || carrera.tipo)}</span>` +
     `<span class="rp-chip">${rpEscapar(coefTxt)}</span>` +
-    (carrera.km ? `<span class="rp-chip">${rpEscapar(carrera.km)} km</span>` : '') +
+    (carrera.participacion.nivel
+      ? `<span class="rp-chip rp-chip-part">${RP_ETIQUETAS_PARTICIPACION[carrera.participacion.nivel].chip}</span>`
+      : '') +
+    // Algunos km ya vienen con la unidad escrita ("57,2 km"): no duplicarla
+    (carrera.km ? `<span class="rp-chip">${rpEscapar(String(carrera.km).replace(/\s*km\.?\s*$/i, ''))} km</span>` : '') +
     `<span class="rp-chip rp-chip-puntos">${nClasificados} clasificados</span>` +
     '</div></header>' +
     // Pestañas estilo FirstCycling, solo si la prueba tiene recorrido subido
