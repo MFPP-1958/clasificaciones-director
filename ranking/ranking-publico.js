@@ -220,6 +220,11 @@ function rpAdaptarCarreras(filas) {
       localidad: extra.localidad || '',
       km: extra.km || '',
       regiones,
+      // Resumen del recorrido GPX/FIT subido desde el dashboard (notes.route):
+      // distancia, desnivel, terreno… Los puntos del trazado NO van aquí:
+      // viven en Storage (race-tracks/{id}/course.json) y se descargan solo
+      // si alguien abre la pestaña "Recorrido y perfil" de la carrera.
+      ruta: (extra.route && typeof extra.route === 'object') ? extra.route : null,
       resultados: (r.race_results || []).map(x => ({
         pos: x.pos, nombre: x.name || '', equipo: x.team || '', cat: x.cat || '',
         // Datos de la clasificación oficial (pueden faltar en pruebas antiguas)
@@ -592,6 +597,7 @@ function rpTarjetaCarrera(c, reciente) {
     '<header class="rp-carrera-cab">' +
     `<span class="rp-carrera-fecha">${rpEscapar(rpDiaSemana(c.fecha))} ${rpEscapar(rpFormatearFecha(c.fecha))}</span>` +
     (reciente ? '<span class="rp-chip-reciente">Reciente</span>' : '') +
+    (c.ruta ? '<span class="rp-chip-ruta" title="Esta prueba tiene mapa y perfil del recorrido">🗺️ Mapa y perfil</span>' : '') +
     `<span class="rp-tipo rp-tipo-${c.tipo}">${rpEscapar(RP_ETIQUETAS_TIPO[c.tipo] || c.tipo)}</span>` +
     '</header>' +
     `<h3 class="rp-carrera-nombre"><button type="button" class="rp-enlace" data-carrera="${rpEscapar(c.id)}">${rpEscapar(c.nombre)}</button></h3>` +
@@ -810,6 +816,7 @@ function rpRenderCalendario() {
 function rpAbrirModalPlanificada(id) {
   const p = (rpEstado.planificadas || []).find(x => String(x.id) === String(id));
   if (!p) return;
+  rpSalirDeFichaCarrera();
   rpEstado.modalClave = null;
   rpEstado.modalEquipo = null;
   const inscritos = [...p.inscritos].sort((a, b) =>
@@ -1227,6 +1234,7 @@ function rpSparkline(corredor) {
 function rpAbrirModal(clave) {
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (!cat) return;
+  rpSalirDeFichaCarrera();
   // El puesto mostrado es el del ranking filtrado que se ve en la tabla.
   const poblacion = rpPoblacion(cat);
   const idx = poblacion.findIndex(c => c.clave === clave);
@@ -1290,11 +1298,216 @@ function rpCarreraPorId(id) {
 // Info de la prueba, podio destacado y clasificación completa con los puntos
 // que otorga cada puesto según el sistema del ranking. Los corredores son
 // clicables y llevan a su ficha.
+/* ============================================================
+   RECORRIDO DE LA CARRERA (mapa Leaflet + perfil de altimetría)
+   Mismo componente visual que el módulo de recorridos del dashboard
+   (colores, marcadores y sincronización perfil↔mapa), adaptado al
+   modo lectura de este widget:
+   - Los puntos del trazado se descargan del bucket race-tracks
+     (Storage) SOLO al abrir la pestaña "Recorrido y perfil".
+   - Leaflet y Chart.js se cargan de CDN también bajo demanda: la
+     portada y el ranking no cargan ni un byte de más.
+   - Solo lecturas: .download() del Storage; jamás upload/remove.
+   ============================================================ */
+
+let rpMapaRuta = null;      // instancia Leaflet activa
+let rpPerfilRuta = null;    // instancia Chart.js activa
+let rpMarcadorRuta = null;  // marcador móvil sincronizado con el perfil
+let rpLibsRutaPromesa = null;
+const rpCursosCache = new Map(); // raceId → course.json (evita re-descargas)
+
+function rpCargarLibsRuta() {
+  if (rpLibsRutaPromesa) return rpLibsRutaPromesa;
+  rpLibsRutaPromesa = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    let pendientes = 2;
+    const listo = () => { if (--pendientes === 0) resolve(); };
+    const fallo = () => {
+      rpLibsRutaPromesa = null; // permitir reintento
+      reject(new Error('No se pudieron cargar las librerías del mapa'));
+    };
+    for (const src of [
+      'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
+      'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js'
+    ]) {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = listo;
+      s.onerror = fallo;
+      document.head.appendChild(s);
+    }
+  });
+  return rpLibsRutaPromesa;
+}
+
+async function rpDescargarCurso(raceId) {
+  if (rpCursosCache.has(raceId)) return rpCursosCache.get(raceId);
+  if (!rpDb) throw new Error('Supabase no disponible');
+  const { data, error } = await rpDb.storage.from('race-tracks').download(`${raceId}/course.json`);
+  if (error || !data) throw new Error('Recorrido no disponible');
+  const curso = JSON.parse(await data.text());
+  rpCursosCache.set(raceId, curso);
+  return curso;
+}
+
+function rpLimpiarRuta() {
+  if (rpMapaRuta) { try { rpMapaRuta.remove(); } catch (_) { /* ya destruido */ } }
+  if (rpPerfilRuta) { try { rpPerfilRuta.destroy(); } catch (_) { /* ya destruido */ } }
+  rpMapaRuta = null;
+  rpPerfilRuta = null;
+  rpMarcadorRuta = null;
+}
+
+// Al pasar de la ficha de carrera a cualquier otra ficha (o cerrar):
+// destruir mapa/gráfico y devolver el modal a su anchura normal.
+function rpSalirDeFichaCarrera() {
+  rpLimpiarRuta();
+  rpEstado._carreraModal = null;
+  const cuadro = document.querySelector('.rp-modal-cuadro');
+  if (cuadro) cuadro.classList.remove('rp-cuadro-ancho');
+}
+
+// Mapa: trazado azul, salida verde, meta roja (idéntico al dashboard)
+function rpDibujarMapaRuta(points) {
+  const el = document.getElementById('rp-ruta-mapa');
+  if (!el || typeof L === 'undefined') return;
+  rpMapaRuta = L.map(el, { preferCanvas: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(rpMapaRuta);
+  const latlngs = points.map(p => [p.lat, p.lon]);
+  L.polyline(latlngs, { color: '#1f6feb', weight: 4, opacity: 0.85 }).addTo(rpMapaRuta);
+  L.circleMarker(latlngs[0], { color: '#15803d', radius: 7, fillOpacity: 1 })
+    .addTo(rpMapaRuta).bindTooltip('Salida');
+  L.circleMarker(latlngs[latlngs.length - 1], { color: '#b91c1c', radius: 7, fillOpacity: 1 })
+    .addTo(rpMapaRuta).bindTooltip('Meta');
+  rpMarcadorRuta = L.circleMarker(latlngs[0], {
+    color: '#7c3aed', fillColor: '#fff', fillOpacity: 1, radius: 6, weight: 2
+  });
+  rpMapaRuta.fitBounds(L.latLngBounds(latlngs), { padding: [20, 20] });
+}
+
+// Perfil: al recorrerlo (dedo o ratón) el marcador se mueve por el mapa
+function rpDibujarPerfilRuta(points) {
+  const el = document.getElementById('rp-ruta-perfil');
+  if (!el || typeof Chart === 'undefined') return;
+  const datos = points.filter(p => p.ele != null)
+    .map(p => ({ x: (p.dist || 0) / 1000, y: p.ele, lat: p.lat, lon: p.lon }));
+  rpPerfilRuta = new Chart(el, {
+    type: 'line',
+    data: {
+      datasets: [{
+        label: 'Altitud (m)',
+        data: datos,
+        borderColor: '#1f6feb',
+        backgroundColor: 'rgba(31,111,235,0.15)',
+        fill: true,
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      // El marcador sigue el dedo/ratón por todo el gráfico, sin exigir
+      // tocar la línea exacta (mejor en táctil que el original)
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'km' } },
+        y: { title: { display: true, text: 'metros' } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `km ${ctx.parsed.x.toFixed(2)} · ${Math.round(ctx.parsed.y)} m`
+          }
+        }
+      },
+      onHover: (ev, items) => {
+        if (items.length && rpMapaRuta && rpMarcadorRuta) {
+          const p = datos[items[0].index];
+          if (p && p.lat != null) {
+            rpMarcadorRuta.setLatLng([p.lat, p.lon]);
+            if (!rpMapaRuta.hasLayer(rpMarcadorRuta)) rpMarcadorRuta.addTo(rpMapaRuta);
+          }
+        }
+      }
+    }
+  });
+}
+
+// Pestañas de la ficha de carrera: Clasificación ↔ Recorrido y perfil
+function rpCambiarPestanaCarrera(tab) {
+  const cont = document.getElementById('rp-modal-contenido');
+  cont.querySelectorAll('[data-rctab]').forEach(b => {
+    b.classList.toggle('rp-activa', b.dataset.rctab === tab);
+    b.setAttribute('aria-pressed', String(b.dataset.rctab === tab));
+  });
+  const clasif = document.getElementById('rp-rc-clasificacion');
+  const ruta = document.getElementById('rp-rc-ruta');
+  if (clasif) clasif.hidden = tab !== 'clasificacion';
+  if (ruta) ruta.hidden = tab !== 'ruta';
+  if (tab === 'ruta' && rpEstado._carreraModal) rpActivarPestanaRuta(rpEstado._carreraModal);
+}
+
+async function rpActivarPestanaRuta(carrera) {
+  const cont = document.getElementById('rp-rc-ruta');
+  if (!cont) return;
+  if (cont.dataset.cargado) {
+    // Ya dibujado: solo recalcular el tamaño del mapa al volver a mostrarse
+    if (rpMapaRuta) setTimeout(() => rpMapaRuta.invalidateSize(), 60);
+    return;
+  }
+  cont.dataset.cargado = '1';
+  cont.innerHTML = '<div class="rp-cargando-caja"><div class="rp-spinner" aria-hidden="true"></div><p class="rp-cargando">Cargando recorrido…</p></div>';
+  try {
+    const [, curso] = await Promise.all([rpCargarLibsRuta(), rpDescargarCurso(carrera.id)]);
+    if (!curso || !Array.isArray(curso.points) || curso.points.length < 2) {
+      throw new Error('Recorrido sin puntos');
+    }
+    const r = carrera.ruta || curso.summary || {};
+    const conAltimetria = !!(r.has_altitude !== false && curso.points.some(p => p.ele != null));
+    const chips = [
+      r.distance_m ? `<span class="rp-chip">📏 ${(r.distance_m / 1000).toFixed(1)} km</span>` : '',
+      Number.isFinite(r.desnivel_pos_m) ? `<span class="rp-chip">⛰️ +${Math.round(r.desnivel_pos_m)} m</span>` : '',
+      Number.isFinite(r.gradient_max_pct) ? `<span class="rp-chip">📈 máx ${r.gradient_max_pct}%</span>` : '',
+      r.terrain_type ? `<span class="rp-chip">${rpEscapar(String(r.terrain_type).charAt(0).toUpperCase() + String(r.terrain_type).slice(1))}</span>` : ''
+    ].filter(Boolean).join('');
+    cont.innerHTML =
+      (chips ? `<div class="rp-ficha-datos rp-ruta-chips">${chips}</div>` : '') +
+      '<div id="rp-ruta-mapa"></div>' +
+      (conAltimetria
+        ? '<div class="rp-ruta-perfil-wrap"><canvas id="rp-ruta-perfil"></canvas></div>' +
+          '<p class="rp-nota">Recorre el perfil con el dedo o el ratón: el punto morado del mapa marca dónde está ese kilómetro.</p>'
+        : '<p class="rp-nota">Este recorrido no trae altimetría por punto, así que solo se muestra el mapa.</p>');
+    rpLimpiarRuta();
+    setTimeout(() => {
+      rpDibujarMapaRuta(curso.points);
+      if (conAltimetria) rpDibujarPerfilRuta(curso.points);
+    }, 60);
+  } catch (e) {
+    cont.dataset.cargado = '';
+    cont.innerHTML =
+      '<p class="rp-nota">No se ha podido cargar el recorrido de esta prueba.</p>' +
+      '<button type="button" class="rp-cal-tab" data-rctab="ruta">Reintentar</button>';
+  }
+}
+
 function rpAbrirModalCarrera(raceId) {
   const carrera = rpCarreraPorId(raceId);
   if (!carrera) return;
   rpEstado.modalClave = null; // desde una carrera las flechas ‹ › no navegan
   rpEstado.modalEquipo = null;
+  rpEstado._carreraModal = carrera;
+  rpLimpiarRuta();
+  // Con recorrido, el modal se ensancha en pantallas grandes: el mapa manda
+  document.querySelector('.rp-modal-cuadro').classList.toggle('rp-cuadro-ancho', !!carrera.ruta);
   const ordenados = [...carrera.resultados].sort((a, b) => {
     const pa = parseInt(a.pos, 10), pb = parseInt(b.pos, 10);
     const va = Number.isFinite(pa) && pa > 0, vb = Number.isFinite(pb) && pb > 0;
@@ -1342,6 +1555,14 @@ function rpAbrirModalCarrera(raceId) {
     (carrera.km ? `<span class="rp-chip">${rpEscapar(carrera.km)} km</span>` : '') +
     `<span class="rp-chip rp-chip-puntos">${nClasificados} clasificados</span>` +
     '</div></header>' +
+    // Pestañas estilo FirstCycling, solo si la prueba tiene recorrido subido
+    (carrera.ruta
+      ? '<div class="rp-carrera-tabs" role="tablist" aria-label="Contenido de la prueba">' +
+        '<button type="button" data-rctab="clasificacion" class="rp-cal-tab rp-activa" aria-pressed="true">📊 Clasificación</button>' +
+        '<button type="button" data-rctab="ruta" class="rp-cal-tab" aria-pressed="false">🗺️ Recorrido y perfil</button>' +
+        '</div>'
+      : '') +
+    '<div id="rp-rc-clasificacion">' +
     '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
     '<thead><tr><th>Pos.</th>' +
     (hayDorsal ? '<th class="rp-col-dorsal" title="Dorsal">Dor.</th>' : '') +
@@ -1351,7 +1572,9 @@ function rpAbrirModalCarrera(raceId) {
     `<tbody>${filas}</tbody></table></div>` +
     '<p class="rp-nota">' +
     (hayTiempos ? 'Tiempo del ganador y diferencia del resto (m.t. = mismo tiempo). ' : '') +
-    'Puntos que otorga cada puesto según el sistema del ranking (bono de +3 por terminar incluido). En verde, el podio; en gris, sin posición válida.</p>';
+    'Puntos que otorga cada puesto según el sistema del ranking (bono de +3 por terminar incluido). En verde, el podio; en gris, sin posición válida.</p>' +
+    '</div>' +
+    (carrera.ruta ? '<div id="rp-rc-ruta" hidden></div>' : '');
   document.getElementById('rp-modal-ant').disabled = true;
   document.getElementById('rp-modal-sig').disabled = true;
   const modal = document.getElementById('rp-modal');
@@ -1368,6 +1591,7 @@ function rpAbrirModalCarrera(raceId) {
 function rpAbrirModalEquipo(claveEquipo) {
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (!cat) return;
+  rpSalirDeFichaCarrera();
   const equipos = rpCalcularEquipos(rpPoblacion(cat));
   const idx = equipos.findIndex(e => e.clave === claveEquipo);
   let e = idx >= 0 ? equipos[idx] : null;
@@ -1447,6 +1671,7 @@ function rpNavegarModal(dir) {
 function rpCerrarModal() {
   rpEstado.modalClave = null;
   rpEstado.modalEquipo = null;
+  rpSalirDeFichaCarrera();
   document.getElementById('rp-modal').hidden = true;
   document.body.style.overflow = '';
 }
@@ -1958,6 +2183,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enlaces cruzados: clic en un corredor o una carrera (dentro del modal o
   // en "Últimos resultados") abre la ficha correspondiente.
   const alClicEnlace = e => {
+    const bTab = e.target.closest('[data-rctab]');
+    if (bTab) { rpCambiarPestanaCarrera(bTab.dataset.rctab); return; }
     const bVista = e.target.closest('[data-calvista]');
     if (bVista) { rpEstado.calVista = bVista.dataset.calvista; rpRenderCalendario(); return; }
     const bCorredor = e.target.closest('[data-corredor]');
