@@ -21,6 +21,10 @@
 /assets/js/*
   Cache-Control: public, max-age=31536000, immutable
 
+# ── Banderas de comunidades (PNG estáticos que nunca cambian) ────────────
+/ranking/banderas/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # ── Ranking público embebible ─────────────────────────────────────────────
 # Solo mfppcycling.com (y este propio dominio) pueden incrustarlo en iframe.
 # CSP frame-ancestors sustituye a X-Frame-Options en navegadores modernos:

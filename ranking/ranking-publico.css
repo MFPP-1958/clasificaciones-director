@@ -424,6 +424,16 @@ html, body { overflow-x: hidden; }
 /* La diferencia de tiempo nunca se parte ("+0:12") */
 .rp-col-tiempo { white-space: nowrap; }
 
+/* Bandera de la comunidad autónoma de la prueba */
+.rp-bandera {
+  width: 22px;
+  height: auto;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  vertical-align: -4px;
+  margin-right: 2px;
+}
+
 /* ── Recorrido de la carrera (mapa + perfil, estilo del dashboard) ── */
 .rp-chip-ruta {
   font-size: 0.66rem;

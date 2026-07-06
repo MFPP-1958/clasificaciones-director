@@ -59,6 +59,8 @@ if (fs.existsSync(path.join(rpDir, 'ranking-publico.html'))) {
   // Script que ejecuta mfppcycling.com (URL estable, sin ?v=: se sirve
   // con no-cache, así los cambios llegan sin tocar el bloque de WordPress)
   fs.copyFileSync(path.join(rpDir, 'embed.js'), path.join(rpDst, 'embed.js'));
+  // Banderas de comunidades autónomas (PNG estáticos, caché larga en _headers)
+  copyDirRecursive(path.join(rpDir, 'banderas'), path.join(rpDst, 'banderas'));
   console.log(`✅ Ranking público → dist/ranking/ (css=${rpCssHash}, js=${rpJsHash})`);
 }
 

@@ -157,6 +157,49 @@ function rpEsFueraCV(ccaa) {
   return !RP_CCAA_CV.has(rpNormalizarTexto(ccaa));
 }
 
+// ── Banderas de las comunidades autónomas ──
+// Archivos PNG en ranking/banderas/ (subidos por el equipo). Diccionario:
+// nombre normalizado con rpNormalizarTexto → archivo. Incluye los alias
+// habituales; lo que no esté aquí simplemente no muestra bandera.
+const RP_BANDERAS = {
+  'andalucia': 'andalucia.png',
+  'aragon': 'aragon.png',
+  'asturias': 'asturias.png',
+  'principado de asturias': 'asturias.png',
+  'islas baleares': 'islas_baleares.png',
+  'baleares': 'islas_baleares.png',
+  'illes balears': 'islas_baleares.png',
+  'canarias': 'canarias.png',
+  'islas canarias': 'canarias.png',
+  'cantabria': 'cantabria.png',
+  'castilla la mancha': 'castilla_la_mancha.png',
+  'castilla y leon': 'castilla_y_leon.png',
+  'cataluna': 'cataluna.png',
+  'catalunya': 'cataluna.png',
+  'comunidad de madrid': 'comunidad_madrid.png',
+  'madrid': 'comunidad_madrid.png',
+  'extremadura': 'extremadura.png',
+  'galicia': 'galicia.png',
+  'la rioja': 'la_rioja.png',
+  'rioja': 'la_rioja.png',
+  'navarra': 'navarra.png',
+  'comunidad foral de navarra': 'navarra.png',
+  'pais vasco': 'pais_vasco.png',
+  'euskadi': 'pais_vasco.png',
+  'region de murcia': 'region_murcia.png',
+  'murcia': 'region_murcia.png'
+};
+// Los alias de la CV ya viven en RP_CCAA_CV (vacío incluido = CV)
+for (const alias of RP_CCAA_CV) RP_BANDERAS[alias] = 'comunidad_valenciana.png';
+
+// <img> de la bandera de una comunidad (o '' si no hay bandera para ella).
+// onerror se autodestruye: si el PNG faltara, jamás se ve una imagen rota.
+function rpBanderaCCAA(ccaa) {
+  const archivo = RP_BANDERAS[rpNormalizarTexto(ccaa)];
+  if (!archivo) return '';
+  return `<img class="rp-bandera" src="banderas/${archivo}" alt="" loading="lazy" onerror="this.remove()">`;
+}
+
 // ¿La carrera pertenece a la comunidad seleccionada en el filtro?
 // Convención del dashboard: notes.ccaa vacío = Comunitat Valenciana.
 // "Sin comunidad asignada" (RP_REGION_SIN) es un filtro de CORREDORES sin
@@ -614,11 +657,14 @@ function rpTarjetaCarrera(c, reciente) {
     `<span class="rp-tipo rp-tipo-${c.tipo}">${rpEscapar(RP_ETIQUETAS_TIPO[c.tipo] || c.tipo)}</span>` +
     '</header>' +
     `<h3 class="rp-carrera-nombre"><button type="button" class="rp-enlace" data-carrera="${rpEscapar(c.id)}">${rpEscapar(c.nombre)}</button></h3>` +
-    // En carreras de fuera de la CV, la comunidad acompaña a la localidad:
-    // con "Todas las comunidades" se entiende de dónde es cada prueba
-    ((c.localidad || (rpEsFueraCV(c.ccaa) && c.ccaa))
-      ? `<p class="rp-carrera-loc">📍 ${[c.localidad, rpEsFueraCV(c.ccaa) ? c.ccaa : ''].filter(Boolean).map(rpEscapar).join(' · ')}</p>`
-      : '') +
+    // Bandera de la comunidad (📍 solo si no hay bandera) y, en carreras de
+    // fuera de la CV, el nombre de la comunidad junto a la localidad
+    (() => {
+      const bandera = rpBanderaCCAA(c.ccaa);
+      const texto = [c.localidad, rpEsFueraCV(c.ccaa) ? c.ccaa : ''].filter(Boolean).map(rpEscapar).join(' · ');
+      if (!bandera && !texto) return '';
+      return `<p class="rp-carrera-loc">${bandera || '📍'} ${texto}</p>`;
+    })() +
     (lineas ? `<ul class="rp-podio-lista">${lineas}</ul>` : '') +
     `<button type="button" class="rp-carrera-cta" data-carrera="${rpEscapar(c.id)}">Ver clasificación completa ➔</button>` +
     '</article>';
@@ -1577,7 +1623,9 @@ function rpAbrirModalCarrera(raceId) {
   document.getElementById('rp-modal-contenido').innerHTML =
     '<header class="rp-ficha-cabecera">' +
     `<h2 id="rp-modal-titulo">${rpEscapar(carrera.nombre)}</h2>` +
-    `<p class="rp-ficha-equipo">${rpEscapar(rpFormatearFecha(carrera.fecha))}${carrera.localidad ? ' · ' + rpEscapar(carrera.localidad) : ''}</p>` +
+    `<p class="rp-ficha-equipo">${rpBanderaCCAA(carrera.ccaa)} ${rpEscapar(rpFormatearFecha(carrera.fecha))}` +
+    `${carrera.localidad ? ' · ' + rpEscapar(carrera.localidad) : ''}` +
+    `${rpEsFueraCV(carrera.ccaa) && carrera.ccaa ? ' · ' + rpEscapar(carrera.ccaa) : ''}</p>` +
     '<div class="rp-ficha-datos">' +
     `<span class="rp-chip">${rpEscapar(RP_ETIQUETAS_TIPO[carrera.tipo] || carrera.tipo)}</span>` +
     `<span class="rp-chip">${rpEscapar(coefTxt)}</span>` +
