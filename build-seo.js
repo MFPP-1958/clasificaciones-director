@@ -3,13 +3,14 @@
    ------------------------------------------------------------
    Crea, a partir de los datos de Supabase (solo lectura, clave
    pública), páginas HTML "de piedra" que Google puede leer sin
-   ejecutar JavaScript:
-     - Un HUB con las últimas carreras.
+   ejecutar JavaScript, PERO con la imagen del ranking (marca,
+   tarjetas, podios) para que la gente que llegue desde Google
+   vea algo bonito y de marca:
+     - Un HUB con las últimas carreras (tarjetas con podio).
      - Una página por carrera con su clasificación completa.
      - Un sitemap.xml.
-   Se sirven bajo ranking.mfppcycling.com (subdominio → Netlify).
-   NO toca el widget interactivo. Si la lectura falla, se omite
-   sin romper el build.
+   Se sirven bajo ranking.mfppcycling.com. NO toca el widget.
+   Si la lectura falla, se omite sin romper el build.
    ============================================================ */
 'use strict';
 
@@ -22,6 +23,11 @@ const BASE = 'https://ranking.mfppcycling.com';        // subdominio SEO
 const WEB = 'https://mfppcycling.com';                 // web principal (entrenador)
 const LOGO = 'https://mfppcycling.com/wp-content/uploads/2023/05/Recurso-3.png';
 
+const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const CCAA_CV = new Set(['', 'comunitat valenciana', 'comunidad valenciana', 'c valenciana', 'cv', 'valencia', 'pais valenciano', 'pais valencia']);
+const MEDALLAS = ['🥇', '🥈', '🥉'];
+
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -32,40 +38,85 @@ function slug(s) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
+function norm(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
 function fmtFecha(iso) {
   const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '');
 }
+function diaSemana(iso) {
+  const d = new Date(iso + 'T12:00:00');
+  return Number.isNaN(d.getTime()) ? '' : DIAS[d.getDay()];
+}
+function diaMes(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? { dia: String(parseInt(m[3], 10)), mes: MESES[parseInt(m[2], 10) - 1] || '' } : { dia: '', mes: '' };
+}
 function anyoDe(iso) { const m = String(iso || '').match(/^(\d{4})/); return m ? m[1] : ''; }
+function tipoCarrera(nombre, extra) {
+  if (/etapa/i.test(nombre || '')) return { etq: 'Etapa', cls: 'etapa' };
+  if (extra.challengeCV === true) return { etq: 'Challenge CV', cls: 'challenge' };
+  if (!CCAA_CV.has(norm(extra.ccaa))) return { etq: 'Fuera de la CV', cls: 'fuera' };
+  return { etq: 'Ordinaria CV', cls: 'ordinaria' };
+}
 
-// Plantilla común: cabecera, estilos mínimos y pie. `head` añade meta/JSON-LD.
+// ── Plantilla común: cabecera de marca, estilos (imagen del ranking) y pie ──
 function pagina({ titulo, head, cuerpo }) {
   return '<!DOCTYPE html>\n<html lang="es">\n<head>\n' +
     '<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
     `<title>${esc(titulo)}</title>\n` + head +
     '<style>' +
-    ':root{--p:#0e7490;--a:#0891b2;--t:#1f2937;--s:#6b7280;--b:#e5e7eb;--f:#f8fafc}' +
-    '*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--t);line-height:1.5;background:#fff}' +
-    '.wrap{max-width:900px;margin:0 auto;padding:20px 16px 48px}' +
-    'a{color:var(--p)}h1{font-size:1.5rem;margin:.2em 0}h2{font-size:1.15rem;margin:1.4em 0 .4em}' +
-    '.marca{color:var(--p);font-weight:800;letter-spacing:.04em;text-decoration:none}' +
-    '.mig{font-size:.85rem;color:var(--s);margin:0 0 12px}.mig a{text-decoration:none}' +
-    '.meta{color:var(--s);font-size:.92rem;margin:.2em 0 1em}' +
-    'table{width:100%;border-collapse:collapse;font-size:.93rem;margin:.5em 0}' +
-    'th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--s);border-bottom:2px solid var(--b);padding:8px 6px}' +
-    'td{padding:8px 6px;border-bottom:1px solid var(--b)}.c{text-align:center}.podio{background:#ecfdf5}.pts{font-weight:700;color:var(--a)}' +
-    '.cta{margin:24px 0;padding:16px;background:var(--f);border:1px solid var(--b);border-radius:12px}' +
-    '.btn{display:inline-block;margin-top:8px;background:var(--p);color:#fff;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:10px}' +
-    '.lista{list-style:none;padding:0}.lista li{padding:10px 0;border-bottom:1px solid var(--b)}.lista .f{color:var(--s);font-size:.85rem}' +
-    'footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--b);color:var(--s);font-size:.85rem}' +
+    ':root{--p:#0e7490;--a:#0891b2;--t:#1f2937;--s:#6b7280;--b:#e5e7eb;--f:#f8fafc;--g:#059669}' +
+    '*{box-sizing:border-box}' +
+    'body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--t);line-height:1.5;background:#fff;-webkit-text-size-adjust:100%}' +
+    '.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 48px}' +
+    'a{color:var(--p);text-decoration:none}a:hover{text-decoration:underline}' +
+    '.top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--b);padding-bottom:12px;margin-bottom:16px}' +
+    '.marca{color:var(--p);font-weight:800;letter-spacing:.04em;font-size:1.05rem}.marca .sep{color:var(--b);margin:0 8px;font-weight:400}.marca .k{color:var(--t)}' +
+    '.top .go{font-size:.85rem;font-weight:700}' +
+    '.mig{font-size:.85rem;color:var(--s);margin:0 0 10px}' +
+    'h1{font-size:1.55rem;margin:.1em 0 .1em;line-height:1.25}h2{font-size:1.15rem;margin:1.5em 0 .6em}' +
+    '.sub{color:var(--s);font-size:.95rem;margin:.2em 0 1.1em}' +
+    '.intro{font-size:.98rem;margin:0 0 1.2em}' +
+    '.chips{display:flex;flex-wrap:wrap;gap:8px;margin:.4em 0 1.2em}' +
+    '.chip{font-size:.82rem;font-weight:700;color:var(--t);background:var(--f);border:1px solid var(--b);border-radius:99px;padding:5px 12px}' +
+    '.chip.tipo{color:var(--p)}.chip.pts{color:#fff;background:var(--a);border-color:var(--a)}' +
+    // Rejilla de tarjetas (hub)
+    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}' +
+    '.card{border:1px solid var(--b);border-radius:14px;padding:14px 16px;background:#fff;transition:box-shadow .15s,border-color .15s}' +
+    '.card:hover{border-color:var(--p);box-shadow:0 4px 16px rgba(14,116,144,.10)}' +
+    '.card .cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}' +
+    '.card .f{font-size:.78rem;font-weight:700;color:var(--s);text-transform:capitalize}' +
+    '.card .tp{margin-left:auto;font-size:.68rem;font-weight:800;border-radius:99px;padding:2px 9px;background:var(--f);border:1px solid var(--b);color:var(--s)}' +
+    '.card .tp.ordinaria{color:var(--p)}.card .tp.challenge{background:#fef3c7;color:#92400e;border-color:#fde68a}.card .tp.fuera{background:#dbeafe;color:#1e40af;border-color:#bfdbfe}.card .tp.etapa{background:#ede9fe;color:#5b21b6;border-color:#ddd6fe}' +
+    '.card h3{font-size:1.02rem;margin:.1em 0 .2em;line-height:1.3}' +
+    '.card .loc{margin:0 0 8px;font-size:.82rem;color:var(--s)}' +
+    '.podio{list-style:none;margin:6px 0 2px;padding:0;display:flex;flex-direction:column;gap:5px}' +
+    '.podio li{font-size:.88rem}.podio .n{font-weight:700}.podio .eq{color:var(--s);font-size:.8rem}' +
+    '.card .ver{display:block;margin-top:10px;padding-top:9px;border-top:1px dashed var(--b);font-size:.84rem;font-weight:700}' +
+    // Tabla de clasificación (página de carrera)
+    '.tablabox{overflow-x:auto;border:1px solid var(--b);border-radius:12px}' +
+    'table{width:100%;border-collapse:collapse;font-size:.93rem}' +
+    'th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:var(--s);border-bottom:2px solid var(--b);padding:10px 8px;background:var(--f)}' +
+    'td{padding:9px 8px;border-bottom:1px solid var(--b)}.c{text-align:center}tr:last-child td{border-bottom:none}' +
+    '.podiofila td{background:#ecfdf5}.pos{font-weight:800;color:var(--p)}.podiofila .pos{color:var(--g)}.nom{font-weight:600}.pts{font-weight:700;color:var(--a)}' +
+    // CTA y pie
+    '.cta{margin:26px 0;padding:18px;background:var(--f);border:1px solid var(--b);border-radius:14px}' +
+    '.cta b{font-size:1.02rem}.btn{display:inline-block;margin-top:10px;background:var(--p);color:#fff;font-weight:700;padding:11px 18px;border-radius:10px}.btn:hover{background:#0b5f74;text-decoration:none}' +
+    'footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--b);color:var(--s);font-size:.85rem}' +
+    '@media(max-width:600px){.grid{grid-template-columns:1fr}h1{font-size:1.3rem}}' +
     '</style>\n</head>\n<body>\n<div class="wrap">\n' +
-    `<p class="mig"><a class="marca" href="${WEB}">MFPP CYCLING</a> · <a href="${BASE}/ranking/resultados/">Ranking y resultados</a></p>\n` +
+    '<div class="top">' +
+    `<span class="marca"><a href="${WEB}">MFPP CYCLING</a><span class="sep">·</span><span class="k">Ranking</span></span>` +
+    `<a class="go" href="${WEB}/ranking/">Ranking interactivo →</a>` +
+    '</div>\n' +
     cuerpo +
     '<div class="cta"><b>¿Quieres mejorar tu rendimiento y escalar en el ranking?</b><br>' +
-    'Entrenamiento personalizado de ciclismo por potencia para cadetes, juveniles y amateurs. ' +
+    'Entrenamiento personalizado de ciclismo por potencia para cadetes, juveniles y amateurs, con un método probado. ' +
     `<br><a class="btn" href="${WEB}">Descubre el método MFPP →</a></div>\n` +
-    `<footer>Ranking de rendimiento del ciclismo base · MFPP Cycling · Datos actualizados cada semana. ` +
-    `<a href="${WEB}/ranking/">Ver el ranking interactivo →</a></footer>\n` +
+    `<footer><a class="marca" href="${WEB}" style="font-size:.9rem">MFPP CYCLING</a> · Ranking de rendimiento del ciclismo base · ` +
+    `Datos actualizados cada semana · <a href="${WEB}/ranking/">Ver el ranking interactivo</a></footer>\n` +
     '</div>\n</body>\n</html>\n';
 }
 
@@ -74,7 +125,7 @@ async function leerCarreras() {
   const t = setTimeout(() => ctrl.abort(), 25000);
   try {
     const url = SUPABASE_URL + '/rest/v1/races?select=id,name,date,notes,' +
-      'race_results(pos,bib,name,team,cat,time,gap_seconds)&race_type=eq.clasificacion&order=date.desc';
+      'race_results(pos,bib,name,team,cat,time)&race_type=eq.clasificacion&order=date.desc';
     const res = await fetch(url, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
       signal: ctrl.signal
@@ -84,20 +135,27 @@ async function leerCarreras() {
   } finally { clearTimeout(t); }
 }
 
-function paginaCarrera(r, extra, ruta) {
+function podioHTML(resultados) {
+  return [1, 2, 3].map((p, i) => {
+    const r = resultados.find(x => parseInt(x.pos, 10) === p);
+    if (!r) return '';
+    return `<li>${MEDALLAS[i]} <span class="n">${esc(r.name)}</span>` +
+      (r.team ? ` <span class="eq">— ${esc(r.team)}</span>` : '') + '</li>';
+  }).join('');
+}
+
+function paginaCarrera(r, extra, ruta, resultados) {
   const url = BASE + '/ranking/resultados/' + ruta;
   const localidad = extra.localidad || '';
   const anyo = anyoDe(r.date);
-  const resultados = (r.race_results || [])
-    .filter(x => Number.isFinite(parseInt(x.pos, 10)) && parseInt(x.pos, 10) > 0)
-    .sort((a, b) => parseInt(a.pos, 10) - parseInt(b.pos, 10));
+  const tipo = tipoCarrera(r.name, extra);
   const hayTiempo = resultados.some(x => x.time);
   const filas = resultados.map(x => {
     const pos = parseInt(x.pos, 10);
-    return `<tr class="${pos <= 3 ? 'podio' : ''}">` +
-      `<td class="c">${pos}</td>` +
-      (x.bib != null && x.bib !== '' ? `<td class="c">${esc(x.bib)}</td>` : '<td class="c"></td>') +
-      `<td>${esc(x.name)}</td><td>${esc(x.team)}</td><td class="c">${esc(x.cat)}</td>` +
+    return `<tr class="${pos <= 3 ? 'podiofila' : ''}">` +
+      `<td class="c pos">${pos}</td>` +
+      `<td class="c">${x.bib != null && x.bib !== '' ? esc(x.bib) : ''}</td>` +
+      `<td class="nom">${esc(x.name)}</td><td>${esc(x.team)}</td><td class="c">${esc(x.cat)}</td>` +
       (hayTiempo ? `<td class="c">${esc(x.time || '')}</td>` : '') +
       '</tr>';
   }).join('\n');
@@ -112,21 +170,26 @@ function paginaCarrera(r, extra, ruta) {
   };
   if (localidad) jsonld.location = { '@type': 'Place', name: localidad };
   const head =
-    `<meta name="description" content="${esc(desc)}">\n` +
-    '<meta name="robots" content="index, follow">\n' +
+    `<meta name="description" content="${esc(desc)}">\n<meta name="robots" content="index, follow">\n` +
     `<link rel="canonical" href="${esc(url)}">\n` +
     '<meta property="og:type" content="article">\n<meta property="og:site_name" content="MFPP Cycling">\n' +
     `<meta property="og:title" content="${esc(titulo)}">\n<meta property="og:description" content="${esc(desc)}">\n` +
     `<meta property="og:url" content="${esc(url)}">\n<meta property="og:image" content="${LOGO}">\n` +
     `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>\n`;
   const cuerpo =
+    '<p class="mig"><a href="' + BASE + '/ranking/resultados/">Ranking y resultados</a> › ' + esc(r.name) + '</p>\n' +
     `<h1>${esc(r.name)}</h1>\n` +
-    `<p class="meta">📅 ${esc(fmtFecha(r.date))}${localidad ? ' · 📍 ' + esc(localidad) : ''} · Ciclismo base</p>\n` +
-    `<p><a href="${WEB}/ranking/?carrera=${encodeURIComponent(r.id)}">▶ Abrir esta clasificación en el ranking interactivo</a> ` +
-    '(mapa, perfil, fichas de corredores…).</p>\n' +
-    '<h2>Clasificación</h2>\n<table><thead><tr><th class="c">Pos.</th><th class="c">Dorsal</th>' +
+    '<div class="chips">' +
+    `<span class="chip tipo">${esc(tipo.etq)}</span>` +
+    `<span class="chip">📅 ${esc(diaSemana(r.date))} ${esc(fmtFecha(r.date))}</span>` +
+    (localidad ? `<span class="chip">📍 ${esc(localidad)}</span>` : '') +
+    `<span class="chip pts">${resultados.length} clasificados</span>` +
+    '</div>\n' +
+    `<p class="intro">▶ <a href="${WEB}/ranking/?carrera=${encodeURIComponent(r.id)}">Abrir en el ranking interactivo</a> ` +
+    'para ver mapa, perfil de altimetría y fichas de corredores.</p>\n' +
+    '<h2>Clasificación</h2>\n<div class="tablabox"><table><thead><tr><th class="c">Pos.</th><th class="c">Dorsal</th>' +
     '<th>Corredor</th><th>Equipo</th><th class="c">Cat.</th>' + (hayTiempo ? '<th class="c">Tiempo</th>' : '') +
-    `</tr></thead>\n<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table>\n`;
+    `</tr></thead>\n<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table></div>\n`;
   return pagina({ titulo, head, cuerpo });
 }
 
@@ -141,25 +204,31 @@ function paginaHub(items) {
     publisher: { '@type': 'SportsOrganization', name: 'MFPP Cycling', url: WEB, logo: LOGO }
   };
   const head =
-    `<meta name="description" content="${esc(desc)}">\n` +
-    '<meta name="robots" content="index, follow">\n' +
+    `<meta name="description" content="${esc(desc)}">\n<meta name="robots" content="index, follow">\n` +
     `<link rel="canonical" href="${esc(url)}">\n` +
     '<meta property="og:type" content="website">\n<meta property="og:site_name" content="MFPP Cycling">\n' +
     `<meta property="og:title" content="${esc(titulo)}">\n<meta property="og:description" content="${esc(desc)}">\n` +
     `<meta property="og:url" content="${esc(url)}">\n<meta property="og:image" content="${LOGO}">\n` +
     `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>\n`;
-  const lista = items.map(it =>
-    `<li><a href="${esc(it.ruta)}">${esc(it.nombre)}</a>` +
-    `<div class="f">${esc(fmtFecha(it.fecha))}${it.localidad ? ' · ' + esc(it.localidad) : ''}` +
-    `${it.podio ? ' · 🥇 ' + esc(it.podio) : ''}</div></li>`
+  const tarjetas = items.map(it =>
+    '<article class="card">' +
+    '<div class="cab">' +
+    `<span class="f">${esc(diaSemana(it.fecha))} ${esc(fmtFecha(it.fecha))}</span>` +
+    `<span class="tp ${it.tipo.cls}">${esc(it.tipo.etq)}</span>` +
+    '</div>' +
+    `<h3><a href="${esc(it.ruta)}">${esc(it.nombre)}</a></h3>` +
+    (it.localidad ? `<p class="loc">📍 ${esc(it.localidad)}</p>` : '') +
+    (it.podio ? `<ul class="podio">${it.podio}</ul>` : '') +
+    `<a class="ver" href="${esc(it.ruta)}">Ver clasificación completa →</a>` +
+    '</article>'
   ).join('\n');
   const cuerpo =
     '<h1>Ranking y resultados de ciclismo base</h1>\n' +
-    '<p class="meta">Cadetes, juveniles y sub-23 · Comunidad Valenciana · Temporada 2026</p>\n' +
-    '<p>Aquí encontrarás las <b>clasificaciones y podios</b> de las pruebas del ciclismo base, ' +
+    '<p class="sub">Cadetes, juveniles y sub-23 · Comunidad Valenciana · Temporada 2026</p>\n' +
+    '<p class="intro">Aquí encontrarás las <b>clasificaciones y podios</b> de las pruebas del ciclismo base, ' +
     'con el ranking de rendimiento que elabora MFPP Cycling. ' +
     `Para filtros, fichas de corredores, mapas y perfiles, entra en el <a href="${WEB}/ranking/">ranking interactivo</a>.</p>\n` +
-    '<h2>Últimas carreras</h2>\n<ul class="lista">\n' + lista + '\n</ul>\n';
+    '<h2>Últimas carreras</h2>\n<div class="grid">\n' + tarjetas + '\n</div>\n';
   return pagina({ titulo, head, cuerpo });
 }
 
@@ -172,18 +241,20 @@ async function generarSEO(distDir) {
   for (const r of carreras) {
     let extra = {};
     try { extra = JSON.parse(r.notes || '{}') || {}; } catch (_) { extra = {}; }
+    const resultados = (r.race_results || [])
+      .filter(x => Number.isFinite(parseInt(x.pos, 10)) && parseInt(x.pos, 10) > 0)
+      .sort((a, b) => parseInt(a.pos, 10) - parseInt(b.pos, 10));
     const ruta = slug(r.name) + '-' + String(r.id).slice(0, 6) + '.html';
-    fs.writeFileSync(path.join(outDir, ruta), paginaCarrera(r, extra, ruta), 'utf8');
-    const ganador = (r.race_results || []).find(x => parseInt(x.pos, 10) === 1);
+    fs.writeFileSync(path.join(outDir, ruta), paginaCarrera(r, extra, ruta, resultados), 'utf8');
     items.push({
       ruta, nombre: r.name, fecha: r.date, localidad: extra.localidad || '',
-      podio: ganador ? ganador.name : ''
+      tipo: tipoCarrera(r.name, extra), podio: podioHTML(resultados)
     });
     urls.push({ loc: BASE + '/ranking/resultados/' + ruta, lastmod: String(r.date || '').slice(0, 10) });
   }
   fs.writeFileSync(path.join(outDir, 'index.html'), paginaHub(items), 'utf8');
   const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9">\n'.replace('sitemap.org', 'sitemaps.org') +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     urls.map(u => '<url><loc>' + esc(u.loc) + '</loc>' +
       (u.lastmod ? '<lastmod>' + u.lastmod + '</lastmod>' : '') + '</url>').join('\n') +
     '\n</urlset>\n';
