@@ -1051,7 +1051,8 @@ function rpRenderCalendario() {
         ? `<button type="button" class="rp-cal-chip" data-planificada="${rpEscapar(p.id)}">📋 Lista de inscritos (${p.inscritos.length})</button>`
         : '<span class="rp-cal-chip rp-cal-chip-off">Sin inscritos</span>') +
       (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación disponible</button>` : '') +
-      `<button type="button" class="rp-cal-chip" data-ics="${rpEscapar(p.id)}">📅 Añadir a mi calendario</button>` +
+      `<a class="rp-cal-chip" href="${rpEscapar(rpEnlaceGoogleCal(p))}" target="_blank" rel="noopener">📅 Google Calendar</a>` +
+      `<button type="button" class="rp-cal-chip" data-ics="${rpEscapar(p.id)}">🍎 Apple / iCal (.ics)</button>` +
       '</div>';
   };
   cont.innerHTML =
@@ -1615,6 +1616,31 @@ function rpGenerarICS(p) {
 function rpDescargarICS(p) {
   rpDescargarArchivo(rpGenerarICS(p), 'text/calendar',
     (p.nombre || 'prueba').replace(/[^\w\-]+/g, '_').slice(0, 60) + '.ics');
+}
+
+// Enlace de Google Calendar (se ABRE directamente el calendario con el
+// evento listo para guardar, sin descargar ningún archivo).
+function rpEnlaceGoogleCal(p) {
+  const p2 = n => String(n).padStart(2, '0');
+  const base = new Date(p.fecha + 'T00:00:00');
+  let dates;
+  if (/^\d{1,2}:\d{2}/.test(p.hora || '')) {
+    const [h, m] = p.hora.split(':');
+    const d = new Date(base); d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+    const e = new Date(d.getTime() + 2 * 3600e3);
+    const f = x => '' + x.getFullYear() + p2(x.getMonth() + 1) + p2(x.getDate()) + 'T' + p2(x.getHours()) + p2(x.getMinutes()) + '00';
+    dates = f(d) + '/' + f(e);
+  } else {
+    const e = new Date(base.getTime() + 864e5);
+    const f = x => '' + x.getFullYear() + p2(x.getMonth() + 1) + p2(x.getDate());
+    dates = f(base) + '/' + f(e);
+  }
+  const q = new URLSearchParams({
+    action: 'TEMPLATE', text: p.nombre || 'Prueba', dates: dates,
+    location: p.localidad || '', details: 'Prueba del calendario · MFPP Cycling',
+    ctz: 'Europe/Madrid'
+  });
+  return 'https://calendar.google.com/calendar/render?' + q.toString();
 }
 
 // ── Modal de ficha del ciclista ──

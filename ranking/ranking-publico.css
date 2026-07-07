@@ -427,6 +427,7 @@ html, body { overflow-x: hidden; }
   cursor: pointer;
 }
 .rp-cal-chip:hover, .rp-cal-chip:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+a.rp-cal-chip { text-decoration: none; display: inline-block; }
 .rp-cal-chip-off { color: var(--rp-color-suave); cursor: default; font-weight: 600; }
 .rp-cal-chip-ok { color: #065f46; background: #d1fae5; border-color: #6ee7b7; }
 /* ── Portada: tarjetas de últimas carreras con podio ── */
