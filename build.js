@@ -71,6 +71,13 @@ if(fs.existsSync(headersSrc)){
   fs.copyFileSync(headersSrc, path.join(__dirname, 'dist', '_headers'));
 }
 
+// Copiar _redirects (reglas de redirección; p. ej. la raíz del subdominio
+// SEO ranking.mfppcycling.com lleva al hub del ranking, no al panel admin).
+const redirectsSrc = path.join(__dirname, '_redirects');
+if(fs.existsSync(redirectsSrc)){
+  fs.copyFileSync(redirectsSrc, path.join(__dirname, 'dist', '_redirects'));
+}
+
 console.log(`✅ Build completado → dist/index.html (css=${cssHash}, js=${jsHash})`);
 
 // ── Páginas SEO estáticas del ranking (hub + una por carrera + sitemap) ──

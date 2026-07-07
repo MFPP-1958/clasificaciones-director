@@ -1,0 +1,7 @@
+# Redirecciones de Netlify.
+# Subdominio SEO ranking.mfppcycling.com: su página de inicio lleva al hub
+# del ranking, NO al panel de administración. Estas reglas solo afectan a
+# ese subdominio (llevan el host en el origen), nunca a
+# clasificaciones-director.netlify.app, donde Manuel sigue entrando al panel.
+https://ranking.mfppcycling.com/            https://ranking.mfppcycling.com/ranking/resultados/   301!
+https://ranking.mfppcycling.com/index.html  https://ranking.mfppcycling.com/ranking/resultados/   301!
