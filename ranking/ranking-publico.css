@@ -1015,6 +1015,67 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
     overflow-wrap: anywhere;  /* nombres de equipo largos: partir, no desbordar */
   }
   #rp-tabla { font-size: 0.9rem; }
+
+  /* ── Tabla de CORREDORES en móvil: tarjeta compacta de 2 líneas ──
+     Línea 1: [nº][±] Nombre (flexible, se recorta) · Pruebas · Puntos
+     Línea 2: Equipo, a todo el ancho y en una sola línea (antes se rompía
+     en 3 líneas y la fila era altísima). Solo afecta a esta tabla, no a
+     Equipos ni Challenge. */
+  #rp-tabla.rp-tabla-corredores,
+  #rp-tabla.rp-tabla-corredores tbody { display: block; }
+  #rp-tabla.rp-tabla-corredores thead { display: none; }
+  #rp-tabla.rp-tabla-corredores tr.rp-fila {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto;
+    grid-template-areas:
+      "rank evo name  pruebas puntos"
+      "rank evo team  team    team";
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 1px;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--rp-color-borde);
+  }
+  #rp-tabla.rp-tabla-corredores td { padding: 0; border: none; }
+  #rp-tabla.rp-tabla-corredores .rp-rank { grid-area: rank; }
+  #rp-tabla.rp-tabla-corredores .rp-col-evo { grid-area: evo; }
+  #rp-tabla.rp-tabla-corredores .rp-col-nombre {
+    grid-area: name;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;                 /* deja recortar el nombre */
+  }
+  #rp-tabla.rp-tabla-corredores .rp-nombre {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;      /* nombre largo → "Nombre…" antes de chocar */
+  }
+  #rp-tabla.rp-tabla-corredores .rp-col-nombre .rp-badge-region,
+  #rp-tabla.rp-tabla-corredores .rp-col-nombre .rp-bandera-mini,
+  #rp-tabla.rp-tabla-corredores .rp-medallas { flex: none; }
+  #rp-tabla.rp-tabla-corredores .rp-col-pruebas {
+    grid-area: pruebas;
+    text-align: right;
+    font-size: 0.82rem;
+    color: var(--rp-color-suave);
+    white-space: nowrap;
+  }
+  #rp-tabla.rp-tabla-corredores .rp-pts { grid-area: puntos; text-align: right; white-space: nowrap; }
+  #rp-tabla.rp-tabla-corredores .rp-col-cat { display: none; }
+  #rp-tabla.rp-tabla-corredores .rp-col-equipo {
+    grid-area: team;
+    display: block;               /* anula el display:none general del móvil */
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;      /* equipo largo en 1 línea, con … si no cabe */
+  }
+  #rp-tabla.rp-tabla-corredores .rp-col-equipo .rp-enlace-suave {
+    font-size: 0.75rem;
+    color: var(--rp-color-suave);
+  }
 }
 
 /* Accesibilidad: sin animación del panel si el sistema lo pide */

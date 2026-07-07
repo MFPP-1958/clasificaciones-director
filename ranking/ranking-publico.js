@@ -2112,14 +2112,12 @@ function rpRenderTabla() {
       `<td class="rp-c rp-col-evo">${evo}</td>` +
       `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(c.nombre)}</span>` +
       `${badge}` +
-      // En móvil el equipo va aquí como sublínea; ahora es un botón, así que
-      // también se puede tocar para abrir la ficha del equipo (en escritorio
-      // esta sublínea está oculta y se usa la columna Equipo)
-      `${c.equipo ? `<button type="button" class="rp-equipo-sub" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}` +
       `${medallas ? `<span class="rp-medallas">${medallas}</span>` : ''}</td>` +
       `<td class="rp-c rp-col-cat">${c.subcatPrincipal ? `<span class="rp-badge-cat">${rpEscapar(c.subcatPrincipal)}</span>` : '—'}</td>` +
+      // Columna Equipo: en escritorio es una columna normal; en móvil, el
+      // CSS la recoloca como 2ª línea a todo el ancho (grid), en una sola línea
       `<td class="rp-col-equipo">${c.equipo ? `<button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}</td>` +
-      `<td class="rp-c">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
+      `<td class="rp-c rp-col-pruebas">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
       `<td class="rp-c rp-pts">${rpFormatearPuntos(c.puntosTotales)}</td>` +
       `</tr>`
     );
@@ -2128,10 +2126,10 @@ function rpRenderTabla() {
   rpRenderSubtitulo(); // cualquier cambio de filtro pasa por aquí
   rpGuardarPrefs();    // y se recuerda para la próxima visita
   cont.innerHTML =
-    '<table id="rp-tabla"><thead><tr>' +
+    '<table id="rp-tabla" class="rp-tabla-corredores"><thead><tr>' +
     '<th class="rp-c">#</th><th class="rp-c rp-col-evo" title="Evolución respecto a la jornada anterior">±</th>' +
     '<th>Corredor</th><th class="rp-c rp-col-cat" title="Categoría del corredor">Cat.</th><th class="rp-col-equipo">Equipo</th>' +
-    '<th class="rp-c" title="Pruebas que puntúan / pruebas disputadas">Pruebas</th><th class="rp-c">Puntos</th>' +
+    '<th class="rp-c rp-col-pruebas" title="Pruebas que puntúan / pruebas disputadas">Pruebas</th><th class="rp-c">Puntos</th>' +
     '</tr></thead>' +
     `<tbody>${filas.join('') || '<tr><td colspan="7" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>`;
 }
