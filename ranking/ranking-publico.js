@@ -1488,6 +1488,70 @@ function rpSparkline(corredor) {
     '</svg></figure>';
 }
 
+/* ============================================================
+   COMPARTIR y DESCARGAR RECORRIDO
+   ============================================================ */
+
+// URL pública donde vive el ranking (la web de WordPress). Los enlaces que
+// se comparten apuntan aquí — no al dominio de Netlify — para que el tráfico
+// llegue a mfppcycling.com. embed.js reenvía los parámetros al widget.
+const RP_URL_PUBLICA = 'https://mfppcycling.com/ranking/';
+
+function rpEnlaceCorredor(nombre) { return RP_URL_PUBLICA + '?ficha=' + encodeURIComponent(nombre); }
+function rpEnlaceCarrera(id) { return RP_URL_PUBLICA + '?carrera=' + encodeURIComponent(id); }
+
+// Botones "📲 WhatsApp" + "🔗 Copiar enlace" para una ficha.
+function rpBotonesCompartir(titulo, url) {
+  return '<div class="rp-compartir">' +
+    `<button type="button" class="rp-compartir-btn rp-compartir-wa" data-share-url="${rpEscapar(url)}" data-share-txt="${rpEscapar(titulo)}">📲 Compartir</button>` +
+    `<button type="button" class="rp-compartir-btn rp-compartir-cp" data-share-url="${rpEscapar(url)}">🔗 Copiar enlace</button>` +
+    '</div>';
+}
+
+function rpCopiarEnlace(url, btn) {
+  const ok = () => {
+    if (!btn) return;
+    const original = btn.textContent;
+    btn.textContent = '✅ ¡Copiado!';
+    setTimeout(() => { btn.textContent = original; }, 1600);
+  };
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(); } catch (_) { /* nada */ }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(ok).catch(fallback);
+  } else { fallback(); }
+}
+
+// ── Recorrido en GPX (para Garmin/Wahoo/Strava…) generado del course.json ──
+function rpGenerarGPX(carrera, curso) {
+  const trkpts = curso.points.map(p =>
+    `<trkpt lat="${Number(p.lat).toFixed(6)}" lon="${Number(p.lon).toFixed(6)}">` +
+    (p.ele != null ? `<ele>${Math.round(p.ele)}</ele>` : '') +
+    '</trkpt>'
+  ).join('\n');
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<gpx version="1.1" creator="MFPP Cycling" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+    `<metadata><name>${rpEscapar(carrera.nombre)}</name></metadata>\n` +
+    `<trk><name>${rpEscapar(carrera.nombre)}</name><trkseg>\n${trkpts}\n</trkseg></trk>\n</gpx>`;
+}
+
+function rpDescargarGPX(carrera, curso) {
+  const blob = new Blob([rpGenerarGPX(carrera, curso)], { type: 'application/gpx+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (carrera.nombre || 'recorrido').replace(/[^\w\-]+/g, '_').slice(0, 60) + '.gpx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 // ── Modal de ficha del ciclista ──
 function rpAbrirModal(clave) {
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
@@ -1531,7 +1595,9 @@ function rpAbrirModal(clave) {
     `<span class="rp-stat">🏆 <b>${podios}</b> podios</span>` +
     `<span class="rp-stat">🔟 <b>${top10}</b> top-10</span>` +
     `<span class="rp-stat">🚴 <b>${c.pruebasTotales}</b> pruebas</span>` +
-    '</div></header>' +
+    '</div>' +
+    rpBotonesCompartir('Ranking MFPP · ' + c.nombre, rpEnlaceCorredor(c.nombre)) +
+    '</header>' +
     rpRenderHighlights(c) +
     rpSparkline(c) +
     rpRenderHistorial(c);
@@ -1737,13 +1803,25 @@ async function rpActivarPestanaRuta(carrera) {
       Number.isFinite(r.gradient_max_pct) ? `<span class="rp-chip">📈 máx ${r.gradient_max_pct}%</span>` : '',
       r.terrain_type ? `<span class="rp-chip">${rpEscapar(String(r.terrain_type).charAt(0).toUpperCase() + String(r.terrain_type).slice(1))}</span>` : ''
     ].filter(Boolean).join('');
+    // Acciones: descargar el trazado (GPX) y abrir la salida en Google Maps
+    const salida = curso.points[0];
+    const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' +
+      Number(salida.lat).toFixed(6) + ',' + Number(salida.lon).toFixed(6);
+    const acciones =
+      '<div class="rp-ruta-acciones">' +
+      '<button type="button" class="rp-ruta-btn" id="rp-ruta-gpx">⬇️ Descargar recorrido (GPX)</button>' +
+      `<a class="rp-ruta-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺️ Ver salida en Google Maps</a>` +
+      '</div>';
     cont.innerHTML =
       (chips ? `<div class="rp-ficha-datos rp-ruta-chips">${chips}</div>` : '') +
       '<div id="rp-ruta-mapa"></div>' +
       (conAltimetria
         ? '<div class="rp-ruta-perfil-wrap"><canvas id="rp-ruta-perfil"></canvas></div>' +
           '<p class="rp-nota">Recorre el perfil con el dedo o el ratón: el punto morado del mapa marca dónde está ese kilómetro.</p>'
-        : '<p class="rp-nota">Este recorrido no trae altimetría por punto, así que solo se muestra el mapa.</p>');
+        : '<p class="rp-nota">Este recorrido no trae altimetría por punto, así que solo se muestra el mapa.</p>') +
+      acciones;
+    const btnGpx = document.getElementById('rp-ruta-gpx');
+    if (btnGpx) btnGpx.addEventListener('click', () => rpDescargarGPX(carrera, curso));
     rpLimpiarRuta();
     setTimeout(() => {
       rpDibujarMapaRuta(curso.points);
@@ -1827,7 +1905,9 @@ function rpAbrirModalCarrera(raceId) {
     // Algunos km ya vienen con la unidad escrita ("57,2 km"): no duplicarla
     (carrera.km ? `<span class="rp-chip">${rpEscapar(String(carrera.km).replace(/\s*km\.?\s*$/i, ''))} km</span>` : '') +
     `<span class="rp-chip rp-chip-puntos">${nClasificados} clasificados</span>` +
-    '</div></header>' +
+    '</div>' +
+    rpBotonesCompartir('Clasificación · ' + carrera.nombre, rpEnlaceCarrera(carrera.id)) +
+    '</header>' +
     // Pestañas estilo FirstCycling, solo si la prueba tiene recorrido subido
     (carrera.ruta
       ? '<div class="rp-carrera-tabs" role="tablist" aria-label="Contenido de la prueba">' +
@@ -2264,6 +2344,70 @@ function rpRecalcular() {
   if (!cats.length) rpMostrarVacio(); else rpMostrarEstado('');
 }
 
+/* ── Enlaces profundos (?comunidad, ?modo, ?vista, ?pantalla, ?carrera,
+   ?ficha) ── `get(clave)` devuelve el valor del parámetro. Se llama con la
+   URL propia del widget y, cuando va embebido, con los parámetros que el
+   padre (mfppcycling.com) reenvía por postMessage (así los enlaces que se
+   comparten abren directamente el corredor o la prueba). */
+function rpAplicarDeeplink(get) {
+  const comunidad = get('comunidad');
+  if (comunidad) {
+    rpEstado.region = rpNormalizarTexto(comunidad);
+    rpRenderRegiones();
+    rpRenderPestanas();
+    rpRenderTabla();
+  }
+  const modoParam = get('modo');
+  if (modoParam === 'challenge' || modoParam === 'mfpp') {
+    rpEstado.modo = modoParam;
+    rpRenderModo();
+    rpRenderTabla();
+  }
+  const vistaParam = get('vista');
+  if (vistaParam === 'equipos' || vistaParam === 'corredores') {
+    rpEstado.pantalla = 'ranking';
+    rpEstado.vista = vistaParam;
+    rpRenderPantalla();
+    rpRenderVista();
+    rpRenderTabla();
+  }
+  const pantallaParam = get('pantalla');
+  if (pantallaParam === 'ranking' || pantallaParam === 'carreras') {
+    rpEstado.pantalla = pantallaParam;
+    rpRenderPantalla();
+    if (pantallaParam === 'ranking') rpRenderTabla();
+  }
+  const carreraParam = get('carrera');
+  if (carreraParam) {
+    if (rpCarreraPorId(carreraParam)) rpAbrirModalCarrera(carreraParam);
+    else rpAbrirModalPlanificada(carreraParam);
+  }
+  const ficha = get('ficha');
+  if (ficha) {
+    const clave = rpNormalizarClave(ficha);
+    const cat = rpEstado.ranking.categorias.find(c => c.corredores.some(x => x.clave === clave));
+    if (cat) {
+      rpEstado.categoria = cat.key;
+      rpRenderPestanas();
+      rpRenderSubcats();
+      rpRenderCalendario();
+      rpRenderUltimos();
+      rpRenderTabla();
+      rpAbrirModal(clave);
+    }
+  }
+}
+
+// Enlace profundo recibido del padre antes de tener datos: se guarda y se
+// aplica en cuanto rpIniciar termina de cargar.
+let rpDeeplinkPendiente = null;
+window.addEventListener('message', ev => {
+  const d = ev.data;
+  if (!d || d.tipo !== 'mfpp-rp-deeplink' || !d.params) return;
+  if (rpEstado.ranking) rpAplicarDeeplink(k => d.params[k]);
+  else rpDeeplinkPendiente = d.params;
+});
+
 async function rpIniciar() {
   rpMostrarCargando();
   try {
@@ -2318,62 +2462,14 @@ async function rpIniciar() {
     }
     rpRecalcular();
     rpRenderTodo();
-    // Filtro inicial por URL: ?comunidad=Comunitat Valenciana (o el nombre de
-    // cualquier comunidad de los datos). Útil para incrustar en la web una
-    // versión que arranque mostrando solo la CV.
-    const comunidad = new URLSearchParams(location.search).get('comunidad');
-    if (comunidad) {
-      rpEstado.region = rpNormalizarTexto(comunidad);
-      rpRenderRegiones();   // valida contra los datos (si no existe, la resetea)
-      rpRenderPestanas();
-      rpRenderTabla();
-    }
-    // Modo inicial por URL: ?modo=challenge (o mfpp).
-    const modoParam = new URLSearchParams(location.search).get('modo');
-    if (modoParam === 'challenge' || modoParam === 'mfpp') {
-      rpEstado.modo = modoParam;
-      rpRenderModo();
-      rpRenderTabla();
-    }
-    // Vista inicial por URL: ?vista=equipos (o corredores).
-    const vistaParam = new URLSearchParams(location.search).get('vista');
-    if (vistaParam === 'equipos' || vistaParam === 'corredores') {
-      // Pedir una vista del ranking implica entrar directamente al ranking
-      rpEstado.pantalla = 'ranking';
-      rpEstado.vista = vistaParam;
-      rpRenderPantalla();
-      rpRenderVista();
-      rpRenderTabla();
-    }
-    // Enlace directo a la vista principal: ?pantalla=ranking|carreras
-    const pantallaParam = new URLSearchParams(location.search).get('pantalla');
-    if (pantallaParam === 'ranking' || pantallaParam === 'carreras') {
-      rpEstado.pantalla = pantallaParam;
-      rpRenderPantalla();
-      if (pantallaParam === 'ranking') rpRenderTabla();
-    }
-    // Enlace directo a una prueba: ?carrera=<id> (disputada o del calendario).
-    const carreraParam = new URLSearchParams(location.search).get('carrera');
-    if (carreraParam) {
-      if (rpCarreraPorId(carreraParam)) rpAbrirModalCarrera(carreraParam);
-      else rpAbrirModalPlanificada(carreraParam);
-    }
-    // Enlace directo a una ficha: ?ficha=Apellido, Nombre (se normaliza igual
-    // que la identidad, así que admite variantes de mayúsculas/acentos).
-    const ficha = new URLSearchParams(location.search).get('ficha');
-    if (ficha) {
-      const clave = rpNormalizarClave(ficha);
-      const cat = rpEstado.ranking.categorias.find(c => c.corredores.some(x => x.clave === clave));
-      if (cat) {
-        rpEstado.categoria = cat.key;
-        rpRenderPestanas();
-        rpRenderSubcats();
-        rpRenderCalendario();
-        rpRenderUltimos();
-        rpRenderTabla();
-        rpAbrirModal(clave);
-      }
-    }
+    // Aplicar los parámetros de la propia URL (?comunidad, ?carrera, ?ficha…)
+    const paramsURL = new URLSearchParams(location.search);
+    rpAplicarDeeplink(k => paramsURL.get(k));
+    // Si el padre (mfppcycling.com) mandó un enlace profundo antes de que
+    // hubiera datos, aplicarlo ahora; y avisar de que el widget está listo
+    // para recibir enlaces que lleguen más tarde.
+    if (rpDeeplinkPendiente) { rpAplicarDeeplink(k => rpDeeplinkPendiente[k]); rpDeeplinkPendiente = null; }
+    if (window.parent !== window) window.parent.postMessage({ tipo: 'mfpp-rp-listo' }, '*');
     if (new URLSearchParams(location.search).get('debug') === '1') {
       console.log('[ranking-publico] carreras adaptadas:', rpEstado.carreras);
       console.log('[ranking-publico] ranking:', rpEstado.ranking);
@@ -2531,6 +2627,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enlaces cruzados: clic en un corredor o una carrera (dentro del modal o
   // en "Últimos resultados") abre la ficha correspondiente.
   const alClicEnlace = e => {
+    const bWA = e.target.closest('.rp-compartir-wa');
+    if (bWA) {
+      window.open('https://wa.me/?text=' + encodeURIComponent(bWA.dataset.shareTxt + '\n' + bWA.dataset.shareUrl), '_blank', 'noopener');
+      return;
+    }
+    const bCP = e.target.closest('.rp-compartir-cp');
+    if (bCP) { rpCopiarEnlace(bCP.dataset.shareUrl, bCP); return; }
     const bTab = e.target.closest('[data-rctab]');
     if (bTab) { rpCambiarPestanaCarrera(bTab.dataset.rctab); return; }
     const bVista = e.target.closest('[data-calvista]');

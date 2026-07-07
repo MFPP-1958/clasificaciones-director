@@ -587,6 +587,50 @@ html, body { overflow-x: hidden; }
   padding: 2px 8px;
   white-space: nowrap;
 }
+/* Botones Compartir / Copiar enlace en las fichas */
+.rp-compartir { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.rp-compartir-btn {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--rp-color-primario);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  padding: 7px 14px;
+  min-height: 38px;
+  cursor: pointer;
+}
+.rp-compartir-btn:hover, .rp-compartir-btn:focus-visible {
+  border-color: var(--rp-color-primario);
+  outline: none;
+}
+.rp-compartir-wa { color: #fff; background: #25d366; border-color: #25d366; }
+.rp-compartir-wa:hover, .rp-compartir-wa:focus-visible { background: #1eb457; border-color: #1eb457; }
+
+/* Acciones del recorrido: descargar GPX / abrir en Google Maps */
+.rp-ruta-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.rp-ruta-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--rp-color-primario);
+  background: var(--rp-color-fondo);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 10px;
+  padding: 9px 14px;
+  min-height: 42px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.rp-ruta-btn:hover, .rp-ruta-btn:focus-visible {
+  border-color: var(--rp-color-primario);
+  background: var(--rp-color-fondo-alt);
+  outline: none;
+}
+
 .rp-carrera-tabs { display: flex; gap: 6px; margin: 0 0 12px; flex-wrap: wrap; }
 .rp-ruta-chips { margin-bottom: 10px; }
 #rp-ruta-mapa {

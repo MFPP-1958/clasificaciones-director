@@ -25,12 +25,36 @@
     var iframe = document.getElementById('mfpp-ranking-iframe');
     if (!iframe) return;
 
+    // ── Enlace profundo: pasar los parámetros de la URL de mfppcycling.com al
+    // widget (así un enlace compartido tipo .../ranking/?carrera=ID abre esa
+    // prueba directamente, aunque el ranking viva en un iframe de otro dominio) ──
+    function enviarDeeplink() {
+      var p = new URLSearchParams(location.search);
+      var claves = ['ficha', 'carrera', 'pantalla', 'vista', 'modo', 'comunidad'];
+      var params = {};
+      var hay = false;
+      for (var i = 0; i < claves.length; i++) {
+        var v = p.get(claves[i]);
+        if (v) { params[claves[i]] = v; hay = true; }
+      }
+      if (hay && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ tipo: 'mfpp-rp-deeplink', params: params }, ORIGEN);
+      }
+    }
+
     // ── Altura del contenido → altura del iframe ──
     window.addEventListener('message', function (ev) {
-      if (ev.origin !== ORIGEN || !ev.data || ev.data.tipo !== 'mfpp-rp-altura') return;
-      iframe.style.height = ev.data.altura + 'px';
-      programarVista();
+      if (ev.origin !== ORIGEN || !ev.data) return;
+      if (ev.data.tipo === 'mfpp-rp-altura') {
+        iframe.style.height = ev.data.altura + 'px';
+        programarVista();
+      } else if (ev.data.tipo === 'mfpp-rp-listo') {
+        // El widget ya tiene datos: ahora sí puede abrir el enlace profundo
+        enviarDeeplink();
+      }
     });
+    // Fallback: también al cargar el iframe (por si el mensaje 'listo' se pierde)
+    iframe.addEventListener('load', enviarDeeplink);
 
     // ── ¿Qué parte del iframe se ve de verdad? ──
     // Muestrea puntos verticales sobre el iframe con elementFromPoint y
