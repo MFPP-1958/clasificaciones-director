@@ -78,7 +78,8 @@ const RP_ETIQUETAS_TIPO = {
   ordinaria: 'Ordinaria CV',
   challenge: 'Challenge CV',
   fuera_cv: 'Fuera de la CV',
-  etapa: 'Etapa'
+  etapa: 'Etapa',
+  general: 'General de vuelta'
 };
 
 // ── Coeficiente de participación ──
@@ -268,6 +269,9 @@ function rpTipoCarrera(carrera) {
 // Posición válida fuera de tabla → base 0 pero el bono de terminar SÍ cuenta.
 // coefPart = coeficiente de participación de la carrera (1 / 1.10 / 1.20).
 // Multiplica ordinarias y etapas; challenge y fuera_cv mantienen el suyo.
+// La General de una vuelta usa la tabla completa con su coeficiente ya
+// resuelto (participación, o ×1.35 si la vuelta fue fuera de la CV) y SIN
+// bono de +3: la general no es una carrera corrida aparte.
 function rpPuntosResultado(pos, tipo, coefPart = 1) {
   const p = parseInt(pos, 10);
   if (!Number.isFinite(p) || p <= 0) return { base: 0, coef: 0, bono: 0, puntos: 0 };
@@ -275,6 +279,11 @@ function rpPuntosResultado(pos, tipo, coefPart = 1) {
     const base = RP_PUNTOS_ETAPA[p] || 0;
     const puntos = Math.round((base * coefPart + RP_BONO_FINALIZAR) * 100) / 100;
     return { base, coef: coefPart, bono: RP_BONO_FINALIZAR, puntos };
+  }
+  if (tipo === 'general') {
+    const base = RP_PUNTOS_BASE[p] || 0;
+    const puntos = Math.round(base * coefPart * 100) / 100;
+    return { base, coef: coefPart, bono: 0, puntos };
   }
   const base = RP_PUNTOS_BASE[p] || 0;
   const coef = tipo === 'ordinaria' ? coefPart : (RP_COEFICIENTES[tipo] ?? 1);
@@ -328,13 +337,101 @@ function rpAdaptarCarreras(filas) {
         pos: x.pos, nombre: x.name || '', equipo: x.team || '', cat: x.cat || '',
         // Datos de la clasificación oficial (pueden faltar en pruebas antiguas)
         bib: x.bib ?? '', tiempo: x.time || '',
-        gap: Number.isFinite(x.gap_seconds) ? x.gap_seconds : null
+        gap: Number.isFinite(x.gap_seconds) ? x.gap_seconds : null,
+        // Tiempo total en segundos: permite calcular la General de una
+        // vuelta sumando etapas (como el ciclismo de verdad)
+        segundosTotales: Number.isFinite(x.total_seconds) ? x.total_seconds : null
       }))
     };
     carrera.tipo = rpTipoCarrera(carrera);
     carrera.participacion = rpNivelParticipacion(carrera);
     return carrera;
   }).filter(c => c.temporada !== null);
+}
+
+/* ── GENERAL DE VUELTA (calculada) ──
+   Cuando una vuelta tiene 2+ etapas ("Etapa N-<nombre>", días próximos),
+   se calcula su clasificación General sumando el tiempo total de cada
+   corredor en TODAS las etapas — como el ciclismo de verdad, sin
+   bonificaciones (si el organizador publica la general oficial y se sube
+   al dashboard, esta calculada se descarta sola). La General se comporta
+   como una prueba más: tarjeta en la portada, ficha con tiempos
+   acumulados y puntos de tabla completa (ver rpPuntosResultado). */
+function rpSintetizarGenerales(carreras) {
+  const grupos = new Map(); // temporada|nombre-vuelta → [{c, display}]
+  for (const c of carreras) {
+    if (c.tipo !== 'etapa') continue;
+    const resto = (c.nombre || '').replace(/^\s*etapa\s*\d+\s*[-–—:.]?\s*/i, '');
+    const display = resto.replace(/[-\s]*CRI\.?\s*$/i, '').trim();
+    const claveVuelta = rpNormalizarTexto(display);
+    if (!claveVuelta || claveVuelta === rpNormalizarTexto(c.nombre)) continue;
+    const k = c.temporada + '|' + claveVuelta;
+    if (!grupos.has(k)) grupos.set(k, { claveVuelta, etapas: [] });
+    grupos.get(k).etapas.push({ c, display });
+  }
+  const generales = [];
+  for (const { claveVuelta, etapas } of grupos.values()) {
+    if (etapas.length < 2) continue;
+    etapas.sort((a, b) => (a.c.fecha || '').localeCompare(b.c.fecha || ''));
+    const primera = etapas[0].c, ultima = etapas[etapas.length - 1].c;
+    // Etapas a más de 10 días: probablemente no son la misma vuelta
+    if ((new Date(ultima.fecha) - new Date(primera.fecha)) / 864e5 > 10) continue;
+    // Si existe una general oficial subida al dashboard, manda ella
+    const hayOficial = carreras.some(o => o.tipo !== 'etapa' &&
+      o.temporada === primera.temporada &&
+      rpNormalizarTexto(o.nombre).includes(claveVuelta));
+    if (hayOficial) continue;
+    // Todas las etapas deben traer tiempos totales
+    if (!etapas.every(e => e.c.resultados.some(r => Number.isFinite(r.segundosTotales)))) continue;
+    // Acumular: solo corredores con posición válida y tiempo en TODAS las etapas
+    const acum = new Map();
+    etapas.forEach(({ c }, i) => {
+      for (const r of c.resultados) {
+        const pos = parseInt(r.pos, 10);
+        if (!Number.isFinite(pos) || pos <= 0 || !Number.isFinite(r.segundosTotales)) continue;
+        const clave = rpNormalizarClave(r.nombre);
+        if (!clave) continue;
+        if (i === 0) {
+          acum.set(clave, { seg: r.segundosTotales, n: 1, r });
+        } else {
+          const a = acum.get(clave);
+          if (a && a.n === i) { a.seg += r.segundosTotales; a.n++; a.r = r; }
+        }
+      }
+    });
+    const gc = [...acum.values()].filter(a => a.n === etapas.length)
+      .sort((x, y) => x.seg - y.seg);
+    if (gc.length < 2) continue;
+    const lider = gc[0].seg;
+    const regiones = Object.assign({}, ...etapas.map(e => e.c.regiones));
+    const carrera = {
+      id: 'general-' + ultima.id,
+      nombre: 'General — ' + etapas[etapas.length - 1].display,
+      fecha: ultima.fecha,
+      temporada: ultima.temporada,
+      challengeCV: false,
+      ccaa: ultima.ccaa || '',
+      localidad: '',
+      km: '',
+      regiones,
+      ruta: null,
+      esGeneral: true,
+      resultados: gc.map((a, i) => ({
+        pos: i + 1, nombre: a.r.nombre, equipo: a.r.equipo, cat: a.r.cat, bib: '',
+        tiempo: i === 0 ? rpFormatearGap(a.seg) : '',
+        gap: Math.round((a.seg - lider) * 100) / 100,
+        segundosTotales: a.seg
+      }))
+    };
+    carrera.tipo = 'general';
+    // Coeficiente de la General: el de fuera de la CV si la vuelta fue
+    // fuera (sin acumular), o el de participación si se corrió en la CV
+    carrera.participacion = rpEsFueraCV(carrera.ccaa)
+      ? { nivel: null, coef: RP_COEFICIENTES.fuera_cv }
+      : rpNivelParticipacion(carrera);
+    generales.push(carrera);
+  }
+  return generales;
 }
 
 // Fecha de HOY en ISO local (no UTC): una prueba de hoy sigue visible hasta
@@ -1654,7 +1751,9 @@ function rpAbrirModalCarrera(raceId) {
   const nClasificados = ordenados.filter(r => parseInt(r.pos, 10) > 0).length;
   const coefTxt = carrera.tipo === 'etapa'
     ? 'Tabla de etapa (25…1)'
-    : `Coef. ×${(RP_COEFICIENTES[carrera.tipo] ?? 1).toFixed(2)}`;
+    : carrera.tipo === 'general'
+      ? `Tiempos acumulados · Coef. ×${carrera.participacion.coef.toFixed(2)}`
+      : `Coef. ×${(RP_COEFICIENTES[carrera.tipo] ?? 1).toFixed(2)}`;
   // Dorsal y tiempos: solo si la clasificación de esta prueba los trae
   // (pruebas antiguas pueden no tenerlos). El tiempo se muestra al estilo
   // ciclista: absoluto para el ganador, "+diferencia" para el resto y
@@ -2093,7 +2192,7 @@ async function rpIniciar() {
     const [rRanking, rCalendario, rAgenda] = await Promise.all([
       rpLeer(
         'races',
-        'id, name, date, notes, race_results(pos, bib, name, team, cat, time, gap_seconds)',
+        'id, name, date, notes, race_results(pos, bib, name, team, cat, time, gap_seconds, total_seconds)',
         q => q.eq('race_type', 'clasificacion').order('date', { ascending: false })
       ),
       rpLeer(
@@ -2107,6 +2206,8 @@ async function rpIniciar() {
     ]);
     if (rRanking.error) throw rRanking.error;
     rpEstado.carreras = rpAdaptarCarreras(rRanking.data);
+    // Generales de vuelta calculadas por tiempos (2+ etapas detectadas)
+    rpEstado.carreras = rpEstado.carreras.concat(rpSintetizarGenerales(rpEstado.carreras));
     // PRE-INSCRIPCIONES: al subir los inscritos de una prueba futura, esta
     // pasa a race_type='clasificacion' aunque aún no se haya corrido (caso
     // Trofeo Torrent). Sigue siendo una PRÓXIMA prueba: se fusiona con las
