@@ -60,8 +60,14 @@ const RP_PUNTOS_BASE = {
   11: 21, 12: 18, 13: 15, 14: 13, 15: 11, 16: 9, 17: 7, 18: 5, 19: 3, 20: 1
 };
 
-// Puntuación directa de etapas sueltas (top-10, SIN coeficiente). >10º → 0.
-const RP_PUNTOS_ETAPA = { 1: 25, 2: 20, 3: 16, 4: 13, 5: 11, 6: 9, 7: 7, 8: 5, 9: 3, 10: 1 };
+// Puntuación de etapas: MEDIA tabla de una carrera de un día (RP_PUNTOS_BASE
+// ÷2, redondeado al alza), top-20. Así ganar una etapa (50) vale la mitad que
+// ganar una clásica (100): un premio digno aunque el corredor abandone la
+// vuelta y no entre en la general, sin que la vuelta pese como dos carreras.
+const RP_PUNTOS_ETAPA = {
+  1: 50, 2: 40, 3: 33, 4: 28, 5: 24, 6: 21, 7: 18, 8: 16, 9: 14, 10: 12,
+  11: 11, 12: 9, 13: 8, 14: 7, 15: 6, 16: 5, 17: 4, 18: 3, 19: 2, 20: 1
+};
 
 // Bono de regularidad: +3 por terminar una prueba (posición válida).
 const RP_BONO_FINALIZAR = 3;
@@ -1750,7 +1756,7 @@ function rpAbrirModalCarrera(raceId) {
   });
   const nClasificados = ordenados.filter(r => parseInt(r.pos, 10) > 0).length;
   const coefTxt = carrera.tipo === 'etapa'
-    ? 'Tabla de etapa (25…1)'
+    ? 'Tabla de etapa (50…1)'
     : carrera.tipo === 'general'
       ? `Tiempos acumulados · Coef. ×${carrera.participacion.coef.toFixed(2)}`
       : `Coef. ×${(RP_COEFICIENTES[carrera.tipo] ?? 1).toFixed(2)}`;
