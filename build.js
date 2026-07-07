@@ -72,5 +72,16 @@ if(fs.existsSync(headersSrc)){
 }
 
 console.log(`✅ Build completado → dist/index.html (css=${cssHash}, js=${jsHash})`);
+
+// ── Páginas SEO estáticas del ranking (hub + una por carrera + sitemap) ──
+// Se generan leyendo los datos de Supabase. Si falla (sin red, etc.) se
+// omite SIN romper el despliegue: el widget y el resto no dependen de esto.
+try {
+  require('./build-seo').generarSEO(path.join(__dirname, 'dist'))
+    .then(n => console.log(`✅ SEO → dist/ranking/resultados/ (${n} carreras)`))
+    .catch(e => console.warn('⚠️  SEO omitido (no crítico):', e.message));
+} catch (e) {
+  console.warn('⚠️  SEO no disponible (no crítico):', e.message);
+}
 // Build trigger 1779079327
 // Trigger deploy after credits refill 1779079759
