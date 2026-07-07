@@ -609,7 +609,7 @@ html, body { overflow-x: hidden; }
 .rp-compartir-wa:hover, .rp-compartir-wa:focus-visible { background: #1eb457; border-color: #1eb457; }
 
 /* Acciones del recorrido: descargar GPX / abrir en Google Maps */
-.rp-ruta-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.rp-ruta-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
 .rp-ruta-btn {
   font: inherit;
   font-size: 0.85rem;

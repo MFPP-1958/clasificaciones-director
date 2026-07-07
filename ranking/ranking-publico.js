@@ -1814,12 +1814,12 @@ async function rpActivarPestanaRuta(carrera) {
       '</div>';
     cont.innerHTML =
       (chips ? `<div class="rp-ficha-datos rp-ruta-chips">${chips}</div>` : '') +
+      acciones +   // arriba, para que se vean sin hacer scroll
       '<div id="rp-ruta-mapa"></div>' +
       (conAltimetria
         ? '<div class="rp-ruta-perfil-wrap"><canvas id="rp-ruta-perfil"></canvas></div>' +
           '<p class="rp-nota">Recorre el perfil con el dedo o el ratón: el punto morado del mapa marca dónde está ese kilómetro.</p>'
-        : '<p class="rp-nota">Este recorrido no trae altimetría por punto, así que solo se muestra el mapa.</p>') +
-      acciones;
+        : '<p class="rp-nota">Este recorrido no trae altimetría por punto, así que solo se muestra el mapa.</p>');
     const btnGpx = document.getElementById('rp-ruta-gpx');
     if (btnGpx) btnGpx.addEventListener('click', () => rpDescargarGPX(carrera, curso));
     rpLimpiarRuta();
