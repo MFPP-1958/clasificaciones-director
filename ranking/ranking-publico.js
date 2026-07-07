@@ -1010,6 +1010,15 @@ function rpDiaSemana(fechaISO) {
   return Number.isNaN(d.getTime()) ? '' : RP_DIAS_SEMANA[d.getDay()];
 }
 
+// Día del mes y mes abreviado (para el minicalendario de próximas pruebas)
+const RP_MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function rpDiaMes(fechaISO) {
+  const m = String(fechaISO || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m
+    ? { dia: String(parseInt(m[3], 10)), mes: RP_MESES_CORTO[parseInt(m[2], 10) - 1] || '' }
+    : { dia: '', mes: '' };
+}
+
 // Clasificación ya cargada de una prueba planificada (misma fecha y nombre
 // equivalente): permite enlazar "🏆 Clasificación disponible" el mismo día.
 function rpClasificacionDe(p) {
@@ -1043,16 +1052,31 @@ function rpRenderCalendario() {
   const hoyISO = rpHoyISO();
   const tarjeta = p => {
     const clasif = p.fecha === hoyISO ? rpClasificacionDe(p) : null; // solo el día de la prueba
-    return '<div class="rp-ultimo">' +
-      `<span class="rp-ultimo-fecha">${rpEscapar(rpDiaSemana(p.fecha))} ${rpEscapar(rpFormatearFecha(p.fecha))}${p.hora ? ' · ' + rpEscapar(p.hora) : ''}</span>` +
-      `<button type="button" class="rp-enlace rp-ultimo-nombre" data-planificada="${rpEscapar(p.id)}">${rpEscapar(p.nombre)}</button>` +
-      (p.localidad ? `<span class="rp-ultimo-equipo">📍 ${rpEscapar(p.localidad)}</span>` : '') +
+    const dm = rpDiaMes(p.fecha);
+    const chips =
       (p.inscritos.length
-        ? `<button type="button" class="rp-cal-chip" data-planificada="${rpEscapar(p.id)}">📋 Lista de inscritos (${p.inscritos.length})</button>`
+        ? `<button type="button" class="rp-cal-chip" data-planificada="${rpEscapar(p.id)}">📋 Inscritos (${p.inscritos.length})</button>`
         : '<span class="rp-cal-chip rp-cal-chip-off">Sin inscritos</span>') +
-      (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación disponible</button>` : '') +
-      `<a class="rp-cal-chip" href="${rpEscapar(rpEnlaceGoogleCal(p))}" target="_blank" rel="noopener">📅 Añadir a mi calendario</a>` +
-      '</div>';
+      (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación</button>` : '') +
+      `<a class="rp-cal-chip" href="${rpEscapar(rpEnlaceGoogleCal(p))}" target="_blank" rel="noopener">📅 Añadir a mi calendario</a>`;
+    // Detalle de localidad/hora (o solo hora si no hay localidad)
+    const detalle = p.localidad
+      ? `<span class="rp-prueba-loc">📍 ${rpEscapar(p.localidad)}${p.hora ? ' · 🕐 ' + rpEscapar(p.hora) : ''}</span>`
+      : (p.hora ? `<span class="rp-prueba-loc">🕐 ${rpEscapar(p.hora)}</span>` : '');
+    return '<article class="rp-prueba-card">' +
+      '<span class="rp-prueba-cal" aria-hidden="true">' +
+        `<span class="rp-prueba-cal-dow">${rpEscapar(rpDiaSemana(p.fecha))}</span>` +
+        `<span class="rp-prueba-cal-dia">${dm.dia}</span>` +
+        `<span class="rp-prueba-cal-mes">${dm.mes}</span>` +
+      '</span>' +
+      '<div class="rp-prueba-info">' +
+        `<button type="button" class="rp-enlace rp-prueba-nombre" data-planificada="${rpEscapar(p.id)}">${rpEscapar(p.nombre)}</button>` +
+        '<div class="rp-prueba-bot">' +
+          detalle +
+          `<span class="rp-prueba-chips">${chips}</span>` +
+        '</div>' +
+      '</div>' +
+    '</article>';
   };
   cont.innerHTML =
     '<div class="rp-cal-tabs">' +
