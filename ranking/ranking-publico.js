@@ -833,33 +833,54 @@ function rpTarjetaCarrera(c, reciente, posRanking) {
 
 function rpRenderUltimos() {
   const cont = document.getElementById('rp-ultimos');
-  // Al cambiar de temporada, pestaña o comunidad, el "Ver más" se reinicia
-  const clave = rpEstado.temporada + '|' + rpEstado.categoria + '|' + rpEstado.region;
+  // Al cambiar de temporada, pestaña, comunidad o filtro de tipo → reinicia "Ver más"
+  const clave = rpEstado.temporada + '|' + rpEstado.categoria + '|' + rpEstado.region + '|' + (rpEstado.filtroTipoCarrera || '');
   if (rpEstado._ultimosClave !== clave) {
     rpEstado._ultimosClave = clave;
     rpEstado.ultimosVisibles = 10;
   }
-  const todas = (rpEstado.carreras || [])
+  // Todas las carreras de la categoría + comunidad (sin filtrar aún por tipo)
+  const base = (rpEstado.carreras || [])
     .filter(c => c.temporada === rpEstado.temporada && c.resultados.length &&
                  rpGruposDeCarrera(c).has(rpEstado.categoria) && rpCarreraEnRegion(c))
     .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
-  if (!todas.length) {
+  if (!base.length) {
     cont.innerHTML = '<p class="rp-vacio">Aún no hay carreras disputadas de esta categoría con la temporada y comunidad seleccionadas.</p>';
     return;
   }
+  // Tipos presentes (para las pastillas de filtro), en orden fijo
+  const orden = ['ordinaria', 'challenge', 'general', 'etapa', 'fuera_cv'];
+  const cuentaTipo = {};
+  base.forEach(c => { cuentaTipo[c.tipo] = (cuentaTipo[c.tipo] || 0) + 1; });
+  const tiposPresentes = orden.filter(t => cuentaTipo[t]);
+  // Si el tipo filtrado ya no está disponible, volver a "Todas"
+  if (rpEstado.filtroTipoCarrera && !cuentaTipo[rpEstado.filtroTipoCarrera]) rpEstado.filtroTipoCarrera = '';
+  const filtro = rpEstado.filtroTipoCarrera || '';
+  const todas = filtro ? base.filter(c => c.tipo === filtro) : base;
+
   const hace7 = new Date(Date.now() - 7 * 864e5);
   const corteISO = hace7.getFullYear() + '-' +
     String(hace7.getMonth() + 1).padStart(2, '0') + '-' +
     String(hace7.getDate()).padStart(2, '0');
-  // Puesto y puntos de cada corredor en el ranking FILTRADO actual (misma
-  // población y orden que la tabla del ranking): así lo que sale junto al
-  // nombre respeta año + comunidad + categoría + subcategoría.
+  // Puesto y puntos de cada corredor en el ranking FILTRADO actual
   const posRanking = new Map();
   const catActiva = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (catActiva) rpPoblacion(catActiva).forEach((cor, i) =>
     posRanking.set(cor.clave, { pos: i + 1, puntos: cor.puntosTotales }));
+
+  // Pastillas de filtro por tipo (solo si hay más de un tipo de prueba)
+  const chip = (val, texto, n) =>
+    `<button type="button" class="rp-tipo-chip${filtro === val ? ' rp-activa' : ''}" data-tipofiltro="${val}">${texto} <span class="rp-num">${n}</span></button>`;
+  const filtroHTML = tiposPresentes.length > 1
+    ? '<div class="rp-tipo-filtro">' +
+      chip('', 'Todas', base.length) +
+      tiposPresentes.map(t => chip(t, rpEscapar(RP_ETIQUETAS_TIPO[t] || t), cuentaTipo[t])).join('') +
+      '</div>'
+    : '';
+
   const visibles = todas.slice(0, rpEstado.ultimosVisibles);
-  cont.innerHTML = visibles.map(c => rpTarjetaCarrera(c, c.fecha >= corteISO, posRanking)).join('') +
+  cont.innerHTML = filtroHTML +
+    visibles.map(c => rpTarjetaCarrera(c, c.fecha >= corteISO, posRanking)).join('') +
     (todas.length > visibles.length
       ? `<button type="button" class="rp-ver-mas">Ver más carreras (${todas.length - visibles.length} anteriores)</button>`
       : '');
@@ -1030,6 +1051,7 @@ function rpRenderCalendario() {
         ? `<button type="button" class="rp-cal-chip" data-planificada="${rpEscapar(p.id)}">📋 Lista de inscritos (${p.inscritos.length})</button>`
         : '<span class="rp-cal-chip rp-cal-chip-off">Sin inscritos</span>') +
       (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación disponible</button>` : '') +
+      `<button type="button" class="rp-cal-chip" data-ics="${rpEscapar(p.id)}">📅 Añadir a mi calendario</button>` +
       '</div>';
   };
   cont.innerHTML =
@@ -1541,15 +1563,58 @@ function rpGenerarGPX(carrera, curso) {
 }
 
 function rpDescargarGPX(carrera, curso) {
-  const blob = new Blob([rpGenerarGPX(carrera, curso)], { type: 'application/gpx+xml' });
+  rpDescargarArchivo(rpGenerarGPX(carrera, curso), 'application/gpx+xml',
+    (carrera.nombre || 'recorrido').replace(/[^\w\-]+/g, '_').slice(0, 60) + '.gpx');
+}
+
+// Descarga genérica de un texto como archivo (GPX, ICS…)
+function rpDescargarArchivo(texto, tipo, nombre) {
+  const blob = new Blob([texto], { type: tipo });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = (carrera.nombre || 'recorrido').replace(/[^\w\-]+/g, '_').slice(0, 60) + '.gpx';
+  a.download = nombre;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// ── Añadir una próxima prueba al calendario (.ics: Google/Apple Calendar) ──
+function rpGenerarICS(p) {
+  const p2 = n => String(n).padStart(2, '0');
+  const esc = s => String(s || '').replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n');
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const fmtFecha = d => '' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate());
+  const fmtHora = d => fmtFecha(d) + 'T' + p2(d.getHours()) + p2(d.getMinutes()) + '00';
+  let inicio, fin;
+  const conHora = /^\d{1,2}:\d{2}/.test(p.hora || '');
+  if (conHora) {
+    const [h, m] = p.hora.split(':');
+    const d = new Date(p.fecha + 'T00:00:00');
+    d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+    inicio = 'DTSTART:' + fmtHora(d);
+    fin = 'DTEND:' + fmtHora(new Date(d.getTime() + 2 * 3600e3)); // +2 h
+  } else {
+    const d = new Date(p.fecha + 'T00:00:00');
+    inicio = 'DTSTART;VALUE=DATE:' + fmtFecha(d);
+    fin = 'DTEND;VALUE=DATE:' + fmtFecha(new Date(d.getTime() + 864e5)); // día siguiente
+  }
+  return [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MFPP Cycling//Ranking//ES', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    'UID:mfpp-' + p.id + '@mfppcycling.com',
+    'DTSTAMP:' + stamp, inicio, fin,
+    'SUMMARY:' + esc(p.nombre),
+    p.localidad ? 'LOCATION:' + esc(p.localidad) : '',
+    'DESCRIPTION:' + esc('Prueba del calendario · MFPP Cycling' + (p.cat ? ' · ' + [...new Set(String(p.cat).split(/\s+/))].join(' ') : '')),
+    'END:VEVENT', 'END:VCALENDAR'
+  ].filter(Boolean).join('\r\n') + '\r\n';
+}
+
+function rpDescargarICS(p) {
+  rpDescargarArchivo(rpGenerarICS(p), 'text/calendar',
+    (p.nombre || 'prueba').replace(/[^\w\-]+/g, '_').slice(0, 60) + '.ics');
 }
 
 // ── Modal de ficha del ciclista ──
@@ -2601,6 +2666,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.closest('.rp-ver-mas')) {
       rpEstado.ultimosVisibles += 10;
       rpRenderUltimos();
+      return;
+    }
+    const bTipo = e.target.closest('[data-tipofiltro]');
+    if (bTipo) {
+      rpEstado.filtroTipoCarrera = bTipo.dataset.tipofiltro;
+      rpRenderUltimos();
     }
   });
 
@@ -2634,6 +2705,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const bCP = e.target.closest('.rp-compartir-cp');
     if (bCP) { rpCopiarEnlace(bCP.dataset.shareUrl, bCP); return; }
+    const bIcs = e.target.closest('[data-ics]');
+    if (bIcs) {
+      const p = (rpEstado.planificadas || []).find(x => String(x.id) === String(bIcs.dataset.ics));
+      if (p) rpDescargarICS(p);
+      return;
+    }
     const bTab = e.target.closest('[data-rctab]');
     if (bTab) { rpCambiarPestanaCarrera(bTab.dataset.rctab); return; }
     const bVista = e.target.closest('[data-calvista]');

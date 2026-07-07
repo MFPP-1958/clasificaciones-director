@@ -542,6 +542,34 @@ html, body { overflow-x: hidden; }
   text-align: left;
 }
 .rp-carrera-cta:hover, .rp-carrera-cta:focus-visible { text-decoration: underline; outline: none; }
+/* Filtro por tipo de prueba en la portada de Últimas carreras */
+.rp-tipo-filtro {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.rp-tipo-chip {
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--rp-color-suave);
+  background: var(--rp-color-fondo);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  padding: 6px 12px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.rp-tipo-chip.rp-activa {
+  color: #fff;
+  background: var(--rp-color-primario);
+  border-color: var(--rp-color-primario);
+}
+.rp-tipo-chip.rp-activa .rp-num { background: rgba(255, 255, 255, 0.25); color: #fff; }
+.rp-tipo-chip:hover, .rp-tipo-chip:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+
 .rp-ver-mas {
   grid-column: 1 / -1;
   font: inherit;
