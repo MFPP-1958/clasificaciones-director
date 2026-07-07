@@ -1052,7 +1052,9 @@ function rpRenderCalendario() {
         : '<span class="rp-cal-chip rp-cal-chip-off">Sin inscritos</span>') +
       (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación disponible</button>` : '') +
       `<a class="rp-cal-chip" href="${rpEscapar(rpEnlaceGoogleCal(p))}" target="_blank" rel="noopener">📅 Google Calendar</a>` +
-      `<button type="button" class="rp-cal-chip" data-ics="${rpEscapar(p.id)}">🍎 Apple / iCal (.ics)</button>` +
+      // El .ics se sirve desde una función del servidor con Content-Type
+      // text/calendar para que iPhone/Mac ABRAN el calendario (no lo descarguen)
+      `<a class="rp-cal-chip" href="/.netlify/functions/ics?id=${encodeURIComponent(p.id)}" target="_blank" rel="noopener">🍎 Apple Calendar</a>` +
       '</div>';
   };
   cont.innerHTML =
@@ -2731,12 +2733,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const bCP = e.target.closest('.rp-compartir-cp');
     if (bCP) { rpCopiarEnlace(bCP.dataset.shareUrl, bCP); return; }
-    const bIcs = e.target.closest('[data-ics]');
-    if (bIcs) {
-      const p = (rpEstado.planificadas || []).find(x => String(x.id) === String(bIcs.dataset.ics));
-      if (p) rpDescargarICS(p);
-      return;
-    }
     const bTab = e.target.closest('[data-rctab]');
     if (bTab) { rpCambiarPestanaCarrera(bTab.dataset.rctab); return; }
     const bVista = e.target.closest('[data-calvista]');
