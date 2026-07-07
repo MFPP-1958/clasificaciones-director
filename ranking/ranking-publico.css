@@ -223,13 +223,8 @@ html, body { overflow-x: hidden; }
   color: var(--rp-color-suave);
   flex: none;
 }
-#rp-modo, #rp-vista {
-  display: inline-flex;
-  border: 1px solid var(--rp-color-borde);
-  border-radius: 99px;
-  overflow: hidden;
-}
-#rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { background: #b45309; }
+#rp-modo, #rp-vista { display: inline-flex; gap: 6px; }
+#rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { color: #b45309; border-bottom-color: #b45309; }
 
 /* ── Challenge CV oficial (formato del dashboard, tema ámbar) ── */
 .rp-ch-banner {
@@ -301,21 +296,22 @@ html, body { overflow-x: hidden; }
 /* En la tabla Challenge, "CAT · EQUIPO" va SIEMPRE como subtítulo bajo el
    nombre (también en escritorio, como en el dashboard) */
 #rp-tabla .rp-ch-sub { display: block; font-size: 0.76rem; color: var(--rp-color-suave); font-weight: 400; }
+/* Opciones del ranking (Puntuación / Ver): mismas pestañas subrayadas que
+   la navegación principal, pero algo más pequeñas (son secundarias) */
 .rp-vista-btn {
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--rp-color-suave);
-  background: var(--rp-color-fondo);
+  background: none;
   border: none;
-  padding: 9px 18px;
+  border-bottom: 2px solid transparent;
+  padding: 6px 4px;
+  min-height: 38px;
   cursor: pointer;
-  min-height: 42px;
+  white-space: nowrap;
 }
-.rp-vista-btn.rp-activa {
-  color: #fff;
-  background: var(--rp-color-primario);
-}
+.rp-vista-btn.rp-activa { color: var(--rp-color-primario); border-bottom-color: var(--rp-color-primario); }
 .rp-vista-btn:focus-visible { outline: 2px solid var(--rp-color-acento); outline-offset: -2px; }
 
 /* ── Bloque plegable: Próximas pruebas ── */
@@ -972,33 +968,12 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   /* Pestañas de sección: a lo ancho, centradas */
   #rp-pantalla { gap: 0; }
   .rp-nav-tab { flex: 1 1 0; text-align: center; font-size: 0.92rem; padding: 9px 8px; min-height: 40px; }
-  /* Opciones del ranking: cada grupo en su línea con su etiqueta encima */
-  #rp-solo-ranking { flex-direction: column; align-items: stretch; gap: 8px; }
-  .rp-conmut-grupo { flex-direction: column; align-items: stretch; gap: 4px; }
-  /* Control segmentado nativo para Puntuación / Ver */
-  #rp-modo, #rp-vista {
-    display: flex;
-    background: #e9edf1;
-    border: none;
-    border-radius: 10px;
-    padding: 3px;
-    overflow: visible;
-  }
-  .rp-vista-btn {
-    flex: 1 1 0;
-    min-height: 34px;
-    padding: 4px 6px;
-    font-size: 0.8rem;
-    border-radius: 8px;
-    background: transparent;
-    white-space: nowrap;
-  }
-  .rp-vista-btn.rp-activa {
-    color: var(--rp-color-primario);
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  }
-  #rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { background: #fff; color: #b45309; }
+  /* Opciones del ranking: cada grupo en su línea, etiqueta a la izquierda y
+     pestañas subrayadas (mismo lenguaje que la navegación principal) */
+  #rp-solo-ranking { flex-direction: column; align-items: stretch; gap: 4px; }
+  .rp-conmut-grupo { align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  #rp-modo, #rp-vista { gap: 12px; }
+  .rp-vista-btn { font-size: 0.86rem; min-height: 40px; padding: 8px 2px; }
 
   /* Portada: tarjetas a una columna, más juntas */
   #rp-ultimos { grid-template-columns: 1fr; gap: 8px; padding: 8px 0 2px; }
