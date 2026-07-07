@@ -38,6 +38,13 @@ html, body { overflow-x: hidden; }
   padding: 34px 16px 16px;
 }
 
+.rp-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .rp-header h1 {
   color: var(--rp-color-texto);
   font-size: 1.35rem;
@@ -45,6 +52,67 @@ html, body { overflow-x: hidden; }
   letter-spacing: 0.01em;
   margin: 0 0 2px;
 }
+/* Botón de Ayuda */
+.rp-ayuda-btn {
+  flex: none;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--rp-color-primario);
+  background: var(--rp-color-fondo);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  padding: 7px 14px;
+  min-height: 40px;
+  cursor: pointer;
+}
+.rp-ayuda-btn:hover, .rp-ayuda-btn:focus-visible {
+  border-color: var(--rp-color-primario);
+  background: var(--rp-color-fondo-alt);
+  outline: none;
+}
+/* Pulso suave la primera vez, para que se descubra */
+.rp-ayuda-pulso { animation: rp-pulso 1.6s ease-in-out 3; }
+@keyframes rp-pulso {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(8, 145, 178, 0); }
+  50% { box-shadow: 0 0 0 6px rgba(8, 145, 178, 0.18); }
+}
+/* Aviso de primera visita */
+.rp-ayuda-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+}
+.rp-ayuda-hint span { flex: 1; }
+#rp-ayuda-hint-x {
+  flex: none;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  color: #92400e;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+/* Contenido de la ventana de Ayuda */
+.rp-ayuda section { margin: 0 0 14px; }
+.rp-ayuda h3 {
+  font-size: 0.98rem;
+  color: var(--rp-color-primario);
+  margin: 0 0 4px;
+}
+.rp-ayuda p { margin: 0; font-size: 0.92rem; line-height: 1.5; color: var(--rp-color-texto); }
+.rp-ayuda ul { margin: 4px 0 0; padding-left: 20px; }
+.rp-ayuda li { margin: 4px 0; font-size: 0.92rem; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { .rp-ayuda-pulso { animation: none; } }
 .rp-marca {
   color: var(--rp-color-primario);
   text-decoration: none;

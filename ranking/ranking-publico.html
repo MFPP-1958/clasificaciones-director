@@ -19,8 +19,15 @@
 
   <main id="rp-app">
     <header class="rp-header">
-      <h1><a class="rp-marca" href="https://www.mfppcycling.com" target="_blank" rel="noopener">MFPP CYCLING</a><span class="rp-titulo-sep">·</span>Ranking</h1>
+      <div class="rp-header-top">
+        <h1><a class="rp-marca" href="https://www.mfppcycling.com" target="_blank" rel="noopener">MFPP CYCLING</a><span class="rp-titulo-sep">·</span>Ranking</h1>
+        <button type="button" id="rp-ayuda-btn" class="rp-ayuda-btn" aria-label="Cómo funciona este ranking">❓ Ayuda</button>
+      </div>
       <p id="rp-subtitulo"></p>
+      <div id="rp-ayuda-hint" class="rp-ayuda-hint" hidden>
+        <span>👋 ¿Primera vez? Pulsa <b>❓ Ayuda</b> para ver cómo funciona.</span>
+        <button type="button" id="rp-ayuda-hint-x" aria-label="Cerrar aviso">✕</button>
+      </div>
     </header>
 
     <section id="rp-contenido">

@@ -1948,6 +1948,55 @@ function rpNavegarModal(dir) {
   if (idx >= 0 && destino) rpAbrirModal(destino.clave);
 }
 
+// Ventana de Ayuda: guía rápida de qué es y cómo se usa el ranking.
+// Reutiliza el modal (X, toque fuera, Escape). Sin flechas de navegación.
+function rpAbrirAyuda() {
+  rpSalirDeFichaCarrera();
+  rpEstado.modalClave = null;
+  rpEstado.modalEquipo = null;
+  document.getElementById('rp-modal-contenido').innerHTML =
+    '<header class="rp-ficha-cabecera">' +
+    '<h2 id="rp-modal-titulo">❓ Cómo funciona este ranking</h2>' +
+    '<p class="rp-ficha-equipo">Guía rápida para sacarle partido</p>' +
+    '</header>' +
+    '<div class="rp-ayuda">' +
+    '<section><h3>🏆 ¿Qué es esto?</h3>' +
+    '<p>Un ranking de rendimiento del ciclismo base (cadetes, juveniles, sub-23…) con los resultados y las clasificaciones de la temporada. Se actualiza cada semana.</p></section>' +
+    '<section><h3>🧭 Las dos secciones</h3><ul>' +
+    '<li><b>🏁 Últimas carreras:</b> los podios de las pruebas recién disputadas.</li>' +
+    '<li><b>🏆 Ranking:</b> la clasificación general por puntos de toda la temporada.</li>' +
+    '</ul></section>' +
+    '<section><h3>🎚️ Los filtros</h3>' +
+    '<p>Arriba puedes elegir <b>temporada</b>, <b>comunidad autónoma</b>, <b>categoría</b> y <b>equipo</b>, o usar el <b>buscador</b> para encontrar directamente un corredor, un equipo o una prueba.</p></section>' +
+    '<section><h3>👆 Qué puedes tocar</h3><ul>' +
+    '<li>Un <b>nombre</b> → su ficha: historial completo, estadísticas y evolución de puntos.</li>' +
+    '<li>Un <b>equipo</b> → su plantilla y el puesto de cada corredor en el ranking.</li>' +
+    '<li>Una <b>carrera</b> → su clasificación completa y, si lo tiene, el <b>🗺️ mapa y perfil</b> del recorrido.</li>' +
+    '</ul></section>' +
+    '<section><h3>🔣 Qué significan los símbolos</h3><ul>' +
+    '<li><b>Banderas:</b> la comunidad autónoma (o el país) de cada corredor y de cada prueba.</li>' +
+    '<li>🥇🥈 <b>Medallas:</b> victorias y podios conseguidos por el corredor.</li>' +
+    '<li>▲▼ <b>Flechas:</b> puestos que sube o baja respecto a la jornada anterior (<b>N</b> = nuevo en el ranking).</li>' +
+    '</ul></section>' +
+    '<section><h3>🧮 Cómo se puntúa (en corto)</h3>' +
+    '<p>Cada puesto otorga puntos; las pruebas con rivales venidos de fuera valen algo más; y solo cuentan los <b>12 mejores resultados</b> de cada corredor. Tienes el detalle completo en <b>“Cómo se calculan los puntos”</b>, al final de la página.</p></section>' +
+    '</div>' +
+    '<p class="rp-nota">MFPP Cycling · Ranking de rendimiento del ciclismo base.</p>';
+  document.getElementById('rp-modal-ant').disabled = true;
+  document.getElementById('rp-modal-sig').disabled = true;
+  const modal = document.getElementById('rp-modal');
+  const yaAbierto = !modal.hidden;
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (!yaAbierto) document.getElementById('rp-modal-cerrar').focus();
+  else modal.querySelector('.rp-modal-cuadro').scrollTop = 0;
+  // Marcar la Ayuda como vista: no volver a mostrar el aviso de primera vez
+  try { localStorage.setItem('rp-ayuda-vista', '1'); } catch (_) { /* sin almacenamiento */ }
+  const hint = document.getElementById('rp-ayuda-hint');
+  if (hint) hint.hidden = true;
+  document.getElementById('rp-ayuda-btn').classList.remove('rp-ayuda-pulso');
+}
+
 function rpCerrarModal() {
   rpEstado.modalClave = null;
   rpEstado.modalEquipo = null;
@@ -2512,6 +2561,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') rpCerrarModal();
     else if (e.key === 'ArrowLeft') rpNavegarModal(-1);
     else if (e.key === 'ArrowRight') rpNavegarModal(1);
+  });
+
+  // Botón de Ayuda + aviso de primera vez (una sola vez por navegador)
+  document.getElementById('rp-ayuda-btn').addEventListener('click', rpAbrirAyuda);
+  const ayudaHint = document.getElementById('rp-ayuda-hint');
+  const ayudaHintX = document.getElementById('rp-ayuda-hint-x');
+  try {
+    if (!localStorage.getItem('rp-ayuda-vista')) {
+      ayudaHint.hidden = false;
+      document.getElementById('rp-ayuda-btn').classList.add('rp-ayuda-pulso');
+    }
+  } catch (_) { /* almacenamiento no disponible */ }
+  ayudaHintX.addEventListener('click', () => {
+    ayudaHint.hidden = true;
+    document.getElementById('rp-ayuda-btn').classList.remove('rp-ayuda-pulso');
+    try { localStorage.setItem('rp-ayuda-vista', '1'); } catch (_) { /* sin almacenamiento */ }
   });
 
   rpIniciar();
