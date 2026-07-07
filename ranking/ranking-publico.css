@@ -161,8 +161,20 @@ html, body { overflow-x: hidden; }
 }
 .rp-enlace:hover, .rp-enlace:focus-visible { text-decoration: underline; outline: none; }
 
-/* Enlace discreto (equipos dentro de tablas): color de texto normal */
-.rp-enlace-suave { color: var(--rp-color-texto); font-weight: inherit; }
+/* Enlace discreto (equipos dentro de tablas): color de texto normal, pero
+   con una pista de que es pulsable (subrayado punteado tenue) para que se
+   descubra que abre la ficha del equipo */
+.rp-enlace-suave {
+  color: var(--rp-color-texto);
+  font-weight: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--rp-color-borde);
+  text-underline-offset: 3px;
+}
+.rp-enlace-suave:hover, .rp-enlace-suave:focus-visible {
+  color: var(--rp-color-primario);
+  text-decoration-color: var(--rp-color-primario);
+}
 
 /* ── Conmutadores (modo de puntuación y tipo de ranking) ── */
 .rp-conmutadores { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -847,6 +859,20 @@ th.rp-c { text-align: center; }
 
 /* ── Móvil ── */
 .rp-equipo-sub { display: none; }
+/* Cuando el equipo va como sublínea-botón (móvil): reseteo de botón y pista
+   táctil de que abre la ficha del equipo */
+button.rp-equipo-sub {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--rp-color-borde);
+  text-underline-offset: 2px;
+}
+button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp-color-primario); }
 @media (max-width: 640px) {
   #rp-app { padding: 24px 10px 10px; }
   /* Celdas más compactas para que la tabla quepa sin scroll lateral */

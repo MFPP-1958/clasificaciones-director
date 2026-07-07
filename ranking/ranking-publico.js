@@ -1881,13 +1881,20 @@ function rpAbrirModalEquipo(claveEquipo) {
   if (!e) return;
   rpEstado.modalClave = null;
   rpEstado.modalEquipo = e.clave;
+  // Puesto de cada corredor en el ranking FILTRADO actual (mismo orden que la
+  // tabla): así la ficha del equipo hereda año + comunidad + categoría +
+  // subcategoría. Un corredor fuera de esa vista se marca "—".
+  const posGlobal = new Map();
+  rpPoblacion(cat).forEach((c, i) => posGlobal.set(c.clave, i + 1));
   const filas = e.corredores.map((c, i) => {
     const badge = rpInsigniaRegion(c.region);
+    const puesto = posGlobal.has(c.clave) ? posGlobal.get(c.clave) + 'º' : '—';
     return `<tr class="${i < RP_EQUIPO_TOP_N ? 'rp-podio' : ''}">` +
       `<td class="rp-c">${i + 1}</td>` +
       `<td><button type="button" class="rp-enlace" data-corredor="${rpEscapar(c.clave)}">${rpEscapar(c.nombre)}</button>` +
       `${badge}</td>` +
-      `<td class="rp-c">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
+      `<td class="rp-c rp-rank">${puesto}</td>` +
+      `<td class="rp-c rp-col-mat">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
       `<td class="rp-c rp-pts">${rpFormatearPuntos(c.puntosTotales)}</td>` +
       `</tr>`;
   }).join('');
@@ -1907,9 +1914,9 @@ function rpAbrirModalEquipo(claveEquipo) {
     `<span class="rp-stat">🚴 <b>${e.corredores.length}</b> corredores</span>` +
     '</div></header>' +
     '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
-    '<thead><tr><th>#</th><th>Corredor</th><th>Pruebas</th><th>Puntos</th></tr></thead>' +
+    '<thead><tr><th title="Orden dentro del equipo">#</th><th>Corredor</th><th class="rp-c" title="Puesto en el ranking general con los filtros actuales">Ranking</th><th class="rp-c rp-col-mat">Pruebas</th><th>Puntos</th></tr></thead>' +
     `<tbody>${filas}</tbody></table></div>` +
-    `<p class="rp-nota">En verde, los ${RP_EQUIPO_TOP_N} corredores cuyos puntos suman el total del equipo. Las estadísticas cuentan toda la plantilla.</p>`;
+    `<p class="rp-nota">La columna <b>Ranking</b> es el puesto real de cada corredor en la clasificación general con los filtros activos (${rpEscapar(rpEtiquetaCategoria(catFicha))}${rpEstado.regionDisplay ? ' · ' + rpEscapar(rpEstado.regionDisplay) : ''}); <b>#</b> es su orden dentro del equipo. En verde, los ${RP_EQUIPO_TOP_N} corredores cuyos puntos suman el total del equipo.</p>`;
   const btnAnt = document.getElementById('rp-modal-ant');
   const btnSig = document.getElementById('rp-modal-sig');
   btnAnt.disabled = idx <= 0;
@@ -2105,7 +2112,10 @@ function rpRenderTabla() {
       `<td class="rp-c rp-col-evo">${evo}</td>` +
       `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(c.nombre)}</span>` +
       `${badge}` +
-      `<span class="rp-equipo-sub">${rpEscapar(c.equipo)}</span>` +
+      // En móvil el equipo va aquí como sublínea; ahora es un botón, así que
+      // también se puede tocar para abrir la ficha del equipo (en escritorio
+      // esta sublínea está oculta y se usa la columna Equipo)
+      `${c.equipo ? `<button type="button" class="rp-equipo-sub" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}` +
       `${medallas ? `<span class="rp-medallas">${medallas}</span>` : ''}</td>` +
       `<td class="rp-c rp-col-cat">${c.subcatPrincipal ? `<span class="rp-badge-cat">${rpEscapar(c.subcatPrincipal)}</span>` : '—'}</td>` +
       `<td class="rp-col-equipo">${c.equipo ? `<button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}</td>` +
