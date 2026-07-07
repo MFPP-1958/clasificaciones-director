@@ -5,11 +5,6 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Funciones serverless (p. ej. /.netlify/functions/ics → .ics con
-# Content-Type text/calendar para que el móvil ABRA el calendario)
-[functions]
-  directory = "netlify/functions"
-
 # ─── Cache-Control por defecto: NUNCA cachear ─────────────────────────────
 # Aplicamos no-cache global. Las reglas específicas para assets versionados
 # (más abajo) anularán esto para CSS/JS que llevan ?v=hash y pueden cachearse

@@ -1051,11 +1051,7 @@ function rpRenderCalendario() {
         ? `<button type="button" class="rp-cal-chip" data-planificada="${rpEscapar(p.id)}">📋 Lista de inscritos (${p.inscritos.length})</button>`
         : '<span class="rp-cal-chip rp-cal-chip-off">Sin inscritos</span>') +
       (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación disponible</button>` : '') +
-      `<a class="rp-cal-chip" href="${rpEscapar(rpEnlaceGoogleCal(p))}" target="_blank" rel="noopener">📅 Google Calendar</a>` +
-      // Apple: enlace directo al .ics (text/calendar) navegando a nivel
-      // superior (target="_top") — así iPhone/Mac muestran "Añadir evento"
-      // al calendario propio, en vez de descargar el archivo o suscribirse.
-      `<a class="rp-cal-chip" href="/.netlify/functions/ics?id=${encodeURIComponent(p.id)}" target="_top" rel="noopener">🍎 Apple Calendar</a>` +
+      `<a class="rp-cal-chip" href="${rpEscapar(rpEnlaceGoogleCal(p))}" target="_blank" rel="noopener">📅 Añadir a mi calendario</a>` +
       '</div>';
   };
   cont.innerHTML =
@@ -1582,43 +1578,6 @@ function rpDescargarArchivo(texto, tipo, nombre) {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
-
-// ── Añadir una próxima prueba al calendario (.ics: Google/Apple Calendar) ──
-function rpGenerarICS(p) {
-  const p2 = n => String(n).padStart(2, '0');
-  const esc = s => String(s || '').replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n');
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
-  const fmtFecha = d => '' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate());
-  const fmtHora = d => fmtFecha(d) + 'T' + p2(d.getHours()) + p2(d.getMinutes()) + '00';
-  let inicio, fin;
-  const conHora = /^\d{1,2}:\d{2}/.test(p.hora || '');
-  if (conHora) {
-    const [h, m] = p.hora.split(':');
-    const d = new Date(p.fecha + 'T00:00:00');
-    d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
-    inicio = 'DTSTART:' + fmtHora(d);
-    fin = 'DTEND:' + fmtHora(new Date(d.getTime() + 2 * 3600e3)); // +2 h
-  } else {
-    const d = new Date(p.fecha + 'T00:00:00');
-    inicio = 'DTSTART;VALUE=DATE:' + fmtFecha(d);
-    fin = 'DTEND;VALUE=DATE:' + fmtFecha(new Date(d.getTime() + 864e5)); // día siguiente
-  }
-  return [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MFPP Cycling//Ranking//ES', 'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT',
-    'UID:mfpp-' + p.id + '@mfppcycling.com',
-    'DTSTAMP:' + stamp, inicio, fin,
-    'SUMMARY:' + esc(p.nombre),
-    p.localidad ? 'LOCATION:' + esc(p.localidad) : '',
-    'DESCRIPTION:' + esc('Prueba del calendario · MFPP Cycling' + (p.cat ? ' · ' + [...new Set(String(p.cat).split(/\s+/))].join(' ') : '')),
-    'END:VEVENT', 'END:VCALENDAR'
-  ].filter(Boolean).join('\r\n') + '\r\n';
-}
-
-function rpDescargarICS(p) {
-  rpDescargarArchivo(rpGenerarICS(p), 'text/calendar',
-    (p.nombre || 'prueba').replace(/[^\w\-]+/g, '_').slice(0, 60) + '.ics');
 }
 
 // Enlace de Google Calendar (se ABRE directamente el calendario con el
