@@ -399,9 +399,34 @@ html, body { overflow-x: hidden; }
   flex-direction: column;
   gap: 5px;
 }
-.rp-podio-lista li { font-size: 0.88rem; }
+.rp-podio-lista li {
+  display: flex;
+  gap: 7px;
+  font-size: 0.88rem;
+}
+.rp-podio-medalla { flex: none; line-height: 1.35; }
+.rp-podio-datos { display: flex; flex-direction: column; min-width: 0; }
+/* Línea 1: nombre del corredor + su puesto/puntos en el ranking */
+.rp-podio-l1 { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .rp-podio-nombre { font-weight: 700; }
-.rp-podio-equipo { color: var(--rp-color-suave); font-size: 0.8rem; }
+.rp-podio-rank {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--rp-color-acento);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 99px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+/* Línea 2: equipo, más tenue y con salto propio; nombres largos se parten */
+.rp-podio-equipo {
+  display: block;
+  color: var(--rp-color-suave);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
 .rp-carrera-cta {
   display: block;
   width: 100%;

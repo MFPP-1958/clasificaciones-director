@@ -785,16 +785,27 @@ function rpRenderPantalla() {
 // más antigua. Las de los últimos 7 días se destacan; "Ver más" amplía.
 const RP_MEDALLAS_PODIO = ['🥇', '🥈', '🥉'];
 
-function rpTarjetaCarrera(c, reciente) {
+function rpTarjetaCarrera(c, reciente, posRanking) {
   const lineas = [1, 2, 3].map((p, i) => {
     const r = c.resultados.find(x => parseInt(x.pos, 10) === p);
     if (!r) return '';
     const clave = rpNormalizarClave(r.nombre);
     const nombre = rpEstado.clavesRanking.has(clave)
-      ? `<button type="button" class="rp-enlace" data-corredor="${rpEscapar(clave)}">${rpEscapar(r.nombre)}</button>`
+      ? `<button type="button" class="rp-enlace rp-podio-nombre" data-corredor="${rpEscapar(clave)}">${rpEscapar(r.nombre)}</button>`
       : `<span class="rp-podio-nombre">${rpEscapar(r.nombre)}</span>`;
-    return `<li>${RP_MEDALLAS_PODIO[i]} ${nombre}` +
-      (r.equipo ? `<span class="rp-podio-equipo"> — ${rpEscapar(r.equipo)}</span>` : '') + '</li>';
+    // Posición y puntos del corredor EN EL RANKING FILTRADO actual (año +
+    // comunidad + categoría + subcategoría). Solo si está en esa vista: un
+    // corredor de otra comunidad no tiene puesto en el ranking de la CV.
+    const rk = posRanking && posRanking.get(clave);
+    const insignia = rk
+      ? `<span class="rp-podio-rank" title="Puesto ${rk.pos}º del ranking con los filtros actuales">${rk.pos}º · ${rpFormatearPuntos(rk.puntos)} pts</span>`
+      : '';
+    return '<li>' +
+      `<span class="rp-podio-medalla">${RP_MEDALLAS_PODIO[i]}</span>` +
+      '<span class="rp-podio-datos">' +
+        `<span class="rp-podio-l1">${nombre}${insignia}</span>` +
+        (r.equipo ? `<span class="rp-podio-equipo">${rpEscapar(r.equipo)}</span>` : '') +
+      '</span></li>';
   }).join('');
   return `<article class="rp-carrera${reciente ? ' rp-carrera-reciente' : ''}" data-carrera="${rpEscapar(c.id)}">` +
     '<header class="rp-carrera-cab">' +
@@ -840,8 +851,15 @@ function rpRenderUltimos() {
   const corteISO = hace7.getFullYear() + '-' +
     String(hace7.getMonth() + 1).padStart(2, '0') + '-' +
     String(hace7.getDate()).padStart(2, '0');
+  // Puesto y puntos de cada corredor en el ranking FILTRADO actual (misma
+  // población y orden que la tabla del ranking): así lo que sale junto al
+  // nombre respeta año + comunidad + categoría + subcategoría.
+  const posRanking = new Map();
+  const catActiva = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
+  if (catActiva) rpPoblacion(catActiva).forEach((cor, i) =>
+    posRanking.set(cor.clave, { pos: i + 1, puntos: cor.puntosTotales }));
   const visibles = todas.slice(0, rpEstado.ultimosVisibles);
-  cont.innerHTML = visibles.map(c => rpTarjetaCarrera(c, c.fecha >= corteISO)).join('') +
+  cont.innerHTML = visibles.map(c => rpTarjetaCarrera(c, c.fecha >= corteISO, posRanking)).join('') +
     (todas.length > visibles.length
       ? `<button type="button" class="rp-ver-mas">Ver más carreras (${todas.length - visibles.length} anteriores)</button>`
       : '');
