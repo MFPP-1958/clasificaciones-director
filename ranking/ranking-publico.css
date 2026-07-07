@@ -177,37 +177,59 @@ html, body { overflow-x: hidden; }
 }
 
 /* ── Conmutadores (modo de puntuación y tipo de ranking) ── */
-.rp-conmutadores { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.rp-conmutadores > div { margin-bottom: 0 !important; }
-#rp-modo {
+.rp-conmutadores {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Navegación principal: pestañas subrayadas (se leen como "menú"/secciones) */
+#rp-pantalla {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--rp-color-borde);
+}
+.rp-nav-tab {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--rp-color-suave);
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 10px 18px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.rp-nav-tab.rp-activa { color: var(--rp-color-primario); border-bottom-color: var(--rp-color-primario); }
+.rp-nav-tab:focus-visible { outline: 2px solid var(--rp-color-acento); outline-offset: -2px; }
+
+/* Opciones dentro del Ranking: fila secundaria, cada una con su etiqueta */
+#rp-solo-ranking {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  align-items: center;
+}
+#rp-solo-ranking[hidden] { display: none; }
+.rp-conmut-grupo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rp-conmut-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--rp-color-suave);
+  flex: none;
+}
+#rp-modo, #rp-vista {
   display: inline-flex;
   border: 1px solid var(--rp-color-borde);
   border-radius: 99px;
   overflow: hidden;
 }
 #rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { background: #b45309; }
-
-#rp-vista {
-  display: inline-flex;
-  gap: 0;
-  border: 1px solid var(--rp-color-borde);
-  border-radius: 99px;
-  overflow: hidden;
-}
-
-/* Conmutador de vista principal (Últimas carreras / Ranking) */
-#rp-pantalla {
-  display: inline-flex;
-  border: 1px solid var(--rp-color-borde);
-  border-radius: 99px;
-  overflow: hidden;
-}
-/* Envoltorio de los conmutadores propios del ranking: transparente al
-   layout cuando se ve, invisible cuando la portada está activa. El
-   [hidden] explícito es necesario porque display:contents le ganaría a
-   la regla [hidden] del navegador. */
-#rp-solo-ranking { display: contents; }
-#rp-solo-ranking[hidden] { display: none; }
 
 /* ── Challenge CV oficial (formato del dashboard, tema ámbar) ── */
 .rp-ch-banner {
@@ -945,11 +967,16 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   }
   #rp-filtros.rp-abierto { margin-bottom: 2px; }
 
-  /* Conmutadores como control segmentado nativo, en una sola línea */
-  .rp-conmutadores { gap: 8px; margin-bottom: 8px; }
-  #rp-pantalla, #rp-modo, #rp-vista {
-    flex: 1 1 0;
-    min-width: 140px;
+  /* Conmutadores compactos */
+  .rp-conmutadores { gap: 10px; margin-bottom: 8px; }
+  /* Pestañas de sección: a lo ancho, centradas */
+  #rp-pantalla { gap: 0; }
+  .rp-nav-tab { flex: 1 1 0; text-align: center; font-size: 0.92rem; padding: 9px 8px; min-height: 40px; }
+  /* Opciones del ranking: cada grupo en su línea con su etiqueta encima */
+  #rp-solo-ranking { flex-direction: column; align-items: stretch; gap: 8px; }
+  .rp-conmut-grupo { flex-direction: column; align-items: stretch; gap: 4px; }
+  /* Control segmentado nativo para Puntuación / Ver */
+  #rp-modo, #rp-vista {
     display: flex;
     background: #e9edf1;
     border: none;
@@ -959,9 +986,9 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   }
   .rp-vista-btn {
     flex: 1 1 0;
-    min-height: 32px;
+    min-height: 34px;
     padding: 4px 6px;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     border-radius: 8px;
     background: transparent;
     white-space: nowrap;
@@ -972,11 +999,6 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   }
   #rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { background: #fff; color: #b45309; }
-  .rp-lbl-largo { display: none; }
-  .rp-lbl-corto { display: inline; }
-  /* El conmutador principal ocupa su propia línea, algo más protagonista */
-  #rp-pantalla { flex: 1 1 100%; }
-  #rp-pantalla .rp-vista-btn { font-size: 0.84rem; min-height: 36px; }
 
   /* Portada: tarjetas a una columna, más juntas */
   #rp-ultimos { grid-template-columns: 1fr; gap: 8px; padding: 8px 0 2px; }

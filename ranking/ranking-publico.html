@@ -44,20 +44,26 @@
       </div>
 
       <div class="rp-conmutadores">
-        <!-- Vista principal: portada de últimas carreras (por defecto) o ranking -->
-        <div id="rp-pantalla" role="group" aria-label="Vista principal">
-          <button type="button" data-pantalla="carreras" class="rp-vista-btn rp-activa" aria-pressed="true">🏁 Últimas carreras</button>
-          <button type="button" data-pantalla="ranking" class="rp-vista-btn" aria-pressed="false">🏆 Ranking</button>
+        <!-- Navegación principal: dos secciones, como pestañas subrayadas -->
+        <div id="rp-pantalla" role="tablist" aria-label="Sección">
+          <button type="button" role="tab" data-pantalla="carreras" class="rp-nav-tab rp-activa" aria-selected="true">🏁 Últimas carreras</button>
+          <button type="button" role="tab" data-pantalla="ranking" class="rp-nav-tab" aria-selected="false">🏆 Ranking</button>
         </div>
-        <!-- Conmutadores que solo aplican dentro del ranking -->
+        <!-- Opciones que solo aplican dentro de la sección Ranking -->
         <div id="rp-solo-ranking" hidden>
-          <div id="rp-modo" role="group" aria-label="Sistema de puntuación">
-            <button type="button" data-modo="mfpp" class="rp-vista-btn rp-activa" aria-pressed="true"><span class="rp-lbl-largo">🏆 Ranking Rendimiento MFPP</span><span class="rp-lbl-corto">MFPP</span></button>
-            <button type="button" data-modo="challenge" class="rp-vista-btn" aria-pressed="false"><span class="rp-lbl-largo">🔥 Challenge CV Oficial</span><span class="rp-lbl-corto">Challenge CV</span></button>
+          <div class="rp-conmut-grupo">
+            <span class="rp-conmut-label">Puntuación</span>
+            <div id="rp-modo" role="group" aria-label="Sistema de puntuación">
+              <button type="button" data-modo="mfpp" class="rp-vista-btn rp-activa" aria-pressed="true">🏆 Rendimiento MFPP</button>
+              <button type="button" data-modo="challenge" class="rp-vista-btn" aria-pressed="false">🔥 Challenge CV Oficial</button>
+            </div>
           </div>
-          <div id="rp-vista" role="group" aria-label="Tipo de ranking">
-            <button type="button" data-vista="corredores" class="rp-vista-btn rp-activa" aria-pressed="true"><span class="rp-lbl-largo">👤 Corredores</span><span class="rp-lbl-corto">Corredores</span></button>
-            <button type="button" data-vista="equipos" class="rp-vista-btn" aria-pressed="false"><span class="rp-lbl-largo">👥 Equipos</span><span class="rp-lbl-corto">Equipos</span></button>
+          <div class="rp-conmut-grupo">
+            <span class="rp-conmut-label">Ver</span>
+            <div id="rp-vista" role="group" aria-label="Tipo de ranking">
+              <button type="button" data-vista="corredores" class="rp-vista-btn rp-activa" aria-pressed="true">👤 Corredores</button>
+              <button type="button" data-vista="equipos" class="rp-vista-btn" aria-pressed="false">👥 Equipos</button>
+            </div>
           </div>
         </div>
       </div>
