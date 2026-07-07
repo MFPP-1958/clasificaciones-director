@@ -1052,9 +1052,10 @@ function rpRenderCalendario() {
         : '<span class="rp-cal-chip rp-cal-chip-off">Sin inscritos</span>') +
       (clasif ? `<button type="button" class="rp-cal-chip rp-cal-chip-ok" data-carrera="${rpEscapar(clasif.id)}">🏆 Clasificación disponible</button>` : '') +
       `<a class="rp-cal-chip" href="${rpEscapar(rpEnlaceGoogleCal(p))}" target="_blank" rel="noopener">📅 Google Calendar</a>` +
-      // Apple: esquema webcal:// → iPhone/Mac abren el Calendario directamente
-      // (apunta a la misma función que sirve el .ics como text/calendar)
-      `<a class="rp-cal-chip" href="webcal://clasificaciones-director.netlify.app/.netlify/functions/ics?id=${encodeURIComponent(p.id)}">🍎 Apple Calendar</a>` +
+      // Apple: enlace directo al .ics (text/calendar) navegando a nivel
+      // superior (target="_top") — así iPhone/Mac muestran "Añadir evento"
+      // al calendario propio, en vez de descargar el archivo o suscribirse.
+      `<a class="rp-cal-chip" href="/.netlify/functions/ics?id=${encodeURIComponent(p.id)}" target="_top" rel="noopener">🍎 Apple Calendar</a>` +
       '</div>';
   };
   cont.innerHTML =
