@@ -92,8 +92,11 @@ function pagina({ titulo, head, cuerpo }) {
     '.card .tp.ordinaria{color:var(--p)}.card .tp.challenge{background:#fef3c7;color:#92400e;border-color:#fde68a}.card .tp.fuera{background:#dbeafe;color:#1e40af;border-color:#bfdbfe}.card .tp.etapa{background:#ede9fe;color:#5b21b6;border-color:#ddd6fe}' +
     '.card h3{font-size:1.02rem;margin:.1em 0 .2em;line-height:1.3}' +
     '.card .loc{margin:0 0 8px;font-size:.82rem;color:var(--s)}' +
-    '.podio{list-style:none;margin:6px 0 2px;padding:0;display:flex;flex-direction:column;gap:5px}' +
-    '.podio li{font-size:.88rem}.podio .n{font-weight:700}.podio .eq{color:var(--s);font-size:.8rem}' +
+    '.podio{list-style:none;margin:6px 0 2px;padding:0;display:flex;flex-direction:column;gap:7px}' +
+    '.podio li{display:flex;gap:7px;font-size:.88rem}.podio .med{flex:none;line-height:1.3}' +
+    '.podio .pdatos{display:flex;flex-direction:column;min-width:0}.podio .n{font-weight:700}' +
+    '.podio .eq{color:var(--s);font-size:.8rem;overflow-wrap:anywhere}' +
+    '.nom a{color:var(--p);font-weight:600}' +
     '.card .ver{display:block;margin-top:10px;padding-top:9px;border-top:1px dashed var(--b);font-size:.84rem;font-weight:700}' +
     // Tabla de clasificación (página de carrera)
     '.tablabox{overflow-x:auto;border:1px solid var(--b);border-radius:12px}' +
@@ -135,12 +138,20 @@ async function leerCarreras() {
   } finally { clearTimeout(t); }
 }
 
+function enlaceFicha(nombre) {
+  // Abre la ficha del corredor en el ranking interactivo (no crea página
+  // indexable: rel=nofollow para no generar señales por corredor menor)
+  return `${WEB}/ranking/?ficha=${encodeURIComponent(nombre)}`;
+}
+
 function podioHTML(resultados) {
   return [1, 2, 3].map((p, i) => {
     const r = resultados.find(x => parseInt(x.pos, 10) === p);
     if (!r) return '';
-    return `<li>${MEDALLAS[i]} <span class="n">${esc(r.name)}</span>` +
-      (r.team ? ` <span class="eq">— ${esc(r.team)}</span>` : '') + '</li>';
+    return `<li><span class="med">${MEDALLAS[i]}</span><span class="pdatos">` +
+      `<a class="n" href="${esc(enlaceFicha(r.name))}" rel="nofollow">${esc(r.name)}</a>` +
+      (r.team ? `<span class="eq">${esc(r.team)}</span>` : '') +
+      '</span></li>';
   }).join('');
 }
 
@@ -155,7 +166,8 @@ function paginaCarrera(r, extra, ruta, resultados) {
     return `<tr class="${pos <= 3 ? 'podiofila' : ''}">` +
       `<td class="c pos">${pos}</td>` +
       `<td class="c">${x.bib != null && x.bib !== '' ? esc(x.bib) : ''}</td>` +
-      `<td class="nom">${esc(x.name)}</td><td>${esc(x.team)}</td><td class="c">${esc(x.cat)}</td>` +
+      `<td class="nom"><a href="${esc(enlaceFicha(x.name))}" rel="nofollow">${esc(x.name)}</a></td>` +
+      `<td>${esc(x.team)}</td><td class="c">${esc(x.cat)}</td>` +
       (hayTiempo ? `<td class="c">${esc(x.time || '')}</td>` : '') +
       '</tr>';
   }).join('\n');
