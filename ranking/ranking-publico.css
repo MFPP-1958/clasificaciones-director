@@ -1113,6 +1113,77 @@ th.rp-c { text-align: center; }
   .rp-radar-svg { width: 250px; max-width: 78%; margin: 0 auto; }
   .rp-radar-leg { width: 100%; }
 }
+
+/* ── Comparador head-to-head ── */
+.rp-comparar-btn {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 10px;
+  font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+  color: var(--rp-color-primario); background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde); border-radius: 99px;
+  padding: 10px 18px; min-height: 42px;
+}
+.rp-comparar-btn:hover, .rp-comparar-btn:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+/* Colores de bando */
+.rp-cmp-a { color: var(--rp-color-primario); }
+.rp-cmp-b { color: #c97a06; }
+/* Selector de rival */
+.rp-cmp-buscar {
+  width: 100%; font: inherit; font-size: 0.95rem; padding: 11px 14px; margin: 4px 0 10px;
+  border: 1px solid var(--rp-color-borde); border-radius: 10px;
+  background: var(--rp-color-fondo); color: var(--rp-color-texto);
+}
+.rp-cmp-buscar:focus { outline: none; border-color: var(--rp-color-primario); box-shadow: 0 0 0 3px rgba(14,116,144,.14); }
+.rp-cmp-lista { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; }
+.rp-cmp-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  font: inherit; background: none; border: 1px solid transparent; border-radius: 10px;
+  padding: 8px 10px; cursor: pointer;
+}
+.rp-cmp-item:hover, .rp-cmp-item:focus-visible { background: var(--rp-color-fondo-alt); border-color: var(--rp-color-borde); outline: none; }
+.rp-cmp-ipos { flex: none; width: 40px; font-weight: 800; color: var(--rp-color-suave); }
+.rp-cmp-inom { flex: 1 1 auto; min-width: 0; font-weight: 700; color: var(--rp-color-primario); display: flex; flex-direction: column; }
+.rp-cmp-inom small { font-weight: 400; font-size: 0.76rem; color: var(--rp-color-suave); }
+.rp-cmp-ipts { flex: none; font-weight: 800; color: var(--rp-color-acento); }
+.rp-cmp-volver {
+  display: inline-block; margin-top: 12px; font: inherit; font-size: 0.86rem; font-weight: 700;
+  color: var(--rp-color-primario); background: none; border: none; cursor: pointer; padding: 6px 0;
+}
+/* Cabecera del duelo */
+.rp-cmp-cab { display: flex; align-items: stretch; gap: 8px; margin: 6px 0 14px; }
+.rp-cmp-lado { flex: 1 1 0; min-width: 0; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.rp-cmp-nom { font-size: 1.05rem; font-weight: 800; overflow-wrap: anywhere; }
+.rp-cmp-eq { font-size: 0.76rem; color: var(--rp-color-suave); overflow-wrap: anywhere; }
+.rp-cmp-vs { flex: none; align-self: center; font-weight: 900; color: var(--rp-color-suave); font-size: 0.9rem; }
+/* Marcador cara a cara */
+.rp-cmp-h2h { text-align: center; margin-bottom: 14px; }
+.rp-cmp-marcador { font-size: 2.6rem; font-weight: 900; display: flex; justify-content: center; align-items: center; gap: 14px; }
+.rp-cmp-marcador span { color: var(--rp-color-borde); font-weight: 400; }
+.rp-cmp-h2h p { margin: 2px 0 0; font-size: 0.86rem; color: var(--rp-color-suave); }
+.rp-cmp-aviso { color: #c97a06; }
+/* Tabla comparativa */
+.rp-cmp-tabla { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.rp-cmp-tabla th {
+  text-align: center; font-size: 0.78rem; font-weight: 700; color: var(--rp-color-suave);
+  padding: 8px 6px; white-space: nowrap;
+}
+.rp-cmp-cel {
+  text-align: center; width: 34%; font-size: 1.05rem; font-weight: 700; padding: 8px 6px;
+  border-bottom: 1px solid var(--rp-color-fondo-alt);
+}
+.rp-cmp-tabla th { border-bottom: 1px solid var(--rp-color-fondo-alt); }
+.rp-cmp-gana { background: rgba(14,116,144,.08); border-radius: 8px; }
+td.rp-cmp-gana { color: var(--rp-color-primario); }
+/* Leyenda del radar comparado (valor A · eje · valor B) */
+.rp-cmp-leg li { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; gap: 8px; }
+.rp-cmp-leg .rp-radar-k { min-width: 0; text-align: center; }
+.rp-cmp-leg b { text-align: center; font-weight: 800; }
+/* Lista de carreras en común */
+.rp-cmp-comunes { display: flex; flex-direction: column; gap: 4px; }
+.rp-cmp-carrera { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: var(--rp-color-fondo-alt); }
+.rp-cmp-cpos { flex: none; width: 42px; text-align: center; font-weight: 800; color: var(--rp-color-suave); }
+.rp-cmp-cpos.rp-cmp-gana { color: var(--rp-color-primario); }
+.rp-cmp-cnom { flex: 1 1 auto; min-width: 0; font-size: 0.86rem; display: flex; flex-direction: column; }
+.rp-cmp-cnom small { color: var(--rp-color-suave); font-size: 0.74rem; }
 .rp-subtabla {
   width: 100%;
   border-collapse: collapse;

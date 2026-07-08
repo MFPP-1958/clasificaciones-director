@@ -1716,26 +1716,35 @@ function rpRadar(c) {
 const RP_RADAR_EJES = [['Regularidad', '🎯'], ['Eficiencia', '⚡'], ['Palmarés', '🏆'], ['Participación', '📅'], ['Forma', '🔥']];
 
 function rpRadarSVG(ejes) {
+  return rpRadarSVGmulti([{ ejes, stroke: 'var(--rp-color-primario)', fill: 'rgba(14,116,144,.28)' }]);
+}
+// Dibuja uno o varios perfiles superpuestos (para el comparador head-to-head).
+function rpRadarSVGmulti(series) {
   const S = 340, cx = 170, cy = 170, R = 112, n = 5;
   const ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;
   const P = (i, r) => [cx + Math.cos(ang(i)) * r, cy + Math.sin(ang(i)) * r];
   const poly = r => RP_RADAR_EJES.map((_, i) => P(i, r).map(v => v.toFixed(1)).join(',')).join(' ');
   let grid = '';
   [0.25, 0.5, 0.75, 1].forEach(g => { grid += `<polygon points="${poly(R * g)}" fill="none" stroke="rgba(100,116,139,.20)" stroke-width="1"/>`; });
-  let axes = '', datos = '', pts = '', ic = '';
+  let axes = '', ic = '';
   RP_RADAR_EJES.forEach(([k, emo], i) => {
     const [ax, ay] = P(i, R);
     axes += `<line x1="${cx}" y1="${cy}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="rgba(100,116,139,.20)" stroke-width="1"/>`;
-    const [dx, dy] = P(i, R * Math.max(4, ejes[k]) / 100);
-    datos += `${dx.toFixed(1)},${dy.toFixed(1)} `;
-    pts += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="4" fill="var(--rp-color-primario)"/>`;
     const [ix, iy] = P(i, R + 20);
     ic += `<text x="${ix.toFixed(1)}" y="${(iy + 7).toFixed(1)}" text-anchor="middle" font-size="22">${emo}</text>`;
   });
+  let shapes = '';
+  series.forEach(s => {
+    let datos = '', pts = '';
+    RP_RADAR_EJES.forEach(([k], i) => {
+      const [dx, dy] = P(i, R * Math.max(4, s.ejes[k] || 0) / 100);
+      datos += `${dx.toFixed(1)},${dy.toFixed(1)} `;
+      pts += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="3.6" fill="${s.stroke}"/>`;
+    });
+    shapes += `<polygon points="${datos.trim()}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="2.5" stroke-linejoin="round"/>${pts}`;
+  });
   return `<svg viewBox="0 0 ${S} ${S}" class="rp-radar-svg" role="img" aria-label="Perfil del corredor">` +
-    grid + axes +
-    `<polygon points="${datos.trim()}" fill="rgba(14,116,144,.28)" stroke="var(--rp-color-primario)" stroke-width="2.5" stroke-linejoin="round"/>` +
-    pts + ic + '</svg>';
+    grid + axes + shapes + ic + '</svg>';
 }
 
 function rpRenderRadar(c) {
@@ -1751,6 +1760,136 @@ function rpRenderRadar(c) {
     '<ul class="rp-radar-leg">' + leyenda + '</ul></div>' +
     '<p class="rp-radar-nota">De 0 a 100 comparado con su categoría · <b>Forma</b>: 50 = en su nivel actual.</p>' +
     '</section>';
+}
+
+// ── Comparador head-to-head (Fase B) ──
+function rpCorredorPorClave(clave) {
+  for (const g of rpEstado.ranking.categorias) {
+    const c = g.corredores.find(x => x.clave === clave);
+    if (c) return c;
+  }
+  return null;
+}
+
+// Muestra el modal ya poblado (arriba se rellena #rp-modal-contenido). Sin
+// navegación ‹ › (esa es solo para fichas de corredor).
+function rpModalMostrar() {
+  document.getElementById('rp-modal-ant').disabled = true;
+  document.getElementById('rp-modal-sig').disabled = true;
+  const modal = document.getElementById('rp-modal');
+  const abierto = !modal.hidden;
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (!abierto) document.getElementById('rp-modal-cerrar').focus();
+  else modal.querySelector('.rp-modal-cuadro').scrollTop = 0;
+}
+
+function rpStatsCorredor(c) {
+  const pos = c.resultados.map(r => r.pos).filter(p => p >= 1);
+  const cat = rpEstado.ranking.categorias.find(g => g.key === c.categoria);
+  return {
+    puesto: cat ? cat.corredores.findIndex(x => x.clave === c.clave) + 1 : 0,
+    puntos: c.puntosTotales,
+    victorias: pos.filter(p => p === 1).length,
+    podios: pos.filter(p => p <= 3).length,
+    top10: pos.filter(p => p <= 10).length,
+    pruebas: c.pruebasTotales != null ? c.pruebasTotales : c.resultados.length,
+    mejor: pos.length ? Math.min(...pos) : null
+  };
+}
+
+function rpBotonComparar() {
+  return '<button type="button" class="rp-comparar-btn">⚔️ Comparar con otro corredor</button>';
+}
+
+// Paso 1: elegir rival (misma categoría), con buscador.
+function rpMostrarSelectorComparar(claveA) {
+  const a = rpCorredorPorClave(claveA);
+  if (!a) return;
+  rpEstado.compararA = claveA;
+  const cat = rpEstado.ranking.categorias.find(g => g.key === a.categoria);
+  const rivales = (cat ? cat.corredores : []).filter(x => x.clave !== claveA);
+  const items = rivales.map((x, i) =>
+    `<button type="button" class="rp-cmp-item" data-cmp="${rpEscapar(x.clave)}" ` +
+    `data-norm="${rpEscapar(rpNormalizarTexto(x.nombre + ' ' + (x.equipo || '')))}">` +
+    `<span class="rp-cmp-ipos">${i + 1}º</span>` +
+    `<span class="rp-cmp-inom">${rpEscapar(x.nombre)}<small>${rpEscapar(x.equipo || '')}</small></span>` +
+    `<span class="rp-cmp-ipts">${rpFormatearPuntos(x.puntosTotales)}</span></button>`).join('');
+  document.getElementById('rp-modal-contenido').innerHTML =
+    '<header class="rp-ficha-cabecera"><h2 id="rp-modal-titulo">⚔️ Comparar</h2>' +
+    `<p class="rp-ficha-equipo">Elige con quién medir a <b>${rpEscapar(a.nombre)}</b></p></header>` +
+    '<input type="text" class="rp-cmp-buscar" placeholder="🔍 Buscar corredor…" autocomplete="off" spellcheck="false">' +
+    `<div class="rp-cmp-lista">${items || '<p class="rp-radar-nota">No hay más corredores en esta categoría.</p>'}</div>` +
+    `<button type="button" class="rp-cmp-volver" data-cmp-volver="${rpEscapar(claveA)}">← Volver a la ficha</button>`;
+  rpModalMostrar();
+  const inp = document.querySelector('.rp-cmp-buscar');
+  if (inp) inp.focus();
+}
+
+// Paso 2: el duelo
+function rpAbrirComparador(claveA, claveB) {
+  const a = rpCorredorPorClave(claveA), b = rpCorredorPorClave(claveB);
+  if (!a || !b) return;
+  rpEstado.compararA = claveA;
+  const sa = rpStatsCorredor(a), sb = rpStatsCorredor(b);
+  // Cara a cara en carreras comunes (ambos con posición)
+  const posA = new Map(a.resultados.filter(r => r.pos != null).map(r => [r.raceId, r.pos]));
+  const comunes = b.resultados.filter(r => r.pos != null && posA.has(r.raceId))
+    .map(r => ({ carrera: r.carrera, fecha: r.fecha, pb: r.pos, pa: posA.get(r.raceId) }))
+    .sort((x, y) => (y.fecha || '').localeCompare(x.fecha || ''));
+  let ga = 0, gb = 0;
+  comunes.forEach(c => { if (c.pa < c.pb) ga++; else if (c.pb < c.pa) gb++; });
+  const ra = rpRadar(a).ejes, rb = rpRadar(b).ejes;
+
+  const mayor = (x, y) => x > y ? 1 : x < y ? -1 : 0;   // 1 = gana A, -1 = gana B
+  const menor = (x, y) => (x == null && y == null) ? 0 : x == null ? -1 : y == null ? 1 : (x < y ? 1 : x > y ? -1 : 0);
+  const fila = (lab, va, vb, cmp) =>
+    `<tr><td class="rp-cmp-cel${cmp === 1 ? ' rp-cmp-gana' : ''}">${va}</td>` +
+    `<th>${lab}</th><td class="rp-cmp-cel${cmp === -1 ? ' rp-cmp-gana' : ''}">${vb}</td></tr>`;
+  const tabla =
+    fila('Puesto', sa.puesto + 'º', sb.puesto + 'º', menor(sa.puesto, sb.puesto)) +
+    fila('Puntos', rpFormatearPuntos(sa.puntos), rpFormatearPuntos(sb.puntos), mayor(sa.puntos, sb.puntos)) +
+    fila('🥇 Victorias', sa.victorias, sb.victorias, mayor(sa.victorias, sb.victorias)) +
+    fila('🏆 Podios', sa.podios, sb.podios, mayor(sa.podios, sb.podios)) +
+    fila('🔟 Top-10', sa.top10, sb.top10, mayor(sa.top10, sb.top10)) +
+    fila('🚴 Pruebas', sa.pruebas, sb.pruebas, mayor(sa.pruebas, sb.pruebas)) +
+    fila('Mejor puesto', sa.mejor ? sa.mejor + 'º' : '—', sb.mejor ? sb.mejor + 'º' : '—', menor(sa.mejor, sb.mejor));
+
+  const leg = RP_RADAR_EJES.map(([k, emo]) =>
+    `<li><b class="rp-cmp-a">${ra[k]}</b><span class="rp-radar-k">${emo} ${k}</span><b class="rp-cmp-b">${rb[k]}</b></li>`).join('');
+
+  const comunesHTML = comunes.slice(0, 8).map(c =>
+    `<div class="rp-cmp-carrera"><span class="rp-cmp-cpos${c.pa < c.pb ? ' rp-cmp-gana' : ''}">${c.pa}º</span>` +
+    `<span class="rp-cmp-cnom">${rpEscapar(c.carrera)}<small>${rpEscapar(rpFormatearFecha(c.fecha))}</small></span>` +
+    `<span class="rp-cmp-cpos${c.pb < c.pa ? ' rp-cmp-gana' : ''}">${c.pb}º</span></div>`).join('') +
+    (comunes.length > 8 ? `<p class="rp-radar-nota">…y ${comunes.length - 8} carreras en común más.</p>` : '');
+
+  document.getElementById('rp-modal-contenido').innerHTML =
+    '<header class="rp-ficha-cabecera"><h2 id="rp-modal-titulo">⚔️ Duelo</h2></header>' +
+    '<div class="rp-cmp-cab">' +
+    `<div class="rp-cmp-lado"><span class="rp-cmp-nom rp-cmp-a">${rpEscapar(a.nombre)}</span><span class="rp-cmp-eq">${rpEscapar(a.equipo || '')}</span></div>` +
+    '<div class="rp-cmp-vs">VS</div>' +
+    `<div class="rp-cmp-lado"><span class="rp-cmp-nom rp-cmp-b">${rpEscapar(b.nombre)}</span><span class="rp-cmp-eq">${rpEscapar(b.equipo || '')}</span></div>` +
+    '</div>' +
+    '<div class="rp-cmp-h2h">' +
+    `<div class="rp-cmp-marcador"><b class="rp-cmp-a">${ga}</b><span>–</span><b class="rp-cmp-b">${gb}</b></div>` +
+    (comunes.length
+      ? `<p>Cara a cara en <b>${comunes.length}</b> ${comunes.length === 1 ? 'carrera' : 'carreras'} en común` +
+        (comunes.length < 5 ? ' <span class="rp-cmp-aviso">(pocas para sacar conclusiones)</span>' : '') + '</p>'
+      : '<p>No han coincidido todavía en ninguna carrera.</p>') +
+    '</div>' +
+    `<table class="rp-cmp-tabla"><tbody>${tabla}</tbody></table>` +
+    '<h3 class="rp-radar-tit">📊 Perfil comparado</h3>' +
+    '<div class="rp-radar-wrap">' +
+    rpRadarSVGmulti([
+      { ejes: ra, stroke: 'var(--rp-color-primario)', fill: 'rgba(14,116,144,.26)' },
+      { ejes: rb, stroke: '#f5b21a', fill: 'rgba(245,178,26,.22)' }
+    ]) +
+    `<ul class="rp-radar-leg rp-cmp-leg">${leg}</ul></div>` +
+    (comunes.length ? '<h3 class="rp-radar-tit">Carreras en común</h3><div class="rp-cmp-comunes">' + comunesHTML + '</div>' : '') +
+    `<button type="button" class="rp-cmp-volver" data-cmp-volver="${rpEscapar(claveA)}">← Volver a la ficha</button>`;
+  rpModalMostrar();
+  document.querySelector('.rp-modal-cuadro').scrollTop = 0;
 }
 
 function rpSparkline(corredor) {
@@ -2090,6 +2229,7 @@ function rpAbrirModal(clave) {
     '</div>' +
     rpBotonTarjeta() +
     rpBotonesCompartir('Ranking MFPP · ' + c.nombre, rpEnlaceCorredor(c.nombre)) +
+    rpBotonComparar() +
     '</header>' +
     rpRenderHighlights(c) +
     rpRenderRadar(c) +
@@ -3134,6 +3274,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const alClicEnlace = e => {
     const bTar = e.target.closest('.rp-tarjeta-btn');
     if (bTar) { rpCompartirTarjeta(bTar); return; }
+    const bCmp = e.target.closest('.rp-comparar-btn');
+    if (bCmp) { rpMostrarSelectorComparar(rpEstado.modalClave); return; }
+    const bCmpItem = e.target.closest('.rp-cmp-item');
+    if (bCmpItem) { rpAbrirComparador(rpEstado.compararA, bCmpItem.dataset.cmp); return; }
+    const bCmpVolver = e.target.closest('.rp-cmp-volver');
+    if (bCmpVolver) { rpAbrirModal(bCmpVolver.dataset.cmpVolver); return; }
     const bWA = e.target.closest('.rp-compartir-wa');
     if (bWA) {
       window.open('https://wa.me/?text=' + encodeURIComponent(bWA.dataset.shareTxt + '\n' + bWA.dataset.shareUrl), '_blank', 'noopener');
@@ -3155,6 +3301,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bPlanificada) rpAbrirModalPlanificada(bPlanificada.dataset.planificada);
   };
   document.getElementById('rp-modal-contenido').addEventListener('click', alClicEnlace);
+  // Filtro del selector de rival (comparador): teclear filtra la lista
+  document.getElementById('rp-modal-contenido').addEventListener('input', e => {
+    if (!e.target.closest('.rp-cmp-buscar')) return;
+    const f = rpNormalizarTexto(e.target.value);
+    document.querySelectorAll('.rp-cmp-item').forEach(it => {
+      it.style.display = (!f || (it.dataset.norm || '').indexOf(f) >= 0) ? '' : 'none';
+    });
+  });
   document.getElementById('rp-ultimos').addEventListener('click', alClicEnlace);
   document.getElementById('rp-calendario').addEventListener('click', alClicEnlace);
 
