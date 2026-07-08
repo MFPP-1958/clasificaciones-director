@@ -750,6 +750,22 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
 .rp-compartir-wa { color: #fff; background: #25d366; border-color: #25d366; }
 .rp-compartir-wa:hover, .rp-compartir-wa:focus-visible { background: #1eb457; border-color: #1eb457; }
 
+/* Botón "Compartir mi tarjeta": genera una imagen del puesto para redes */
+.rp-tarjeta-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 14px;
+  font: inherit; font-size: 0.9rem; font-weight: 800;
+  color: #0b2a44; background: linear-gradient(180deg, #ffc93c, #f5b21a);
+  border: none; border-radius: 99px;
+  padding: 12px 22px; min-height: 44px; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(245, 178, 26, 0.4);
+  transition: transform .12s, box-shadow .15s;
+}
+.rp-tarjeta-btn:hover, .rp-tarjeta-btn:focus-visible {
+  transform: translateY(-1px); box-shadow: 0 9px 24px rgba(245, 178, 26, 0.5); outline: none;
+}
+.rp-tarjeta-btn:disabled { opacity: .7; cursor: default; transform: none; }
+
 /* Acciones del recorrido: descargar GPX / abrir en Google Maps */
 .rp-ruta-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
 .rp-ruta-btn {

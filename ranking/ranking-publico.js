@@ -1708,6 +1708,137 @@ function rpBotonesCompartir(titulo, url) {
     '</div>';
 }
 
+// ── Tarjeta del corredor para redes (Instagram/WhatsApp/X) ──
+// Se dibuja en un <canvas> 1080×1080 (sin librerías) con el puesto, los puntos
+// y la marca. En móvil se comparte con el menú nativo del teléfono; en
+// escritorio se descarga. Todos los datos ya son públicos en el ranking.
+function rpBotonTarjeta() {
+  return '<button type="button" class="rp-tarjeta-btn">📸 Compartir mi tarjeta</button>';
+}
+
+function rpRR(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function rpDibujarTarjeta(d) {
+  return new Promise(resolve => {
+    const S = 1080, cx = S / 2;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const ctx = cv.getContext('2d');
+    const FF = "'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif";
+    ctx.textAlign = 'center';
+    // Fondo degradado + brillo dorado
+    let g = ctx.createRadialGradient(cx, -S * 0.1, 0, cx, -S * 0.1, S * 1.25);
+    g.addColorStop(0, '#14889e'); g.addColorStop(.26, '#0e6d86'); g.addColorStop(.62, '#0b3a55'); g.addColorStop(1, '#08243a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+    g = ctx.createRadialGradient(cx, S * 0.4, 0, cx, S * 0.4, S * 0.55);
+    g.addColorStop(0, 'rgba(245,178,26,.16)'); g.addColorStop(1, 'rgba(245,178,26,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+    // Ajusta el tamaño de fuente hasta que el texto quepa en maxW
+    const fit = (txt, maxW, size, weight) => {
+      let s = size; ctx.font = `${weight} ${s}px ${FF}`;
+      while (ctx.measureText(txt).width > maxW && s > 16) { s -= 2; ctx.font = `${weight} ${s}px ${FF}`; }
+      return s;
+    };
+    // Marca
+    ctx.fillStyle = '#e8f6fb';
+    ctx.font = `800 ${fit('MFPP CYCLING · Ranking', S - 160, 34, 800)}px ${FF}`;
+    ctx.fillText('MFPP CYCLING · Ranking', cx, 100);
+    // Categoría · comunidad · temporada
+    const eyebrow = [d.catLabel, d.region, d.temporada].filter(Boolean).join('  ·  ').toUpperCase();
+    ctx.fillStyle = '#f5b21a';
+    ctx.font = `800 ${fit(eyebrow, S - 150, 27, 800)}px ${FF}`;
+    ctx.fillText(eyebrow, cx, 166);
+    // Medalla (podio) o aro con el número
+    const pos = d.puesto;
+    if (pos === 1 || pos === 2 || pos === 3) {
+      ctx.font = `128px ${FF}`;
+      ctx.fillText(pos === 1 ? '🥇' : pos === 2 ? '🥈' : '🥉', cx, 340);
+    } else if (pos) {
+      ctx.beginPath(); ctx.arc(cx, 292, 76, 0, Math.PI * 2);
+      ctx.lineWidth = 9; ctx.strokeStyle = '#f5b21a'; ctx.stroke();
+      ctx.fillStyle = '#f5b21a';
+      ctx.font = `900 ${fit('#' + pos, 118, 66, 900)}px ${FF}`;
+      ctx.fillText('#' + pos, cx, 318);
+    }
+    // SOY Xº
+    ctx.fillStyle = '#fff';
+    const hero = pos ? ('SOY ' + pos + 'º') : 'EN EL RANKING';
+    ctx.font = `900 ${fit(hero, S - 120, 130, 900)}px ${FF}`;
+    ctx.fillText(hero, cx, 498);
+    // Nombre (si viene "Apellido, Nombre" se le da la vuelta para leerlo natural)
+    let nombre = d.nombre || '';
+    const mm = nombre.match(/^([^,]+),\s*(.+)$/); if (mm) nombre = (mm[2] + ' ' + mm[1]).trim();
+    ctx.fillStyle = '#fff';
+    ctx.font = `800 ${fit(nombre, S - 130, 60, 800)}px ${FF}`;
+    ctx.fillText(nombre, cx, 586);
+    // Equipo
+    if (d.equipo) {
+      ctx.fillStyle = 'rgba(255,255,255,.72)';
+      ctx.font = `600 ${fit(d.equipo.toUpperCase(), S - 150, 27, 600)}px ${FF}`;
+      ctx.fillText(d.equipo.toUpperCase(), cx, 630);
+    }
+    // Badge de puntos
+    if (d.puntos != null) {
+      const pts = String(d.puntos), lbl = 'PUNTOS';
+      ctx.font = `900 58px ${FF}`; const w1 = ctx.measureText(pts).width;
+      ctx.font = `800 30px ${FF}`; const w2 = ctx.measureText(lbl).width;
+      const bw = w1 + w2 + 14 + 70, bh = 92, by = 688, bx = cx - bw / 2;
+      ctx.save();
+      ctx.shadowColor = 'rgba(245,178,26,.45)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 14;
+      ctx.fillStyle = '#f5b21a'; rpRR(ctx, bx, by, bw, bh, bh / 2); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#0b2a44'; ctx.textAlign = 'left';
+      ctx.font = `900 58px ${FF}`; ctx.fillText(pts, bx + 35, by + 61);
+      ctx.font = `800 30px ${FF}`; ctx.fillText(lbl, bx + 35 + w1 + 14, by + 59);
+      ctx.textAlign = 'center';
+    }
+    // CTA + aviso
+    ctx.fillStyle = '#e8f6fb';
+    const cta = 'Mira el ranking completo · mfppcycling.com/ranking';
+    ctx.font = `800 ${fit(cta, S - 110, 33, 800)}px ${FF}`;
+    ctx.fillText(cta, cx, 966);
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.font = `600 21px ${FF}`;
+    ctx.fillText('⚠️ Ranking personal, no oficial · elaborado con datos públicos', cx, 1012);
+    cv.toBlob(b => resolve(b), 'image/png');
+  });
+}
+
+async function rpCompartirTarjeta(btn) {
+  const d = rpEstado.modalTarjeta;
+  if (!d) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Generando…';
+  try {
+    const blob = await rpDibujarTarjeta(d);
+    const file = new File([blob], 'ranking-mfpp.png', { type: 'image/png' });
+    const texto = (d.puesto ? `Soy ${d.puesto}º` : 'Estoy') + ` en el Ranking MFPP ${d.temporada} 🏆` +
+      (d.puntos != null ? ` — ${d.puntos} pts` : '') + '\nmfppcycling.com/ranking';
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], text: texto });
+      btn.textContent = orig; btn.disabled = false;
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'ranking-mfpp' + (d.puesto ? '-' + d.puesto : '') + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      btn.textContent = '✅ Descargada'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1900);
+    }
+  } catch (_) {
+    // El usuario canceló el compartir, o error puntual: restaurar el botón
+    btn.textContent = orig; btn.disabled = false;
+  }
+}
+
 function rpCopiarEnlace(url, btn) {
   const ok = () => {
     if (!btn) return;
@@ -1809,6 +1940,17 @@ function rpAbrirModal(clave) {
   const victorias = posValidas.filter(p => p === 1).length;
   const podios = posValidas.filter(p => p <= 3).length;
   const top10 = posValidas.filter(p => p <= 10).length;
+  // Datos para la tarjeta compartible (puesto en el ranking filtrado actual;
+  // si no está, su puesto dentro de su categoría)
+  let rpPuesto = idx >= 0 ? idx + 1 : null;
+  if (rpPuesto === null) {
+    const catT = rpEstado.ranking.categorias.find(g => g.key === c.categoria);
+    if (catT) { const i = catT.corredores.findIndex(x => x.clave === c.clave); if (i >= 0) rpPuesto = i + 1; }
+  }
+  rpEstado.modalTarjeta = {
+    nombre: c.nombre, puesto: rpPuesto, puntos: rpFormatearPuntos(c.puntosTotales), equipo: c.equipo,
+    catLabel: rpEtiquetaCategoria(c.categoria), region: c.region || '', temporada: rpEstado.temporada
+  };
   document.getElementById('rp-modal-contenido').innerHTML =
     '<header class="rp-ficha-cabecera">' +
     `<h2 id="rp-modal-titulo">${rpEscapar(c.nombre)}</h2>` +
@@ -1827,6 +1969,7 @@ function rpAbrirModal(clave) {
     `<span class="rp-stat">🔟 <b>${top10}</b> top-10</span>` +
     `<span class="rp-stat">🚴 <b>${c.pruebasTotales}</b> pruebas</span>` +
     '</div>' +
+    rpBotonTarjeta() +
     rpBotonesCompartir('Ranking MFPP · ' + c.nombre, rpEnlaceCorredor(c.nombre)) +
     '</header>' +
     rpRenderHighlights(c) +
@@ -2869,6 +3012,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enlaces cruzados: clic en un corredor o una carrera (dentro del modal o
   // en "Últimos resultados") abre la ficha correspondiente.
   const alClicEnlace = e => {
+    const bTar = e.target.closest('.rp-tarjeta-btn');
+    if (bTar) { rpCompartirTarjeta(bTar); return; }
     const bWA = e.target.closest('.rp-compartir-wa');
     if (bWA) {
       window.open('https://wa.me/?text=' + encodeURIComponent(bWA.dataset.shareTxt + '\n' + bWA.dataset.shareUrl), '_blank', 'noopener');
