@@ -1892,6 +1892,65 @@ function rpAbrirComparador(claveA, claveB) {
   document.querySelector('.rp-modal-cuadro').scrollTop = 0;
 }
 
+// ── Evolución de POSICIÓN en el tiempo (Fase C, 2/2) ──
+// Recalcula el ranking "a fecha de cada jornada" (el motor acepta hastaFecha) y
+// guarda esos snapshots en caché por temporada. Luego saca el puesto del
+// corredor en cada jornada aplicando los filtros actuales (misma numeración que
+// la tabla).
+function rpSnapshotsPosicion() {
+  if (rpEstado._snapTemp === rpEstado.temporada && rpEstado._snaps) return rpEstado._snaps;
+  const fechas = [...new Set((rpEstado.carreras || [])
+    .filter(c => c.temporada === rpEstado.temporada && c.resultados && c.resultados.length)
+    .map(c => c.fecha).filter(Boolean))].sort();
+  rpEstado._snaps = fechas.map(f => ({
+    fecha: f,
+    // hastaFecha es exclusiva; f+'￿' incluye las carreras del propio día f
+    ranking: calcularRankingPublico(rpEstado.carreras, { temporada: rpEstado.temporada, hastaFecha: f + '￿' })
+  }));
+  rpEstado._snapTemp = rpEstado.temporada;
+  return rpEstado._snaps;
+}
+
+function rpEvolucionPosicion(c) {
+  const serie = [];
+  for (const s of rpSnapshotsPosicion()) {
+    const cat = s.ranking.categorias.find(g => g.key === c.categoria);
+    if (!cat) continue;
+    const idx = rpPoblacion(cat).findIndex(x => x.clave === c.clave);
+    if (idx >= 0) serie.push({ fecha: s.fecha, pos: idx + 1, total: rpPoblacion(cat).length });
+  }
+  return serie;
+}
+
+function rpRenderEvolucionPos(c) {
+  const serie = rpEvolucionPosicion(c);
+  if (serie.length < 2) return '';
+  const W = 600, H = 150, PL = 34, PR = 42, PT = 16, PB = 22;
+  const posMax = Math.max(...serie.map(p => p.pos));
+  const x = i => PL + i * (W - PL - PR) / (serie.length - 1);
+  const y = pos => PT + (pos - 1) / Math.max(1, posMax - 1) * (H - PT - PB);
+  const linea = serie.map((p, i) => `${x(i).toFixed(1)},${y(p.pos).toFixed(1)}`).join(' ');
+  const marcas = serie.map((p, i) => {
+    const cx = x(i).toFixed(1), cy = y(p.pos).toFixed(1);
+    const det = `${rpFormatearFecha(p.fecha)} · Puesto ${p.pos}º de ${p.total}`;
+    return `<g class="rp-spark-punto"><circle cx="${cx}" cy="${cy}" r="9" fill="transparent"></circle>` +
+      `<circle cx="${cx}" cy="${cy}" r="3.5" fill="var(--rp-color-primario)" stroke="var(--rp-color-fondo)" stroke-width="2"></circle>` +
+      `<title>${rpEscapar(det)}</title></g>`;
+  }).join('');
+  const ult = serie[serie.length - 1];
+  return '<figure class="rp-spark rp-evopos">' +
+    '<figcaption class="rp-spark-titulo">Evolución de posición en el ranking</figcaption>' +
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución del puesto de ${rpEscapar(c.nombre)} durante la temporada">` +
+    `<text x="4" y="${(y(1) + 4).toFixed(1)}" class="rp-evopos-eje">1º</text>` +
+    (posMax > 1 ? `<text x="4" y="${(y(posMax) + 4).toFixed(1)}" class="rp-evopos-eje">${posMax}º</text>` : '') +
+    `<polyline points="${linea}" fill="none" stroke="var(--rp-color-primario)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>` +
+    marcas +
+    `<text x="${(W - PR + 6).toFixed(1)}" y="${(y(ult.pos) + 4).toFixed(1)}" class="rp-spark-valor">${ult.pos}º</text>` +
+    '</svg>' +
+    '<figcaption class="rp-radar-nota">Más arriba = mejor puesto. Puesto entre los corredores con los filtros actuales.</figcaption>' +
+    '</figure>';
+}
+
 function rpSparkline(corredor) {
   const datos = [...corredor.resultados].reverse(); // cronológico ascendente
   if (datos.length < 2) return '';
@@ -2234,6 +2293,7 @@ function rpAbrirModal(clave) {
     rpRenderHighlights(c) +
     rpRenderRadar(c) +
     rpSparkline(c) +
+    rpRenderEvolucionPos(c) +
     rpRenderHistorial(c);
   // Navegación ‹ › sobre el ranking filtrado actual
   const btnAnt = document.getElementById('rp-modal-ant');

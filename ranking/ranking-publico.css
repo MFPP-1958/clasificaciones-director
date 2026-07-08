@@ -1089,6 +1089,8 @@ th.rp-c { text-align: center; }
   fill: var(--rp-color-texto);
 }
 .rp-spark-punto { cursor: help; }
+.rp-evopos-eje { font: 700 11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--rp-color-suave); }
+.rp-evopos { margin-top: 2px; }
 
 /* ── Perfil del corredor (radar de 5 métricas) ── */
 .rp-radar { margin: 4px 0 14px; }
