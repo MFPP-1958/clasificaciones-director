@@ -1655,6 +1655,104 @@ function rpRenderHighlights(corredor) {
 // ranking; las carreras descartadas aparecen como tramo plano con marcador
 // gris). Una sola serie → sin leyenda; color de datos #0891b2 (validado con
 // la skill dataviz: banda de luminosidad, croma, contraste sobre blanco).
+// ── Perfil del corredor: radar de 5 métricas ──
+// Todas 0-100. Regularidad y Forma son absolutas; Eficiencia, Palmarés y
+// Participación se normalizan al mejor de la categoría (mismo criterio para
+// todos). Definición acordada con el director deportivo.
+function rpMetricasRaw(c) {
+  const R = c.resultados || [];
+  const disp = R.length;
+  const fin = R.filter(r => r.pos != null);
+  const finPts = fin.map(r => r.puntos || 0);
+  const media = disp ? R.reduce((s, r) => s + (r.puntos || 0), 0) / disp : 0;
+  // Constancia = 1 − coeficiente de variación de los puntos de las terminadas
+  let constancia = finPts.length === 1 ? 1 : 0;
+  if (finPts.length >= 2) {
+    const m = finPts.reduce((a, b) => a + b, 0) / finPts.length;
+    if (m > 0) {
+      const sd = Math.sqrt(finPts.reduce((a, b) => a + (b - m) * (b - m), 0) / finPts.length);
+      constancia = Math.max(0, 1 - Math.min(sd / m, 1));
+    }
+  }
+  const tasaFin = disp ? fin.length / disp : 0;
+  const vic = fin.filter(r => r.pos === 1).length;
+  const pod = fin.filter(r => r.pos === 2 || r.pos === 3).length;
+  const t10 = fin.filter(r => r.pos >= 4 && r.pos <= 10).length;
+  // Forma: media de las últimas 3 terminadas frente a la media de la temporada
+  let forma = 50;
+  if (finPts.length >= 2) {
+    const rec = [...fin].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 3).map(r => r.puntos || 0);
+    const mRec = rec.reduce((a, b) => a + b, 0) / rec.length;
+    const mAll = finPts.reduce((a, b) => a + b, 0) / finPts.length;
+    forma = mAll > 0 ? 50 * (mRec / mAll) : 50;
+  }
+  return { disp, media, regularidad: tasaFin * constancia, palmares: 5 * vic + 3 * pod + t10, forma };
+}
+
+function rpRadar(c) {
+  const cat = rpEstado.ranking.categorias.find(g => g.key === c.categoria);
+  const pool = (cat && cat.corredores.length) ? cat.corredores : [c];
+  let maxEf = 1, maxPa = 1, maxPt = 1;
+  for (const x of pool) {
+    const m = rpMetricasRaw(x);
+    if (m.media > maxEf) maxEf = m.media;
+    if (m.palmares > maxPa) maxPa = m.palmares;
+    if (m.disp > maxPt) maxPt = m.disp;
+  }
+  const me = rpMetricasRaw(c);
+  const clip = v => Math.round(Math.max(0, Math.min(100, v)));
+  return {
+    suficiente: me.disp >= 3,
+    ejes: {
+      'Regularidad': clip(100 * me.regularidad),
+      'Eficiencia': clip(100 * me.media / maxEf),
+      'Palmarés': clip(100 * me.palmares / maxPa),
+      'Participación': clip(100 * me.disp / maxPt),
+      'Forma': clip(me.forma)
+    }
+  };
+}
+
+const RP_RADAR_EJES = [['Regularidad', '🎯'], ['Eficiencia', '⚡'], ['Palmarés', '🏆'], ['Participación', '📅'], ['Forma', '🔥']];
+
+function rpRadarSVG(ejes) {
+  const S = 340, cx = 170, cy = 170, R = 112, n = 5;
+  const ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;
+  const P = (i, r) => [cx + Math.cos(ang(i)) * r, cy + Math.sin(ang(i)) * r];
+  const poly = r => RP_RADAR_EJES.map((_, i) => P(i, r).map(v => v.toFixed(1)).join(',')).join(' ');
+  let grid = '';
+  [0.25, 0.5, 0.75, 1].forEach(g => { grid += `<polygon points="${poly(R * g)}" fill="none" stroke="rgba(100,116,139,.20)" stroke-width="1"/>`; });
+  let axes = '', datos = '', pts = '', ic = '';
+  RP_RADAR_EJES.forEach(([k, emo], i) => {
+    const [ax, ay] = P(i, R);
+    axes += `<line x1="${cx}" y1="${cy}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="rgba(100,116,139,.20)" stroke-width="1"/>`;
+    const [dx, dy] = P(i, R * Math.max(4, ejes[k]) / 100);
+    datos += `${dx.toFixed(1)},${dy.toFixed(1)} `;
+    pts += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="4" fill="var(--rp-color-primario)"/>`;
+    const [ix, iy] = P(i, R + 20);
+    ic += `<text x="${ix.toFixed(1)}" y="${(iy + 7).toFixed(1)}" text-anchor="middle" font-size="22">${emo}</text>`;
+  });
+  return `<svg viewBox="0 0 ${S} ${S}" class="rp-radar-svg" role="img" aria-label="Perfil del corredor">` +
+    grid + axes +
+    `<polygon points="${datos.trim()}" fill="rgba(14,116,144,.28)" stroke="var(--rp-color-primario)" stroke-width="2.5" stroke-linejoin="round"/>` +
+    pts + ic + '</svg>';
+}
+
+function rpRenderRadar(c) {
+  const r = rpRadar(c);
+  if (!r.suficiente) return ''; // con menos de 3 carreras no es fiable
+  const leyenda = RP_RADAR_EJES.map(([k, emo]) =>
+    `<li><span class="rp-radar-k">${emo} ${k}</span>` +
+    `<span class="rp-radar-bar"><span style="width:${r.ejes[k]}%"></span></span>` +
+    `<b class="rp-radar-num">${r.ejes[k]}</b></li>`).join('');
+  return '<section class="rp-radar">' +
+    '<h3 class="rp-radar-tit">📊 Perfil del corredor</h3>' +
+    '<div class="rp-radar-wrap">' + rpRadarSVG(r.ejes) +
+    '<ul class="rp-radar-leg">' + leyenda + '</ul></div>' +
+    '<p class="rp-radar-nota">De 0 a 100 comparado con su categoría · <b>Forma</b>: 50 = en su nivel actual.</p>' +
+    '</section>';
+}
+
 function rpSparkline(corredor) {
   const datos = [...corredor.resultados].reverse(); // cronológico ascendente
   if (datos.length < 2) return '';
@@ -1994,6 +2092,7 @@ function rpAbrirModal(clave) {
     rpBotonesCompartir('Ranking MFPP · ' + c.nombre, rpEnlaceCorredor(c.nombre)) +
     '</header>' +
     rpRenderHighlights(c) +
+    rpRenderRadar(c) +
     rpSparkline(c) +
     rpRenderHistorial(c);
   // Navegación ‹ › sobre el ranking filtrado actual

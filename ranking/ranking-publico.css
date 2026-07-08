@@ -1089,6 +1089,30 @@ th.rp-c { text-align: center; }
   fill: var(--rp-color-texto);
 }
 .rp-spark-punto { cursor: help; }
+
+/* ── Perfil del corredor (radar de 5 métricas) ── */
+.rp-radar { margin: 4px 0 14px; }
+.rp-radar-tit {
+  font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.03em; color: var(--rp-color-suave); margin: 0 0 6px;
+}
+.rp-radar-wrap { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.rp-radar-svg { width: 240px; max-width: 62%; height: auto; flex: none; }
+.rp-radar-leg { list-style: none; margin: 0; padding: 0; flex: 1 1 200px; min-width: 180px; }
+.rp-radar-leg li { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 0.86rem; }
+.rp-radar-k { flex: 0 0 auto; min-width: 118px; font-weight: 600; color: var(--rp-color-texto); }
+.rp-radar-bar {
+  flex: 1 1 auto; height: 7px; border-radius: 99px;
+  background: var(--rp-color-fondo-alt); overflow: hidden;
+}
+.rp-radar-bar > span { display: block; height: 100%; border-radius: 99px; background: var(--rp-color-primario); }
+.rp-radar-num { flex: 0 0 auto; min-width: 26px; text-align: right; color: var(--rp-color-primario); font-weight: 800; }
+.rp-radar-nota { margin: 8px 0 0; font-size: 0.76rem; color: var(--rp-color-suave); }
+@media (max-width: 560px) {
+  .rp-radar-wrap { flex-direction: column; align-items: stretch; gap: 8px; }
+  .rp-radar-svg { width: 250px; max-width: 78%; margin: 0 auto; }
+  .rp-radar-leg { width: 100%; }
+}
 .rp-subtabla {
   width: 100%;
   border-collapse: collapse;
