@@ -218,6 +218,53 @@ html, body { overflow-x: hidden; }
 #rp-region { flex: 1 1 190px; min-width: 0; }
 #rp-subcat { flex: 1 1 150px; min-width: 0; }
 
+/* ── Filtros con búsqueda (fallito 2): mismo aspecto que los selects, pero
+   con un desplegable propio donde se puede teclear para filtrar ── */
+.rp-cb { position: relative; min-width: 0; }
+.rp-cb-region { flex: 1 1 190px; }
+.rp-cb-subcat { flex: 1 1 150px; }
+.rp-cb-equipo { flex: 1 1 150px; }
+.rp-cb .rp-cb-native {
+  position: absolute !important; width: 1px !important; height: 1px !important;
+  min-height: 0 !important; padding: 0 !important; margin: 0 !important;
+  opacity: 0 !important; pointer-events: none !important; border: 0 !important;
+}
+.rp-cb-input {
+  font: inherit; font-size: 0.95rem; width: 100%;
+  padding: 10px 34px 10px 12px;
+  border: 1px solid var(--rp-color-borde); border-radius: 10px;
+  background: var(--rp-color-fondo); color: var(--rp-color-texto);
+  min-height: 44px; cursor: text;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  transition: border-color .15s, box-shadow .15s;
+}
+.rp-cb-input:focus {
+  outline: none; border-color: var(--rp-color-primario);
+  box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.14);
+}
+.rp-cb-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 600;
+  background: var(--rp-color-fondo); border: 1px solid var(--rp-color-borde);
+  border-radius: 10px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+  max-height: 264px; overflow-y: auto; padding: 4px;
+}
+.rp-cb-list[hidden] { display: none; }
+.rp-cb-opt {
+  padding: 9px 10px; font-size: 0.9rem; border-radius: 7px;
+  color: var(--rp-color-texto); cursor: pointer;
+}
+.rp-cb-opt.rp-cb-on, .rp-cb-opt:hover:not(.rp-cb-grp):not(.rp-cb-vacio) {
+  background: var(--rp-color-fondo-alt);
+}
+.rp-cb-opt.rp-cb-sel { color: var(--rp-color-primario); font-weight: 700; }
+.rp-cb-opt.rp-cb-grp {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--rp-color-suave); font-weight: 700; cursor: default;
+  padding: 8px 10px 3px;
+}
+.rp-cb-opt.rp-cb-vacio { color: var(--rp-color-suave); cursor: default; }
+
 /* ── Enlaces internos (corredor ↔ carrera) ── */
 .rp-enlace {
   font: inherit;
@@ -1151,6 +1198,22 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
     min-height: 40px;
     font-size: 0.88rem;
     padding: 8px 10px;
+  }
+  /* Filtros con búsqueda: a lo ancho en la columna del panel móvil */
+  #rp-filtros .rp-cb { flex: 0 0 auto; width: 100%; }
+  #rp-filtros .rp-cb-input {
+    min-height: 40px;
+    font-size: 0.88rem;
+    padding: 8px 32px 8px 10px;
+  }
+  /* El panel de filtros lleva overflow:hidden (animación de plegado), que
+     recortaría un desplegable flotante. En móvil la lista fluye hacia abajo
+     (empuja el contenido) para que se vea entera dentro del panel. */
+  #rp-filtros .rp-cb-list {
+    position: static;
+    margin-top: 4px;
+    box-shadow: none;
+    max-height: 244px;
   }
   #rp-filtros.rp-abierto { margin-bottom: 2px; }
 

@@ -1407,6 +1407,146 @@ function rpRenderSubcats() {
   }).join('');
 }
 
+// ── Filtros con búsqueda (fallito 2) ──
+// Convierte un <select> en un desplegable donde SE PUEDE TECLEAR para filtrar
+// las opciones (empiezan-por, sin acentos ni mayúsculas). Útil sobre todo en
+// móvil (iOS), donde el <select> nativo abre una ruleta sin teclado.
+// El <select> se mantiene oculto como fuente de la verdad: valor, evento
+// "change" (los manejadores existentes siguen funcionando) y repoblado
+// dinámico. Un MutationObserver sincroniza el texto visible y la visibilidad.
+function rpFiltroBuscable(sel, claseExtra) {
+  if (!sel || sel.dataset.cbHecho) return;
+  sel.dataset.cbHecho = '1';
+  const wrap = document.createElement('div');
+  wrap.className = 'rp-cb' + (claseExtra ? ' ' + claseExtra : '');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'rp-cb-input';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-autocomplete', 'list');
+  const etq = sel.getAttribute('aria-label');
+  if (etq) input.setAttribute('aria-label', etq);
+  const list = document.createElement('div');
+  list.className = 'rp-cb-list';
+  list.hidden = true;
+  sel.parentNode.insertBefore(wrap, sel);
+  wrap.appendChild(sel);
+  wrap.appendChild(input);
+  wrap.appendChild(list);
+  sel.classList.add('rp-cb-native');
+  sel.setAttribute('tabindex', '-1');
+  sel.setAttribute('aria-hidden', 'true');
+
+  let abierto = false, activo = -1;
+  const textoSel = () => (sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : '');
+  const syncVisibilidad = () => { wrap.hidden = (sel.style.display === 'none'); };
+  const syncTexto = () => { if (!abierto) input.value = textoSel(); };
+
+  function coincide(txt, f) {
+    if (!f) return true;
+    const n = rpNormalizarTexto(txt);
+    if (n.indexOf(f) === 0) return true;                 // empieza por…
+    return n.split(/[\s\-/|]+/).some(p => p.indexOf(f) === 0); // …o alguna palabra
+  }
+  function crearOpcion(op, f) {
+    if (!coincide(op.textContent, f)) return null;
+    const el = document.createElement('div');
+    el.className = 'rp-cb-opt';
+    if (op.value === sel.value) el.classList.add('rp-cb-sel');
+    el.textContent = op.textContent;
+    el.dataset.val = op.value;
+    el.addEventListener('mousedown', e => { e.preventDefault(); elegir(op.value, op.textContent); });
+    return el;
+  }
+  function construir(filtro) {
+    const f = filtro ? rpNormalizarTexto(filtro) : '';
+    list.innerHTML = '';
+    activo = -1;
+    let hay = false;
+    for (const hijo of sel.children) {
+      if (hijo.tagName === 'OPTGROUP') {
+        const ops = [];
+        for (const op of hijo.children) { const el = crearOpcion(op, f); if (el) ops.push(el); }
+        if (ops.length) {
+          const grp = document.createElement('div');
+          grp.className = 'rp-cb-opt rp-cb-grp';
+          grp.textContent = hijo.label;
+          list.appendChild(grp);
+          ops.forEach(o => list.appendChild(o));
+          hay = true;
+        }
+      } else if (hijo.tagName === 'OPTION') {
+        const el = crearOpcion(hijo, f);
+        if (el) { list.appendChild(el); hay = true; }
+      }
+    }
+    if (!hay) {
+      const v = document.createElement('div');
+      v.className = 'rp-cb-opt rp-cb-vacio';
+      v.textContent = 'Sin coincidencias';
+      list.appendChild(v);
+    }
+  }
+  const opciones = () => [...list.querySelectorAll('.rp-cb-opt:not(.rp-cb-grp):not(.rp-cb-vacio)')];
+  function marcar(i) {
+    const ops = opciones();
+    ops.forEach(o => o.classList.remove('rp-cb-on'));
+    if (i < 0 || i >= ops.length) { activo = -1; return; }
+    activo = i;
+    ops[i].classList.add('rp-cb-on');
+    ops[i].scrollIntoView({ block: 'nearest' });
+  }
+  function abrir(conTexto) {
+    abierto = true;
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    construir(conTexto ? input.value : '');
+    if (!conTexto) input.select();
+  }
+  function cerrar() {
+    if (!abierto) return;
+    abierto = false;
+    list.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    input.value = textoSel();
+  }
+  function elegir(val, txt) {
+    sel.value = val;
+    abierto = false;
+    list.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    input.value = txt;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  input.addEventListener('focus', () => abrir(false));
+  input.addEventListener('click', () => { if (!abierto) abrir(false); });
+  input.addEventListener('input', () => abrir(true));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!abierto) abrir(false); marcar(Math.min(activo + 1, opciones().length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); marcar(Math.max(activo - 1, 0)); }
+    else if (e.key === 'Enter') { const ops = opciones(); if (abierto && activo >= 0 && ops[activo]) { e.preventDefault(); elegir(ops[activo].dataset.val, ops[activo].textContent); } }
+    else if (e.key === 'Escape') { cerrar(); input.blur(); }
+  });
+  input.addEventListener('blur', () => setTimeout(cerrar, 130));
+
+  new MutationObserver(muts => {
+    let opts = false, estilo = false;
+    for (const m of muts) {
+      if (m.type === 'childList') opts = true;
+      if (m.type === 'attributes' && m.attributeName === 'style') estilo = true;
+    }
+    if (estilo) syncVisibilidad();
+    if (opts) syncTexto();
+  }).observe(sel, { childList: true, attributes: true, attributeFilter: ['style'] });
+
+  syncVisibilidad();
+  syncTexto();
+}
+
 function rpRenderPestanas() {
   const nav = document.getElementById('rp-pestanas');
   // El contador refleja el filtro de comunidad (la subcategoría no, porque
@@ -2600,6 +2740,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     rpRenderTabla();
   });
+
+  // Fallito 2: filtros tecleables (comunidad, categoría, equipo)
+  rpFiltroBuscable(document.getElementById('rp-region'), 'rp-cb-region');
+  rpFiltroBuscable(document.getElementById('rp-subcat'), 'rp-cb-subcat');
+  rpFiltroBuscable(document.getElementById('rp-equipo'), 'rp-cb-equipo');
 
   document.getElementById('rp-region').addEventListener('change', e => {
     rpEstado.region = e.target.value;

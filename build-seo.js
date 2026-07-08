@@ -117,7 +117,21 @@ function pagina({ titulo, head, cuerpo }) {
     '.cta{margin:26px 0;padding:18px;background:var(--f);border:1px solid var(--b);border-radius:14px}' +
     '.cta b{font-size:1.02rem}.btn{display:inline-block;margin-top:10px;background:var(--p);color:#fff;font-weight:700;padding:11px 18px;border-radius:10px}.btn:hover{background:#0b5f74;text-decoration:none}' +
     'footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--b);color:var(--s);font-size:.85rem}' +
-    '@media(max-width:600px){.grid{grid-template-columns:1fr}h1{font-size:1.3rem}}' +
+    '@media(max-width:600px){.grid{grid-template-columns:1fr}h1{font-size:1.3rem}' +
+    // Fallito 1: la tabla de clasificación general se convierte en tarjetas en móvil
+    // (nombre arriba, equipo abajo; se ocultan categoría y pruebas para que no se corte)
+    '.rk-tabla{overflow-x:visible;border:0;border-radius:0}' +
+    '.rk-tabla table,.rk-tabla tbody{display:block;width:100%}' +
+    '.rk-tabla thead{display:none}' +
+    '.rk-tabla tr{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"pos nom pts" "pos eq pts";column-gap:12px;align-items:center;border:1px solid var(--b);border-radius:12px;padding:10px 13px;margin:0 0 8px}' +
+    '.rk-tabla td{display:block;padding:0;border:0}' +
+    '.rk-tabla .pos{grid-area:pos;font-size:1.05rem;text-align:center;min-width:1.4em}' +
+    '.rk-tabla .nom{grid-area:nom;font-size:.98rem;line-height:1.25;min-width:0;overflow-wrap:anywhere}' +
+    '.rk-tabla .eq{grid-area:eq;font-size:.8rem;color:var(--s);font-weight:400;line-height:1.3;min-width:0;overflow-wrap:anywhere}' +
+    '.rk-tabla .pts{grid-area:pts;font-size:1rem;text-align:right;white-space:nowrap}' +
+    '.rk-tabla .cat,.rk-tabla .pru{display:none}' +
+    '.rk-tabla .podiofila{background:#ecfdf5}' +
+    '}' +
     '</style>\n</head>\n<body>\n<div class="wrap">\n' +
     '<div class="top">' +
     `<span class="marca"><a href="${WEB}">MFPP CYCLING</a><span class="sep">·</span><span class="k">Ranking</span></span>` +
@@ -242,8 +256,8 @@ function paginaRanking(catKey, catLabel, corredores, ruta, todosRankings) {
   const filas = corredores.map((c, i) =>
     `<tr class="${i < 3 ? 'podiofila' : ''}"><td class="c pos">${i + 1}</td>` +
     `<td class="nom"><a href="${esc(enlaceFicha(c.nombre))}" rel="nofollow">${esc(c.nombre)}</a></td>` +
-    `<td>${esc(c.equipo)}</td><td class="c">${esc(c.subcatPrincipal || '')}</td>` +
-    `<td class="c">${c.pruebasContadas}/${c.pruebasTotales}</td><td class="c pts">${core.rpFormatearPuntos(c.puntosTotales)}</td></tr>`
+    `<td class="eq">${esc(c.equipo)}</td><td class="c cat">${esc(c.subcatPrincipal || '')}</td>` +
+    `<td class="c pru">${c.pruebasContadas}/${c.pruebasTotales}</td><td class="c pts">${core.rpFormatearPuntos(c.puntosTotales)}</td></tr>`
   ).join('\n');
   const nav = todosRankings.map(r =>
     r.ruta === ruta ? `<a style="background:var(--p);color:#fff" href="${esc(r.ruta)}">${esc(r.label)}</a>`
@@ -256,7 +270,7 @@ function paginaRanking(catKey, catLabel, corredores, ruta, todosRankings) {
     '<div class="rnav">' + nav + '</div>\n' +
     '<p class="intro">Clasificación general del ranking MFPP de rendimiento. ' +
     `Pulsa un corredor para ver su ficha completa (historial y evolución) en el <a href="${WEB}/ranking/">ranking interactivo</a>.</p>\n` +
-    '<div class="tablabox"><table><thead><tr><th class="c">#</th><th>Corredor</th><th>Equipo</th>' +
+    '<div class="tablabox rk-tabla"><table><thead><tr><th class="c">#</th><th>Corredor</th><th>Equipo</th>' +
     '<th class="c">Cat.</th><th class="c">Pruebas</th><th class="c">Puntos</th></tr></thead>\n' +
     `<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table></div>\n`;
   return pagina({ titulo, head, cuerpo });
