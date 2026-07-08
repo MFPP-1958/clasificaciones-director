@@ -44,6 +44,20 @@ const RP_GRUPOS_CATEGORIA = [
 ];
 const RP_GRUPO_OTROS = { key: 'otros', label: 'Otras' };
 
+// Repara "mojibake": la ñ y las vocales acentuadas que se guardaron mal en los
+// datos (UTF-8 interpretado como Mac Roman): "Ba√±uls" → "Bañuls". Así los
+// corredores duplicados por el error de codificación se fusionan en uno solo.
+function rpRepararMojibake(s) {
+  if (typeof s !== 'string' || (s.indexOf('√') < 0 && s.indexOf('Ã') < 0)) return s;
+  const pares = [
+    ['√±', 'ñ'], ['√°', 'á'], ['√©', 'é'], ['√≠', 'í'], ['√≥', 'ó'], ['√∫', 'ú'], ['√º', 'ü'],
+    ['√ë', 'Ñ'], ['√Å', 'Á'], ['√â', 'É'], ['√ç', 'Í'], ['√ì', 'Ó'], ['√ö', 'Ú'], ['√ú', 'Ü'],
+    ['Ã±', 'ñ'], ['Ã¡', 'á'], ['Ã©', 'é'], ['Ã­', 'í'], ['Ã³', 'ó'], ['Ãº', 'ú'], ['Ã‘', 'Ñ']
+  ];
+  for (const [mal, bien] of pares) if (s.indexOf(mal) >= 0) s = s.split(mal).join(bien);
+  return s;
+}
+
 function rpNormalizarClave(nombre) {
   if (!nombre) return '';
   const s = String(nombre).trim();
@@ -323,5 +337,5 @@ function calcularRanking(filas) {
 module.exports = {
   calcularRanking,
   rpFormatearPuntos, rpNormalizarTexto, rpEsFueraCV, rpNormalizarClave,
-  RP_GRUPOS_CATEGORIA, RP_GRUPO_OTROS
+  rpRepararMojibake, RP_GRUPOS_CATEGORIA, RP_GRUPO_OTROS
 };

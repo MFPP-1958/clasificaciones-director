@@ -157,7 +157,14 @@ async function leerCarreras() {
       signal: ctrl.signal
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
+    const filas = await res.json();
+    // Reparar nombres/equipos con caracteres corruptos (mojibake) para que los
+    // corredores duplicados se fusionen y no distorsionen el ranking.
+    for (const r of filas) for (const x of (r.race_results || [])) {
+      if (x.name) x.name = core.rpRepararMojibake(x.name);
+      if (x.team) x.team = core.rpRepararMojibake(x.team);
+    }
+    return filas;
   } finally { clearTimeout(t); }
 }
 

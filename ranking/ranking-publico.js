@@ -157,6 +157,20 @@ const RP_GRUPO_OTROS = { key: 'otros', label: 'Otras' };
    UTILIDADES PURAS DE DOMINIO
    ============================================================ */
 
+// Repara "mojibake": la ñ y las vocales acentuadas que se guardaron mal en los
+// datos (UTF-8 interpretado como Mac Roman): "Ba√±uls" → "Bañuls". Así los
+// corredores duplicados por el error de codificación se fusionan en uno solo.
+function rpRepararMojibake(s) {
+  if (typeof s !== 'string' || (s.indexOf('√') < 0 && s.indexOf('Ã') < 0)) return s;
+  const pares = [
+    ['√±', 'ñ'], ['√°', 'á'], ['√©', 'é'], ['√≠', 'í'], ['√≥', 'ó'], ['√∫', 'ú'], ['√º', 'ü'],
+    ['√ë', 'Ñ'], ['√Å', 'Á'], ['√â', 'É'], ['√ç', 'Í'], ['√ì', 'Ó'], ['√ö', 'Ú'], ['√ú', 'Ü'],
+    ['Ã±', 'ñ'], ['Ã¡', 'á'], ['Ã©', 'é'], ['Ã­', 'í'], ['Ã³', 'ó'], ['Ãº', 'ú'], ['Ã‘', 'Ñ']
+  ];
+  for (const [mal, bien] of pares) if (s.indexOf(mal) >= 0) s = s.split(mal).join(bien);
+  return s;
+}
+
 // Identidad de un ciclista entre pruebas: "apellido, nombre" en minúsculas,
 // sin acentos, solo primer apellido — replicado de normalizeForMatching
 // (assets/js/app.js:10052), mantener sincronizado a mano.
@@ -340,7 +354,7 @@ function rpAdaptarCarreras(filas) {
       // si alguien abre la pestaña "Recorrido y perfil" de la carrera.
       ruta: (extra.route && typeof extra.route === 'object') ? extra.route : null,
       resultados: (r.race_results || []).map(x => ({
-        pos: x.pos, nombre: x.name || '', equipo: x.team || '', cat: x.cat || '',
+        pos: x.pos, nombre: rpRepararMojibake(x.name || ''), equipo: rpRepararMojibake(x.team || ''), cat: x.cat || '',
         // Datos de la clasificación oficial (pueden faltar en pruebas antiguas)
         bib: x.bib ?? '', tiempo: x.time || '',
         gap: Number.isFinite(x.gap_seconds) ? x.gap_seconds : null,
