@@ -2828,6 +2828,79 @@ function rpRenderTablaChallenge(cat) {
     : '<p class="rp-vacio">No hay pruebas Challenge en la temporada seleccionada.</p>';
 }
 
+// ── Mapa de perfiles (scatter Regularidad × Puntos, 4 cuadrantes) — Fase C ──
+const RP_CUADRANTES = {
+  completo: { label: 'Completo', emo: '🎯', color: '#0e7490', desc: 'regular y con muchos puntos' },
+  pistolero: { label: 'Pistolero', emo: '🔫', color: '#d97706', desc: 'irregular, pero puntúa fuerte' },
+  regular: { label: 'Regular', emo: '🛡️', color: '#16a34a', desc: 'constante, aún con pocos puntos' },
+  desarrollo: { label: 'En desarrollo', emo: '🌱', color: '#64748b', desc: 'empezando a sumar' }
+};
+function rpCuadranteDe(x, y, medX, medY) {
+  if (x >= medX && y >= medY) return 'completo';
+  if (x < medX && y >= medY) return 'pistolero';
+  if (x >= medX && y < medY) return 'regular';
+  return 'desarrollo';
+}
+function rpRenderPerfiles(poblacion) {
+  const raw = poblacion.map(c => {
+    const pos = c.resultados.filter(r => r.pos != null).map(r => r.pos);
+    let sd = null;
+    if (pos.length >= 2) { const m = pos.reduce((a, x) => a + x, 0) / pos.length; sd = Math.sqrt(pos.reduce((a, x) => a + (x - m) * (x - m), 0) / pos.length); }
+    return { c, sd, ry: c.puntosTotales };
+  });
+  if (raw.length < 6) return ''; // pocos corredores → el mapa no aporta
+  // Se sitúa a cada corredor por su PERCENTIL dentro de la categoría (no por el
+  // valor bruto): reparto uniforme y cuadrantes equilibrados (corte en la
+  // mediana = percentil 50). Eje X = Regularidad (consistencia de PUESTOS:
+  // menos variación → más regular). Eje Y = Puntos.
+  const rX = new Map();
+  const conSD = raw.filter(o => o.sd != null).sort((a, b) => b.sd - a.sd); // más irregular primero (SD alta)
+  const nX = conSD.length;
+  conSD.forEach((o, i) => rX.set(o.c.clave, nX > 1 ? (i / (nX - 1)) * 100 : 50));
+  const rY = new Map();
+  const ordY = [...raw].sort((a, b) => a.ry - b.ry);
+  const nY = ordY.length;
+  ordY.forEach((o, i) => rY.set(o.c.clave, nY > 1 ? (i / (nY - 1)) * 100 : 50));
+  const datos = raw.map(o => ({ c: o.c, x: rX.has(o.c.clave) ? rX.get(o.c.clave) : 50, y: rY.get(o.c.clave) }));
+  const medX = 50, medY = 50;
+  const W = 340, H = 300, P = 10;
+  const px = x => P + (x / 100) * (W - 2 * P);
+  const py = y => P + (1 - y / 100) * (H - 2 * P);
+  const mx = +px(medX).toFixed(1), my = +py(medY).toFixed(1);
+  const rect = (x, y, w, h, col) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" opacity="0.07"/>`;
+  const fondos =
+    rect(P, P, mx - P, my - P, RP_CUADRANTES.pistolero.color) +
+    rect(mx, P, W - P - mx, my - P, RP_CUADRANTES.completo.color) +
+    rect(P, my, mx - P, H - P - my, RP_CUADRANTES.desarrollo.color) +
+    rect(mx, my, W - P - mx, H - P - my, RP_CUADRANTES.regular.color);
+  const divis =
+    `<line x1="${mx}" y1="${P}" x2="${mx}" y2="${H - P}" stroke="rgba(100,116,139,.35)" stroke-width="1" stroke-dasharray="4 4"/>` +
+    `<line x1="${P}" y1="${my}" x2="${W - P}" y2="${my}" stroke="rgba(100,116,139,.35)" stroke-width="1" stroke-dasharray="4 4"/>`;
+  const lab = (x, y, anchor, q) => `<text x="${x}" y="${y}" text-anchor="${anchor}" class="rp-perf-qlab" fill="${RP_CUADRANTES[q].color}">${RP_CUADRANTES[q].emo} ${RP_CUADRANTES[q].label}</text>`;
+  const etiquetas =
+    lab(P + 4, P + 15, 'start', 'pistolero') +
+    lab(W - P - 4, P + 15, 'end', 'completo') +
+    lab(P + 4, H - P - 5, 'start', 'desarrollo') +
+    lab(W - P - 4, H - P - 5, 'end', 'regular');
+  const pts = datos.map(d => {
+    const q = rpCuadranteDe(d.x, d.y, medX, medY);
+    const cx = px(d.x).toFixed(1), cy = py(d.y).toFixed(1);
+    return `<g class="rp-perf-pt" data-scatter-clave="${rpEscapar(d.c.clave)}" tabindex="0" role="button" aria-label="Ficha de ${rpEscapar(d.c.nombre)}">` +
+      `<circle cx="${cx}" cy="${cy}" r="12" fill="transparent"/>` +
+      `<circle cx="${cx}" cy="${cy}" r="4.5" fill="${RP_CUADRANTES[q].color}" stroke="#fff" stroke-width="1.5"/>` +
+      `<title>${rpEscapar(d.c.nombre)} · ${RP_CUADRANTES[q].label}</title></g>`;
+  }).join('');
+  const leyenda = '<ul class="rp-perf-leg">' + Object.keys(RP_CUADRANTES).map(k =>
+    `<li><span class="rp-perf-dot" style="background:${RP_CUADRANTES[k].color}"></span><b>${RP_CUADRANTES[k].emo} ${RP_CUADRANTES[k].label}</b> — ${RP_CUADRANTES[k].desc}</li>`).join('') + '</ul>';
+  return '<details class="rp-perfiles"><summary>🗺️ Mapa de perfiles de la categoría</summary>' +
+    '<div class="rp-perf-box"><svg viewBox="0 0 ' + W + ' ' + H + '" class="rp-perf-svg" role="img" aria-label="Mapa de perfiles de corredores">' +
+    fondos + divis + etiquetas + pts + '</svg></div>' +
+    '<p class="rp-perf-ejes">Horizontal: <b>Regularidad</b> (→ más regular) · Vertical: <b>Puntos</b> (↑ más). Cortes en la <b>mediana</b> de la categoría.</p>' +
+    leyenda +
+    '<p class="rp-radar-nota">Cada punto es un corredor: tócalo para ver su ficha.</p>' +
+    '</details>';
+}
+
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const info = document.getElementById('rp-challenge-info');
@@ -2847,8 +2920,9 @@ function rpRenderTabla() {
     rpEstado.rankingPrevio.categorias.find(x => x.key === rpEstado.categoria);
   if (catPrev) rpPoblacion(catPrev).forEach((c, i) => posPrevias.set(c.clave, i + 1));
 
+  const pobl = rpPoblacion(cat);
   const filas = [];
-  rpPoblacion(cat).forEach((c, i) => {
+  pobl.forEach((c, i) => {
     // i+1 es la posición dentro del ranking filtrado (comunidad/subcategoría
     // renumeran); el buscador solo oculta filas y conserva esa posición.
     if (filtro &&
@@ -2894,7 +2968,8 @@ function rpRenderTabla() {
     '<th>Corredor</th><th class="rp-c rp-col-cat" title="Categoría del corredor">Cat.</th><th class="rp-col-equipo">Equipo</th>' +
     '<th class="rp-c rp-col-pruebas" title="Pruebas que puntúan / pruebas disputadas">Pruebas</th><th class="rp-c">Puntos</th>' +
     '</tr></thead>' +
-    `<tbody>${filas.join('') || '<tr><td colspan="7" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>`;
+    `<tbody>${filas.join('') || '<tr><td colspan="7" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>` +
+    rpRenderPerfiles(pobl);
 }
 
 function rpRenderTodo() {
@@ -3209,6 +3284,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // celda tiene prioridad sobre la fila; la fila abre corredor o equipo según
   // la vista activa.
   const alAccionarFila = e => {
+    const bScatter = e.target.closest('[data-scatter-clave]');
+    if (bScatter) { rpAbrirModal(bScatter.dataset.scatterClave); return; }
     const bEquipo = e.target.closest('button[data-equipo]');
     if (bEquipo) { rpAbrirModalEquipo(bEquipo.dataset.equipo); return; }
     const fila = e.target.closest('tr.rp-fila');
