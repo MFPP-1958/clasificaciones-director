@@ -16,6 +16,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const core = require('./ranking-core.js'); // motor de cálculo (réplica del widget)
+
+const TEMPORADA = 2026;
 
 const SUPABASE_URL = 'https://neeamkhbtoqsdxvsaogd.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_R7anMfu6xfwlr7Ew3kMUbg_N1mqNRJb';
@@ -95,8 +98,14 @@ function pagina({ titulo, head, cuerpo }) {
     '.podio{list-style:none;margin:6px 0 2px;padding:0;display:flex;flex-direction:column;gap:7px}' +
     '.podio li{display:flex;gap:7px;font-size:.88rem}.podio .med{flex:none;line-height:1.3}' +
     '.podio .pdatos{display:flex;flex-direction:column;min-width:0}.podio .n{font-weight:700}' +
+    '.podio .l1{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}' +
+    '.podio .rk{font-size:.72rem;font-weight:700;color:var(--a);background:var(--f);border:1px solid var(--b);border-radius:99px;padding:1px 7px;white-space:nowrap}' +
     '.podio .eq{color:var(--s);font-size:.8rem;overflow-wrap:anywhere}' +
     '.nom a{color:var(--p);font-weight:600}' +
+    // Menú de clasificaciones generales (enlaces a las páginas de ranking)
+    '.rnav{display:flex;flex-wrap:wrap;gap:8px;margin:.4em 0 1.4em}' +
+    '.rnav a{font-size:.85rem;font-weight:700;color:var(--p);background:var(--f);border:1px solid var(--b);border-radius:99px;padding:7px 14px}' +
+    '.rnav a:hover{border-color:var(--p);text-decoration:none}' +
     '.card .ver{display:block;margin-top:10px;padding-top:9px;border-top:1px dashed var(--b);font-size:.84rem;font-weight:700}' +
     // Tabla de clasificación (página de carrera)
     '.tablabox{overflow-x:auto;border:1px solid var(--b);border-radius:12px}' +
@@ -128,7 +137,7 @@ async function leerCarreras() {
   const t = setTimeout(() => ctrl.abort(), 25000);
   try {
     const url = SUPABASE_URL + '/rest/v1/races?select=id,name,date,notes,' +
-      'race_results(pos,bib,name,team,cat,time)&race_type=eq.clasificacion&order=date.desc';
+      'race_results(pos,bib,name,team,cat,time,gap_seconds,total_seconds)&race_type=eq.clasificacion&order=date.desc';
     const res = await fetch(url, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
       signal: ctrl.signal
@@ -144,12 +153,16 @@ function enlaceFicha(nombre) {
   return `${WEB}/ranking/?ficha=${encodeURIComponent(nombre)}`;
 }
 
-function podioHTML(resultados) {
+function podioHTML(resultados, posCV) {
   return [1, 2, 3].map((p, i) => {
     const r = resultados.find(x => parseInt(x.pos, 10) === p);
     if (!r) return '';
+    // Puesto y puntos del corredor en el ranking general (CV), igual que el
+    // widget: solo si está en esa clasificación (los de fuera no llevan badge)
+    const rk = posCV && posCV.get(core.rpNormalizarClave(r.name));
+    const badge = rk ? ` <span class="rk">${rk.pos}º · ${core.rpFormatearPuntos(rk.puntos)} pts</span>` : '';
     return `<li><span class="med">${MEDALLAS[i]}</span><span class="pdatos">` +
-      `<a class="n" href="${esc(enlaceFicha(r.name))}" rel="nofollow">${esc(r.name)}</a>` +
+      `<span class="l1"><a class="n" href="${esc(enlaceFicha(r.name))}" rel="nofollow">${esc(r.name)}</a>${badge}</span>` +
       (r.team ? `<span class="eq">${esc(r.team)}</span>` : '') +
       '</span></li>';
   }).join('');
@@ -205,7 +218,51 @@ function paginaCarrera(r, extra, ruta, resultados) {
   return pagina({ titulo, head, cuerpo });
 }
 
-function paginaHub(items) {
+// ── Página de RANKING (clasificación general) de una categoría ──
+// La página más valiosa para SEO ("ranking cadetes ciclismo"). Muestra la
+// clasificación general filtrada por la Comunidad Valenciana (como el widget
+// por defecto), con puesto, corredor, equipo y puntos.
+function paginaRanking(catKey, catLabel, corredores, ruta, todosRankings) {
+  const url = BASE + '/ranking/resultados/' + ruta;
+  const titulo = `Ranking ${catLabel} ${TEMPORADA} · Ciclismo Comunidad Valenciana | MFPP Cycling`;
+  const desc = `Clasificación general del ranking de rendimiento de ${catLabel.toLowerCase()} ` +
+    `${TEMPORADA} de la Comunidad Valenciana: puestos, puntos y equipos. Actualizado cada semana. MFPP Cycling.`;
+  const jsonld = {
+    '@context': 'https://schema.org', '@type': 'ItemList', name: titulo, url,
+    numberOfItems: corredores.length,
+    itemListElement: corredores.slice(0, 50).map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.nombre }))
+  };
+  const head =
+    `<meta name="description" content="${esc(desc)}">\n<meta name="robots" content="index, follow">\n` +
+    `<link rel="canonical" href="${esc(url)}">\n` +
+    '<meta property="og:type" content="website">\n<meta property="og:site_name" content="MFPP Cycling">\n' +
+    `<meta property="og:title" content="${esc(titulo)}">\n<meta property="og:description" content="${esc(desc)}">\n` +
+    `<meta property="og:url" content="${esc(url)}">\n<meta property="og:image" content="${LOGO}">\n` +
+    `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>\n`;
+  const filas = corredores.map((c, i) =>
+    `<tr class="${i < 3 ? 'podiofila' : ''}"><td class="c pos">${i + 1}</td>` +
+    `<td class="nom"><a href="${esc(enlaceFicha(c.nombre))}" rel="nofollow">${esc(c.nombre)}</a></td>` +
+    `<td>${esc(c.equipo)}</td><td class="c">${esc(c.subcatPrincipal || '')}</td>` +
+    `<td class="c">${c.pruebasContadas}/${c.pruebasTotales}</td><td class="c pts">${core.rpFormatearPuntos(c.puntosTotales)}</td></tr>`
+  ).join('\n');
+  const nav = todosRankings.map(r =>
+    r.ruta === ruta ? `<a style="background:var(--p);color:#fff" href="${esc(r.ruta)}">${esc(r.label)}</a>`
+                    : `<a href="${esc(r.ruta)}">${esc(r.label)}</a>`
+  ).join('');
+  const cuerpo =
+    '<p class="mig"><a href="' + BASE + '/ranking/resultados/">Ranking y resultados</a> › Ranking ' + esc(catLabel) + '</p>\n' +
+    `<h1>Ranking ${esc(catLabel)} ${TEMPORADA}</h1>\n` +
+    '<p class="sub">Clasificación general de rendimiento · Comunidad Valenciana</p>\n' +
+    '<div class="rnav">' + nav + '</div>\n' +
+    '<p class="intro">Clasificación general del ranking MFPP de rendimiento. ' +
+    `Pulsa un corredor para ver su ficha completa (historial y evolución) en el <a href="${WEB}/ranking/">ranking interactivo</a>.</p>\n` +
+    '<div class="tablabox"><table><thead><tr><th class="c">#</th><th>Corredor</th><th>Equipo</th>' +
+    '<th class="c">Cat.</th><th class="c">Pruebas</th><th class="c">Puntos</th></tr></thead>\n' +
+    `<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table></div>\n`;
+  return pagina({ titulo, head, cuerpo });
+}
+
+function paginaHub(items, rankings) {
   const url = BASE + '/ranking/resultados/';
   const titulo = 'Ranking y Resultados de Ciclismo Base 2026 · Cadetes y Juveniles | MFPP Cycling';
   const desc = 'Resultados y clasificaciones del ciclismo base de la Comunidad Valenciana: ' +
@@ -234,21 +291,40 @@ function paginaHub(items) {
     `<a class="ver" href="${esc(it.ruta)}">Ver clasificación completa →</a>` +
     '</article>'
   ).join('\n');
+  const navRank = (rankings || []).map(r => `<a href="${esc(r.ruta)}">🏆 Ranking ${esc(r.label)}</a>`).join('');
   const cuerpo =
     '<h1>Ranking y resultados de ciclismo base</h1>\n' +
     '<p class="sub">Cadetes, juveniles y sub-23 · Comunidad Valenciana · Temporada 2026</p>\n' +
     '<p class="intro">Aquí encontrarás las <b>clasificaciones y podios</b> de las pruebas del ciclismo base, ' +
     'con el ranking de rendimiento que elabora MFPP Cycling. ' +
     `Para filtros, fichas de corredores, mapas y perfiles, entra en el <a href="${WEB}/ranking/">ranking interactivo</a>.</p>\n` +
+    (navRank ? '<h2>Clasificación general por categoría</h2>\n<div class="rnav">' + navRank + '</div>\n' : '') +
     '<h2>Últimas carreras</h2>\n<div class="grid">\n' + tarjetas + '\n</div>\n';
   return pagina({ titulo, head, cuerpo });
 }
 
 async function generarSEO(distDir) {
-  const carreras = (await leerCarreras()).filter(r => (r.race_results || []).length);
+  const filas = await leerCarreras();
   const outDir = path.join(distDir, 'ranking', 'resultados');
   fs.mkdirSync(outDir, { recursive: true });
   const urls = [{ loc: BASE + '/ranking/resultados/', lastmod: null }];
+
+  // ── Ranking calculado (motor idéntico al widget) ──
+  const rk = core.calcularRanking(filas);
+  const posCV = new Map();     // clave → { pos, puntos } en el ranking CV
+  const rankings = [];         // páginas de clasificación general por categoría
+  for (const cat of rk.categorias) {
+    const cv = cat.corredores.filter(c => core.rpNormalizarTexto(c.region) === 'comunitat valenciana');
+    cv.forEach((c, i) => posCV.set(c.clave, { pos: i + 1, puntos: c.puntosTotales }));
+    if (cv.length) rankings.push({ key: cat.key, label: cat.label, ruta: 'ranking-' + cat.key + '-' + TEMPORADA + '.html', corredores: cv });
+  }
+  for (const rc of rankings) {
+    fs.writeFileSync(path.join(outDir, rc.ruta), paginaRanking(rc.key, rc.label, rc.corredores, rc.ruta, rankings), 'utf8');
+    urls.push({ loc: BASE + '/ranking/resultados/' + rc.ruta, lastmod: null });
+  }
+
+  // ── Páginas por carrera + hub ──
+  const carreras = filas.filter(r => (r.race_results || []).length);
   const items = [];
   for (const r of carreras) {
     let extra = {};
@@ -260,11 +336,11 @@ async function generarSEO(distDir) {
     fs.writeFileSync(path.join(outDir, ruta), paginaCarrera(r, extra, ruta, resultados), 'utf8');
     items.push({
       ruta, nombre: r.name, fecha: r.date, localidad: extra.localidad || '',
-      tipo: tipoCarrera(r.name, extra), podio: podioHTML(resultados)
+      tipo: tipoCarrera(r.name, extra), podio: podioHTML(resultados, posCV)
     });
     urls.push({ loc: BASE + '/ranking/resultados/' + ruta, lastmod: String(r.date || '').slice(0, 10) });
   }
-  fs.writeFileSync(path.join(outDir, 'index.html'), paginaHub(items), 'utf8');
+  fs.writeFileSync(path.join(outDir, 'index.html'), paginaHub(items, rankings), 'utf8');
   const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     urls.map(u => '<url><loc>' + esc(u.loc) + '</loc>' +
