@@ -78,6 +78,14 @@ if(fs.existsSync(redirectsSrc)){
   fs.copyFileSync(redirectsSrc, path.join(__dirname, 'dist', '_redirects'));
 }
 
+// Copiar archivos de verificación de Google Search Console (google*.html)
+// desde la raíz del repo al dist (se sirven en la raíz del dominio).
+for(const f of fs.readdirSync(__dirname)){
+  if(/^google[a-z0-9]*\.html$/i.test(f)){
+    fs.copyFileSync(path.join(__dirname, f), path.join(__dirname, 'dist', f));
+  }
+}
+
 console.log(`✅ Build completado → dist/index.html (css=${cssHash}, js=${jsHash})`);
 
 // ── Páginas SEO estáticas del ranking (hub + una por carrera + sitemap) ──
