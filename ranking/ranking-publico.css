@@ -78,6 +78,8 @@ html, body { overflow-x: hidden; }
   50% { box-shadow: 0 0 0 6px rgba(8, 145, 178, 0.18); }
 }
 /* Aviso de primera visita */
+/* [hidden] debe ganar a display:flex (si no, la X no cierra el aviso) */
+.rp-ayuda-hint[hidden] { display: none; }
 .rp-ayuda-hint {
   display: flex;
   align-items: center;
