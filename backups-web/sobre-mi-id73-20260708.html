@@ -1,0 +1,382 @@
+<style>
+.sm2-root{font-family:inherit;color:#1F2937;line-height:1.6}
+.sm2-root *,.sm2-root *::before,.sm2-root *::after{box-sizing:border-box;margin:0;padding:0}
+.sm2-fade{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+.sm2-fade.sm2-vis{opacity:1;transform:translateY(0)}
+.sm2-d1{transition-delay:.12s}.sm2-d2{transition-delay:.24s}.sm2-d3{transition-delay:.36s}
+.sm2-hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden}
+.sm2-hbg{position:absolute;inset:0;background:url('https://mfppcycling.com/wp-content/uploads/2023/05/MF-2023-03-04-40094_2-min.jpg') center 30%/cover no-repeat;transform:scale(1.06);will-change:transform}
+.sm2-hov{position:absolute;inset:0;background:linear-gradient(135deg,rgba(13,59,110,.93) 0%,rgba(13,59,110,.72) 55%,rgba(13,59,110,.38) 100%)}
+.sm2-hc{position:relative;z-index:2;max-width:1100px;margin:0 auto;padding:6rem 2rem 4rem;width:100%}
+.sm2-eyebrow{display:inline-flex;align-items:center;gap:.4rem;background:rgba(74,144,217,.22);border:1px solid rgba(74,144,217,.45);color:#C8DCF0;padding:.35rem 1rem;border-radius:20px;font-size:.82rem;font-weight:700;letter-spacing:.5px;margin-bottom:1.4rem}
+.sm2-hero h1{font-size:clamp(1.9rem,4.5vw,3.1rem);font-weight:800;color:#fff;line-height:1.15;margin-bottom:1.2rem;max-width:760px}
+.sm2-hero h1 em{font-style:normal;color:#4A90D9}
+.sm2-hdesc{font-size:1.1rem;color:#C8DCF0;max-width:590px;margin-bottom:2rem;line-height:1.75}
+.sm2-htags{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:2.2rem}
+.sm2-htag{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;padding:.28rem .85rem;border-radius:4px;font-size:.78rem;font-weight:600}
+.sm2-hbtns{display:flex;gap:.9rem;flex-wrap:wrap}
+.sm2-btn{display:inline-flex;align-items:center;gap:.45rem;padding:.82rem 1.7rem;border-radius:4px;font-weight:700;font-size:.92rem;text-decoration:none!important;transition:all .22s ease;border:2px solid transparent;cursor:pointer}
+.sm2-btn-wa{background:#25D366;color:#fff!important;border-color:#25D366}
+.sm2-btn-wa:hover{background:#1DAE57;border-color:#1DAE57;transform:translateY(-2px);box-shadow:0 6px 20px rgba(37,211,102,.4)}
+.sm2-btn-ow{background:transparent;color:#fff!important;border-color:#fff}
+.sm2-btn-ow:hover{background:#fff;color:#0D3B6E!important;transform:translateY(-2px)}
+.sm2-btn-p{background:#1B5E9B;color:#fff!important;border-color:#1B5E9B}
+.sm2-btn-p:hover{background:#154d82;border-color:#154d82;transform:translateY(-2px);box-shadow:0 6px 20px rgba(27,94,155,.4)}
+.sm2-btn-ob{background:transparent;color:#1B5E9B!important;border-color:#1B5E9B}
+.sm2-btn-ob:hover{background:#1B5E9B;color:#fff!important;transform:translateY(-2px)}
+.sm2-stats{background:#0D3B6E;padding:3.5rem 2rem}
+.sm2-sg{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;max-width:1100px;margin:0 auto;text-align:center}
+.sm2-sn{font-size:2.8rem;font-weight:900;color:#4A90D9;line-height:1;display:block}
+.sm2-sdiv{width:28px;height:2px;background:#4A90D9;margin:.55rem auto 0;border-radius:1px}
+.sm2-sl{color:#C8DCF0;font-size:.87rem;margin-top:.45rem;display:block}
+.sm2-sec{padding:5rem 2rem}
+.sm2-sec-lt{background:#F4F7FA}.sm2-sec-wh{background:#fff}.sm2-sec-dk{background:#0D3B6E}.sm2-sec-bl{background:#1B5E9B}
+.sm2-con{max-width:1100px;margin:0 auto}
+.sm2-lbl{display:inline-flex;align-items:center;gap:.4rem;color:#1B5E9B;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:.7rem}
+.sm2-lbl::before{content:'';display:inline-block;width:22px;height:2px;background:#1B5E9B}
+.sm2-lbl-w{color:#C8DCF0}.sm2-lbl-w::before{background:#C8DCF0}
+.sm2-h2{font-size:clamp(1.55rem,3vw,2.15rem);font-weight:800;color:#0D3B6E;line-height:1.2;margin-bottom:.9rem}
+.sm2-h2-w{color:#fff!important}
+.sm2-lead{font-size:1.03rem;color:#4B5563;max-width:640px;line-height:1.75}
+.sm2-lead-w{color:#C8DCF0}
+.sm2-div{width:44px;height:4px;background:#1B5E9B;border-radius:2px;margin:1rem 0 2rem}
+.sm2-div-w{background:#4A90D9}
+.sm2-biog{display:grid;grid-template-columns:1fr 1.45fr;gap:4rem;align-items:center}
+.sm2-biow{position:relative}
+.sm2-bioi{width:100%;border-radius:12px;display:block;position:relative;z-index:2}
+.sm2-bioa{position:absolute;top:-15px;left:-15px;width:100%;height:100%;border:3px solid #1B5E9B;border-radius:12px;z-index:1}
+.sm2-biobdg{position:absolute;bottom:-1rem;right:-1rem;background:#1B5E9B;color:#fff;padding:.7rem 1.2rem;border-radius:8px;font-weight:700;font-size:.82rem;z-index:3;text-align:center;box-shadow:0 4px 20px rgba(27,94,155,.4)}
+.sm2-biobdg b{display:block;font-size:1.3rem;font-weight:900;color:#4A90D9}
+.sm2-biot p{color:#374151;line-height:1.82;margin-bottom:1.2rem;font-size:.98rem}
+.sm2-bq{border-left:4px solid #1B5E9B;background:#F4F7FA;padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.5rem 0 2rem;font-style:italic;color:#1F2937;font-size:1.03rem;line-height:1.65}
+.sm2-biohl{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin-top:1.4rem}
+.sm2-hl{display:flex;align-items:center;gap:.5rem;font-size:.88rem;color:#374151;font-weight:500}
+.sm2-hl::before{content:'‚úì';color:#1B5E9B;font-weight:900}
+.sm2-steps{display:grid;grid-template-columns:repeat(2,1fr);gap:1.4rem;margin-top:3rem}
+.sm2-card{background:#fff;border-radius:12px;padding:1.9rem;border:1px solid #E2ECF8;transition:all .3s ease;position:relative;overflow:hidden}
+.sm2-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:#1B5E9B;opacity:0;transition:opacity .3s}
+.sm2-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(27,94,155,.12);border-color:#1B5E9B}
+.sm2-card:hover::before{opacity:1}
+.sm2-cn{font-size:2.8rem;font-weight:900;color:#E2ECF8;line-height:1;margin-bottom:.4rem}
+.sm2-ci{font-size:1.7rem;display:block;margin-bottom:.65rem}
+.sm2-ct{font-size:1.05rem;font-weight:700;color:#0D3B6E;margin-bottom:.65rem}
+.sm2-cx{font-size:.9rem;color:#4B5563;line-height:1.72}
+.sm2-expg{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4rem;margin-top:3rem}
+.sm2-expc{background:#F4F7FA;border-radius:12px;overflow:hidden;transition:transform .3s ease,box-shadow .3s ease}
+.sm2-expc:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.1)}
+.sm2-expi{width:100%;height:200px;object-fit:cover;display:block}
+.sm2-expb{padding:1.2rem}
+.sm2-exptag{display:inline-block;background:#1B5E9B;color:#fff;font-size:.7rem;font-weight:700;padding:.18rem .65rem;border-radius:3px;margin-bottom:.55rem;text-transform:uppercase;letter-spacing:.5px}
+.sm2-exptit{font-size:.98rem;font-weight:700;color:#0D3B6E;margin-bottom:.45rem;line-height:1.3}
+.sm2-expdesc{font-size:.86rem;color:#4B5563;line-height:1.62}
+.sm2-apg{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-top:3rem}
+.sm2-api{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:1.4rem;text-align:center;transition:background .3s}
+.sm2-api:hover{background:rgba(255,255,255,.18)}
+.sm2-apico{font-size:1.9rem;display:block;margin-bottom:.65rem}
+.sm2-aptit{font-size:.92rem;font-weight:700;color:#fff;margin-bottom:.35rem}
+.sm2-apdesc{font-size:.8rem;color:#C8DCF0;line-height:1.55}
+.sm2-valg{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-top:3rem}
+.sm2-valc{background:#fff;border-radius:12px;padding:1.7rem;border-bottom:4px solid #1B5E9B;transition:transform .3s,box-shadow .3s}
+.sm2-valc:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(27,94,155,.1)}
+.sm2-valico{font-size:1.9rem;display:block;margin-bottom:.9rem}
+.sm2-valtit{font-size:.98rem;font-weight:700;color:#0D3B6E;margin-bottom:.45rem}
+.sm2-valdesc{font-size:.86rem;color:#4B5563;line-height:1.62}
+.sm2-toolg{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;margin-top:3rem;align-items:center}
+.sm2-toolimg{width:100%;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.1);display:block}
+.sm2-toolt h3{font-size:1.15rem;font-weight:700;color:#0D3B6E;margin-bottom:.7rem}
+.sm2-toolt p{font-size:.93rem;color:#4B5563;line-height:1.75;margin-bottom:.9rem}
+.sm2-cta{text-align:center;padding:6rem 2rem;background:linear-gradient(135deg,#0D3B6E 0%,#1B5E9B 100%);position:relative;overflow:hidden}
+.sm2-cta::before{content:'';position:absolute;top:-50%;left:-10%;width:500px;height:500px;background:radial-gradient(circle,rgba(74,144,217,.15) 0%,transparent 70%);border-radius:50%}
+.sm2-ctai{position:relative;z-index:2;max-width:720px;margin:0 auto}
+.sm2-cta h2{font-size:clamp(1.7rem,3vw,2.4rem);font-weight:800;color:#fff;margin-bottom:1rem}
+.sm2-cta p{font-size:1.05rem;color:#C8DCF0;margin-bottom:2.4rem;line-height:1.75}
+.sm2-ctabtns{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+@media(max-width:768px){
+  .sm2-sg{grid-template-columns:repeat(2,1fr)}
+  .sm2-biog{grid-template-columns:1fr;gap:2rem}
+  .sm2-bioa{display:none}
+  .sm2-steps{grid-template-columns:1fr}
+  .sm2-expg{grid-template-columns:1fr}
+  .sm2-apg{grid-template-columns:repeat(2,1fr)}
+  .sm2-valg{grid-template-columns:repeat(2,1fr)}
+  .sm2-toolg{grid-template-columns:1fr}
+  .sm2-biohl{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .sm2-apg{grid-template-columns:1fr}
+  .sm2-valg{grid-template-columns:1fr}
+  .sm2-sec{padding:3.5rem 1.25rem}
+  .sm2-hc{padding:5rem 1.25rem 3.5rem}
+}
+</style>
+<div class="sm2-root" itemscope itemtype="https://schema.org/Person">
+<section class="sm2-hero" aria-label="Presentaci√≥n de Manuel P√©rez, entrenador de ciclismo">
+<div class="sm2-hbg" id="sm2bg"></div>
+<div class="sm2-hov"></div>
+<div class="sm2-hc">
+<div class="sm2-eyebrow sm2-fade">‚ö° MFPP Cycling ¬∑ Castell√≥n ¬∑ Espa√±a</div>
+<h1 class="sm2-fade sm2-d1" itemprop="jobTitle">Entrenador de ciclismo especializado en <em>rendimiento, formaci√≥n</em> y desarrollo de ciclistas</h1>
+<p class="sm2-hdesc sm2-fade sm2-d2">Soy Manuel P√©rez, <strong style="color:#fff">Director Nacional de Ciclismo Nivel III</strong> por la RFEC. Dise√±o planes de entrenamiento individualizados basados en datos reales ‚Äî para ciclistas de todos los niveles que quieren mejorar de verdad.</p>
+<div class="sm2-htags sm2-fade sm2-d2">
+<span class="sm2-htag">Ì†ΩÌ≥ä Entrenamiento por potencia</span><br />
+<span class="sm2-htag">Ì†ΩÌ∫¥ Ruta ¬∑ BTT ¬∑ Ciclocross</span><br />
+<span class="sm2-htag">Ì†ºÌøÖ Director Nacional Nivel III RFEC</span><br />
+<span class="sm2-htag">Ì†ΩÌ±• Director TBG Wixum</span><br />
+<span class="sm2-htag">Ì†ΩÌ≥ç Castell√≥n ¬∑ Espa√±a</span>
+</div>
+<div class="sm2-hbtns sm2-fade sm2-d3">
+<a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20el%20entrenamiento%20personalizado%20de%20ciclismo" class="sm2-btn sm2-btn-wa" target="_blank" rel="noopener noreferrer" aria-label="Contactar por WhatsApp con Manuel P√©rez entrenador de ciclismo"><br />
+<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg><br />
+WhatsApp<br />
+</a><br />
+<a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="sm2-btn sm2-btn-ow">Ver planes de entrenamiento ‚Üí</a>
+</div>
+</div>
+</section>
+<div class="sm2-stats" role="region" aria-label="Estad√≠sticas de experiencia">
+<div class="sm2-sg">
+<div class="sm2-fade"><span class="sm2-sn" data-target="10" data-sfx="+">0+</span></p>
+<div class="sm2-sdiv"></div>
+<p><span class="sm2-sl">A√±os de experiencia</span></div>
+<div class="sm2-fade sm2-d1"><span class="sm2-sn" data-target="175" data-sfx="+">0+</span></p>
+<div class="sm2-sdiv"></div>
+<p><span class="sm2-sl">Ciclistas entrenados</span></div>
+<div class="sm2-fade sm2-d2"><span class="sm2-sn" data-target="4" data-sfx="">0</span></p>
+<div class="sm2-sdiv"></div>
+<p><span class="sm2-sl">Disciplinas: Ruta, BTT, Ciclocross, Pista</span></div>
+<div class="sm2-fade sm2-d3"><span class="sm2-sn" data-nival="true">Nivel III</span></p>
+<div class="sm2-sdiv"></div>
+<p><span class="sm2-sl">Director Nacional RFEC</span></div>
+</div>
+</div>
+<section class="sm2-sec sm2-sec-wh" aria-labelledby="sm2h-bio">
+<div class="sm2-con">
+<div class="sm2-biog">
+<div class="sm2-biow sm2-fade">
+<div class="sm2-bioa" aria-hidden="true"></div>
+<div class="sm2-bioi" style="width:100%;aspect-ratio:5/6;background:linear-gradient(135deg,#0D3B6E 0%,#1B5E9B 100%);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;color:rgba(255,255,255,.5);font-size:.9rem;text-align:center;padding:2rem"><img decoding="async" src="https://mfppcycling.com/wp-content/uploads/2026/06/MFPPanalizandoEntrenamientos.png" alt="Manuel Francisco Perez analizando entrenamientos de ciclismo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;"></div>
+<div class="sm2-biobdg" aria-hidden="true"><b>10+</b>a√±os entrenando</div>
+</div>
+<div class="sm2-biot">
+<div class="sm2-lbl sm2-fade">Qui√©n soy</div>
+<h2 class="sm2-h2 sm2-fade" id="sm2h-bio">Manuel P√©rez ‚Äî m√©todo, datos y compromiso con cada ciclista</h2>
+<div class="sm2-div sm2-fade"></div>
+<p class="sm2-fade">Soy <strong>Manuel P√©rez P√©rez</strong>, entrenador de ciclismo con m√°s de 10 a√±os de experiencia en <strong>preparaci√≥n f√≠sica para ciclismo</strong>, planificaci√≥n individualizada y direcci√≥n deportiva. Cuento con la titulaci√≥n de <strong>Director Nacional de Ciclismo Nivel III</strong> por la Real Federaci√≥n Espa√±ola de Ciclismo ‚Äî la m√°xima cualificaci√≥n t√©cnica del ciclismo espa√±ol.</p>
+<p class="sm2-fade">Actualmente soy <strong>Director T√©cnico del equipo TBG Wixum</strong> en las categor√≠as Cadete y Juvenil. Trabajo con j√≥venes ciclistas con visi√≥n de desarrollo a largo plazo: no buscamos resultados r√°pidos, sino formar ciclistas s√≥lidos, completos y con base t√©cnica real.</p>
+<p class="sm2-fade">Tambi√©n entreno ciclistas adultos de todos los niveles ‚Äî aficionados que buscan mejorar su rendimiento en ciclismo, cicloturistas con objetivos claros, y deportistas que quieren tomarse el ciclismo en serio sin hacerlo a tiempo completo.</p>
+<blockquote class="sm2-bq sm2-fade"><p>¬´No entreno por intuici√≥n. Cada plan parte de datos reales: potencia, frecuencia card√≠aca y carga de trabajo. Mi objetivo siempre es el mismo ‚Äî que el ciclista llegue m√°s lejos de donde cre√≠a que pod√≠a llegar.¬ª</p></blockquote>
+<div class="sm2-biohl sm2-fade">
+<div class="sm2-hl">Director Nacional Nivel III RFEC</div>
+<div class="sm2-hl">An√°lisis de datos con WKO5</div>
+<div class="sm2-hl">Ruta ¬∑ BTT ¬∑ Ciclocross</div>
+<div class="sm2-hl">Director TBG Wixum Cadete y Juvenil</div>
+<div class="sm2-hl">Planificaci√≥n con TrainingPeaks</div>
+<div class="sm2-hl">Ciclistas aficionados y competici√≥n</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="sm2-sec sm2-sec-lt" aria-labelledby="sm2h-met">
+<div class="sm2-con">
+<div class="sm2-lbl sm2-fade">Mi m√©todo</div>
+<h2 class="sm2-h2 sm2-fade" id="sm2h-met">As√≠ trabajo con cada ciclista</h2>
+<div class="sm2-div sm2-fade"></div>
+<p class="sm2-lead sm2-fade">La <strong>planificaci√≥n ciclista</strong> no puede ser gen√©rica. Cada ciclista es diferente ‚Äî distinto perfil, distintos objetivos, distinta disponibilidad. Mi metodolog√≠a se apoya en cuatro pilares fundamentales:</p>
+<div class="sm2-steps">
+<div class="sm2-card sm2-fade">
+<div class="sm2-cn">01</div>
+<p><span class="sm2-ci">Ì†ΩÌ≥ä</span></p>
+<div class="sm2-ct">An√°lisis y evaluaci√≥n inicial</div>
+<div class="sm2-cx">Antes de dise√±ar ning√∫n plan, analizo en profundidad tu perfil: historial de entrenamiento, FTP real, potencia m√°xima, puntos d√©biles y objetivos concretos. Utilizo <strong>WKO5</strong> para obtener un diagn√≥stico preciso basado en datos, no en suposiciones.</div>
+</div>
+<div class="sm2-card sm2-fade sm2-d1">
+<div class="sm2-cn">02</div>
+<p><span class="sm2-ci">Ì†ΩÌ∑∫Ô∏è</span></p>
+<div class="sm2-ct">Planificaci√≥n individualizada</div>
+<div class="sm2-cx">Dise√±o un <strong>entrenamiento personalizado para ciclistas</strong> periodizado y adaptado a tu vida real: horarios, compromisos, calendario de competiciones. Tu plan en <strong>TrainingPeaks</strong> evoluciona contigo ‚Äî no es un documento est√°tico, es una hoja de ruta viva.</div>
+</div>
+<div class="sm2-card sm2-fade sm2-d2">
+<div class="sm2-cn">03</div>
+<p><span class="sm2-ci">Ì†ΩÌ≥à</span></p>
+<div class="sm2-ct">Seguimiento y an√°lisis continuo</div>
+<div class="sm2-cx">Reviso tus sesiones regularmente: potencia, TSS, CTL, ATL y TSB. Si algo no cuadra ‚Äî una semana dif√≠cil, enfermedad, fatiga acumulada ‚Äî ajusto el plan de inmediato. El <strong>entrenamiento por potencia</strong> solo funciona si se adapta en tiempo real.</div>
+</div>
+<div class="sm2-card sm2-fade sm2-d3">
+<div class="sm2-cn">04</div>
+<p><span class="sm2-ci">Ì†ΩÌ≤¨</span></p>
+<div class="sm2-ct">Comunicaci√≥n y acompa√±amiento constante</div>
+<div class="sm2-cx">Estoy disponible para resolver dudas, analizar sensaciones y ajustar cuando haga falta. No eres un n√∫mero en una lista ‚Äî eres un ciclista con un objetivo real, y mi trabajo es ayudarte a conseguirlo semana a semana.</div>
+</div>
+</div>
+<div style="text-align:center;margin-top:2.5rem" class="sm2-fade">
+<a href="/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/" class="sm2-btn sm2-btn-p">Conoce mi m√©todo en detalle ‚Üí</a>
+</div>
+</div>
+</section>
+<section class="sm2-sec sm2-sec-wh" aria-labelledby="sm2h-exp">
+<div class="sm2-con">
+<div class="sm2-lbl sm2-fade">Trayectoria</div>
+<h2 class="sm2-h2 sm2-fade" id="sm2h-exp">Experiencia real en ciclismo de competici√≥n</h2>
+<div class="sm2-div sm2-fade"></div>
+<p class="sm2-lead sm2-fade">Mi trabajo como entrenador de ciclismo en Espa√±a no se limita al entrenamiento individual. He desarrollado mi trayectoria en la formaci√≥n de ciclistas j√≥venes, la direcci√≥n deportiva de equipos y el acompa√±amiento en pruebas de referencia.</p>
+<div class="sm2-expg">
+<div class="sm2-expc sm2-fade">
+<img loading="lazy" loading="lazy" decoding="async" class="sm2-expi" src="https://mfppcycling.com/wp-content/uploads/2024/02/MF-2024-02-08-44077-scaled.jpg" alt="Equipo TBG Wixum categor√≠as Cadete y Juvenil con Manuel P√©rez como Director T√©cnico" loading="lazy" width="400" height="200"/></p>
+<div class="sm2-expb">
+<span class="sm2-exptag">Direcci√≥n deportiva</span></p>
+<div class="sm2-exptit">Director T√©cnico TBG Wixum ‚Äî Ciclismo Cadete y Juvenil</div>
+<div class="sm2-expdesc">Dirijo el equipo TBG Wixum en las categor√≠as <strong>ciclismo cadete</strong> y <strong>ciclismo juvenil</strong>. Un trabajo de formaci√≥n integral donde el desarrollo t√©cnico, f√≠sico y mental del joven ciclista es la prioridad, con visi√≥n deportiva a largo plazo.</div>
+</div>
+</div>
+<div class="sm2-expc sm2-fade sm2-d1">
+<img loading="lazy" loading="lazy" decoding="async" class="sm2-expi" src="https://mfppcycling.com/wp-content/uploads/2023/06/Los-ganadores-45-Volta-a-Castello-min.jpg" alt="Ganadores de la 45 Volta a Castell√≥ - ciclismo de competici√≥n en Castell√≥n" loading="lazy" width="400" height="200"/></p>
+<div class="sm2-expb">
+<span class="sm2-exptag">Competici√≥n</span></p>
+<div class="sm2-exptit">Volta a Castell√≥ y pruebas federadas de referencia</div>
+<div class="sm2-expdesc">He acompa√±ado a ciclistas en pruebas federadas como la Volta a Castell√≥, con resultados que demuestran que la planificaci√≥n correcta marca una diferencia real. El <strong>rendimiento en ciclismo</strong> se construye, no se improvisa.</div>
+</div>
+</div>
+<div class="sm2-expc sm2-fade sm2-d2">
+<img loading="lazy" loading="lazy" decoding="async" class="sm2-expi" src="https://mfppcycling.com/wp-content/uploads/2023/05/Entrenador-con-TrainingPeaks.jpg" alt="Entrenador de ciclismo Manuel P√©rez analizando datos en TrainingPeaks" loading="lazy" width="400" height="200"/></p>
+<div class="sm2-expb">
+<span class="sm2-exptag">Entrenamiento online</span></p>
+<div class="sm2-exptit">M√°s de 100 ciclistas entrenados en toda Espa√±a</div>
+<div class="sm2-expdesc">He trabajado con ciclistas de toda Espa√±a ‚Äî aficionados, M√°ster, junior, cadetes ‚Äî mediante <strong>entrenamiento de ciclismo online</strong> con TrainingPeaks. La distancia no es un obst√°culo cuando el m√©todo es s√≥lido.</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="sm2-sec sm2-sec-dk" aria-labelledby="sm2h-ap">
+<div class="sm2-con">
+<div class="sm2-lbl sm2-lbl-w sm2-fade">¬øPor qu√© trabajar conmigo?</div>
+<h2 class="sm2-h2 sm2-h2-w sm2-fade" id="sm2h-ap" style="color:#F97316!important">Qu√© puedo aportarte como entrenador de ciclismo</h2>
+<div class="sm2-div sm2-div-w sm2-fade"></div>
+<p class="sm2-lead sm2-lead-w sm2-fade">Tanto si eres principiante como si compites a nivel federado, hay elementos clave que marcan la diferencia entre entrenar y entrenar bien. Estos son los aspectos en los que m√°s impacto tengo:</p>
+<div class="sm2-apg">
+<div class="sm2-api sm2-fade"><span class="sm2-apico">‚ö°</span></p>
+<div class="sm2-aptit">Mejorar el rendimiento</div>
+<div class="sm2-apdesc">Planes orientados a mejorar FTP, potencia en escaladas, resistencia y velocidad seg√∫n tus puntos d√©biles espec√≠ficos.</div>
+</div>
+<div class="sm2-api sm2-fade sm2-d1"><span class="sm2-apico">Ì†ΩÌ≥Ö</span></p>
+<div class="sm2-aptit">Organizar los entrenamientos</div>
+<div class="sm2-apdesc">Basta de entrenar sin estructura. Dise√±o tu temporada completa con objetivos a corto, medio y largo plazo bien definidos.</div>
+</div>
+<div class="sm2-api sm2-fade sm2-d2"><span class="sm2-apico">Ì†ΩÌ¥ç</span></p>
+<div class="sm2-aptit">Interpretar tus datos</div>
+<div class="sm2-apdesc">El <strong>an√°lisis de datos en ciclismo</strong> es una ventaja. Aprende a entrenar por zonas de potencia reales, no gen√©ricas, con WKO5.</div>
+</div>
+<div class="sm2-api sm2-fade"><span class="sm2-apico">Ì†ºÌæØ</span></p>
+<div class="sm2-aptit">Preparar tus objetivos</div>
+<div class="sm2-apdesc">Tienes una marcha, una carrera o un reto personal. Dise√±o la puesta a punto perfecta para que llegues en tu mejor momento.</div>
+</div>
+<div class="sm2-api sm2-fade sm2-d1"><span class="sm2-apico">Ì†ΩÌª°Ô∏è</span></p>
+<div class="sm2-aptit">Evitar errores de entrenamiento</div>
+<div class="sm2-apdesc">Sobreentrenamiento, cargas mal distribuidas, descanso insuficiente. Detecto y corrijo estos errores antes de que frenen tu progreso.</div>
+</div>
+<div class="sm2-api sm2-fade sm2-d2"><span class="sm2-apico">Ì†ºÌº±</span></p>
+<div class="sm2-aptit">Acompa√±ar el proceso</div>
+<div class="sm2-apdesc">El entrenamiento es un proceso, no un sprint. Estoy contigo semana a semana, ajustando, motivando y celebrando cada mejora.</div>
+</div>
+</div>
+<div style="text-align:center;margin-top:2.5rem" class="sm2-fade">
+<a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="sm2-btn sm2-btn-ow">Ver todos los servicios de entrenamiento ‚Üí</a>
+</div>
+</div>
+</section>
+<section class="sm2-sec sm2-sec-lt" aria-labelledby="sm2h-val">
+<div class="sm2-con">
+<div class="sm2-lbl sm2-fade">C√≥mo soy</div>
+<h2 class="sm2-h2 sm2-fade" id="sm2h-val">Los valores que gu√≠an mi trabajo como entrenador</h2>
+<div class="sm2-div sm2-fade"></div>
+<p class="sm2-lead sm2-fade">En MFPP Cycling no hay atajos. El ciclismo bien entrenado requiere tiempo, honestidad y una visi√≥n a largo plazo. Estos son los principios que aplico con cada ciclista, sin excepci√≥n:</p>
+<div class="sm2-valg">
+<div class="sm2-valc sm2-fade"><span class="sm2-valico">Ì†ΩÌ≥ö</span></p>
+<div class="sm2-valtit">Formaci√≥n continua</div>
+<div class="sm2-valdesc">Me formo constantemente para aplicar siempre la mejor metodolog√≠a disponible. El entrenamiento deportivo avanza ‚Äî yo tambi√©n.</div>
+</div>
+<div class="sm2-valc sm2-fade sm2-d1"><span class="sm2-valico">Ì†ΩÌ¥Ñ</span></p>
+<div class="sm2-valtit">Constancia y proceso</div>
+<div class="sm2-valdesc">Los resultados duraderos se construyen con constancia. No vendo milagros ‚Äî vendo m√©todo, trabajo sostenido y evoluci√≥n real.</div>
+</div>
+<div class="sm2-valc sm2-fade sm2-d2"><span class="sm2-valico">Ì†æÌ¥ù</span></p>
+<div class="sm2-valtit">Honestidad</div>
+<div class="sm2-valdesc">Si algo no funciona, lo digo. Si necesitas m√°s tiempo para tu objetivo, tambi√©n. La confianza entre entrenador y ciclista es la base de todo.</div>
+</div>
+<div class="sm2-valc sm2-fade"><span class="sm2-valico">Ì†ΩÌ≤Ø</span></p>
+<div class="sm2-valtit">Trabajo bien hecho</div>
+<div class="sm2-valdesc">Cada plan est√° pensado, cada sesi√≥n tiene un prop√≥sito. No hago relleno. Cuando entrenas conmigo, cada pedalada cuenta.</div>
+</div>
+<div class="sm2-valc sm2-fade sm2-d1"><span class="sm2-valico">Ì†ΩÌ∫Ä</span></p>
+<div class="sm2-valtit">Desarrollo a largo plazo</div>
+<div class="sm2-valdesc">Con ciclistas j√≥venes especialmente, la visi√≥n tiene que ser de a√±os, no de semanas. Formamos ciclistas completos, no ganadores de una carrera.</div>
+</div>
+<div class="sm2-valc sm2-fade sm2-d2"><span class="sm2-valico">‚ù§Ô∏è</span></p>
+<div class="sm2-valtit">Compromiso real</div>
+<div class="sm2-valdesc">Cuando trabajamos juntos, me implico de verdad. Tu evoluci√≥n me importa. Tu progreso es tambi√©n mi progreso ‚Äî eso no es marketing, es mi forma de trabajar.</div>
+</div>
+</div>
+</div>
+</section>
+<section class="sm2-sec sm2-sec-wh" aria-labelledby="sm2h-tools">
+<div class="sm2-con">
+<div class="sm2-lbl sm2-fade">Tecnolog√≠a al servicio del ciclista</div>
+<h2 class="sm2-h2 sm2-fade" id="sm2h-tools">Herramientas de an√°lisis profesional</h2>
+<div class="sm2-div sm2-fade"></div>
+<p class="sm2-lead sm2-fade">La diferencia entre entrenar y entrenar bien est√° en los datos. Utilizo las herramientas m√°s avanzadas del mercado para que tu plan sea preciso, no gen√©rico:</p>
+<div class="sm2-toolg">
+<div class="sm2-fade"><img decoding="async" class="sm2-toolimg" src="https://mfppcycling.com/wp-content/uploads/2023/05/WKO5.png" alt="Software WKO5 para an√°lisis avanzado de potencia en ciclismo - entrenamiento por potencia profesional" loading="lazy" width="540"/></div>
+<div class="sm2-fade sm2-d1">
+<div class="sm2-toolt">
+<h3>Ì†ΩÌ¥¨ WKO5 ‚Äî An√°lisis de potencia avanzado</h3>
+<p><strong>WKO5</strong> es la herramienta m√°s potente del mercado para el an√°lisis del rendimiento ciclista. Con ella calculo tu perfil de potencia completo: <strong>FTP real, iLevels individualizados, W&#8217; y modelos de fatiga neuromuscular</strong>. Resultado: un entrenamiento basado en tus datos reales, no en tablas gen√©ricas de internet.</p>
+<p>Esto significa menos tiempo perdido, menos desgaste innecesario y mejoras m√°s r√°pidas y sostenibles a lo largo de la temporada.</p>
+<p><a href="/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/" class="sm2-btn sm2-btn-ob" style="margin-top:.5rem">Conoce mi metodolog√≠a ‚Üí</a>
+</div>
+</div>
+<div class="sm2-fade sm2-d2">
+<div class="sm2-toolt">
+<h3>Ì†ΩÌ≥ä TrainingPeaks ‚Äî Planificaci√≥n y seguimiento en tiempo real</h3>
+<p><strong>TrainingPeaks</strong> es la plataforma donde gestiono todos los planes de entrenamiento. T√∫ ves cada sesi√≥n directamente en tu m√≥vil o reloj GPS. Yo monitorizo en tiempo real tu <strong>carga de entrenamiento (CTL), fatiga (ATL) y forma (TSB)</strong> para tomar decisiones correctas cada semana.</p>
+<p>Si la semana sale mal ‚Äî trabajo, enfermedad, viaje ‚Äî ajusto el plan antes de que acumules fatiga innecesaria. El plan se adapta a tu vida, no tu vida al plan.</p>
+<p><a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="sm2-btn sm2-btn-ob" style="margin-top:.5rem">Ver planes disponibles ‚Üí</a>
+</div>
+</div>
+<div class="sm2-fade sm2-d3"><img decoding="async" class="sm2-toolimg" src="https://mfppcycling.com/wp-content/uploads/2023/05/Entrenador-con-TrainingPeaks.jpg" alt="Manuel P√©rez entrenador de ciclismo analizando datos de TrainingPeaks para planificaci√≥n del entrenamiento" loading="lazy" width="540"/></div>
+</div>
+</div>
+</section>
+<section class="sm2-cta" aria-labelledby="sm2h-cta">
+<div class="sm2-ctai">
+<div class="sm2-lbl sm2-lbl-w sm2-fade" style="justify-content:center">¬øHablamos?</div>
+<h2 class="sm2-fade sm2-d1" id="sm2h-cta">¬øListo para llevar tu ciclismo al siguiente nivel?</h2>
+<p class="sm2-fade sm2-d2">Tanto si buscas mejorar en tu primera marcha como si quieres competir con seriedad, cu√©ntame tu caso. La primera consulta es gratuita y sin compromiso ‚Äî juntos definimos si podemos trabajar bien y qu√© plan tiene sentido para ti.</p>
+<div class="sm2-ctabtns sm2-fade sm2-d3">
+<a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20el%20entrenamiento%20personalizado%20en%20MFPP%20Cycling" class="sm2-btn sm2-btn-wa" target="_blank" rel="noopener noreferrer"><br />
+<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg><br />
+WhatsApp directo<br />
+</a><br />
+<a href="/contacto-entrenamientos-ciclismo-mfpp-cycling/" class="sm2-btn sm2-btn-ow">Formulario de contacto</a><br />
+<a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="sm2-btn sm2-btn-ow">Ver planes y precios</a>
+</div>
+<p class="sm2-fade" style="color:rgba(200,220,240,.55);font-size:.8rem;margin-top:1.8rem">Ì†ΩÌ≥û +34 650 545 759 &nbsp;¬∑&nbsp; ‚úâÔ∏è mfppcycling@gmail.com</p>
+</div>
+</section>
+</div>
+<p><script>
+(function(){
+var fades=document.querySelectorAll('.sm2-fade');
+if('IntersectionObserver' in window){
+var obs=new IntersectionObserver(function(e){e.forEach(function(e){if(e.isIntersecting){e.target.classList.add('sm2-vis');obs.unobserve(e.target)}})},{threshold:.1,rootMargin:'0px 0px -30px 0px'});
+fades.forEach(function(el){obs.observe(el)});
+}else{fades.forEach(function(el){el.classList.add('sm2-vis')})}
+var counters=document.querySelectorAll('.sm2-sn[data-target]');
+if(counters.length){
+var co=new IntersectionObserver(function(e){e.forEach(function(e){if(!e.isIntersecting)return;var el=e.target,t=parseInt(el.getAttribute('data-target')),s=el.getAttribute('data-sfx')||'';co.unobserve(el);if(!t){el.textContent=s;return}var st=null,dur=1100;function step(ts){if(!st)st=ts;var p=Math.min((ts-st)/dur,1),ea=1-Math.pow(1-p,3);el.textContent=Math.floor(ea*t)+s;if(p<1)requestAnimationFrame(step);else el.textContent=t+s}requestAnimationFrame(step)})},{threshold:.3});
+counters.forEach(function(el){co.observe(el)});
+}
+var bg=document.getElementById('sm2bg');
+if(bg){window.addEventListener('scroll',function(){var sc=window.pageYOffset;if(sc<window.innerHeight)bg.style.transform='scale(1.06) translateY('+(sc*.12)+'px)'},{ passive:true })}
+})();
+</script></p>

@@ -1,0 +1,456 @@
+
+<style>
+.sv{font-family:inherit;color:#1F2937;line-height:1.6}
+.sv *,.sv *::before,.sv *::after{box-sizing:border-box;margin:0;padding:0}
+.svf{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+.svf.svv{opacity:1;transform:translateY(0)}
+.svd1{transition-delay:.12s}.svd2{transition-delay:.24s}.svd3{transition-delay:.36s}
+.sv-hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden}
+.sv-hbg{position:absolute;inset:0;background:url('https://mfppcycling.com/wp-content/uploads/2023/05/MF-2023-03-04-40094_2-min.jpg') center 30%/cover no-repeat;transform:scale(1.06);will-change:transform}
+.sv-hov{position:absolute;inset:0;background:linear-gradient(145deg,rgba(13,59,110,.97) 0%,rgba(13,59,110,.84) 50%,rgba(27,94,155,.55) 100%)}
+.sv-hc{position:relative;z-index:2;max-width:1100px;margin:0 auto;padding:6rem 2rem 4rem;width:100%}
+.sv-eye{display:inline-flex;align-items:center;gap:.4rem;background:rgba(74,144,217,.22);border:1px solid rgba(74,144,217,.45);color:#C8DCF0;padding:.35rem 1rem;border-radius:20px;font-size:.82rem;font-weight:700;letter-spacing:.5px;margin-bottom:1.4rem}
+.sv-hero h1{font-size:clamp(1.85rem,4vw,3rem);font-weight:800;color:#fff;line-height:1.15;margin-bottom:1.2rem;max-width:820px}
+.sv-hero h1 em{font-style:normal;color:#4A90D9}
+.sv-hdesc{font-size:1.08rem;color:#C8DCF0;max-width:630px;margin-bottom:2rem;line-height:1.75}
+.sv-htags{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:2.2rem}
+.sv-htag{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;padding:.28rem .85rem;border-radius:4px;font-size:.78rem;font-weight:600}
+.sv-hbtns{display:flex;gap:.9rem;flex-wrap:wrap}
+.sv-btn{display:inline-flex;align-items:center;gap:.45rem;padding:.82rem 1.7rem;border-radius:4px;font-weight:700;font-size:.92rem;text-decoration:none!important;transition:all .22s ease;border:2px solid transparent}
+.sv-btn-wa{background:#25D366;color:#fff!important;border-color:#25D366}
+.sv-btn-wa:hover{background:#1DAE57;border-color:#1DAE57;transform:translateY(-2px);box-shadow:0 6px 20px rgba(37,211,102,.4)}
+.sv-btn-ow{background:transparent;color:#fff!important;border-color:#fff}
+.sv-btn-ow:hover{background:#fff;color:#0D3B6E!important;transform:translateY(-2px)}
+.sv-btn-p{background:#1B5E9B;color:#fff!important;border-color:#1B5E9B}
+.sv-btn-p:hover{background:#154d82;transform:translateY(-2px);box-shadow:0 6px 20px rgba(27,94,155,.4)}
+.sv-btn-ob{background:transparent;color:#1B5E9B!important;border-color:#1B5E9B}
+.sv-btn-ob:hover{background:#1B5E9B;color:#fff!important;transform:translateY(-2px)}
+.sv-btn-sm{padding:.6rem 1.2rem;font-size:.85rem}
+.sv-pills{background:#0D3B6E;padding:2.5rem 2rem}
+.sv-pg{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;max-width:1100px;margin:0 auto;text-align:center}
+.sv-pill-ico{font-size:1.8rem;display:block;margin-bottom:.5rem}
+.sv-pill-t{font-weight:700;color:#fff;font-size:.95rem;margin-bottom:.25rem}
+.sv-pill-d{font-size:.8rem;color:#C8DCF0}
+.sv-sec{padding:5rem 2rem}
+.sv-sec-wh{background:#fff}.sv-sec-lt{background:#F4F7FA}.sv-sec-dk{background:#0D3B6E}
+.sv-con{max-width:1100px;margin:0 auto}
+.sv-lbl{display:inline-flex;align-items:center;gap:.4rem;color:#1B5E9B;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:.7rem}
+.sv-lbl::before{content:'';display:inline-block;width:22px;height:2px;background:#1B5E9B}
+.sv-lbl-w{color:#C8DCF0}.sv-lbl-w::before{background:#C8DCF0}
+.sv-h2{font-size:clamp(1.55rem,3vw,2.15rem);font-weight:800;color:#0D3B6E;line-height:1.2;margin-bottom:.9rem}
+.sv-h2-w{color:#fff}
+.sv-lead{font-size:1.03rem;color:#4B5563;max-width:680px;line-height:1.75}
+.sv-lead-w{color:#C8DCF0}
+.sv-div{width:44px;height:4px;background:#1B5E9B;border-radius:2px;margin:1rem 0 2rem}
+.sv-div-w{background:#4A90D9}
+.sv-tc{text-align:center}.sv-tc .sv-lead{margin:0 auto}.sv-tc .sv-lbl{justify-content:center}.sv-tc .sv-div{margin:1rem auto 2rem}
+.sv-pains{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:2.5rem}
+.sv-pain{background:#fff;border-radius:10px;padding:1.4rem;border-left:4px solid #1B5E9B;box-shadow:0 2px 12px rgba(0,0,0,.05);display:flex;gap:.75rem;align-items:flex-start;transition:transform .3s,box-shadow .3s}
+.sv-pain:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(27,94,155,.12)}
+.sv-pain-ico{font-size:1.5rem;flex-shrink:0}
+.sv-pain-t{font-size:.95rem;font-weight:700;color:#0D3B6E;margin-bottom:.3rem}
+.sv-pain-d{font-size:.82rem;color:#4B5563;line-height:1.5}
+.sv-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5rem;margin-top:2.5rem}
+.sv-cards-3{grid-template-columns:repeat(3,1fr)}
+.sv-tbg-banner{background:linear-gradient(135deg,#0D3B6E 0%,#1B5E9B 100%);border-radius:14px;padding:1.75rem 2rem;margin-top:2.5rem}
+.sv-tbg-inner{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap}
+.sv-tbg-ico{font-size:2rem;flex-shrink:0}
+.sv-tbg-inner strong{display:block;font-size:1.05rem;color:#fff;margin-bottom:.25rem}
+.sv-tbg-inner span{font-size:.9rem;color:rgba(255,255,255,.8)}
+.sv-plan-badge{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.25rem .85rem;border-radius:100px;margin-bottom:.6rem}
+.sv-badge-gr{background:#DCFCE7;color:#166534}
+.sv-badge-bl{background:#DBEAFE;color:#1E40AF}
+.sv-badge-am{background:#FEF3C7;color:#92400E}
+.sv-card-price{text-align:center;margin:.8rem 0 .5rem;padding:.6rem 0;border-top:1px solid #E2ECF8}
+.sv-price-num{font-size:2.1rem;font-weight:800;color:#1B5E9B}
+.sv-price-per{font-size:.85rem;color:#6B7280;margin-left:.15rem}
+@media(max-width:820px){.sv-cards-3{grid-template-columns:1fr}}
+.sv-card{background:#fff;border-radius:14px;border:1px solid #E2ECF8;overflow:hidden;transition:transform .3s,box-shadow .3s;display:flex;flex-direction:column}
+.sv-card:hover{transform:translateY(-5px);box-shadow:0 16px 40px rgba(27,94,155,.14)}
+.sv-card-top{background:linear-gradient(135deg,#0D3B6E 0%,#1B5E9B 100%);padding:1.75rem}
+.sv-card-ico{font-size:2.2rem;display:block;margin-bottom:.75rem}
+.sv-card-t{font-size:1.15rem;font-weight:800;color:#fff;margin-bottom:.5rem}
+.sv-card-for{display:inline-block;background:rgba(255,255,255,.15);color:#C8DCF0;font-size:.75rem;padding:.25rem .75rem;border-radius:20px;font-weight:600}
+.sv-card-body{padding:1.5rem 1.75rem;flex:1;display:flex;flex-direction:column}
+.sv-card-list{margin:0 0 1.2rem;padding:0;list-style:none;flex:1}
+.sv-card-list li{font-size:.87rem;color:#374151;padding:.35rem 0;border-bottom:1px solid #F0F4F8;display:flex;align-items:flex-start;gap:.5rem;line-height:1.5}
+.sv-card-list li:last-child{border-bottom:none}
+.sv-card-list li::before{content:'‚úì';color:#1B5E9B;font-weight:700;flex-shrink:0;margin-top:.05rem}
+.sv-card-cta{margin-top:auto;padding-top:1rem;display:flex;gap:.75rem;flex-wrap:wrap}
+.sv-card-feat{grid-column:auto;display:flex;flex-direction:column;border:2px solid #1B5E9B}
+.sv-card-feat .sv-card-top{padding:2rem}
+.sv-card-feat .sv-card-body{padding:2rem}
+.sv-card-feat .sv-card-t{font-size:1.35rem}
+.sv-inc{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-top:2.5rem}
+.sv-inc-item{text-align:center;padding:1.5rem 1rem;background:#fff;border-radius:10px;border-bottom:3px solid #1B5E9B;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:transform .3s}
+.sv-inc-item:hover{transform:translateY(-4px)}
+.sv-inc-ico{font-size:1.7rem;display:block;margin-bottom:.7rem}
+.sv-inc-t{font-size:.85rem;font-weight:700;color:#0D3B6E;line-height:1.35}
+.sv-diff{display:grid;grid-template-columns:repeat(4,1fr);gap:1.1rem;margin-top:2.5rem}
+.sv-diff-card{background:#F4F7FA;border-radius:10px;padding:1.4rem;border-top:4px solid #1B5E9B;transition:transform .3s,box-shadow .3s}
+.sv-diff-card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(27,94,155,.1)}
+.sv-diff-ico{font-size:1.7rem;display:block;margin-bottom:.65rem}
+.sv-diff-t{font-size:.92rem;font-weight:700;color:#0D3B6E;margin-bottom:.4rem}
+.sv-diff-d{font-size:.82rem;color:#4B5563;line-height:1.55}
+.sv-proc{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3rem}
+.sv-pstep{text-align:center;padding:0 .5rem}
+.sv-pstep-num{width:56px;height:56px;background:#1B5E9B;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.2rem;margin:0 auto 1rem;box-shadow:0 4px 16px rgba(27,94,155,.3)}
+.sv-pstep-ico{font-size:1.4rem;display:block;margin-bottom:.5rem}
+.sv-pstep-t{font-size:.95rem;font-weight:700;color:#0D3B6E;margin-bottom:.4rem}
+.sv-pstep-d{font-size:.82rem;color:#4B5563;line-height:1.55}
+.sv-testi{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:2.5rem}
+.sv-tcard{background:#fff;border-radius:12px;padding:1.75rem;border:1px solid #E2ECF8;box-shadow:0 2px 12px rgba(0,0,0,.05);transition:transform .3s,box-shadow .3s}
+.sv-tcard:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(27,94,155,.1)}
+.sv-stars{color:#F59E0B;font-size:1rem;letter-spacing:.1rem;margin-bottom:.9rem}
+.sv-tcard-txt{font-style:italic;color:#374151;font-size:.93rem;line-height:1.7;margin-bottom:1.2rem;position:relative;padding-left:1.2rem}
+.sv-tcard-txt::before{content:'"';position:absolute;left:0;top:-.2rem;color:#1B5E9B;font-size:2.2rem;line-height:1;font-style:normal}
+.sv-tcard-author{display:flex;align-items:center;gap:.75rem}
+.sv-tcard-av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#1B5E9B,#4A90D9);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.1rem;flex-shrink:0}
+.sv-tcard-name{font-weight:700;font-size:.9rem;color:#0D3B6E}
+.sv-tcard-role{font-size:.78rem;color:#6B7280}
+.sv-faq{margin-top:2.5rem}
+.sv-faq-item{border:1px solid #E2ECF8;border-radius:10px;margin-bottom:.75rem;overflow:hidden;background:#fff!important}
+.sv-faq-q{width:100%;background:none;border:none;padding:1.2rem 1.5rem;display:flex;justify-content:space-between;align-items:center;cursor:pointer;text-align:left;gap:1rem;transition:background .2s}
+.sv-faq-q:hover{background:rgba(255,255,255,.1)}
+.sv-faq-qt{font-size:.97rem;font-weight:700;color:#fff!important}
+.sv-faq-arr{width:22px;height:22px;flex-shrink:0;color:#fff!important;transition:transform .35s ease}
+.sv-faq-item.sv-open .sv-faq-arr{transform:rotate(180deg)}
+.sv-faq-a{max-height:0;overflow:hidden;transition:max-height .4s cubic-bezier(.4,0,.2,1)}
+.sv-faq-item.sv-open .sv-faq-a{max-height:600px}
+.sv-faq-ab{padding:0 1.5rem 1.2rem;font-size:.92rem;color:#374151!important;line-height:1.75}
+.sv-cta{text-align:center;padding:6rem 2rem;background:linear-gradient(135deg,#0D3B6E 0%,#1B5E9B 100%);position:relative;overflow:hidden}
+.sv-cta::before{content:'';position:absolute;top:-40%;left:-5%;width:480px;height:480px;background:radial-gradient(circle,rgba(74,144,217,.15) 0%,transparent 70%);border-radius:50%}
+.sv-ctai{position:relative;z-index:2;max-width:700px;margin:0 auto}
+.sv-cta h2{font-size:clamp(1.7rem,3vw,2.4rem);font-weight:800;color:#fff;margin-bottom:1rem}
+.sv-cta p{font-size:1.05rem;color:#C8DCF0;margin-bottom:2.4rem;line-height:1.75}
+.sv-ctabtns{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+@media(max-width:900px){
+.sv-pg{grid-template-columns:repeat(2,1fr)}
+.sv-pains{grid-template-columns:repeat(2,1fr)}
+.sv-cards{grid-template-columns:1fr}
+.sv-card-feat{grid-column:auto;display:flex;flex-direction:column}
+.sv-inc{grid-template-columns:repeat(3,1fr)}
+.sv-diff{grid-template-columns:repeat(2,1fr)}
+.sv-proc{grid-template-columns:1fr}
+.sv-testi{grid-template-columns:1fr}
+}
+@media(max-width:520px){
+.sv-sec{padding:3.5rem 1.25rem}
+.sv-hc{padding:5rem 1.25rem 3.5rem}
+.sv-pains{grid-template-columns:1fr}
+.sv-inc{grid-template-columns:repeat(2,1fr)}
+.sv-diff{grid-template-columns:1fr}
+}
+</style>
+
+<div class="sv" itemscope itemtype="https://schema.org/Service">
+
+<section class="sv-hero" aria-label="Servicios de entrenamiento ciclista MFPP Cycling">
+<div class="sv-hbg" id="svhbg"></div>
+<div class="sv-hov"></div>
+<div class="sv-hc">
+<div class="sv-eye svf">Ì†ºÌøÖ MFPP Cycling ¬∑ Servicios de Entrenamiento</div>
+<h1 class="svf svd1">Entrenamiento de ciclismo <em>personalizado</em> para alcanzar tu mejor rendimiento</h1>
+<p class="sv-hdesc svf svd2">Planificaci√≥n individualizada, seguimiento continuo y an√°lisis profesional con WKO5 y TrainingPeaks ‚Äî para que cada hora en la bici cuente de verdad.</p>
+<div class="sv-htags svf svd2">
+<span class="sv-htag">Ì†ΩÌ∫¥ Ruta ¬∑ BTT ¬∑ Ciclocross</span>
+<span class="sv-htag">Ì†ΩÌ≥ä An√°lisis de potencia</span>
+<span class="sv-htag">Ì†ºÌº± Cadetes y Juveniles</span>
+<span class="sv-htag">Ì†ºÌøÜ Competici√≥n ¬∑ Cicloturismo</span>
+<span class="sv-htag">Ì†ΩÌ≤ª 100% Online</span>
+</div>
+<div class="sv-hbtns svf svd3">
+<a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20saber%20m%C3%A1s%20sobre%20tus%20servicios%20de%20entrenamiento%20ciclista" class="sv-btn sv-btn-wa" target="_blank" rel="noopener noreferrer"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> Consultar por WhatsApp</a>
+<a href="/contacto-entrenamientos-ciclismo-mfpp-cycling/" class="sv-btn sv-btn-ow">Solicitar informaci√≥n ‚Üí</a>
+</div>
+</div>
+</section>
+
+<div class="sv-pills">
+<div class="sv-pg">
+<div class="svf"><span class="sv-pill-ico">Ì†ºÌæØ</span><div class="sv-pill-t">Plan individualizado</div><div class="sv-pill-d">Para tu perfil y objetivos</div></div>
+<div class="svf svd1"><span class="sv-pill-ico">Ì†ΩÌ≥ä</span><div class="sv-pill-t">An√°lisis con WKO5</div><div class="sv-pill-d">Datos reales, decisiones correctas</div></div>
+<div class="svf svd2"><span class="sv-pill-ico">Ì†ΩÌ¥Ñ</span><div class="sv-pill-t">Seguimiento continuo</div><div class="sv-pill-d">Revisi√≥n semanal garantizada</div></div>
+<div class="svf svd3"><span class="sv-pill-ico">Ì†ºÌºê</span><div class="sv-pill-t">100% online</div><div class="sv-pill-d">Entrenas donde y cuando puedas</div></div>
+</div>
+</div>
+
+<section class="sv-sec sv-sec-lt" aria-labelledby="svh-prob">
+<div class="sv-con">
+<div class="sv-tc">
+<div class="sv-lbl svf">¬øTe identificas?</div>
+<h2 class="sv-h2 svf" id="svh-prob">¬øEntrenas mucho pero no ves resultados?</h2>
+<div class="sv-div svf"></div>
+<p class="sv-lead svf">Si alguna de estas situaciones te resulta familiar, el entrenamiento personalizado puede cambiar completamente tu forma de entrenar y tus resultados:</p>
+</div>
+<div class="sv-pains">
+<div class="sv-pain svf"><span class="sv-pain-ico">Ì†ΩÌ∏§</span><div><div class="sv-pain-t">Acumulas kil√≥metros sin mejorar</div><div class="sv-pain-d">Entrenas muchas horas pero tu rendimiento se estanca. Sin estructura, el volumen no se convierte en mejora real.</div></div></div>
+<div class="sv-pain svf svd1"><span class="sv-pain-ico">‚ùì</span><div><div class="sv-pain-t">No sabes si entrenas bien o mal</div><div class="sv-pain-d">Sigues planes gen√©ricos de internet sin saber si son adecuados para tu nivel, tu cuerpo y tus objetivos reales.</div></div></div>
+<div class="sv-pain svf svd2"><span class="sv-pain-ico">Ì†ΩÌ≥â</span><div><div class="sv-pain-t">Llegas cansado a las competiciones</div><div class="sv-pain-d">Sin gesti√≥n de cargas, puedes llegar fatigado justo cuando m√°s importa. La puesta a punto es una ciencia.</div></div></div>
+<div class="sv-pain svf"><span class="sv-pain-ico">Ì†ΩÌ≥ä</span><div><div class="sv-pain-t">Tienes datos pero no los entiendes</div><div class="sv-pain-d">Potenci√≥metro, zonas de potencia, TSS‚Ä¶ mucha informaci√≥n que no sabes c√≥mo usar para mejorar de verdad.</div></div></div>
+<div class="sv-pain svf svd1"><span class="sv-pain-ico">‚è∞</span><div><div class="sv-pain-t">Poco tiempo y no sabes c√≥mo aprovecharlo</div><div class="sv-pain-d">Con pocas horas semanales, la calidad es m√°s importante que el volumen. Cada sesi√≥n debe tener un prop√≥sito.</div></div></div>
+<div class="sv-pain svf svd2"><span class="sv-pain-ico">Ì†ºÌæØ</span><div><div class="sv-pain-t">Tienes un objetivo y no sabes c√≥mo prepararlo</div><div class="sv-pain-d">Una marcha, una carrera o un reto personal necesita periodizaci√≥n espec√≠fica para que llegues en tu mejor momento.</div></div></div>
+</div>
+</div>
+</section>
+
+<section class="sv-sec sv-sec-wh" aria-labelledby="svh-servicios">
+<div class="sv-con">
+<div class="sv-tc">
+<div class="sv-lbl svf">Lo que ofrezco</div>
+<h2 class="sv-h2 svf" id="svh-servicios">Servicios de entrenamiento ciclista personalizado</h2>
+<div class="sv-div svf"></div>
+<p class="sv-lead svf">Cada servicio est√° dise√±ado para un perfil y un objetivo concreto. Si tienes dudas sobre cu√°l encaja mejor con tu situaci√≥n, escr√≠beme y lo valoramos juntos:</p>
+</div>
+<div class="sv-cards sv-cards-3">
+
+<div class="sv-card svf svd1">
+<div class="sv-card-top">
+<div class="sv-plan-badge sv-badge-gr">Para empezar</div>
+<div class="sv-card-t">Entrena</div>
+<span class="sv-card-for">Para el cadete que busca su primer plan estructurado</span>
+</div>
+<div class="sv-card-body">
+<ul class="sv-card-list">
+<li>An√°lisis inicial de condici√≥n f√≠sica y objetivos de temporada</li>
+<li>Plan de entrenamiento semanal 100% personalizado</li>
+<li>Ajuste del plan cada mes seg√∫n tu progresi√≥n real</li>
+<li>Seguimiento mensual con informe de evoluci√≥n</li>
+<li>Acceso a app de entrenamiento (TrainingPeaks)</li>
+<li>Soporte por WhatsApp con respuesta garantizada en 24h</li>
+<li>Consejos de nutrici√≥n b√°sica adaptados a la edad</li>
+</ul>
+<div class="sv-card-price"><span class="sv-price-num">35‚Ç¨</span><span class="sv-price-per">/mes</span></div>
+<div class="sv-card-cta"><a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20el%20plan%20Entrena" class="sv-btn sv-btn-wa">Empezar con este plan</a></div>
+</div>
+</div>
+
+<div class="sv-card sv-card-feat svf svd2">
+<div class="sv-card-top">
+<div class="sv-plan-badge sv-badge-bl">M√°s elegido</div>
+<div class="sv-card-t">Compite</div>
+<span class="sv-card-for">Para juveniles y cadetes con calendario de carreras</span>
+</div>
+<div class="sv-card-body">
+<ul class="sv-card-list">
+<li>Todo lo incluido en el plan Entrena</li>
+<li>Planificaci√≥n de temporada completa con objetivos por carrera</li>
+<li>An√°lisis semanal de carga y recuperaci√≥n ‚Äî sin sobreentrenar</li>
+<li>Informe mensual con gr√°ficos de progresi√≥n f√≠sica real</li>
+<li>T√°ctica de carrera personalizada seg√∫n el tipo de prueba</li>
+<li>Puesta a punto espec√≠fica antes de tus carreras m√°s importantes</li>
+<li>Gesti√≥n de la carga en semanas de competici√≥n y recuperaci√≥n</li>
+<li>Acceso prioritario por WhatsApp ‚Äî respuesta en menos de 4h</li>
+</ul>
+<div class="sv-card-price"><span class="sv-price-num">45‚Ç¨</span><span class="sv-price-per">/mes</span></div>
+<div class="sv-card-cta"><a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20el%20plan%20Compite" class="sv-btn sv-btn-wa">Empezar con este plan</a></div>
+</div>
+</div>
+
+<div class="sv-card svf svd3">
+<div class="sv-card-top">
+<div class="sv-plan-badge sv-badge-am">M√°ximo nivel</div>
+<div class="sv-card-t">Destaca</div>
+<span class="sv-card-for">Para ciclistas que apuntan a selecciones auton√≥micas o nacionales</span>
+</div>
+<div class="sv-card-body">
+<ul class="sv-card-list">
+<li>Todo lo incluido en el plan Compite</li>
+<li>Direcci√≥n deportiva personal con coordinaci√≥n directa con el equipo</li>
+<li>Control y ajuste diario de la carga de entrenamiento</li>
+<li>Seguimiento en competici√≥n: t√°ctica en tiempo real</li>
+<li>An√°lisis de rendimiento post-carrera en profundidad</li>
+<li>Planificaci√≥n orientada a selecciones auton√≥micas y nacionales</li>
+<li>Acceso directo a Manuel en cualquier momento del d√≠a</li>
+</ul>
+<div class="sv-card-price"><span class="sv-price-num">50‚Ç¨</span><span class="sv-price-per">/mes</span></div>
+<div class="sv-card-cta"><a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20el%20plan%20Destaca" class="sv-btn sv-btn-wa">Empezar con este plan</a></div>
+</div>
+</div>
+
+</div>
+
+<div class="sv-tbg-banner">
+  <div class="sv-tbg-inner">
+    <span class="sv-tbg-ico">Ì†ºÌøÖ</span>
+    <div>
+      <strong>¬øEres ciclista del equipo TBG WIXUM?</strong>
+      <span>Los miembros del equipo tienen un precio especial en todos los planes. Escr√≠benos por WhatsApp y te informamos.</span>
+    </div>
+    <a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20soy%20del%20equipo%20TBG%20WIXUM%20y%20me%20interesa%20el%20descuento%20en%20los%20planes" class="sv-btn sv-btn-wa" style="white-space:nowrap;flex-shrink:0">Ver mi descuento</a>
+  </div>
+</div>
+</div>
+</section>
+
+<section class="sv-sec sv-sec-lt" aria-labelledby="svh-inc">
+<div class="sv-con">
+<div class="sv-tc">
+<div class="sv-lbl svf">Componentes del servicio</div>
+<h2 class="sv-h2 svf" id="svh-inc">Qu√© incluye el entrenamiento personalizado para ciclistas</h2>
+<div class="sv-div svf"></div>
+<p class="sv-lead svf">El entrenamiento ciclista personalizado es mucho m√°s que un plan de sesiones. Cada uno de estos elementos forma parte del proceso de mejora real:</p>
+</div>
+<div class="sv-inc">
+<div class="sv-inc-item svf"><span class="sv-inc-ico">Ì†ΩÌ≥ã</span><div class="sv-inc-t">Planificaci√≥n individualizada</div></div>
+<div class="sv-inc-item svf svd1"><span class="sv-inc-ico">‚ö°</span><div class="sv-inc-t">Entrenamiento por potencia</div></div>
+<div class="sv-inc-item svf svd2"><span class="sv-inc-ico">‚ù§Ô∏è</span><div class="sv-inc-t">Control de frecuencia cardiaca</div></div>
+<div class="sv-inc-item svf svd3"><span class="sv-inc-ico">Ì†ΩÌ≥à</span><div class="sv-inc-t">An√°lisis de rendimiento</div></div>
+<div class="sv-inc-item svf"><span class="sv-inc-ico">Ì†ΩÌ¥Ñ</span><div class="sv-inc-t">Seguimiento continuo</div></div>
+<div class="sv-inc-item svf svd1"><span class="sv-inc-ico">Ì†ΩÌ¥ß</span><div class="sv-inc-t">Adaptaci√≥n semanal del plan</div></div>
+<div class="sv-inc-item svf svd2"><span class="sv-inc-ico">Ì†ΩÌ≤¨</span><div class="sv-inc-t">Comunicaci√≥n directa</div></div>
+<div class="sv-inc-item svf svd3"><span class="sv-inc-ico">Ì†ºÌæØ</span><div class="sv-inc-t">Revisi√≥n de objetivos</div></div>
+<div class="sv-inc-item svf"><span class="sv-inc-ico">Ì†ΩÌ¥¨</span><div class="sv-inc-t">Interpretaci√≥n de datos</div></div>
+<div class="sv-inc-item svf svd1"><span class="sv-inc-ico">‚öñÔ∏è</span><div class="sv-inc-t">Gesti√≥n de cargas de entrenamiento</div></div>
+</div>
+</div>
+</section>
+
+<section class="sv-sec sv-sec-wh" aria-labelledby="svh-why">
+<div class="sv-con">
+<div class="sv-lbl svf">¬øPor qu√© MFPP Cycling?</div>
+<h2 class="sv-h2 svf" id="svh-why">Razones para elegir un entrenador de ciclismo con experiencia real</h2>
+<div class="sv-div svf"></div>
+<div class="sv-diff">
+<div class="sv-diff-card svf"><span class="sv-diff-ico">Ì†ºÌøÖ</span><div class="sv-diff-t">+10 a√±os de experiencia</div><div class="sv-diff-d">M√°s de una d√©cada entrenando ciclistas en ruta, BTT y ciclocross, en todos los niveles, desde formaci√≥n hasta competici√≥n.</div></div>
+<div class="sv-diff-card svf svd1"><span class="sv-diff-ico">Ì†æÌ∑¨</span><div class="sv-diff-t">100% individualizado</div><div class="sv-diff-d">Sin plantillas ni planes gen√©ricos. Todo parte de tu an√°lisis personal, tu perfil de potencia real y tus circunstancias concretas.</div></div>
+<div class="sv-diff-card svf svd2"><span class="sv-diff-ico">Ì†ΩÌ≥ä</span><div class="sv-diff-t">Datos como base</div><div class="sv-diff-d">WKO5 para an√°lisis avanzado de potencia. TrainingPeaks para planificaci√≥n y seguimiento. Decisiones basadas en evidencia.</div></div>
+<div class="sv-diff-card svf svd3"><span class="sv-diff-ico">Ì†ºÌøÜ</span><div class="sv-diff-t">Experiencia en competici√≥n</div><div class="sv-diff-d">Director T√©cnico del equipo TBG Wixum en cadete y juvenil. Conozco el ciclismo de competici√≥n por dentro, no solo desde la teor√≠a.</div></div>
+<div class="sv-diff-card svf"><span class="sv-diff-ico">Ì†ΩÌ≤¨</span><div class="sv-diff-t">Trato cercano y real</div><div class="sv-diff-d">No soy un algoritmo ni una app. Hay una persona real leyendo tus sesiones, respondiendo tus dudas y pensando en tu entrenamiento.</div></div>
+<div class="sv-diff-card svf svd1"><span class="sv-diff-ico">Ì†ΩÌ≥ö</span><div class="sv-diff-t">Titulaci√≥n Nivel III</div><div class="sv-diff-d">Formaci√≥n oficial que garantiza rigor t√©cnico, actualizaci√≥n continua y aplicaci√≥n correcta de los principios del entrenamiento.</div></div>
+<div class="sv-diff-card svf svd2"><span class="sv-diff-ico">Ì†ºÌº±</span><div class="sv-diff-t">Visi√≥n a largo plazo</div><div class="sv-diff-d">El desarrollo sostenible del ciclista siempre por encima del resultado inmediato. Construimos una base s√≥lida para durar temporadas.</div></div>
+<div class="sv-diff-card svf svd3"><span class="sv-diff-ico">Ì†ºÌºê</span><div class="sv-diff-t">Servicio completamente online</div><div class="sv-diff-d">Trabajo con ciclistas de toda Espa√±a. La distancia no es un obst√°culo: mismo nivel de acompa√±amiento que en presencial.</div></div>
+</div>
+</div>
+</section>
+
+<section class="sv-sec sv-sec-lt" aria-labelledby="svh-proc">
+<div class="sv-con">
+<div class="sv-tc">
+<div class="sv-lbl svf">Primeros pasos</div>
+<h2 class="sv-h2 svf" id="svh-proc">C√≥mo empezar a entrenar con MFPP Cycling</h2>
+<div class="sv-div svf"></div>
+<p class="sv-lead svf">Desde el primer contacto hasta tu primer plan de entrenamiento personalizado, el proceso es sencillo, claro y sin sorpresas:</p>
+</div>
+<div class="sv-proc">
+<div class="sv-pstep svf"><div class="sv-pstep-num">1</div><span class="sv-pstep-ico">Ì†ΩÌ≥¨</span><div class="sv-pstep-t">Contacto inicial</div><div class="sv-pstep-d">Me escribes por WhatsApp o formulario con tu situaci√≥n, objetivos y nivel actual. Sin compromiso ‚Äî una conversaci√≥n para ver si encajamos.</div></div>
+<div class="sv-pstep svf svd1"><div class="sv-pstep-num">2</div><span class="sv-pstep-ico">Ì†ΩÌ¥ç</span><div class="sv-pstep-t">An√°lisis del ciclista</div><div class="sv-pstep-d">Recojo toda la informaci√≥n: historial de entrenamiento, datos de TrainingPeaks o Garmin, disponibilidad horaria y calendario de objetivos.</div></div>
+<div class="sv-pstep svf svd2"><div class="sv-pstep-num">3</div><span class="sv-pstep-ico">Ì†ºÌæØ</span><div class="sv-pstep-t">Definici√≥n de objetivos</div><div class="sv-pstep-d">Establecemos metas realistas y alcanzables a corto, medio y largo plazo ‚Äî la base de toda la planificaci√≥n posterior.</div></div>
+<div class="sv-pstep svf"><div class="sv-pstep-num">4</div><span class="sv-pstep-ico">Ì†ΩÌ≥ã</span><div class="sv-pstep-t">Planificaci√≥n</div><div class="sv-pstep-d">Dise√±o tu plan completo en TrainingPeaks: periodizaci√≥n, sesiones, cargas, zonas de trabajo. Todo adaptado a tu perfil real.</div></div>
+<div class="sv-pstep svf svd1"><div class="sv-pstep-num">5</div><span class="sv-pstep-ico">Ì†ΩÌ≥ä</span><div class="sv-pstep-t">Seguimiento y an√°lisis</div><div class="sv-pstep-d">Revisi√≥n semanal de lo realizado, an√°lisis con WKO5, ajustes inmediatos si algo cambia y comunicaci√≥n directa contigo.</div></div>
+<div class="sv-pstep svf svd2"><div class="sv-pstep-num">6</div><span class="sv-pstep-ico">Ì†ΩÌ≥à</span><div class="sv-pstep-t">Mejora continua</div><div class="sv-pstep-d">Evaluamos la evoluci√≥n, ajustamos objetivos y construimos la siguiente fase. El trabajo es a largo plazo, temporada a temporada.</div></div>
+</div>
+<div style="text-align:center;margin-top:3rem" class="svf">
+<a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20quiero%20empezar%20a%20entrenar%20contigo" class="sv-btn sv-btn-p" target="_blank" rel="noopener noreferrer">Empezar ahora ‚Üí</a>
+</div>
+</div>
+</section>
+
+<section class="sv-sec sv-sec-wh" aria-labelledby="svh-testi">
+<div class="sv-con">
+<div class="sv-tc">
+<div class="sv-lbl svf">Opiniones</div>
+<h2 class="sv-h2 svf" id="svh-testi">Lo que dicen los ciclistas que entrenan con MFPP Cycling</h2>
+<div class="sv-div svf"></div>
+</div>
+<div class="sv-testi">
+<div class="sv-tcard svf">
+<div class="sv-stars">‚òÖ‚òÖ‚òÖ‚òÖ‚òÖ</div>
+<p class="sv-tcard-txt">Llevaba a√±os acumulando kil√≥metros sin estructura. Desde que trabajo con Manuel, mi FTP ha mejorado un 18% en una temporada y, lo m√°s importante, s√© exactamente por qu√©.</p>
+<div class="sv-tcard-author"><div class="sv-tcard-av">C</div><div><div class="sv-tcard-name">Carlos M.</div><div class="sv-tcard-role">Ciclista m√°ster ¬∑ Castell√≥n</div></div></div>
+</div>
+<div class="sv-tcard svf svd1">
+<div class="sv-stars">‚òÖ‚òÖ‚òÖ‚òÖ‚òÖ</div>
+<p class="sv-tcard-txt">Preparamos la Marcha Cicloturista con un plan espec√≠fico y llegu√© en las mejores condiciones de los √∫ltimos a√±os. La puesta a punto fue perfecta.</p>
+<div class="sv-tcard-author"><div class="sv-tcard-av">A</div><div><div class="sv-tcard-name">Alberto R.</div><div class="sv-tcard-role">Cicloturista ¬∑ Valencia</div></div></div>
+</div>
+<div class="sv-tcard svf svd2">
+<div class="sv-stars">‚òÖ‚òÖ‚òÖ‚òÖ‚òÖ</div>
+<p class="sv-tcard-txt">Como padre de un cadete buscaba un entrenador que entendiera la formaci√≥n a largo plazo sin quemar etapas. Manuel trabaja exactamente as√≠: primero el desarrollo, luego los resultados.</p>
+<div class="sv-tcard-author"><div class="sv-tcard-av">F</div><div><div class="sv-tcard-name">Familia Garc√≠a</div><div class="sv-tcard-role">Cadete ¬∑ Equipo TBG Wixum</div></div></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sv-sec sv-sec-lt" itemscope itemtype="https://schema.org/FAQPage" aria-labelledby="svh-faq">
+<div class="sv-con">
+<div class="sv-lbl svf">Preguntas frecuentes</div>
+<h2 class="sv-h2 svf" id="svh-faq">FAQ: todo lo que necesitas saber sobre el entrenamiento ciclista personalizado</h2>
+<div class="sv-div svf"></div>
+<div class="sv-faq svf">
+
+<div class="sv-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+<button class="sv-faq-q" aria-expanded="false"><span class="sv-faq-qt" itemprop="name">¬øNecesito tener potenci√≥metro para entrenar contigo?</span><svg class="sv-faq-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="sv-faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div class="sv-faq-ab" itemprop="text">No es imprescindible, aunque s√≠ recomendable si el objetivo es mejorar el rendimiento con datos precisos. Se puede trabajar perfectamente con frecuencia cardiaca y RPE (percepci√≥n del esfuerzo). Si tienes potenci√≥metro, lo aprovechamos al m√°ximo con WKO5. Si no lo tienes todav√≠a, puedo orientarte sobre si merece la pena invertir en uno seg√∫n tus objetivos y tu nivel actual.</div></div>
+</div>
+
+<div class="sv-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+<button class="sv-faq-q" aria-expanded="false"><span class="sv-faq-qt" itemprop="name">¬øTrabajas con ciclistas m√°ster (mayores de 40 a√±os)?</span><svg class="sv-faq-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="sv-faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div class="sv-faq-ab" itemprop="text">S√≠, y es uno de los perfiles con los que trabajo habitualmente. El entrenamiento m√°ster tiene particularidades propias: la recuperaci√≥n es m√°s lenta, la tolerancia al volumen cambia y la retenci√≥n de masa muscular requiere atenci√≥n espec√≠fica. Adapto completamente la metodolog√≠a a estas necesidades para que puedas seguir mejorando a tu mejor nivel.</div></div>
+</div>
+
+<div class="sv-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+<button class="sv-faq-q" aria-expanded="false"><span class="sv-faq-qt" itemprop="name">¬øEntrenas ciclistas cadetes y juveniles?</span><svg class="sv-faq-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="sv-faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div class="sv-faq-ab" itemprop="text">S√≠. La formaci√≥n de ciclistas j√≥venes es una especialidad dentro de mi trabajo ‚Äî dirijo t√©cnicamente el equipo TBG Wixum en las categor√≠as cadete y juvenil. La clave con estos ciclistas es el desarrollo a largo plazo: construir una buena base sin quemar etapas. Si tienes un hijo/a ciclista o eres parte de un club, puedes contactarme para hablarlo.</div></div>
+</div>
+
+<div class="sv-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+<button class="sv-faq-q" aria-expanded="false"><span class="sv-faq-qt" itemprop="name">¬øC√≥mo funciona el seguimiento de los entrenamientos?</span><svg class="sv-faq-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="sv-faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div class="sv-faq-ab" itemprop="text">El seguimiento es semanal. Reviso todos tus entrenamientos en TrainingPeaks, analizo la carga realizada (TSS, CTL, ATL, TSB), leo tus comentarios y sensaciones, y ajusto el plan de la semana siguiente si hace falta. Tenemos comunicaci√≥n directa por WhatsApp o email para cualquier duda. No env√≠o un plan y desaparezco ‚Äî estoy ah√≠ durante todo el proceso.</div></div>
+</div>
+
+<div class="sv-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+<button class="sv-faq-q" aria-expanded="false"><span class="sv-faq-qt" itemprop="name">¬øQu√© plataformas utilizas para el entrenamiento?</span><svg class="sv-faq-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="sv-faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div class="sv-faq-ab" itemprop="text">Uso TrainingPeaks para planificaci√≥n y seguimiento, y WKO5 para an√°lisis avanzado de potencia. TrainingPeaks tiene versi√≥n gratuita suficiente para empezar. Si ya tienes Garmin Connect, Strava u otra plataforma, los integramos sin problema. Te gu√≠o con todo el proceso de configuraci√≥n desde el inicio.</div></div>
+</div>
+
+<div class="sv-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+<button class="sv-faq-q" aria-expanded="false"><span class="sv-faq-qt" itemprop="name">¬øPuedo entrenar contigo si tengo poco tiempo disponible?</span><svg class="sv-faq-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="sv-faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div class="sv-faq-ab" itemprop="text">S√≠, y es precisamente donde m√°s diferencia hace el entrenamiento personalizado. Con pocas horas semanales, la calidad es mucho m√°s importante que el volumen. Un ciclista con 5-6 horas bien estructuradas mejora m√°s que uno con 12 horas sin criterio. Adapto completamente el plan a tu disponibilidad real ‚Äî no me ajusto a ning√∫n modelo est√°ndar de horas.</div></div>
+</div>
+
+<div class="sv-faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+<button class="sv-faq-q" aria-expanded="false"><span class="sv-faq-qt" itemprop="name">¬øSolo trabajas con ciclistas de Castell√≥n o tambi√©n en otras provincias?</span><svg class="sv-faq-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="sv-faq-a" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div class="sv-faq-ab" itemprop="text">El servicio es completamente online, as√≠ que trabajo con ciclistas de toda Espa√±a y tambi√©n del extranjero. La comunicaci√≥n se hace por WhatsApp, email y TrainingPeaks, y el seguimiento funciona igual de bien independientemente de donde est√©s. La distancia no es un obst√°culo para un acompa√±amiento de calidad.</div></div>
+</div>
+
+</div>
+</div>
+</section>
+
+<section class="sv-cta">
+<div class="sv-ctai">
+<div class="sv-lbl sv-lbl-w svf" style="justify-content:center">¬øDamos el paso?</div>
+<h2 class="svf svd1">¬øListo para mejorar tu rendimiento ciclista?</h2>
+<p class="svf svd2">La primera consulta es gratuita y sin compromiso. Cu√©ntame tu situaci√≥n y vemos juntos qu√© servicio encaja mejor con tu perfil y tus objetivos.</p>
+<div class="sv-ctabtns svf svd3">
+<a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20quiero%20mejorar%20mi%20rendimiento%20ciclista%20y%20me%20gustar%C3%ADa%20saber%20m%C3%A1s%20sobre%20tus%20servicios" class="sv-btn sv-btn-wa" target="_blank" rel="noopener noreferrer"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp directo</a>
+<a href="/contacto-entrenamientos-ciclismo-mfpp-cycling/" class="sv-btn sv-btn-ow">Formulario de contacto</a>
+<a href="/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/" class="sv-btn sv-btn-ow">Conoce mi m√©todo</a>
+</div>
+<p class="svf" style="color:rgba(200,220,240,.55);font-size:.8rem;margin-top:1.8rem">Ì†ΩÌ≥û +34 650 545 759 &nbsp;¬∑&nbsp; ‚úâÔ∏è mfppcycling@gmail.com</p>
+</div>
+</section>
+
+</div>
+
+<script>
+(function(){
+var fades=document.querySelectorAll('.svf');
+if('IntersectionObserver' in window){
+var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('svv');obs.unobserve(e.target)}})},{threshold:.08,rootMargin:'0px 0px -25px 0px'});
+fades.forEach(function(el){obs.observe(el)});
+}else{fades.forEach(function(el){el.classList.add('svv')})}
+var bg=document.getElementById('svhbg');
+if(bg){window.addEventListener('scroll',function(){var sc=window.pageYOffset;if(sc<window.innerHeight)bg.style.transform='scale(1.06) translateY('+(sc*.12)+'px)'},{ passive:true })}
+document.querySelectorAll('.sv-faq-q').forEach(function(btn){
+btn.addEventListener('click',function(){
+var item=btn.closest('.sv-faq-item');
+var isOpen=item.classList.contains('sv-open');
+document.querySelectorAll('.sv-faq-item').forEach(function(i){i.classList.remove('sv-open');i.querySelector('.sv-faq-q').setAttribute('aria-expanded','false')});
+if(!isOpen){item.classList.add('sv-open');btn.setAttribute('aria-expanded','true')}
+});
+});
+})();
+</script>

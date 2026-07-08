@@ -1,0 +1,184 @@
+
+<style>
+:root{--mfpp-blue:#1B5E9B;--mfpp-blue-dark:#0D3B6E;--mfpp-blue-light:#4A90D9;--mfpp-blue-pale:#C8DCF0;--mfpp-bg-light:#F4F7FA;--mfpp-text:#1F2937;--mfpp-orange:#F97316}
+.tm{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--mfpp-text);line-height:1.65;margin:0;padding:0}
+.tm *{box-sizing:border-box}
+.tm a{text-decoration:none}
+.tmf{opacity:0;transform:translateY(28px);transition:opacity .6s ease,transform .6s ease}
+.tmv{opacity:1;transform:none}
+
+.tm-cover{display:flex;flex-direction:column;min-height:100vh;min-height:100svh}
+#tmhero{position:relative;min-height:500px;flex:1 0 auto;display:flex;align-items:center;overflow:hidden;background:#0D3B6E}
+#tmhbg{position:absolute;inset:0;background-image:url('https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1600&q=80');background-size:cover;background-position:center 30%;opacity:.35;will-change:transform}
+.tm-hero-inner{position:relative;z-index:2;max-width:900px;margin:0 auto;padding:5rem 2rem;text-align:center}
+.tm-breadcrumb{display:inline-flex;align-items:center;gap:.5rem;background:rgba(255,255,255,.12);padding:.4rem 1rem;border-radius:20px;font-size:.82rem;color:var(--mfpp-blue-pale);margin-bottom:1.5rem}
+.tm-h1{font-size:clamp(2rem,4vw,3rem);font-weight:800;color:#fff!important;line-height:1.15;margin:0 0 1rem}
+.tm-h1 span{color:var(--mfpp-blue-light)}
+.tm-hero-lead{font-size:1.1rem;color:var(--mfpp-blue-pale)!important;max-width:650px;margin:0 auto 2rem}
+
+.tm-stats{background:var(--mfpp-blue-dark);padding:1.5rem 2rem;flex:0 0 auto}
+.tm-stats-inner{max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;text-align:center}
+@media(max-width:640px){.tm-stats-inner{grid-template-columns:repeat(2,1fr)}}
+.tm-stat-num{font-size:1.8rem;font-weight:800;color:#fff}
+.tm-stat-lbl{font-size:.8rem;color:var(--mfpp-blue-pale);text-transform:uppercase;letter-spacing:.05em}
+
+.tm-grid-sec{background:#fff;padding:2rem 2rem 5rem}
+.tm-grid-inner{max-width:1100px;margin:0 auto}
+.tm-sec-label{font-size:.78rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mfpp-blue-light);display:flex;align-items:center;gap:.6rem;margin-bottom:.75rem}
+.tm-sec-label::before{content:'';display:block;width:28px;height:2px;background:var(--mfpp-blue-light)}
+.tm-h2{font-size:clamp(1.5rem,3vw,2.1rem);font-weight:800;color:var(--mfpp-blue-dark);margin:0 0 .5rem}
+.tm-div{width:48px;height:3px;background:var(--mfpp-blue);border-radius:2px;margin:0 0 1rem}
+.tm-lead{font-size:1rem;color:#6B7280;margin:0 0 3rem;max-width:600px}
+.tm-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem}
+@media(max-width:900px){.tm-cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:580px){.tm-cards{grid-template-columns:1fr}}
+
+.tm-card{background:#fff;border:1px solid #E5ECF4;border-radius:14px;padding:2rem;display:flex;flex-direction:column;gap:1rem;box-shadow:0 4px 20px rgba(27,94,155,.07);transition:transform .25s,box-shadow .25s}
+.tm-card:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(27,94,155,.14)}
+.tm-quote-icon{font-size:3rem;line-height:.8;color:var(--mfpp-blue-light);font-family:Georgia,serif;font-weight:700}
+.tm-text{font-size:.95rem;color:#374151;line-height:1.75;flex:1;font-style:italic}
+.tm-divider{height:1px;background:#E5ECF4;margin:.5rem 0}
+.tm-author{display:flex;align-items:center;gap:.875rem}
+.tm-photo{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--mfpp-blue-pale)}
+.tm-name{font-weight:700;font-size:.95rem;color:var(--mfpp-blue-dark)}
+.tm-cat{font-size:.8rem;color:#6B7280;margin-top:.15rem}
+.tm-stars{color:#F97316;font-size:.9rem;letter-spacing:.05em}
+
+.tm-cta{background:linear-gradient(135deg,#0D3B6E 0%,#1B5E9B 100%);padding:5rem 2rem;text-align:center}
+.tm-cta-inner{max-width:700px;margin:0 auto}
+.tm-cta h2{font-size:clamp(1.6rem,3vw,2.4rem);font-weight:800;color:#fff;margin:0 0 1rem}
+.tm-cta p{color:var(--mfpp-blue-pale);font-size:1rem;margin:0 0 2rem}
+.tm-cta-btns{display:flex;flex-wrap:wrap;gap:1rem;justify-content:center}
+.tm-btn-wa{background:#25D366;color:#fff;padding:.9rem 2rem;border-radius:8px;font-weight:700;font-size:1rem;display:inline-flex;align-items:center;gap:.6rem;transition:background .2s,transform .15s}
+.tm-btn-wa:hover{background:#1ebe5a;transform:translateY(-2px)}
+.tm-btn-contact{background:transparent;color:#fff!important;border:2px solid rgba(255,255,255,.6);padding:.9rem 2rem;border-radius:8px;font-weight:700;font-size:1rem;transition:all .2s}
+.tm-btn-contact:hover{background:rgba(255,255,255,.1);border-color:#fff}
+
+.tm,.tm>*{max-width:none!important}
+</style>
+
+<div class="tm" id="tm-root">
+
+<div class="tm-cover">
+<section id="tmhero">
+  <div id="tmhbg"></div>
+  <div class="tm-hero-inner">
+    <div class="tm-breadcrumb tmf">������ MFPP Cycling · Testimonios</div>
+    <h1 class="tm-h1 tmf">Lo que dicen los ciclistas que <span>entrenan conmigo</span></h1>
+    <p class="tm-hero-lead tmf">Resultados reales de ciclistas reales. Cada testimonio es una historia de esfuerzo, constancia y mejora medible.</p>
+  </div>
+</section>
+
+<div class="tm-stats">
+  <div class="tm-stats-inner">
+    <div class="tmf"><div class="tm-stat-num">+175</div><div class="tm-stat-lbl">Ciclistas entrenados</div></div>
+    <div class="tmf"><div class="tm-stat-num">+10</div><div class="tm-stat-lbl">Años de experiencia</div></div>
+    <div class="tmf"><div class="tm-stat-num">100%</div><div class="tm-stat-lbl">Online y personalizado</div></div>
+    <div class="tmf"><div class="tm-stat-num">4</div><div class="tm-stat-lbl">Modalidades de ciclismo</div></div>
+  </div>
+</div>
+</div>
+
+<section class="tm-grid-sec">
+  <div class="tm-grid-inner">
+    <div class="tm-sec-label tmf">EXPERIENCIAS REALES</div>
+    <h2 class="tm-h2 tmf">Ciclistas que ya han mejorado su rendimiento</h2>
+    <div class="tm-div tmf"></div>
+    <p class="tm-lead tmf">Desde cadetes hasta máster 40, ciclistas de distintos niveles y objetivos que han encontrado en MFPP Cycling el método que necesitaban.</p>
+    <div class="tm-cards">
+
+      <div class="tm-card tmf">
+        <div class="tm-quote-icon">«</div>
+        <p class="tm-text">A los 40 pensaba que no podía mejorar mucho más. Me equivocaba. En seis meses mi rendimiento en los puertos mejoró notablemente. El secreto fue entrenar con cabeza, no con más horas.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-divider"></div>
+        <div class="tm-author">
+          <img decoding="async" class="tm-photo" src="https://mfppcycling.com/wp-content/uploads/2023/05/Ruben-Sanz-min.jpg" alt="Rubén Sanz" loading="lazy"/>
+          <div><div class="tm-name">Rubén Sanz</div><div class="tm-cat">Máster 40 · Carretera</div></div>
+        </div>
+      </div>
+
+      <div class="tm-card tmf">
+        <div class="tm-quote-icon">«</div>
+        <p class="tm-text">Yo no busco podios, busco terminar las marchas sin sufrir en los últimos puertos. Ahora lo consigo. Organizar bien el entrenamiento marcó la diferencia entre aguantar y disfrutar.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-divider"></div>
+        <div class="tm-author">
+          <img decoding="async" class="tm-photo" src="https://mfppcycling.com/wp-content/uploads/2023/05/JorgePons-min.jpg" alt="Jorge Pons" loading="lazy"/>
+          <div><div class="tm-name">Jorge Pons</div><div class="tm-cat">Cicloturista</div></div>
+        </div>
+      </div>
+
+      <div class="tm-card tmf">
+        <div class="tm-quote-icon">«</div>
+        <p class="tm-text">Llevaba dos temporadas entrenando por sensaciones sin saber si mejoraba o no. Con Manuel por primera vez vi una curva de progresión real. Eso lo cambia todo mentalmente.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-divider"></div>
+        <div class="tm-author">
+          <img decoding="async" class="tm-photo" src="https://mfppcycling.com/wp-content/uploads/2023/05/Iker-Martinez-min.jpg" alt="Iker Martínez" loading="lazy"/>
+          <div><div class="tm-name">Iker Martínez</div><div class="tm-cat">Sub 23 · BTT</div></div>
+        </div>
+      </div>
+
+      <div class="tm-card tmf">
+        <div class="tm-quote-icon">«</div>
+        <p class="tm-text">Lo que más me sorprendió fue ver los números mejorar mes a mes. Por primera vez tenía una referencia clara de hasta dónde había llegado y a dónde podía llegar. Eso te cambia la motivación.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-divider"></div>
+        <div class="tm-author">
+          <img decoding="async" class="tm-photo" src="https://mfppcycling.com/wp-content/uploads/2023/06/Jorge-de-La-Flor_2-min.jpg" alt="Jorge de la Flor" loading="lazy"/>
+          <div><div class="tm-name">Jorge de la Flor</div><div class="tm-cat">Juvenil · Carretera</div></div>
+        </div>
+      </div>
+
+      <div class="tm-card tmf">
+        <div class="tm-quote-icon">«</div>
+        <p class="tm-text">Al empezar no sabía cómo dosificar mis esfuerzos en carrera. Tres meses después, por primera vez llegué al sprint final con piernas. Eso es algo que no se consigue entrenando sin método.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-divider"></div>
+        <div class="tm-author">
+          <img decoding="async" class="tm-photo" src="https://mfppcycling.com/wp-content/uploads/2023/06/PabloMolina_1-min.jpg" alt="Pablo Molina" loading="lazy"/>
+          <div><div class="tm-name">Pablo Molina</div><div class="tm-cat">Cadete · Carretera</div></div>
+        </div>
+      </div>
+
+      <div class="tm-card tmf">
+        <div class="tm-quote-icon">«</div>
+        <p class="tm-text">Como padre me preocupaba que el entrenamiento fuera demasiado exigente para su edad. Manuel entiende muy bien los tiempos de un chico joven. Mi hijo entrena más y mejor, y encima disfruta haciéndolo.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-divider"></div>
+        <div class="tm-author">
+          <img decoding="async" class="tm-photo" src="https://mfppcycling.com/wp-content/uploads/2023/06/Alejandro_1-min.jpg" alt="Padre de Alejandro G." loading="lazy"/>
+          <div><div class="tm-name">Padre de Alejandro G.</div><div class="tm-cat">Infantil · Carretera</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="tm-cta">
+  <div class="tm-cta-inner">
+    <div class="tm-sec-label tmf" style="justify-content:center;color:#C8DCF0">¿LISTO PARA EMPEZAR?</div>
+    <h2 class="tmf">¿Quieres ser el próximo en mejorar?</h2>
+    <p class="tmf">La primera consulta es gratuita y sin compromiso. Cuéntame tu situación y vemos juntos qué servicio encaja mejor con tu perfil y tus objetivos.</p>
+    <div class="tm-cta-btns tmf">
+      <a class="tm-btn-wa" href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20he%20visto%20los%20testimonios%20y%20me%20gustar%C3%ADa%20empezar%20a%20entrenar%20contigo" target="_blank" rel="noopener">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Consultar por WhatsApp
+      </a>
+      <a class="tm-btn-contact" href="/contacto-entrenamientos-ciclismo-mfpp-cycling/">Formulario de contacto →</a>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var hbg=document.getElementById('tmhbg');
+  if(hbg){window.addEventListener('scroll',function(){hbg.style.transform='translateY('+window.scrollY*.3+'px)';},{passive:true});}
+  var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){e.target.classList.add('tmv');obs.unobserve(e.target);}});},{threshold:.12});
+  document.querySelectorAll('.tmf').forEach(function(el){obs.observe(el);});
+})();
+</script>

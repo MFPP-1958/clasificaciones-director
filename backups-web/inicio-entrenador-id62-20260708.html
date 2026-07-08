@@ -1,0 +1,351 @@
+
+<style>
+/* ===== RESET ASTRA HEADING COLOR EN HERO ===== */
+.ih-h1,.ih-h1 *,.ih-hero h1,.ih-hero h2,.ih-hero h3{color:#fff!important}
+.ih-about-right h2,.ih-about-right h2 *{color:#0D3B6E!important}
+.ih-plans-sec h2,.ih-sec-hd{color:#0D3B6E!important}
+.ih-tests-sec h2{color:#0D3B6E!important}
+.ih-cta-sec h2{color:#fff!important}
+.ih-plan h3{color:#0D3B6E!important}
+
+/* ===== HERO ===== */
+.ih-hero{
+  position:relative;
+  min-height:92vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  background-image:url('https://mfppcycling.com/wp-content/uploads/2026/06/Equipochaquetanegra.jpeg');
+  background-size:cover;
+  background-position:center 30%;
+  color:#fff;
+  overflow:hidden;
+}
+.ih-hero::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(160deg,rgba(5,15,30,.82) 0%,rgba(10,30,60,.72) 50%,rgba(5,15,30,.88) 100%);
+  z-index:1;
+}
+.ih-hero-inner{
+  position:relative;
+  z-index:2;
+  max-width:820px;
+  margin:0 auto;
+  padding:6rem 1.5rem 5rem;
+}
+.ih-tag{
+  display:inline-block;
+  font-size:.72rem;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:#4A90D9;
+  margin-bottom:1.4rem;
+  background:rgba(74,144,217,.12);
+  padding:.35rem 1rem;
+  border-radius:100px;
+  border:1px solid rgba(74,144,217,.3);
+}
+.ih-h1{
+  font-size:clamp(2rem,4.5vw,3.2rem)!important;
+  font-weight:800!important;
+  line-height:1.15!important;
+  margin:0 0 .9rem!important;
+  color:#fff!important;
+  text-shadow:0 2px 20px rgba(0,0,0,.5);
+}
+.ih-cred-line{font-size:.88rem;color:rgba(255,255,255,.65);margin-bottom:.8rem;letter-spacing:.02em}
+.ih-sub{font-size:1.1rem;color:rgba(255,255,255,.82);margin:0 auto 2.2rem;line-height:1.75;max-width:600px}
+.ih-btns{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap;margin-bottom:3.5rem}
+.ih-btn-p{
+  display:inline-block;padding:.9rem 2rem;
+  background:#1B5E9B;color:#fff!important;
+  border-radius:8px;font-weight:700;font-size:1rem;
+  text-decoration:none;transition:background .2s,transform .15s;
+  box-shadow:0 4px 18px rgba(27,94,155,.45);
+}
+.ih-btn-p:hover{background:#0D3B6E;transform:translateY(-2px)}
+.ih-btn-g{
+  display:inline-block;padding:.9rem 2rem;
+  border:1.5px solid rgba(255,255,255,.45);color:#fff!important;
+  border-radius:8px;font-weight:600;font-size:1rem;
+  text-decoration:none;transition:border-color .2s,background .2s;
+  backdrop-filter:blur(4px);background:rgba(255,255,255,.06);
+}
+.ih-btn-g:hover{border-color:#fff;background:rgba(255,255,255,.12)}
+.ih-counters{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.ih-counter{
+  text-align:center;flex:1;min-width:130px;
+  padding:1.2rem 1rem;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:12px;
+  backdrop-filter:blur(8px);
+}
+.ih-counter-num{font-size:2.4rem;font-weight:800;color:#4A90D9;display:block;line-height:1}
+.ih-counter-lbl{font-size:.72rem;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.08em;margin-top:.3rem;display:block}
+.ih-scroll-hint{
+  position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);
+  z-index:2;color:rgba(255,255,255,.4);font-size:.75rem;letter-spacing:.1em;
+  text-transform:uppercase;animation:ih-bounce 2s infinite;
+}
+@keyframes ih-bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(6px)}}
+
+/* ===== SOBRE MÍ ===== */
+.ih-about-sec{background:#fff;padding:5rem 1.5rem}
+.ih-about-inner{max-width:900px;margin:0 auto;display:flex;gap:3.5rem;align-items:flex-start}
+.ih-about-left{flex-shrink:0;text-align:center;min-width:160px}
+.ih-avatar{
+  width:130px;height:130px;border-radius:50%;
+  background:#C8DCF0;color:#0D3B6E;
+  font-size:2.2rem;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 1rem;border:4px solid #E2ECF8;
+}
+.ih-about-aname{font-weight:700;font-size:.95rem;color:#0D3B6E}
+.ih-about-arole{font-size:.8rem;color:#6B7280;line-height:1.5;margin-top:.2rem}
+.ih-about-right h2{font-size:1.7rem;font-weight:700;margin:0 0 1rem;line-height:1.3}
+.ih-about-right p{font-size:1rem;color:#4B5563;line-height:1.85;margin-bottom:1.2rem}
+.ih-creds-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.ih-cr{font-size:.78rem;padding:.35rem .9rem;border-radius:100px;background:#F4F7FA;border:1px solid #E2ECF8;color:#374151}
+
+/* ===== PLANES ===== */
+.ih-plans-sec{background:#F4F7FA;padding:5rem 1.5rem}
+.ih-sec-hd{text-align:center;font-size:1.8rem;font-weight:700;margin:0 0 .5rem}
+.ih-sec-sub{text-align:center;font-size:1rem;color:#6B7280;margin:0 0 2.8rem}
+.ih-plans-grid{max-width:920px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+.ih-plan{background:#fff;border-radius:14px;padding:1.75rem;border:1px solid #E2ECF8;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+.ih-plan:hover{transform:translateY(-4px);box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.ih-plan.feat{border:2px solid #1B5E9B}
+.ih-plan-badge{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.25rem .8rem;border-radius:100px;margin-bottom:.85rem}
+.bg-gr{background:#DCFCE7;color:#166534}
+.bg-bl{background:#DBEAFE;color:#1E40AF}
+.bg-am{background:#FEF3C7;color:#92400E}
+.ih-plan ul{font-size:.9rem;color:#4B5563;padding-left:1.1rem;line-height:2;flex:1;margin:0 0 1.4rem}
+.ih-plan .who{font-size:.83rem;color:#6B7280;margin:0 0 1rem}
+.ih-plan-btn{display:block;text-align:center;padding:.75rem;border-radius:8px;font-size:.92rem;font-weight:600;text-decoration:none;border:1.5px solid #CBD5E1;color:#1B5E9B!important;background:#fff;transition:opacity .2s}
+.ih-plan.feat .ih-plan-btn{background:#1B5E9B;color:#fff!important;border-color:#1B5E9B}
+.ih-plan-btn:hover{opacity:.82}
+
+/* ===== TESTIMONIOS ===== */
+.ih-tests-sec{background:#fff;padding:5rem 1.5rem}
+.ih-tests-grid{max-width:920px;margin:0 auto;display:grid;grid-template-columns:repeat(2,1fr);gap:1.4rem}
+.ih-test{border:1px solid #E2ECF8;border-radius:14px;padding:1.4rem;background:#FAFCFF;position:relative}
+.ih-test::before{content:'"';position:absolute;top:.5rem;left:1rem;font-size:3.5rem;color:#C8DCF0;font-family:Georgia,serif;line-height:1}
+.ih-test-stars{color:#F59E0B;font-size:.95rem;margin-bottom:.6rem}
+.ih-test-q{font-size:.92rem;color:#374151;line-height:1.75;font-style:italic;margin-bottom:1rem;padding-top:.8rem}
+.ih-test-footer{display:flex;align-items:center;gap:.75rem;border-top:1px solid #E2ECF8;padding-top:.85rem}
+.ih-test-dot{width:38px;height:38px;border-radius:50%;background:#C8DCF0;color:#0D3B6E;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ih-test-name{font-size:.87rem;font-weight:700;color:#0D3B6E}
+.ih-test-cat{font-size:.77rem;color:#9CA3AF}
+.ih-tests-more{text-align:center;margin-top:2.2rem}
+.ih-tests-more a{font-size:.95rem;color:#1B5E9B!important;text-decoration:none;font-weight:600;border-bottom:1.5px solid #1B5E9B;padding-bottom:1px}
+
+/* ===== CTA FINAL ===== */
+.ih-cta-sec{
+  background-image:url('https://mfppcycling.com/wp-content/uploads/2026/06/Equipochaquetanegra.jpeg');
+  background-size:cover;background-position:center 60%;
+  position:relative;padding:6rem 1.5rem;text-align:center;
+}
+.ih-cta-sec::before{content:'';position:absolute;inset:0;background:rgba(5,15,40,.88);z-index:1}
+.ih-cta-inner{position:relative;z-index:2;max-width:640px;margin:0 auto}
+.ih-cta-sec p{font-size:1rem;color:rgba(255,255,255,.75);margin:0 0 2rem;line-height:1.8}
+.ih-cta-btns{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:750px){
+  .ih-about-inner{flex-direction:column;gap:1.5rem;text-align:center}
+  .ih-about-left{min-width:auto;width:100%}
+  .ih-creds-row{justify-content:center}
+  .ih-plans-grid{grid-template-columns:1fr}
+  .ih-tests-grid{grid-template-columns:1fr}
+  .ih-hero{min-height:100svh}
+}
+</style>
+
+<section class="ih-hero">
+  <div class="ih-hero-inner">
+    <span class="ih-tag">Entrenamiento para cadetes y juveniles · Castellón</span>
+    <h1 class="ih-h1">Entrena con el Director Deportivo<br>del equipo TBG WIXUM</h1>
+    <p class="ih-cred-line">Manuel Francisco Pérez &nbsp;·&nbsp; Director Nacional de Ciclismo Nivel III &nbsp;·&nbsp; Máster en Ciclismo Profesional</p>
+    <p class="ih-sub">Más de 10 años ayudando a ciclistas de 14 a 18 años a mejorar de forma segura, medible y progresiva. Online y presencial.</p>
+    <div class="ih-btns">
+      <a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20empezar%20a%20entrenar%20contigo" class="ih-btn-p">������ Reserva tu consulta gratuita</a>
+      <a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="ih-btn-g">Ver planes de entrenamiento →</a>
+    </div>
+    <div class="ih-counters">
+      <div class="ih-counter">
+        <span class="ih-counter-num" data-target="175" data-prefix="+">+175</span>
+        <span class="ih-counter-lbl">Ciclistas entrenados</span>
+      </div>
+      <div class="ih-counter">
+        <span class="ih-counter-num" data-target="10" data-prefix="+">+10</span>
+        <span class="ih-counter-lbl">Años de experiencia</span>
+      </div>
+      <div class="ih-counter">
+        <span class="ih-counter-num" data-target="4" data-prefix="">4</span>
+        <span class="ih-counter-lbl">Modalidades de ciclismo</span>
+      </div>
+    </div>
+  </div>
+  <div class="ih-scroll-hint">↓ &nbsp; Descubre el método</div>
+</section>
+
+<section class="ih-about-sec">
+  <div class="ih-about-inner">
+    <div class="ih-about-left">
+      <div class="ih-avatar">MF</div>
+      <div class="ih-about-aname">Manuel Francisco Pérez</div>
+      <div class="ih-about-arole">Director Deportivo<br>TBG WIXUM</div>
+    </div>
+    <div class="ih-about-right">
+      <h2>Un entrenador que conoce el ciclismo juvenil desde dentro</h2>
+      <p>Los ciclistas jóvenes no son adultos en miniatura. Tienen sus propios ritmos de desarrollo, sus propias presiones y sus propias motivaciones. Llevo más de 10 años especializándome en esa etapa concreta: la que va de los 14 a los 18 años.</p>
+      <p>Como Director Deportivo del TBG WIXUM, no solo diseño entrenamientos desde un despacho — estoy en las carreras, veo cómo compiten y ajusto en consecuencia. Esa combinación de formación académica y experiencia real en competición es lo que diferencia mi método.</p>
+      <div class="ih-creds-row">
+        <span class="ih-cr">✓ Director Nacional de Ciclismo Nivel III</span>
+        <span class="ih-cr">✓ Máster en Ciclismo Profesional</span>
+        <span class="ih-cr">✓ Director Deportivo TBG WIXUM</span>
+        <span class="ih-cr">✓ +175 ciclistas entrenados</span>
+      </div>
+      <a href="/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/" class="ih-btn-p">Conoce mi método →</a>
+    </div>
+  </div>
+</section>
+
+<section class="ih-plans-sec">
+  <h2 class="ih-sec-hd">¿Cuál es tu objetivo esta temporada?</h2>
+  <p class="ih-sec-sub">Tres planes diseñados específicamente para ciclistas de 14 a 18 años.</p>
+  <div class="ih-plans-grid">
+    <div class="ih-plan">
+      <span class="ih-plan-badge bg-gr">Para empezar</span>
+      <h3 style="font-size:1.4rem;font-weight:700;margin:0 0 .3rem">Entrena</h3>
+      <p class="who">Para el cadete que busca su primer plan estructurado</p>
+      <ul>
+        <li>Plan semanal personalizado</li>
+        <li>Seguimiento mensual</li>
+        <li>Acceso a app de entrenamiento</li>
+        <li>Soporte por WhatsApp</li>
+      </ul>
+      <a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="ih-plan-btn">Ver qué incluye →</a>
+    </div>
+    <div class="ih-plan feat">
+      <span class="ih-plan-badge bg-bl">Más elegido</span>
+      <h3 style="font-size:1.4rem;font-weight:700;margin:0 0 .3rem">Compite</h3>
+      <p class="who">Para juveniles con calendario de carreras</p>
+      <ul>
+        <li>Planificación de temporada completa</li>
+        <li>Análisis semanal de carga</li>
+        <li>Táctica de carrera</li>
+        <li>Videollamada mensual</li>
+      </ul>
+      <a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="ih-plan-btn">Ver qué incluye →</a>
+    </div>
+    <div class="ih-plan">
+      <span class="ih-plan-badge bg-am">Máximo nivel</span>
+      <h3 style="font-size:1.4rem;font-weight:700;margin:0 0 .3rem">Destaca</h3>
+      <p class="who">Para ciclistas que apuntan a selecciones</p>
+      <ul>
+        <li>Dirección deportiva completa</li>
+        <li>Coordinación directa con el equipo</li>
+        <li>Control diario de cargas</li>
+        <li>Táctica y análisis de carrera</li>
+      </ul>
+      <a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="ih-plan-btn">Ver qué incluye →</a>
+    </div>
+  </div>
+</section>
+
+<section class="ih-tests-sec">
+  <h2 class="ih-sec-hd" style="text-align:center;font-size:1.8rem;font-weight:700;margin:0 0 .5rem;color:#0D3B6E">Lo que dicen quienes ya entrenan conmigo</h2>
+  <p class="ih-sec-sub">Ciclistas de distintos niveles que han mejorado de forma progresiva y medible.</p>
+  <div class="ih-tests-grid">
+    <div class="ih-test">
+      <div class="ih-test-stars">★★★★★</div>
+      <p class="ih-test-q">«Al empezar no sabía cómo dosificar mis esfuerzos en carrera. Tres meses después, por primera vez llegué al sprint final con piernas. Eso es algo que no se consigue entrenando sin método.»</p>
+      <div class="ih-test-footer">
+        <div class="ih-test-dot">PM</div>
+        <div><div class="ih-test-name">Pablo Molina</div><div class="ih-test-cat">Cadete · Carretera</div></div>
+      </div>
+    </div>
+    <div class="ih-test">
+      <div class="ih-test-stars">★★★★★</div>
+      <p class="ih-test-q">«Lo que más me sorprendió fue ver los números mejorar mes a mes. Por primera vez tenía una referencia clara de hasta dónde había llegado y a dónde podía llegar. Eso te cambia la motivación.»</p>
+      <div class="ih-test-footer">
+        <div class="ih-test-dot">JF</div>
+        <div><div class="ih-test-name">Jorge de la Flor</div><div class="ih-test-cat">Juvenil · Carretera</div></div>
+      </div>
+    </div>
+    <div class="ih-test">
+      <div class="ih-test-stars">★★★★★</div>
+      <p class="ih-test-q">«Como padre me preocupaba que el entrenamiento fuera demasiado exigente para su edad. Manuel entiende muy bien los tiempos de un chico joven. Mi hijo entrena más y mejor, y encima disfruta haciéndolo.»</p>
+      <div class="ih-test-footer">
+        <div class="ih-test-dot">AG</div>
+        <div><div class="ih-test-name">Padre de Alejandro G.</div><div class="ih-test-cat">Infantil · Carretera</div></div>
+      </div>
+    </div>
+    <div class="ih-test">
+      <div class="ih-test-stars">★★★★★</div>
+      <p class="ih-test-q">«Llevaba dos temporadas entrenando por sensaciones sin saber si mejoraba o no. Con Manuel por primera vez vi una curva de progresión real. Eso lo cambia todo mentalmente.»</p>
+      <div class="ih-test-footer">
+        <div class="ih-test-dot">IM</div>
+        <div><div class="ih-test-name">Iker Martínez</div><div class="ih-test-cat">Sub 23 · BTT</div></div>
+      </div>
+    </div>
+    <div class="ih-test">
+      <div class="ih-test-stars">★★★★★</div>
+      <p class="ih-test-q">«A los 40 pensaba que no podía mejorar mucho más. Me equivocaba. En seis meses mi rendimiento en los puertos mejoró notablemente. El secreto fue entrenar con cabeza, no con más horas.»</p>
+      <div class="ih-test-footer">
+        <div class="ih-test-dot">RS</div>
+        <div><div class="ih-test-name">Rubén Sanz</div><div class="ih-test-cat">Máster 40 · Carretera</div></div>
+      </div>
+    </div>
+    <div class="ih-test">
+      <div class="ih-test-stars">★★★★★</div>
+      <p class="ih-test-q">«Yo no busco podios, busco terminar las marchas sin sufrir en los últimos puertos. Ahora lo consigo. Organizar bien el entrenamiento marcó la diferencia entre aguantar y disfrutar.»</p>
+      <div class="ih-test-footer">
+        <div class="ih-test-dot">JP</div>
+        <div><div class="ih-test-name">Jorge Pons</div><div class="ih-test-cat">Cicloturista</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="ih-tests-more"><a href="/testimonios-ciclistas-entrenamientos-mfpp-cycling/">Ver todos los testimonios →</a></div>
+</section>
+
+<section class="ih-cta-sec">
+  <div class="ih-cta-inner">
+    <h2 style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:800;color:#fff;margin:0 0 .75rem;line-height:1.25">¿Tu hijo quiere progresar<br>de verdad este año?</h2>
+    <p>Primera consulta gratuita de 20 minutos. Sin compromiso.<br>Analizamos su nivel y te explicamos qué plan encaja mejor con sus objetivos.</p>
+    <div class="ih-cta-btns">
+      <a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20empezar%20a%20entrenar%20contigo" class="ih-btn-p">Reserva por WhatsApp</a>
+      <a href="/contacto-entrenamientos-ciclismo-mfpp-cycling/" class="ih-btn-g">Formulario de contacto</a>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var els=document.querySelectorAll('.ih-counter-num[data-target]');
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting)return;
+      var el=e.target,target=parseInt(el.dataset.target),prefix=el.dataset.prefix||'',start=null,dur=1800;
+      function step(ts){
+        if(!start)start=ts;
+        var prog=Math.min((ts-start)/dur,1),ease=1-Math.pow(1-prog,3);
+        el.textContent=prefix+Math.round(ease*target);
+        if(prog<1)requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+      io.unobserve(el);
+    });
+  },{threshold:0.4});
+  els.forEach(function(el){io.observe(el);});
+})();
+</script>
+
+
+
+<p class="wp-block-paragraph"></p>

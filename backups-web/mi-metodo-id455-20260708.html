@@ -1,0 +1,402 @@
+
+<style>
+.mm{font-family:inherit;color:#1F2937;line-height:1.6}
+.mm *,.mm *::before,.mm *::after{box-sizing:border-box;margin:0;padding:0}
+.mmf{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+.mmf.mmv{opacity:1;transform:translateY(0)}
+.mmd1{transition-delay:.12s}.mmd2{transition-delay:.24s}.mmd3{transition-delay:.36s}
+.mm-hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden}
+.mm-hbg{position:absolute;inset:0;background:url('https://mfppcycling.com/wp-content/uploads/2023/05/MF-2023-03-04-40094_2-min.jpg') center 40%/cover no-repeat;transform:scale(1.06);will-change:transform}
+.mm-hov{position:absolute;inset:0;background:linear-gradient(135deg,rgba(13,59,110,.95) 0%,rgba(13,59,110,.78) 55%,rgba(13,59,110,.45) 100%)}
+.mm-hc{position:relative;z-index:2;max-width:1100px;margin:0 auto;padding:6rem 2rem 4rem;width:100%}
+.mm-eye{display:inline-flex;align-items:center;gap:.4rem;background:rgba(74,144,217,.22);border:1px solid rgba(74,144,217,.45);color:#C8DCF0;padding:.35rem 1rem;border-radius:20px;font-size:.82rem;font-weight:700;letter-spacing:.5px;margin-bottom:1.4rem}
+.mm-hero h1{font-size:clamp(1.8rem,4vw,2.9rem);font-weight:800;color:#fff;line-height:1.18;margin-bottom:1.2rem;max-width:800px}
+.mm-hero h1 em{font-style:normal;color:#4A90D9}
+.mm-hdesc{font-size:1.1rem;color:#C8DCF0;max-width:620px;margin-bottom:2rem;line-height:1.75}
+.mm-htags{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:2.2rem}
+.mm-htag{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;padding:.28rem .85rem;border-radius:4px;font-size:.78rem;font-weight:600}
+.mm-hbtns{display:flex;gap:.9rem;flex-wrap:wrap}
+.mm-btn{display:inline-flex;align-items:center;gap:.45rem;padding:.82rem 1.7rem;border-radius:4px;font-weight:700;font-size:.92rem;text-decoration:none!important;transition:all .22s ease;border:2px solid transparent}
+.mm-btn-wa{background:#25D366;color:#fff!important;border-color:#25D366}
+.mm-btn-wa:hover{background:#1DAE57;border-color:#1DAE57;transform:translateY(-2px);box-shadow:0 6px 20px rgba(37,211,102,.4)}
+.mm-btn-ow{background:transparent;color:#fff!important;border-color:#fff}
+.mm-btn-ow:hover{background:#fff;color:#0D3B6E!important;transform:translateY(-2px)}
+.mm-btn-p{background:#1B5E9B;color:#fff!important;border-color:#1B5E9B}
+.mm-btn-p:hover{background:#154d82;border-color:#154d82;transform:translateY(-2px);box-shadow:0 6px 20px rgba(27,94,155,.4)}
+.mm-btn-ob{background:transparent;color:#1B5E9B!important;border-color:#1B5E9B}
+.mm-btn-ob:hover{background:#1B5E9B;color:#fff!important;transform:translateY(-2px)}
+.mm-pills{background:#0D3B6E;padding:2.5rem 2rem}
+.mm-pg{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;max-width:1100px;margin:0 auto;text-align:center}
+.mm-pill-ico{font-size:1.8rem;display:block;margin-bottom:.5rem}
+.mm-pill-t{font-weight:700;color:#fff;font-size:.95rem;margin-bottom:.25rem}
+.mm-pill-d{font-size:.8rem;color:#C8DCF0}
+.mm-sec{padding:5rem 2rem}
+.mm-sec-wh{background:#fff}.mm-sec-lt{background:#F4F7FA}.mm-sec-dk{background:#0D3B6E}.mm-sec-bl{background:#1B5E9B}
+.mm-con{max-width:1100px;margin:0 auto}
+.mm-lbl{display:inline-flex;align-items:center;gap:.4rem;color:#1B5E9B;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:.7rem}
+.mm-lbl::before{content:'';display:inline-block;width:22px;height:2px;background:#1B5E9B}
+.mm-lbl-w{color:#C8DCF0}.mm-lbl-w::before{background:#C8DCF0}
+.mm-h2{font-size:clamp(1.55rem,3vw,2.15rem);font-weight:800;color:#0D3B6E;line-height:1.2;margin-bottom:.9rem}
+.mm-h2-w{color:#fff!important}
+.mm-lead{font-size:1.03rem;color:#4B5563;max-width:680px;line-height:1.75}
+.mm-lead-w{color:#C8DCF0}
+.mm-div{width:44px;height:4px;background:#1B5E9B;border-radius:2px;margin:1rem 0 2rem}
+.mm-div-w{background:#4A90D9}
+.mm-2col{display:grid;grid-template-columns:1fr 1fr;gap:3.5rem;align-items:center}
+.mm-img{width:100%;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.12);display:block}
+.mm-text p{color:#374151;line-height:1.82;margin-bottom:1.2rem;font-size:.98rem}
+.mm-bq{border-left:4px solid #1B5E9B;background:#F4F7FA;padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.5rem 0;font-style:italic;color:#1F2937;font-size:1.02rem;line-height:1.65}
+.mm-highlight{display:flex;align-items:flex-start;gap:.75rem;margin-bottom:.9rem}
+.mm-highlight-ico{font-size:1.2rem;flex-shrink:0;margin-top:.1rem}
+.mm-highlight-text{font-size:.93rem;color:#374151;line-height:1.6}
+.mm-highlight-text strong{color:#0D3B6E}
+.mm-steps{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-top:2.5rem}
+.mm-step{background:#fff;border-radius:12px;padding:1.75rem;border:1px solid #E2ECF8;display:flex;gap:1rem;align-items:flex-start;transition:all .3s ease}
+.mm-step:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(27,94,155,.1);border-color:#1B5E9B}
+.mm-step-num{width:44px;height:44px;background:#1B5E9B;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.1rem;flex-shrink:0}
+.mm-step-body{}
+.mm-step-t{font-size:1rem;font-weight:700;color:#0D3B6E;margin-bottom:.45rem}
+.mm-step-d{font-size:.87rem;color:#4B5563;line-height:1.65}
+.mm-data-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem;margin-top:2rem}
+.mm-data-card{background:#F4F7FA;border-radius:10px;padding:1.2rem;text-align:center;border-bottom:3px solid #1B5E9B}
+.mm-data-ico{font-size:1.6rem;display:block;margin-bottom:.5rem}
+.mm-data-t{font-size:.88rem;font-weight:700;color:#0D3B6E;margin-bottom:.3rem}
+.mm-data-d{font-size:.78rem;color:#4B5563;line-height:1.5}
+.mm-types{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-top:2.5rem}
+.mm-type{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:1.4rem;transition:background .3s}
+.mm-type:hover{background:rgba(255,255,255,.18)}
+.mm-type-ico{font-size:1.8rem;display:block;margin-bottom:.6rem}
+.mm-type-t{font-size:.95rem;font-weight:700;color:#fff;margin-bottom:.35rem}
+.mm-type-d{font-size:.82rem;color:#C8DCF0;line-height:1.5}
+.mm-diff{display:grid;grid-template-columns:repeat(4,1fr);gap:1.1rem;margin-top:2.5rem}
+.mm-diff-card{background:#F4F7FA;border-radius:10px;padding:1.4rem;border-top:4px solid #1B5E9B;transition:transform .3s,box-shadow .3s}
+.mm-diff-card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(27,94,155,.1)}
+.mm-diff-ico{font-size:1.7rem;display:block;margin-bottom:.65rem}
+.mm-diff-t{font-size:.92rem;font-weight:700;color:#0D3B6E;margin-bottom:.4rem}
+.mm-diff-d{font-size:.82rem;color:#4B5563;line-height:1.55}
+.mm-cta{text-align:center;padding:6rem 2rem;background:linear-gradient(135deg,#0D3B6E 0%,#1B5E9B 100%);position:relative;overflow:hidden}
+.mm-cta::before{content:'';position:absolute;top:-50%;right:-10%;width:500px;height:500px;background:radial-gradient(circle,rgba(74,144,217,.15) 0%,transparent 70%);border-radius:50%}
+.mm-ctai{position:relative;z-index:2;max-width:700px;margin:0 auto}
+.mm-cta h2{font-size:clamp(1.7rem,3vw,2.4rem);font-weight:800;color:#fff;margin-bottom:1rem}
+.mm-cta p{font-size:1.05rem;color:#C8DCF0;margin-bottom:2.4rem;line-height:1.75}
+.mm-ctabtns{display:flex;gap:.9rem;justify-content:center;flex-wrap:wrap}
+@media(max-width:768px){
+  .mm-pg{grid-template-columns:repeat(2,1fr)}
+  .mm-2col{grid-template-columns:1fr;gap:2rem}
+  .mm-steps{grid-template-columns:1fr}
+  .mm-data-grid{grid-template-columns:repeat(2,1fr)}
+  .mm-types{grid-template-columns:repeat(2,1fr)}
+  .mm-diff{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:480px){
+  .mm-types{grid-template-columns:1fr}
+  .mm-diff{grid-template-columns:1fr}
+  .mm-sec{padding:3.5rem 1.25rem}
+  .mm-hc{padding:5rem 1.25rem 3.5rem}
+}
+</style>
+
+<div class="mm" itemscope itemtype="https://schema.org/WebPage">
+
+<section class="mm-hero" aria-label="M√©todo de entrenamiento MFPP Cycling">
+<div class="mm-hbg" id="mmhbg"></div>
+<div class="mm-hov"></div>
+<div class="mm-hc">
+<div class="mm-eye mmf">Ì†ΩÌ≥ã MFPP Cycling ¬∑ Mi M√©todo de Trabajo</div>
+<h1 class="mmf mmd1">Un m√©todo de entrenamiento ciclista basado en <em>an√°lisis, planificaci√≥n</em> y seguimiento real</h1>
+<p class="mm-hdesc mmf mmd2">El entrenamiento de ciclismo efectivo no es acumular kil√≥metros sin m√°s. Es dise√±ar el proceso correcto para cada ciclista, en cada momento de su temporada ‚Äî con datos, con m√©todo y con acompa√±amiento real.</p>
+<div class="mm-htags mmf mmd2">
+<span class="mm-htag">Ì†ΩÌ≥ä An√°lisis de datos</span>
+<span class="mm-htag">Ì†ΩÌ∑∫Ô∏è Planificaci√≥n individualizada</span>
+<span class="mm-htag">Ì†ΩÌ≥à Seguimiento continuo</span>
+<span class="mm-htag">‚ö° WKO5 + TrainingPeaks</span>
+<span class="mm-htag">Ì†ΩÌ∫¥ Ruta ¬∑ BTT ¬∑ Ciclocross</span>
+</div>
+<div class="mm-hbtns mmf mmd3">
+<a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20me%20interesa%20saber%20m%C3%A1s%20sobre%20tu%20m%C3%A9todo%20de%20entrenamiento" class="mm-btn mm-btn-wa" target="_blank" rel="noopener noreferrer">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+Consulta sin compromiso
+</a>
+<a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="mm-btn mm-btn-ow">Ver servicios y planes ‚Üí</a>
+</div>
+</div>
+</section>
+
+<div class="mm-pills">
+<div class="mm-pg">
+<div class="mmf"><span class="mm-pill-ico">Ì†ºÌæØ</span><div class="mm-pill-t">100% individualizado</div><div class="mm-pill-d">Tu plan, tu perfil, tu objetivo</div></div>
+<div class="mmf mmd1"><span class="mm-pill-ico">Ì†ΩÌ≥ä</span><div class="mm-pill-t">Basado en datos reales</div><div class="mm-pill-d">WKO5 y TrainingPeaks</div></div>
+<div class="mmf mmd2"><span class="mm-pill-ico">Ì†ΩÌ¥Ñ</span><div class="mm-pill-t">Seguimiento continuo</div><div class="mm-pill-d">No env√≠o plans y desaparezco</div></div>
+<div class="mmf mmd3"><span class="mm-pill-ico">Ì†ΩÌ≥à</span><div class="mm-pill-t">Progresi√≥n sostenible</div><div class="mm-pill-d">Entrenar mejor, no m√°s</div></div>
+</div>
+</div>
+
+<section class="mm-sec mm-sec-wh" aria-labelledby="mmh-generic">
+<div class="mm-con">
+<div class="mm-2col">
+<div class="mmf">
+<img decoding="async" class="mm-img" src="https://mfppcycling.com/wp-content/uploads/2023/05/WKO5.png" alt="An√°lisis de potencia con WKO5 para entrenamiento ciclista individualizado - MFPP Cycling" loading="lazy"/>
+</div>
+<div class="mm-text mmf mmd1">
+<div class="mm-lbl">El problema del entrenamiento gen√©rico</div>
+<h2 class="mm-h2" id="mmh-generic">No todos los ciclistas necesitan lo mismo</h2>
+<div class="mm-div"></div>
+<p>Un plan de entrenamiento que funciona para un ciclista de 25 a√±os con 15 horas semanales disponibles no sirve para un m√°ster de 50 a√±os con 6 horas y un trabajo exigente. Ni tampoco para un cadete en formaci√≥n, ni para un cicloturista que prepara su primera gran marcha.</p>
+<p>El <strong>entrenamiento ciclista individualizado</strong> no es un lujo ‚Äî es la √∫nica forma eficaz de mejorar. Cada ciclista tiene un perfil √∫nico: edad, nivel de base, historial de entrenamientos, capacidad de recuperaci√≥n, disponibilidad horaria, objetivos y motivaciones.</p>
+<blockquote class="mm-bq">¬´Entrenar m√°s no es entrenar mejor. La clave est√° en entrenar de forma inteligente: con el est√≠mulo correcto, en el momento correcto y con el descanso adecuado.¬ª</blockquote>
+<div class="mm-highlight"><span class="mm-highlight-ico">‚ùå</span><div class="mm-highlight-text"><strong>Entrenamiento gen√©rico:</strong> mismos kil√≥metros, mismas zonas, para todos igual. Resultados mediocres y riesgo de sobreentrenamiento.</div></div>
+<div class="mm-highlight"><span class="mm-highlight-ico">‚úÖ</span><div class="mm-highlight-text"><strong>Mi m√©todo:</strong> diagn√≥stico individual, plan adaptado, seguimiento continuo. Resultados reales y progresi√≥n sostenible.</div></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="mm-sec mm-sec-lt" aria-labelledby="mmh-steps">
+<div class="mm-con">
+<div class="mm-lbl mmf">Proceso de trabajo</div>
+<h2 class="mm-h2 mmf" id="mmh-steps">C√≥mo trabajo: el proceso paso a paso</h2>
+<div class="mm-div mmf"></div>
+<p class="mm-lead mmf">Desde que un ciclista se pone en contacto conmigo hasta que empieza a ver resultados, seguimos un proceso estructurado y claro. Cada fase tiene un prop√≥sito definido:</p>
+<div class="mm-steps">
+<div class="mm-step mmf">
+<div class="mm-step-num">1</div>
+<div class="mm-step-body">
+<div class="mm-step-t">Ì†ΩÌ¥ç An√°lisis inicial del ciclista</div>
+<div class="mm-step-d">Antes de dise√±ar ning√∫n plan, necesito conocerte. Analizamos tu historial de entrenamiento, tu FTP actual, tu perfil de potencia con WKO5, tus puntos fuertes y tus debilidades. Tambi√©n hablamos de tu disponibilidad horaria y tu calendario de objetivos.</div>
+</div>
+</div>
+<div class="mm-step mmf mmd1">
+<div class="mm-step-num">2</div>
+<div class="mm-step-body">
+<div class="mm-step-t">Ì†ºÌæØ Definici√≥n de objetivos</div>
+<div class="mm-step-d">Establecemos metas realistas y alcanzables: una marcha cicloturista, una carrera federada, mejorar la potencia en escalada, perder peso pedalando o simplemente ordenar el entrenamiento. El objetivo define todo el proceso.</div>
+</div>
+</div>
+<div class="mm-step mmf mmd2">
+<div class="mm-step-num">3</div>
+<div class="mm-step-body">
+<div class="mm-step-t">Ì†ΩÌ≥ã Planificaci√≥n individualizada</div>
+<div class="mm-step-d">Dise√±o tu plan de entrenamiento personalizado en TrainingPeaks: periodizaci√≥n por fases, distribuci√≥n de cargas, sesiones espec√≠ficas por zonas de potencia reales ‚Äî no tablas gen√©ricas. Tu plan se adapta a tu vida, no al rev√©s.</div>
+</div>
+</div>
+<div class="mm-step mmf mmd3">
+<div class="mm-step-num">4</div>
+<div class="mm-step-body">
+<div class="mm-step-t">‚öñÔ∏è Control de cargas de entrenamiento</div>
+<div class="mm-step-d">Monitorizo semanalmente tu carga de trabajo (CTL), tu fatiga acumulada (ATL) y tu forma en tiempo real (TSB). Esto me permite saber cu√°ndo dar m√°s ca√±a y cu√°ndo frenar ‚Äî antes de que la fatiga te frene a ti.</div>
+</div>
+</div>
+<div class="mm-step mmf">
+<div class="mm-step-num">5</div>
+<div class="mm-step-body">
+<div class="mm-step-t">Ì†ΩÌ≥ä An√°lisis de datos y evoluci√≥n</div>
+<div class="mm-step-d">Reviso tus entrenamientos con WKO5: potencia media, potencia normalizada, IF, TSS, distribuci√≥n de zonas y m√©tricas avanzadas como W&#8217; y mFTP. El an√°lisis de datos no es tecnicismo ‚Äî es la base de decisiones de entrenamiento correctas.</div>
+</div>
+</div>
+<div class="mm-step mmf mmd1">
+<div class="mm-step-num">6</div>
+<div class="mm-step-body">
+<div class="mm-step-t">Ì†ΩÌ≤¨ Comunicaci√≥n y ajustes continuos</div>
+<div class="mm-step-d">El plan no es inamovible. Si una semana sale mal ‚Äî trabajo, enfermedad, viaje, mala sensaci√≥n ‚Äî lo hablo contigo y ajusto. La comunicaci√≥n directa entre entrenador y ciclista es lo que diferencia el acompa√±amiento real de simplemente enviar sesiones.</div>
+</div>
+</div>
+<div class="mm-step mmf mmd2" style="grid-column:1/-1">
+<div class="mm-step-num">7</div>
+<div class="mm-step-body">
+<div class="mm-step-t">Ì†ΩÌ≥à Evoluci√≥n a medio y largo plazo</div>
+<div class="mm-step-d">El objetivo no es el pico del mes que viene. Es construir un ciclista m√°s completo, mes a mes, temporada a temporada. La progresi√≥n sostenible ‚Äî sin lesiones, sin sobreentrenamiento, con constancia ‚Äî es la √∫nica que dura. Aqu√≠ es donde se ve la diferencia del m√©todo.</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="mm-sec mm-sec-wh" aria-labelledby="mmh-datos">
+<div class="mm-con">
+<div class="mm-2col">
+<div class="mm-text mmf">
+<div class="mm-lbl">Ciencia aplicada al ciclismo</div>
+<h2 class="mm-h2" id="mmh-datos">Entrenamiento basado en datos: m√°s all√° de los kil√≥metros</h2>
+<div class="mm-div"></div>
+<p>El <strong>entrenamiento por potencia</strong> ha transformado el ciclismo. Hoy podemos medir exactamente cu√°nto trabajo hace un ciclista en cada sesi√≥n, c√≥mo responde a las cargas y c√≥mo evoluciona su capacidad de rendimiento. Pero los datos solo tienen valor si se interpretan correctamente.</p>
+<p>En MFPP Cycling, los datos son la base de todas las decisiones de entrenamiento. No trabajo con sensaciones vagas ni con tablas de zonas prefabricadas ‚Äî trabajo con <strong>tu perfil de potencia real</strong>, actualizado sesi√≥n a sesi√≥n.</p>
+</div>
+<div class="mmf mmd1">
+<img decoding="async" class="mm-img" src="https://mfppcycling.com/wp-content/uploads/2023/05/Entrenador-con-TrainingPeaks.jpg" alt="Entrenador de ciclismo Manuel P√©rez analizando datos en TrainingPeaks para planificaci√≥n individualizada" loading="lazy"/>
+</div>
+</div>
+<div class="mm-data-grid" style="margin-top:3rem">
+<div class="mm-data-card mmf">
+<span class="mm-data-ico">‚ö°</span>
+<div class="mm-data-t">Potencia (W)</div>
+<div class="mm-data-d">FTP, iLevels, W prime. La base objetiva del entrenamiento por potencia en ciclismo.</div>
+</div>
+<div class="mm-data-card mmf mmd1">
+<span class="mm-data-ico">‚ù§Ô∏è</span>
+<div class="mm-data-t">Frecuencia card√≠aca</div>
+<div class="mm-data-d">Se√±al de fatiga, adaptaci√≥n y estr√©s interno. Complementaria a la potencia.</div>
+</div>
+<div class="mm-data-card mmf mmd2">
+<span class="mm-data-ico">Ì†ΩÌ≥â</span>
+<div class="mm-data-t">CTL / ATL / TSB</div>
+<div class="mm-data-d">Forma, fatiga y carga cr√≥nica. El sem√°foro del rendimiento en tiempo real.</div>
+</div>
+<div class="mm-data-card mmf mmd3">
+<span class="mm-data-ico">Ì†ΩÌ¥¨</span>
+<div class="mm-data-t">Perfil de potencia</div>
+<div class="mm-data-d">Fortalezas y debilidades por duraci√≥n: sprints, escaladas, fondos largos.</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="mm-sec mm-sec-lt" aria-labelledby="mmh-seguimiento">
+<div class="mm-con">
+<div class="mm-2col">
+<div class="mmf">
+<img decoding="async" class="mm-img" src="https://mfppcycling.com/wp-content/uploads/2023/05/WKO5.png" alt="Software WKO5 para an√°lisis avanzado de potencia - m√©todo de entrenamiento ciclista MFPP Cycling" loading="lazy"/>
+</div>
+<div class="mm-text mmf mmd1">
+<div class="mm-lbl">M√°s que un plan de entrenamiento</div>
+<h2 class="mm-h2" id="mmh-seguimiento">Seguimiento continuo: aqu√≠ no se manda un plan y ya est√°</h2>
+<div class="mm-div"></div>
+<p>Uno de los problemas m√°s comunes con los planes de entrenamiento gen√©ricos online es que el ciclista recibe un documento, empieza a seguirlo y queda solo ante cualquier duda, cambio o problema. Eso no es entrenamiento ‚Äî es papel mojado.</p>
+<p>Mi forma de trabajar es diferente. El <strong>seguimiento continuo</strong> es parte del servicio. Reviso tus sesiones, analizo tu evoluci√≥n, respondo tus dudas y ajusto el plan cuando algo cambia. Cada semana s√© c√≥mo est√°s, qu√© hiciste y c√≥mo preparar la pr√≥xima.</p>
+<div class="mm-highlight"><span class="mm-highlight-ico">‚úÖ</span><div class="mm-highlight-text"><strong>Revisi√≥n semanal</strong> de sesiones completadas y sensaciones</div></div>
+<div class="mm-highlight"><span class="mm-highlight-ico">‚úÖ</span><div class="mm-highlight-text"><strong>Ajustes inmediatos</strong> si la semana no va como estaba previsto</div></div>
+<div class="mm-highlight"><span class="mm-highlight-ico">‚úÖ</span><div class="mm-highlight-text"><strong>An√°lisis mensual</strong> de evoluci√≥n: m√©tricas, tendencias, adaptaciones</div></div>
+<div class="mm-highlight"><span class="mm-highlight-ico">‚úÖ</span><div class="mm-highlight-text"><strong>Comunicaci√≥n directa</strong> para resolver dudas y hablar de objetivos</div></div>
+<div class="mm-highlight"><span class="mm-highlight-ico">‚úÖ</span><div class="mm-highlight-text"><strong>Puesta a punto espec√≠fica</strong> antes de competiciones o eventos importantes</div></div>
+<div style="margin-top:1.5rem">
+<a href="/sobre-mi/" class="mm-btn mm-btn-ob">Conoce qui√©n est√° detr√°s ‚Üí</a>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="mm-sec mm-sec-dk" aria-labelledby="mmh-tipos">
+<div class="mm-con">
+<div class="mm-lbl mm-lbl-w mmf">¬øEs para ti?</div>
+<h2 class="mm-h2 mm-h2-w mmf" id="mmh-tipos" style="color:#F97316!important">Para qu√© tipo de ciclistas est√° pensado este m√©todo</h2>
+<div class="mm-div mm-div-w mmf"></div>
+<p class="mm-lead mm-lead-w mmf">No importa tu nivel ni tu experiencia. Lo que importa es que tengas un objetivo claro y ganas de mejorar con m√©todo. Mi forma de trabajar est√° pensada para:</p>
+<div class="mm-types">
+<div class="mm-type mmf">
+<span class="mm-type-ico">‚ö°</span>
+<div class="mm-type-t">Ciclistas que quieren mejorar el rendimiento</div>
+<div class="mm-type-d">Quieres subir tus vatios, mejorar en escalada, aguantar mejor los ritmos duros o bajar tus tiempos en segmentos. Necesitas un plan que funcione de verdad.</div>
+</div>
+<div class="mm-type mmf mmd1">
+<span class="mm-type-ico">Ì†ΩÌ≥ä</span>
+<div class="mm-type-t">Ciclistas que entrenan por potencia</div>
+<div class="mm-type-d">Ya tienes potenci√≥metro pero no sabes bien c√≥mo sacarle partido. Quieres zonas de entrenamiento reales, interpretaci√≥n de datos y un plan basado en tu perfil actual.</div>
+</div>
+<div class="mm-type mmf mmd2">
+<span class="mm-type-ico">Ì†ºÌº±</span>
+<div class="mm-type-t">Ciclistas cadetes y juveniles en formaci√≥n</div>
+<div class="mm-type-d">La formaci√≥n de ciclistas j√≥venes es una especialidad. Trabajo con cadetes y juveniles del equipo TBG Wixum con visi√≥n de desarrollo a largo plazo, sin quemar etapas.</div>
+</div>
+<div class="mm-type mmf">
+<span class="mm-type-ico">Ì†ºÌøÜ</span>
+<div class="mm-type-t">Ciclistas m√°ster</div>
+<div class="mm-type-d">La recuperaci√≥n, la carga √≥ptima y el mantenimiento de la masa muscular son clave despu√©s de los 40. El m√©todo se adapta a la fisiolog√≠a m√°ster para que sigas mejorando sin romperte.</div>
+</div>
+<div class="mm-type mmf mmd1">
+<span class="mm-type-ico">Ì†ºÌæØ</span>
+<div class="mm-type-t">Ciclistas con objetivos concretos</div>
+<div class="mm-type-d">Tienes una marcha, una carrera, una prueba o un reto personal en el calendario. Dise√±o la puesta a punto perfecta para que llegues en tu mejor momento del a√±o.</div>
+</div>
+<div class="mm-type mmf mmd2">
+<span class="mm-type-ico">Ì†ΩÌ≥Ö</span>
+<div class="mm-type-t">Ciclistas que quieren ordenar su entrenamiento</div>
+<div class="mm-type-d">Entrenas pero sin estructura, vas seg√∫n el cuerpo te pide o sigues planes de internet. Quieres darle sentido a tus horas en la bici y sacarles el m√°ximo partido.</div>
+</div>
+</div>
+<div style="text-align:center;margin-top:2.5rem" class="mmf">
+<a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="mm-btn mm-btn-ow">Ver todos mis planes de entrenamiento ‚Üí</a>
+</div>
+</div>
+</section>
+
+<section class="mm-sec mm-sec-wh" aria-labelledby="mmh-diff">
+<div class="mm-con">
+<div class="mm-lbl mmf">¬øPor qu√© MFPP Cycling?</div>
+<h2 class="mm-h2 mmf" id="mmh-diff">Qu√© diferencia este m√©todo de entrenamiento ciclista</h2>
+<div class="mm-div mmf"></div>
+<p class="mm-lead mmf">En el mercado hay muchos planes de entrenamiento. Algunos gen√©ricos, algunos adaptados por algoritmos, algunos hechos por entrenadores sin experiencia real en competici√≥n. Aqu√≠ est√°n las razones concretas por las que el m√©todo MFPP Cycling marca la diferencia:</p>
+<div class="mm-diff">
+<div class="mm-diff-card mmf">
+<span class="mm-diff-ico">Ì†æÌ∑¨</span>
+<div class="mm-diff-t">Individualizaci√≥n real</div>
+<div class="mm-diff-d">No hay dos planes iguales porque no hay dos ciclistas iguales. Todo parte de tu an√°lisis espec√≠fico, no de una plantilla.</div>
+</div>
+<div class="mm-diff-card mmf mmd1">
+<span class="mm-diff-ico">Ì†ºÌøÖ</span>
+<div class="mm-diff-t">Experiencia real en ciclismo</div>
+<div class="mm-diff-d">M√°s de 10 a√±os entrenando ciclistas en ruta, BTT y ciclocross. Director t√©cnico de equipo de competici√≥n (TBG Wixum). No es teor√≠a ‚Äî es pr√°ctica.</div>
+</div>
+<div class="mm-diff-card mmf mmd2">
+<span class="mm-diff-ico">Ì†ΩÌ≥ä</span>
+<div class="mm-diff-t">An√°lisis de datos profundo</div>
+<div class="mm-diff-d">WKO5 para perfilado de potencia avanzado. TrainingPeaks para gesti√≥n y seguimiento. Datos que se leen, interpretan y usan para decidir.</div>
+</div>
+<div class="mm-diff-card mmf mmd3">
+<span class="mm-diff-ico">Ì†ΩÌ≤¨</span>
+<div class="mm-diff-t">Comunicaci√≥n real</div>
+<div class="mm-diff-d">No soy un bot ni una app. Hablo contigo, entiendo tu situaci√≥n y ajusto el plan cuando hace falta. El entrenador disponible es el que marca la diferencia.</div>
+</div>
+<div class="mm-diff-card mmf">
+<span class="mm-diff-ico">Ì†ΩÌ≥ö</span>
+<div class="mm-diff-t">Formaci√≥n continua del ciclista</div>
+<div class="mm-diff-d">Entender por qu√© haces cada sesi√≥n mejora el rendimiento. Te ense√±o a interpretar tus datos, a escuchar tu cuerpo y a entrenar de forma aut√≥noma.</div>
+</div>
+<div class="mm-diff-card mmf mmd1">
+<span class="mm-diff-ico">Ì†æÌ∑≠</span>
+<div class="mm-diff-t">Sentido com√∫n sobre todo</div>
+<div class="mm-diff-d">No me dejo llevar por modas ni por protocolos r√≠gidos. Si algo no encaja con tu vida real, lo cambiamos. El mejor entrenamiento es el que realmente haces.</div>
+</div>
+<div class="mm-diff-card mmf mmd2">
+<span class="mm-diff-ico">Ì†ΩÌ≥à</span>
+<div class="mm-diff-t">Progresi√≥n sostenible</div>
+<div class="mm-diff-d">Sin atajos, sin picos artificiales. Construimos forma f√≠sica real que dura temporadas enteras ‚Äî no rendimiento que se desmorona en dos semanas.</div>
+</div>
+<div class="mm-diff-card mmf mmd3">
+<span class="mm-diff-ico">‚öñÔ∏è</span>
+<div class="mm-diff-t">Entrenar mejor, no m√°s</div>
+<div class="mm-diff-d">La clave del rendimiento no es el volumen ‚Äî es la calidad. Hacemos lo justo y necesario para que cada hora en la bici cuente al m√°ximo.</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="mm-cta" aria-labelledby="mmh-cta">
+<div class="mm-ctai">
+<div class="mm-lbl mm-lbl-w mmf" style="justify-content:center">¬øDamos el paso?</div>
+<h2 class="mmf mmd1" id="mmh-cta">¬øQuieres un entrenamiento de ciclismo que realmente funcione?</h2>
+<p class="mmf mmd2">Si has llegado hasta aqu√≠, ya sabes que el entrenamiento gen√©rico no es la respuesta. La primera consulta es gratuita y sin compromiso ‚Äî cu√©ntame tu situaci√≥n y valoramos juntos si podemos trabajar bien.</p>
+<div class="mm-ctabtns mmf mmd3">
+<a href="https://wa.me/34650545759?text=Hola%20Manuel%2C%20he%20le√≠do%20tu%20m√©todo%20de%20entrenamiento%20y%20me%20gustar√≠a%20saber%20m√°s" class="mm-btn mm-btn-wa" target="_blank" rel="noopener noreferrer">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+WhatsApp directo
+</a>
+<a href="/contacto-entrenamientos-ciclismo-mfpp-cycling/" class="mm-btn mm-btn-ow">Formulario de contacto</a>
+<a href="/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/" class="mm-btn mm-btn-ow">Ver planes y precios</a>
+</div>
+<p class="mmf" style="color:rgba(200,220,240,.55);font-size:.8rem;margin-top:1.8rem">Ì†ΩÌ≥û +34 650 545 759 &nbsp;¬∑&nbsp; ‚úâÔ∏è mfppcycling@gmail.com</p>
+</div>
+</section>
+
+</div>
+
+<script>
+(function(){
+var fades=document.querySelectorAll('.mmf');
+if('IntersectionObserver' in window){
+var obs=new IntersectionObserver(function(e){e.forEach(function(e){if(e.isIntersecting){e.target.classList.add('mmv');obs.unobserve(e.target)}})},{threshold:.1,rootMargin:'0px 0px -30px 0px'});
+fades.forEach(function(el){obs.observe(el)});
+}else{fades.forEach(function(el){el.classList.add('mmv')})}
+var bg=document.getElementById('mmhbg');
+if(bg){window.addEventListener('scroll',function(){var sc=window.pageYOffset;if(sc<window.innerHeight)bg.style.transform='scale(1.06) translateY('+(sc*.12)+'px)'},{ passive:true })}
+})();
+</script>
