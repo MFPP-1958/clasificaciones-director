@@ -1800,6 +1800,26 @@ function rpDibujarTarjeta(d) {
       ctx.font = `800 30px ${FF}`; ctx.fillText(lbl, bx + 35 + w1 + 14, by + 59);
       ctx.textAlign = 'center';
     }
+    // Estadísticas de la temporada (para presumir con los compañeros)
+    if (d.stats) {
+      const st = [
+        ['🥇', d.stats.victorias, 'VICTORIAS'],
+        ['🏆', d.stats.podios, 'PODIOS'],
+        ['🔟', d.stats.top10, 'TOP-10'],
+        ['🚴', d.stats.pruebas, 'PRUEBAS']
+      ];
+      // Línea divisoria sutil
+      ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx - 384, 812); ctx.lineTo(cx + 384, 812); ctx.stroke();
+      const gap = 232, x0 = cx - gap * (st.length - 1) / 2;
+      st.forEach((s, i) => {
+        const x = x0 + gap * i;
+        ctx.fillStyle = '#fff'; ctx.font = `900 42px ${FF}`;
+        ctx.fillText(s[0] + ' ' + s[1], x, 872);
+        ctx.fillStyle = 'rgba(255,255,255,.62)'; ctx.font = `800 20px ${FF}`;
+        ctx.fillText(s[2], x, 906);
+      });
+    }
     // CTA + aviso
     ctx.fillStyle = '#e8f6fb';
     const cta = 'Mira el ranking completo · mfppcycling.com/ranking';
@@ -1949,7 +1969,8 @@ function rpAbrirModal(clave) {
   }
   rpEstado.modalTarjeta = {
     nombre: c.nombre, puesto: rpPuesto, puntos: rpFormatearPuntos(c.puntosTotales), equipo: c.equipo,
-    catLabel: rpEtiquetaCategoria(c.categoria), region: c.region || '', temporada: rpEstado.temporada
+    catLabel: rpEtiquetaCategoria(c.categoria), region: c.region || '', temporada: rpEstado.temporada,
+    stats: { victorias, podios, top10, pruebas: c.pruebasTotales }
   };
   document.getElementById('rp-modal-contenido').innerHTML =
     '<header class="rp-ficha-cabecera">' +
