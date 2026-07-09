@@ -2009,7 +2009,7 @@ function rpBotonesCompartir(titulo, url) {
 // y la marca. En móvil se comparte con el menú nativo del teléfono; en
 // escritorio se descarga. Todos los datos ya son públicos en el ranking.
 function rpBotonTarjeta() {
-  return '<button type="button" class="rp-tarjeta-btn">📸 Compartir mi tarjeta</button>';
+  return '<button type="button" class="rp-tarjeta-btn" title="Descarga tu ranking (puesto, puntos y estadísticas) como imagen, para publicarlo o enviarlo por donde quieras: Instagram, WhatsApp, etc.">📸 Compartir mi ranking</button>';
 }
 
 function rpRR(ctx, x, y, w, h, r) {
