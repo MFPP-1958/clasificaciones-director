@@ -906,6 +906,11 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
   padding: 10px 8px;
   border-bottom: 2px solid var(--rp-color-borde);
 }
+/* Cabecera "Cat." clicable para ordenar por categoría */
+.rp-sort-cat { cursor: pointer; user-select: none; white-space: nowrap; }
+.rp-sort-cat:hover, .rp-sort-cat:focus-visible { color: var(--rp-color-primario); outline: none; }
+.rp-sort-ind { font-size: 0.7rem; opacity: 0.5; }
+.rp-sort-ind.rp-sort-on { opacity: 1; color: var(--rp-color-primario); }
 #rp-tabla td {
   padding: 10px 8px;
   border-bottom: 1px solid var(--rp-color-borde);

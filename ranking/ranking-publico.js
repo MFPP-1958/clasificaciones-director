@@ -3076,9 +3076,23 @@ function rpRenderTabla() {
 
   const pobl = rpPoblacion(cat);
   const filas = [];
-  pobl.forEach((c, i) => {
-    // i+1 es la posición dentro del ranking filtrado (comunidad/subcategoría
-    // renumeran); el buscador solo oculta filas y conserva esa posición.
+  // Orden por defecto = ranking (por puesto). Con la flecha de la columna
+  // "Cat." se reordena agrupando por subcategoría, pero el número (#) sigue
+  // siendo el PUESTO REAL del ranking (es solo una ordenación visual).
+  const items = pobl.map((c, i) => ({ c, pos: i + 1 }));
+  if (rpEstado.ordenCat) {
+    const dir = rpEstado.ordenCat; // 1 = ascendente, -1 = descendente
+    items.sort((a, b) => {
+      const ka = a.c.subcatPrincipal || '', kb = b.c.subcatPrincipal || '';
+      // "Genérica" = sin año (CADETE, JUVENIL…) o sin dato → siempre al final,
+      // en los dos sentidos. Solo alternan las de año (CAD-1/CAD-2, JUV-1/JUV-2…).
+      const ga = !/\d/.test(ka), gb = !/\d/.test(kb);
+      if (ga !== gb) return ga ? 1 : -1;
+      if (ka !== kb) return dir * ka.localeCompare(kb, 'es');
+      return a.pos - b.pos;       // dentro de la misma categoría, orden de ranking
+    });
+  }
+  items.forEach(({ c, pos }) => {
     if (filtro &&
         !rpNormalizarTexto(c.nombre).includes(filtro) &&
         !rpNormalizarTexto(c.equipo).includes(filtro)) return;
@@ -3089,17 +3103,17 @@ function rpRenderTabla() {
     const previa = posPrevias.get(c.clave);
     if (!previa) {
       evo = '<span class="rp-evo rp-evo-nuevo" title="Nuevo en el ranking">N</span>';
-    } else if (previa > i + 1) {
-      evo = `<span class="rp-evo rp-evo-sube" title="Sube ${previa - i - 1} desde el puesto ${previa}">▲${previa - i - 1}</span>`;
-    } else if (previa < i + 1) {
-      evo = `<span class="rp-evo rp-evo-baja" title="Baja ${i + 1 - previa} desde el puesto ${previa}">▼${i + 1 - previa}</span>`;
+    } else if (previa > pos) {
+      evo = `<span class="rp-evo rp-evo-sube" title="Sube ${previa - pos} desde el puesto ${previa}">▲${previa - pos}</span>`;
+    } else if (previa < pos) {
+      evo = `<span class="rp-evo rp-evo-baja" title="Baja ${pos - previa} desde el puesto ${previa}">▼${pos - previa}</span>`;
     } else {
       evo = '<span class="rp-evo rp-evo-igual" title="Mantiene el puesto">=</span>';
     }
     const badge = rpInsigniaRegion(c.region);
     filas.push(
       `<tr class="rp-fila" data-clave="${rpEscapar(c.clave)}" tabindex="0" aria-label="Ver ficha de ${rpEscapar(c.nombre)}">` +
-      `<td class="rp-c rp-rank">${i + 1}</td>` +
+      `<td class="rp-c rp-rank">${pos}</td>` +
       `<td class="rp-c rp-col-evo">${evo}</td>` +
       `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(c.nombre)}</span>` +
       `${badge}` +
@@ -3116,10 +3130,13 @@ function rpRenderTabla() {
 
   rpRenderSubtitulo(); // cualquier cambio de filtro pasa por aquí
   rpGuardarPrefs();    // y se recuerda para la próxima visita
+  const flechaCat = rpEstado.ordenCat === 1 ? '▲' : rpEstado.ordenCat === -1 ? '▼' : '↕';
   cont.innerHTML =
     '<table id="rp-tabla" class="rp-tabla-corredores"><thead><tr>' +
     '<th class="rp-c">#</th><th class="rp-c rp-col-evo" title="Evolución respecto a la jornada anterior">±</th>' +
-    '<th>Corredor</th><th class="rp-c rp-col-cat" title="Categoría del corredor">Cat.</th><th class="rp-col-equipo">Equipo</th>' +
+    '<th>Corredor</th>' +
+    `<th class="rp-c rp-col-cat rp-sort-cat" role="button" tabindex="0" aria-label="Ordenar por categoría" title="Ordenar por categoría (agrupa CAD-1, CAD-2… · vuelve a pulsar para invertir o quitar)">Cat. <span class="rp-sort-ind${rpEstado.ordenCat ? ' rp-sort-on' : ''}">${flechaCat}</span></th>` +
+    '<th class="rp-col-equipo">Equipo</th>' +
     '<th class="rp-c rp-col-pruebas" title="Pruebas que puntúan / pruebas disputadas">Pruebas</th><th class="rp-c">Puntos</th>' +
     '</tr></thead>' +
     `<tbody>${filas.join('') || '<tr><td colspan="7" class="rp-vacio">Sin resultados para esa búsqueda.</td></tr>'}</tbody></table>` +
@@ -3438,6 +3455,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // celda tiene prioridad sobre la fila; la fila abre corredor o equipo según
   // la vista activa.
   const alAccionarFila = e => {
+    const sortCat = e.target.closest('.rp-sort-cat');
+    if (sortCat) {
+      const cur = rpEstado.ordenCat || 0;
+      rpEstado.ordenCat = cur === 0 ? 1 : cur === 1 ? -1 : 0; // agrupar → invertir → quitar
+      rpRenderTabla();
+      return;
+    }
     const bScatter = e.target.closest('[data-scatter-clave]');
     if (bScatter) { rpAbrirModal(bScatter.dataset.scatterClave); return; }
     const bEquipo = e.target.closest('button[data-equipo]');
