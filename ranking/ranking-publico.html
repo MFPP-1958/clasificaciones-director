@@ -253,24 +253,36 @@
     window.addEventListener('load', avisarAltura);
     avisarAltura();
 
-    // ── 2. Colocar la modal en la zona visible que informa el padre ──
+    // ── 2. Colocar las ventanas en la zona visible que informa el padre ──
     var vista = null; // {top, alto} de la parte del iframe visible en pantalla
     var modal = document.getElementById('rp-modal');
-    function colocarModal(){
-      if (!vista || !modal || modal.hidden) return;
-      modal.style.alignItems = 'flex-start';
-      modal.style.paddingTop = (vista.top + 12) + 'px';
-      var cuadro = modal.querySelector('.rp-modal-cuadro');
-      if (cuadro) cuadro.style.maxHeight = Math.max(vista.alto - 24, 200) + 'px';
+    function colocar(){
+      if (!vista) return;
+      if (modal && !modal.hidden) {
+        modal.style.alignItems = 'flex-start';
+        modal.style.paddingTop = (vista.top + 12) + 'px';
+        var cuadro = modal.querySelector('.rp-modal-cuadro');
+        if (cuadro) cuadro.style.maxHeight = Math.max(vista.alto - 24, 200) + 'px';
+      }
+      // Vista previa de la tarjeta (modal aparte, añadido dinámicamente)
+      var ov = document.querySelector('.rp-tarjeta-overlay');
+      if (ov) {
+        ov.style.alignItems = 'flex-start';
+        ov.style.paddingTop = (vista.top + 12) + 'px';
+        var img = ov.querySelector('.rp-tarjeta-img');
+        if (img) img.style.maxHeight = Math.max(vista.alto - 120, 160) + 'px';
+      }
     }
+    // Lo expone el widget para reubicar la vista previa justo al abrirla.
+    window.rpColocarVista = colocar;
     window.addEventListener('message', function(ev){
       var d = ev.data;
       if (ev.source !== window.parent || !d || d.tipo !== 'mfpp-rp-vista') return;
       vista = { top: Math.max(0, d.top | 0), alto: Math.max(200, d.alto | 0) };
-      colocarModal();
+      colocar();
     });
     if (modal && 'MutationObserver' in window) {
-      new MutationObserver(colocarModal)
+      new MutationObserver(colocar)
         .observe(modal, { attributes: true, attributeFilter: ['hidden'] });
     }
   })();

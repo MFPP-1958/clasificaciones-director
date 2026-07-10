@@ -2181,6 +2181,8 @@ async function rpPreviewTarjeta(btn) {
     '</div>';
   ov.querySelector('.rp-tarjeta-img').src = url;
   document.body.appendChild(ov);
+  // Si va embebido en un iframe alto, colocarlo en la zona realmente visible
+  if (window.rpColocarVista) window.rpColocarVista();
   function onEsc(e) { if (e.key === 'Escape') cerrar(); }
   function cerrar() { ov.remove(); document.removeEventListener('keydown', onEsc); setTimeout(() => URL.revokeObjectURL(url), 500); }
   document.addEventListener('keydown', onEsc);
