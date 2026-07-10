@@ -447,6 +447,19 @@ html, body { overflow-x: hidden; }
 .rp-vista-btn.rp-activa { color: var(--rp-color-primario); border-bottom-color: var(--rp-color-primario); }
 .rp-vista-btn:focus-visible { outline: 2px solid var(--rp-color-acento); outline-offset: -2px; }
 
+/* Botón "Descargar PDF" del ranking */
+.rp-pdf-btn {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 0.84rem; font-weight: 700; cursor: pointer;
+  color: var(--rp-color-primario); background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde); border-radius: 99px;
+  padding: 8px 16px; min-height: 40px; white-space: nowrap;
+}
+.rp-pdf-btn:hover, .rp-pdf-btn:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+.rp-pdf-btn:disabled { opacity: .6; cursor: default; }
+@media (max-width: 560px) { .rp-pdf-btn { margin-left: 0; width: 100%; justify-content: center; } }
+
 /* ── Bloque plegable: Próximas pruebas ── */
 #rp-calendario-caja {
   border: 1px solid var(--rp-color-borde);

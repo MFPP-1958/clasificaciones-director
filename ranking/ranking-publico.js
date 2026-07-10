@@ -2961,6 +2961,100 @@ function rpRenderPerfiles(poblacion) {
     '</details>';
 }
 
+// ── Descargar el ranking en PDF (logo + título + tabla) ──
+const RP_LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALgAAABECAMAAAAFvQ+XAAABv1BMVEUAAAAAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MArOmI0vWv3vm24fm54vrJ6PvM6fve8f3q9v7s9/7g8v70+v/0+//8/v/9/v/////////////////////////////////////8/v/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////e8f3u+P7r9v7e8f3Z7/3E5vrD5vqq3fis3fis3fit3vis3fih2veQ1PZryvNZxvJ3zfSY1/dRxPFGwvEPue4Gt+0Btu0jvO8wvu/3/P8Aq+gAqugApeYAn+MAsOsAsesAtewBtu0LuO4ove81v/BQw/FZxvJqyvNwy/R1zfSE0PWN0/aU1faW1veh2vej2vip3Piz4Pnj8/7m9P7u+P7x+f7z+v/F5vvJ6PvK6PvU7fzY7v3////Dvu6vAAAAcnRSTlMAECAwQFBgcICQoLDA0ODw8vjz5+jr5+To5fP++/fy8fDu4N7d2dTQz8zIxMC7sKuqpqCenJmXkpCOi4iBgHd0cG5tZmJgW1hVUExKREA9PDMwLiIgHxEQTHOXmKaMdXmPr7zI4snAoIhZWS90g7/QxMh7W8JjAAAKT0lEQVR42s2aiX/bSBXHn2PHdhzH5r4PWRiMqW2CIWAw8hqyWmSIdqPaa3EfC5T7ajILXdpd2rJlm9Iuad8fzNOMR+PxyIrSZrv9fvqxZ0by6Ddv3nuamQbS8DHGhiVsVExkk8FM9qDojGeg6OEydt+Fi8JFBSgmuEQAHDSwZA86gxAkLVzBnsDFMDCEm5aSc2PQAcJBg1asHE0GcCF0UKEMNTPkScuaGlQPpvIAExjDRWChwk+cB+xrbYYEGxMYmB63HBlPTogrws3hoCPnxsBXPZjiTDdSlnhyfEO46RW+HIxBKHswGavBmsCT4xgPM3NBqM+N3YkBYizbXd93e1pgKDf66F//cu3WPZT8tgBPSt/wCSOk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';
+
+function rpCargarScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error('no carga ' + src));
+    document.head.appendChild(s);
+  });
+}
+let rpJsPDFPromesa = null;
+function rpCargarJsPDF() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+  if (rpJsPDFPromesa) return rpJsPDFPromesa;
+  rpJsPDFPromesa = rpCargarScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js')
+    .then(() => rpCargarScript('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'));
+  return rpJsPDFPromesa;
+}
+
+// Prepara título, columnas y filas según la vista actual (Corredores/Equipos/Challenge)
+function rpDatosPDF() {
+  const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
+  if (!cat) return null;
+  const catLabel = rpEtiquetaCategoria(cat.key);
+  const region = rpEstado.region
+    ? (rpEstado.region === RP_REGION_SIN ? 'Sin comunidad asignada' : (rpEstado.regionDisplay || ''))
+    : 'Todas las comunidades';
+  const fechas = (rpEstado.carreras || [])
+    .filter(c => c.temporada === rpEstado.temporada && c.resultados && c.resultados.length)
+    .map(c => c.fecha).filter(Boolean).sort();
+  const rango = fechas.length
+    ? `Resultados del ${rpFormatearFecha(fechas[0])} al ${rpFormatearFecha(fechas[fechas.length - 1])}`
+    : '';
+  let titulo, columnas, filas;
+  if (rpEstado.modo === 'challenge') {
+    titulo = `Challenge CV Oficial · ${catLabel} ${rpEstado.temporada}`;
+    columnas = ['#', 'Ciclista', 'Equipo', 'Puntos'];
+    filas = rpCalcularChallenge(cat).lista.map((x, i) => [i + 1, x.corredor.nombre, x.corredor.equipo || '', rpFormatearPuntos(x.total)]);
+  } else if (rpEstado.vista === 'equipos') {
+    titulo = `Ranking por equipos · ${catLabel} ${rpEstado.temporada}`;
+    columnas = ['#', 'Equipo', 'Corredores', 'Victorias', 'Puntos'];
+    filas = rpCalcularEquipos(rpPoblacion(cat)).map((e, i) => [i + 1, e.nombre, e.corredores.length, e.victorias || 0, rpFormatearPuntos(e.puntos)]);
+  } else {
+    titulo = `Ranking ${catLabel} ${rpEstado.temporada}`;
+    columnas = ['#', 'Corredor', 'Equipo', 'Cat.', 'Pruebas', 'Puntos'];
+    filas = rpPoblacion(cat).map((c, i) => [i + 1, c.nombre, c.equipo || '', c.subcatPrincipal || '', `${c.pruebasContadas}/${c.pruebasTotales}`, rpFormatearPuntos(c.puntosTotales)]);
+  }
+  return { titulo, subtitulo: (region ? region + ' · ' : '') + 'Temporada ' + rpEstado.temporada, rango, columnas, filas, archivo: `ranking-${cat.key}-${rpEstado.temporada}.pdf` };
+}
+
+async function rpDescargarPDF(btn) {
+  const d = rpDatosPDF();
+  if (!d || !d.filas.length) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Generando…';
+  try {
+    await rpCargarJsPDF();
+    const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth(), bandH = 74;
+    // Cabecera: franja azul marino + logo blanco + título
+    doc.setFillColor(11, 42, 68); doc.rect(0, 0, W, bandH, 'F');
+    try { doc.addImage(RP_LOGO_B64, 'PNG', 40, 22, 130, 130 * 68 / 184); } catch (_) { /* si falla el logo, seguimos */ }
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+    doc.text(d.titulo, W - 40, 38, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(190, 214, 230);
+    doc.text(d.subtitulo, W - 40, 55, { align: 'right' });
+    // Metadatos
+    const y = bandH + 22;
+    doc.setTextColor(90, 90, 90); doc.setFontSize(9);
+    if (d.rango) doc.text(d.rango, 40, y);
+    doc.text('Generado el ' + rpFormatearFecha(new Date().toISOString().slice(0, 10)), W - 40, y, { align: 'right' });
+    // Tabla
+    doc.autoTable({
+      startY: y + 12, head: [d.columnas], body: d.filas,
+      styles: { font: 'helvetica', fontSize: 9, cellPadding: 4.5, textColor: [40, 40, 40], lineColor: [230, 230, 230], lineWidth: 0.5 },
+      headStyles: { fillColor: [14, 116, 144], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [246, 250, 252] },
+      columnStyles: { 0: { halign: 'center', cellWidth: 34 }, [d.columnas.length - 1]: { halign: 'right', fontStyle: 'bold', textColor: [14, 116, 144] } },
+      margin: { left: 40, right: 40 },
+      didDrawPage: () => {
+        const H = doc.internal.pageSize.getHeight();
+        doc.setFontSize(8); doc.setTextColor(140, 140, 140);
+        doc.text('Ranking personal, no oficial · elaborado por MFPP Cycling · mfppcycling.com/ranking', 40, H - 22);
+        doc.text('Página ' + doc.internal.getNumberOfPages(), W - 40, H - 22, { align: 'right' });
+      }
+    });
+    doc.save(d.archivo);
+    btn.textContent = '✅ Descargado';
+  } catch (_) {
+    btn.textContent = '⚠️ Error, reinténtalo';
+  }
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2200);
+}
+
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const info = document.getElementById('rp-challenge-info');
@@ -3395,6 +3489,9 @@ document.addEventListener('DOMContentLoaded', () => {
     rpRenderPestanas(); // los contadores cambian: corredores ↔ equipos únicos
     rpRenderTabla();
   });
+
+  // Descargar el ranking en PDF
+  document.getElementById('rp-pdf-btn').addEventListener('click', function () { rpDescargarPDF(this); });
 
   // Conmutador Ranking MFPP / Challenge CV Oficial
   document.getElementById('rp-modo').addEventListener('click', e => {
