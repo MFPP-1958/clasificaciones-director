@@ -2009,7 +2009,10 @@ function rpBotonesCompartir(titulo, url) {
 // y la marca. En móvil se comparte con el menú nativo del teléfono; en
 // escritorio se descarga. Todos los datos ya son públicos en el ranking.
 function rpBotonTarjeta() {
-  return '<button type="button" class="rp-tarjeta-btn" title="Descarga tu ranking (puesto, puntos y estadísticas) como imagen, para publicarlo o enviarlo por donde quieras: Instagram, WhatsApp, etc.">📸 Compartir mi ranking</button>';
+  return '<div class="rp-tarjeta-btns">' +
+    '<button type="button" class="rp-ver-btn" title="Ver primero tu tarjeta del ranking en grande, antes de compartirla o descargarla">👁️ Ver mi ranking</button>' +
+    '<button type="button" class="rp-tarjeta-btn" title="Compartir o descargar tu tarjeta del ranking (Instagram, WhatsApp, etc.)">📸 Compartir mi ranking</button>' +
+    '</div>';
 }
 
 function rpRR(ctx, x, y, w, h, r) {
@@ -2128,6 +2131,23 @@ function rpDibujarTarjeta(d) {
   });
 }
 
+// Comparte (menú nativo en móvil) o descarga (escritorio) una imagen ya generada.
+async function rpCompartirBlob(blob, d) {
+  const file = new File([blob], 'ranking-mfpp' + (d.puesto ? '-' + d.puesto : '') + '.png', { type: 'image/png' });
+  const texto = (d.puesto ? `Soy ${d.puesto}º` : 'Estoy') + ` en el Ranking MFPP ${d.temporada} 🏆` +
+    (d.puntos != null ? ` — ${d.puntos} pts` : '') + '\nmfppcycling.com/ranking';
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: texto }); } catch (_) { /* cancelado por el usuario */ }
+    return 'compartido';
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return 'descargado';
+}
+
 async function rpCompartirTarjeta(btn) {
   const d = rpEstado.modalTarjeta;
   if (!d) return;
@@ -2135,24 +2155,37 @@ async function rpCompartirTarjeta(btn) {
   btn.disabled = true; btn.textContent = '⏳ Generando…';
   try {
     const blob = await rpDibujarTarjeta(d);
-    const file = new File([blob], 'ranking-mfpp.png', { type: 'image/png' });
-    const texto = (d.puesto ? `Soy ${d.puesto}º` : 'Estoy') + ` en el Ranking MFPP ${d.temporada} 🏆` +
-      (d.puntos != null ? ` — ${d.puntos} pts` : '') + '\nmfppcycling.com/ranking';
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], text: texto });
-      btn.textContent = orig; btn.disabled = false;
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'ranking-mfpp' + (d.puesto ? '-' + d.puesto : '') + '.png';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      btn.textContent = '✅ Descargada'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1900);
-    }
-  } catch (_) {
-    // El usuario canceló el compartir, o error puntual: restaurar el botón
-    btn.textContent = orig; btn.disabled = false;
-  }
+    if (await rpCompartirBlob(blob, d) === 'descargado') btn.textContent = '✅ Descargada';
+  } catch (_) { /* error puntual */ }
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1900);
+}
+
+// Vista previa: muestra la tarjeta en un modal para verla antes de compartir/descargar.
+async function rpPreviewTarjeta(btn) {
+  const d = rpEstado.modalTarjeta;
+  if (!d) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Generando…';
+  let blob;
+  try { blob = await rpDibujarTarjeta(d); }
+  catch (_) { btn.textContent = orig; btn.disabled = false; return; }
+  btn.textContent = orig; btn.disabled = false;
+  const url = URL.createObjectURL(blob);
+  const ov = document.createElement('div');
+  ov.className = 'rp-tarjeta-overlay';
+  ov.innerHTML =
+    '<div class="rp-tarjeta-caja" role="dialog" aria-modal="true" aria-label="Vista previa de tu tarjeta del ranking">' +
+    '<button type="button" class="rp-tarjeta-cerrar" aria-label="Cerrar">✕</button>' +
+    '<img class="rp-tarjeta-img" alt="Tu tarjeta del Ranking MFPP">' +
+    '<button type="button" class="rp-tarjeta-descargar">📲 Compartir / Descargar</button>' +
+    '</div>';
+  ov.querySelector('.rp-tarjeta-img').src = url;
+  document.body.appendChild(ov);
+  function onEsc(e) { if (e.key === 'Escape') cerrar(); }
+  function cerrar() { ov.remove(); document.removeEventListener('keydown', onEsc); setTimeout(() => URL.revokeObjectURL(url), 500); }
+  document.addEventListener('keydown', onEsc);
+  ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('.rp-tarjeta-cerrar')) cerrar(); });
+  ov.querySelector('.rp-tarjeta-descargar').addEventListener('click', () => rpCompartirBlob(blob, d));
 }
 
 function rpCopiarEnlace(url, btn) {
@@ -3530,6 +3563,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enlaces cruzados: clic en un corredor o una carrera (dentro del modal o
   // en "Últimos resultados") abre la ficha correspondiente.
   const alClicEnlace = e => {
+    const bVer = e.target.closest('.rp-ver-btn');
+    if (bVer) { rpPreviewTarjeta(bVer); return; }
     const bTar = e.target.closest('.rp-tarjeta-btn');
     if (bTar) { rpCompartirTarjeta(bTar); return; }
     const bCmp = e.target.closest('.rp-comparar-btn');

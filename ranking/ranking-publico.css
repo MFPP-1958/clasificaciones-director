@@ -763,21 +763,53 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
 .rp-compartir-wa { color: #fff; background: #25d366; border-color: #25d366; }
 .rp-compartir-wa:hover, .rp-compartir-wa:focus-visible { background: #1eb457; border-color: #1eb457; }
 
-/* Botón "Compartir mi tarjeta": genera una imagen del puesto para redes */
-.rp-tarjeta-btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  margin-top: 14px;
-  font: inherit; font-size: 0.9rem; font-weight: 800;
-  color: #0b2a44; background: linear-gradient(180deg, #ffc93c, #f5b21a);
-  border: none; border-radius: 99px;
-  padding: 12px 22px; min-height: 44px; cursor: pointer;
-  box-shadow: 0 6px 18px rgba(245, 178, 26, 0.4);
-  transition: transform .12s, box-shadow .15s;
+/* Botones de la tarjeta del ranking: "Ver" (primario) + "Compartir" (secundario) */
+.rp-tarjeta-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.rp-ver-btn, .rp-tarjeta-btn {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0;
+  font: inherit; font-size: 0.9rem; font-weight: 800; cursor: pointer;
+  border-radius: 99px; padding: 12px 20px; min-height: 44px;
+  transition: transform .12s, box-shadow .15s, border-color .15s;
 }
-.rp-tarjeta-btn:hover, .rp-tarjeta-btn:focus-visible {
+.rp-ver-btn {
+  color: #0b2a44; background: linear-gradient(180deg, #ffc93c, #f5b21a);
+  border: none; box-shadow: 0 6px 18px rgba(245, 178, 26, 0.4);
+}
+.rp-ver-btn:hover, .rp-ver-btn:focus-visible {
   transform: translateY(-1px); box-shadow: 0 9px 24px rgba(245, 178, 26, 0.5); outline: none;
 }
-.rp-tarjeta-btn:disabled { opacity: .7; cursor: default; transform: none; }
+.rp-tarjeta-btn {
+  color: var(--rp-color-primario); background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+}
+.rp-tarjeta-btn:hover, .rp-tarjeta-btn:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+.rp-ver-btn:disabled, .rp-tarjeta-btn:disabled { opacity: .7; cursor: default; transform: none; }
+
+/* Modal de vista previa de la tarjeta */
+.rp-tarjeta-overlay {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(5, 15, 30, 0.78); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; padding: 22px;
+  animation: rp-fade .15s ease;
+}
+@keyframes rp-fade { from { opacity: 0 } to { opacity: 1 } }
+.rp-tarjeta-caja { position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 92vw; }
+.rp-tarjeta-img {
+  max-width: min(430px, 86vw); max-height: 72vh; width: auto; height: auto;
+  border-radius: 16px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+.rp-tarjeta-cerrar {
+  position: absolute; top: -16px; right: -12px; width: 40px; height: 40px;
+  border-radius: 50%; border: none; background: #fff; color: #0b2a44;
+  font-size: 1rem; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.rp-tarjeta-descargar {
+  font: inherit; font-size: 1rem; font-weight: 800; cursor: pointer;
+  color: #0b2a44; background: linear-gradient(180deg, #ffc93c, #f5b21a);
+  border: none; border-radius: 99px; padding: 14px 30px;
+  box-shadow: 0 10px 26px rgba(245, 178, 26, 0.5);
+}
+.rp-tarjeta-descargar:hover, .rp-tarjeta-descargar:focus-visible { outline: none; transform: translateY(-1px); }
 
 /* Acciones del recorrido: descargar GPX / abrir en Google Maps */
 .rp-ruta-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
