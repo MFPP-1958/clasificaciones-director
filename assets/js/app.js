@@ -2184,6 +2184,29 @@ let _calPast    = []; // carreras disputadas cargadas
 let _calPlanned = []; // carreras planificadas de Supabase
 let _calInited  = false;
 
+// ── Pruebas EXTERNAS (nuestro equipo NO participa) ──
+// Se añaden solo para nutrir el ranking/clasificación pública; llevan un
+// distintivo propio y se pueden ocultar del calendario con un botón. La marca
+// vive en el JSON de `notes` (extra.externa), sin tocar el esquema de la BD.
+let _calShowExterna = true;
+try{ _calShowExterna = (localStorage.getItem('cal_show_externa') || '1') !== '0'; }catch(_){}
+function _calPassExterna(r){ return _calShowExterna || !(r && r.externa); }
+function _calToggleExterna(){
+  _calShowExterna = !_calShowExterna;
+  try{ localStorage.setItem('cal_show_externa', _calShowExterna?'1':'0'); }catch(_){}
+  _calSyncExternaBtn();
+  _calRender();
+}
+function _calSyncExternaBtn(){
+  const b=document.getElementById('calBtnExterna'); if(!b) return;
+  const hayExternas = [..._calPast, ..._calPlanned].some(r=>r&&r.externa);
+  b.style.display = hayExternas ? '' : 'none';   // el botón solo aparece si hay externas
+  b.textContent = _calShowExterna ? '🌐 Ocultar externas' : '🌐 Mostrar externas';
+  b.style.background = _calShowExterna ? '#64748b' : '#fff';
+  b.style.color      = _calShowExterna ? '#fff' : '#475569';
+  b.style.borderColor= '#64748b';
+}
+
 const _CAL_MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const _CAL_DAYS_ES   = ['L','M','X','J','V','S','D'];
 
@@ -2260,6 +2283,7 @@ async function _calLoadData(){
       inscritosCount: inscritos.length || null,          // participantes que tomaron la salida
       finishCount: riders.length,                        // clasificados (terminaron)
       mineCount, bestMine,                               // rendimiento de nuestro equipo
+      externa: !!r.externa,                              // prueba externa (no participamos)
       type: 'past'
     };
   }).filter(r=>r.date);
@@ -2275,7 +2299,7 @@ async function _calLoadData(){
       try{ extra=JSON.parse(r.notes||'{}'); }catch(e){}
       // tipo de actividad: 'carrera' | 'concentracion' | 'entrenamiento' (por defecto 'carrera')
       const tipo = extra.tipo || (r.race_type==='actividad' ? 'concentracion' : 'carrera');
-      return { id:r.id, date: new Date(r.date+'T12:00:00'), dateStr:r.date, name:r.name, localidad:extra.localidad||'', cat:extra.cat||'', modality:extra.modality||'', challengeCV:!!extra.challengeCV, ccaa:extra.ccaa||'', fccvId:extra.fccvId||'', fccvDetailUrl:extra.fccvDetailUrl||'', notes:extra.notes||'', tipo, type:'planned' };
+      return { id:r.id, date: new Date(r.date+'T12:00:00'), dateStr:r.date, name:r.name, localidad:extra.localidad||'', cat:extra.cat||'', modality:extra.modality||'', challengeCV:!!extra.challengeCV, ccaa:extra.ccaa||'', fccvId:extra.fccvId||'', fccvDetailUrl:extra.fccvDetailUrl||'', notes:extra.notes||'', tipo, externa:!!extra.externa, type:'planned' };
     });
   }
 }
@@ -3484,6 +3508,7 @@ function _calRender(){
     body.innerHTML = emptyBanner + _calBuildMonth(_calYear, _calMonth);
   }
   _calBindTooltips();
+  _calSyncExternaBtn();   // mostrar/ocultar y etiquetar el botón de pruebas externas
   // Re-aplicar la preferencia móvil lista/cuadrícula (solo afecta en <768px)
   if(_calView==='monthly'){ try{ _calMobileView(localStorage.getItem('cal_mobile_view')||'list'); }catch(_){} }
 }
@@ -3551,6 +3576,7 @@ function _calGetRacesForDay(y, m, d){
   const all = [..._calPast, ..._calPlanned];
   return all.filter(r=>{
     if(!r.date) return false;
+    if(!_calPassExterna(r)) return false;   // ocultar externas si el botón está en "Ocultar"
     return r.date.getFullYear()===y && r.date.getMonth()===m && r.date.getDate()===d;
   });
 }
@@ -3572,6 +3598,9 @@ function _calEventStyle(r){
   const tipo = (r && r.tipo) || 'carrera';
   if(tipo==='concentracion') return {tipo, cls:'evento-concentracion', color:'#f59e0b', soft:'#fffbeb', border:'#fcd34d', icon:'🏕️', label:'Concentración de equipo'};
   if(tipo==='entrenamiento')  return {tipo, cls:'evento-entrenamiento',  color:'#8b5cf6', soft:'#f5f3ff', border:'#ddd6fe', icon:'🏋️', label:'Entrenamiento de equipo'};
+  // Prueba EXTERNA (no participamos): gris pizarra + 🌐, distinta de las nuestras.
+  // Se aplica tanto si ya está disputada como si es planificada.
+  if(r && r.externa)          return {tipo:'carrera', externa:true, cls:'evento-carrera-externa', color:'#64748b', soft:'#f8fafc', border:'#cbd5e1', icon:'🌐', label:'Prueba externa · no participamos'};
   if(_calDone(r))             return {tipo:'carrera', cls:'evento-carrera-azul',  color:'#3b82f6', soft:'#eff6ff', border:'#bfdbfe', icon:'',    label:'Carrera disputada'};
   return                             {tipo:'carrera', cls:'evento-carrera-verde', color:'#10b981', soft:'#f0fdf4', border:'#a7f3d0', icon:'📋',  label:'Carrera planificada'};
 }
@@ -3639,7 +3668,7 @@ function _calBuildMonth(y, m){
         const onClickAttr = isPastClickable
           ? `onclick="event.stopPropagation();_calOpenRaceDetails('${escapeAttr(String(r.id))}')"`
           : '';
-        const prefix = ev.tipo==='carrera' ? (!done?'📋 ':'') : (ev.icon+' ');
+        const prefix = ev.externa ? (ev.icon+' ') : (ev.tipo==='carrera' ? (!done?'📋 ':'') : (ev.icon+' '));
         return `<div ${onClickAttr} class="${ev.cls}" style="font-size:10px;font-weight:700;background:${ev.color};color:#fff;border-radius:4px;padding:2px 5px;margin-bottom:2px;overflow:hidden;white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.2;max-width:100%;cursor:${isPastClickable?'pointer':'default'};${isPastClickable?'box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)':''}" title="${escapeHtml(r.name)} · ${escapeAttr(ev.label)}${isPastClickable?' — Click para ver participantes':''}">
           ${ev.tipo==='carrera'?`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${st.color};box-shadow:0 0 0 1px rgba(255,255,255,.9);margin-right:3px;vertical-align:middle" title="${escapeAttr(st.label)}"></span>`:''}${prefix}${escapeHtml(r.name)}
         </div>`;
@@ -3651,7 +3680,7 @@ function _calBuildMonth(y, m){
 
   // Lista de carreras del mes
   const monthRaces = [..._calPast, ..._calPlanned].filter(r=>{
-    return r.date && r.date.getFullYear()===y && r.date.getMonth()===m && _calRaceMatchesCat(r);
+    return r.date && r.date.getFullYear()===y && r.date.getMonth()===m && _calRaceMatchesCat(r) && _calPassExterna(r);
   }).sort((a,b)=>a.date-b.date);
 
   if(monthRaces.length>0){
@@ -3710,7 +3739,7 @@ function _calBuildMonth(y, m){
 function _calBuildAnnual(){
   let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">`;
   for(let m=0;m<12;m++){
-    const races = [..._calPast,..._calPlanned].filter(r=>r.date&&r.date.getFullYear()===_calYear&&r.date.getMonth()===m&&_calRaceMatchesCat(r));
+    const races = [..._calPast,..._calPlanned].filter(r=>r.date&&r.date.getFullYear()===_calYear&&r.date.getMonth()===m&&_calRaceMatchesCat(r)&&_calPassExterna(r));
     html += `<div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
       <div style="background:${races.length>0?'#0b2f6b':'#f3f4f6'};color:${races.length>0?'#fff':'#6b7280'};padding:8px 12px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="_calGoMonth(${m})">
         <span>${_CAL_MONTHS_ES[m]}</span>
@@ -3721,7 +3750,7 @@ function _calBuildAnnual(){
           races.sort((a,b)=>a.date-b.date).map(r=>{ const ev=_calEventStyle(r); return `
           <div class="${ev.cls}" style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f9fafb;background:transparent">
             <span style="width:8px;height:8px;border-radius:50%;background:${ev.color};flex-shrink:0;display:inline-block"></span>
-            <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${escapeHtml(r.name)} · ${escapeAttr(ev.label)}">${ev.tipo!=='carrera'?ev.icon+' ':''}${escapeHtml(r.name)}</span>
+            <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${escapeHtml(r.name)} · ${escapeAttr(ev.label)}">${(ev.tipo!=='carrera'||ev.externa)?ev.icon+' ':''}${escapeHtml(r.name)}</span>
             <span style="color:#9ca3af;flex-shrink:0">${r.date.getDate()}</span>
           </div>`; }).join('')}
       </div>
@@ -4023,6 +4052,7 @@ function _calOpenModal(dateStr){
   document.getElementById('calPlanCat').value = _gLbl || '';
   document.getElementById('calPlanLoc').value='';
   document.getElementById('calPlanNotes').value='';
+  const _extNew=document.getElementById('calPlanExterna'); if(_extNew) _extNew.checked=false;
   if(msg) msg.innerHTML = esPasada
     ? '<span style="color:#92400e">📅 Fecha pasada: se registrará la prueba. Para añadir la clasificación, luego ábrela en <b>Carga y Resumen</b>.</span>'
     : '';
@@ -4047,6 +4077,7 @@ function _calEditPlanned(id){
   document.getElementById('calPlanCat').value  = race.cat || '';
   document.getElementById('calPlanLoc').value  = race.localidad || '';
   document.getElementById('calPlanNotes').value= race.notes || '';
+  const _extEd=document.getElementById('calPlanExterna'); if(_extEd) _extEd.checked=!!race.externa;
   if(msg) msg.textContent='';
   modal.style.display='flex';
   document.body.style.overflow='hidden';
@@ -6283,6 +6314,8 @@ async function _calSavePlanned(btn){
   const loc   = document.getElementById('calPlanLoc')?.value.trim();
   const notes = document.getElementById('calPlanNotes')?.value.trim();
   const tipo  = (document.getElementById('calPlanTipo')?.value || 'carrera');
+  // Prueba externa (no participamos): solo aplica a carreras, no a actividades de equipo
+  const externa = tipo==='carrera' && !!document.getElementById('calPlanExterna')?.checked;
   // Las carreras siguen siendo race_type='planificada' (las consumen las vistas
   // de pruebas). Las actividades de equipo van como 'actividad' para no colarse.
   const raceType = tipo==='carrera' ? 'planificada' : 'actividad';
@@ -6300,7 +6333,7 @@ async function _calSavePlanned(btn){
   const _gfCat = (typeof _globalFilters!=='undefined' && _globalFilters) ? (_globalFilters.cat||'') : '';
   const _gLbl  = (typeof _CAT_IMPORT_LABEL!=='undefined' && _gfCat) ? (_CAT_IMPORT_LABEL[_gfCat]||'') : '';
   const effCat = cat || _gLbl;   // categoría efectiva de la prueba
-  const notesJson = JSON.stringify({cat:effCat, raceCat:effCat, localidad:loc, notes, tipo});
+  const notesJson = JSON.stringify({cat:effCat, raceCat:effCat, localidad:loc, notes, tipo, externa});
 
   // Sin sesión Supabase válida, la RLS rechazará la escritura → avisamos claro.
   if(_sb && !(await _sbEnsureAuth())){
@@ -6318,21 +6351,21 @@ async function _calSavePlanned(btn){
         // borraba la lista de confirmados al editar la prueba.
         let extra={};
         try{ const {data}=await _sb.from('races').select('notes').eq('id',id).single(); if(data&&data.notes) extra=JSON.parse(data.notes); }catch(_){}
-        extra.cat=effCat; extra.raceCat=effCat; extra.localidad=loc; extra.notes=notes; extra.tipo=tipo;
+        extra.cat=effCat; extra.raceCat=effCat; extra.localidad=loc; extra.notes=notes; extra.tipo=tipo; extra.externa=externa;
         const {error} = await _sb.from('races').update({name, date, notes:JSON.stringify(extra), race_type:raceType}).eq('id',id);
         if(error){ const rls=/row-level security|policy/i.test(error.message||''); if(msg){msg.textContent= rls?'⛔ Sin permisos para guardar (sesión caducada). Vuelve a entrar con el enlace mágico.':'❌ Error: '+error.message; msg.style.color='#dc2626';} return; }
       }
       // Actualizar en memoria
       const idx = _calPlanned.findIndex(r=>r.id===id);
-      if(idx>=0) _calPlanned[idx] = {..._calPlanned[idx], name, date:new Date(date+'T12:00:00'), dateStr:date, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', tipo};
+      if(idx>=0) _calPlanned[idx] = {..._calPlanned[idx], name, date:new Date(date+'T12:00:00'), dateStr:date, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', tipo, externa};
     } else {
       // ── MODO AÑADIR ──
       if(_sb){
         const {data, error} = await _sb.from('races').insert({name, date, notes:notesJson, race_type:'planificada'}).select().single();
         if(error){ const rls=/row-level security|policy/i.test(error.message||''); if(msg){msg.textContent= rls?'⛔ Sin permisos para guardar (sesión caducada). Vuelve a entrar con el enlace mágico o Google.':'❌ Error: '+error.message; msg.style.color='#dc2626';} return; }
-        _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', tipo, type:'planned'});
+        _calPlanned.push({id:data.id, date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', tipo, externa, type:'planned'});
       } else {
-        _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', tipo, type:'planned'});
+        _calPlanned.push({id:'local-'+Date.now(), date:new Date(date+'T12:00:00'), dateStr:date, name, localidad:loc||'', cat:effCat||'', raceCat:effCat||'', notes:notes||'', tipo, externa, type:'planned'});
       }
     }
     _calCloseModal();
@@ -8040,6 +8073,7 @@ async function _sbLoadHistory(){
       challengeCV: !!extra.challengeCV,
       raceCat: extra.raceCat || '',   // categoría FORZADA de la prueba (override manual)
       ccaa: extra.ccaa || '',
+      externa: !!extra.externa,       // prueba externa: nuestro equipo NO participó
       route: extra.route || null,
       // Meteo (Open-Meteo) — opcionales, leídos desde notes
       hora_inicio: extra.hora_inicio || '',
