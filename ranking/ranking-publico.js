@@ -2324,6 +2324,7 @@ function rpAbrirModal(clave) {
     rpBotonTarjeta() +
     rpBotonesCompartir('Ranking MFPP · ' + c.nombre, rpEnlaceCorredor(c.nombre)) +
     rpBotonComparar() +
+    rpBotonFichaPDF() +
     '</header>' +
     rpRenderHighlights(c) +
     rpRenderRadar(c) +
@@ -3090,6 +3091,168 @@ async function rpDescargarPDF(btn) {
   setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2200);
 }
 
+// ── Descargar la FICHA COMPLETA del corredor en PDF ──
+function rpBotonFichaPDF() {
+  return '<button type="button" class="rp-ficha-pdf-btn" title="Descargar la ficha completa del corredor en PDF: perfil, estadísticas, evolución e historial de la temporada">📄 Descargar ficha (PDF)</button>';
+}
+
+// Radar dibujado en canvas (fondo blanco, sin emojis) para incrustar en el PDF.
+function rpRadarCanvas(ejes) {
+  const S = 560, cx = S / 2, cy = S / 2 - 6, R = 150;
+  const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, S, S);
+  const ang = i => -Math.PI / 2 + i * 2 * Math.PI / 5;
+  const P = (i, r) => [cx + Math.cos(ang(i)) * r, cy + Math.sin(ang(i)) * r];
+  ctx.strokeStyle = 'rgba(100,116,139,.35)'; ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1].forEach(g => { ctx.beginPath(); RP_RADAR_EJES.forEach((_, i) => { const [x, y] = P(i, R * g); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath(); ctx.stroke(); });
+  RP_RADAR_EJES.forEach((_, i) => { const [x, y] = P(i, R); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke(); });
+  ctx.beginPath(); RP_RADAR_EJES.forEach(([k], i) => { const [x, y] = P(i, R * Math.max(4, ejes[k]) / 100); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath();
+  ctx.fillStyle = 'rgba(14,116,144,.28)'; ctx.fill();
+  ctx.strokeStyle = '#0e7490'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = '#0e7490'; RP_RADAR_EJES.forEach(([k], i) => { const [x, y] = P(i, R * Math.max(4, ejes[k]) / 100); ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); });
+  RP_RADAR_EJES.forEach(([k], i) => {
+    const [x, y] = P(i, R + 28);
+    ctx.textAlign = Math.abs(x - cx) < 12 ? 'center' : (x < cx ? 'right' : 'left');
+    ctx.font = 'bold 20px Helvetica, Arial'; ctx.fillStyle = '#334155'; ctx.fillText(k, x, y);
+    ctx.font = 'bold 22px Helvetica, Arial'; ctx.fillStyle = '#0e7490'; ctx.fillText(String(ejes[k]), x, y + 24);
+  });
+  return cv.toDataURL('image/png');
+}
+
+// Gráfica de línea en canvas (evolución de puntos o de posición) para el PDF.
+function rpLineaCanvas(serie, opts) {
+  const W = 620, H = 300, PL = 52, PR = 18, PT = 18, PB = 26;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  if (!serie || serie.length < 2) return cv.toDataURL('image/png');
+  const ys = serie.map(p => p.y);
+  let minY = opts.invertY ? Math.min(...ys) : (opts.min0 ? 0 : Math.min(...ys));
+  let maxY = Math.max(...ys);
+  const span = Math.max(1, maxY - minY);
+  const X = i => PL + i * (W - PL - PR) / (serie.length - 1);
+  const Y = v => opts.invertY ? PT + (v - minY) / span * (H - PT - PB) : PT + (1 - (v - minY) / span) * (H - PT - PB);
+  ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PL, PT); ctx.lineTo(PL, H - PB); ctx.lineTo(W - PR, H - PB); ctx.stroke();
+  ctx.fillStyle = '#6b7280'; ctx.font = '16px Helvetica, Arial'; ctx.textAlign = 'right';
+  ctx.fillText(opts.invertY ? minY + 'º' : String(Math.round(maxY)), PL - 8, PT + 12);
+  ctx.fillText(opts.invertY ? maxY + 'º' : String(Math.round(minY)), PL - 8, H - PB);
+  ctx.strokeStyle = '#0e7490'; ctx.lineWidth = 3; ctx.beginPath();
+  serie.forEach((p, i) => { const x = X(i), y = Y(p.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+  ctx.fillStyle = '#0e7490'; serie.forEach((p, i) => { ctx.beginPath(); ctx.arc(X(i), Y(p.y), 4, 0, 7); ctx.fill(); });
+  return cv.toDataURL('image/png');
+}
+
+async function rpDescargarFichaPDF(btn) {
+  const c = rpCorredorPorClave(rpEstado.modalClave);
+  if (!c) return;
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Generando…';
+  try {
+    await rpCargarJsPDF();
+    const t = rpEstado.modalTarjeta || {};
+    const st = rpStatsCorredor(c);
+    const radar = rpRadar(c).ejes;
+    const puesto = t.puesto || st.puesto;
+    const fechas = (rpEstado.carreras || []).filter(x => x.temporada === rpEstado.temporada && x.resultados && x.resultados.length).map(x => x.fecha).filter(Boolean).sort();
+    const rango = fechas.length ? `del ${rpFormatearFecha(fechas[0])} al ${rpFormatearFecha(fechas[fechas.length - 1])}` : '';
+    const cron = [...c.resultados].reverse();
+    let acum = 0; const seriePts = cron.map(r => { if (r.contado) acum = Math.round((acum + r.puntos) * 100) / 100; return { y: acum }; });
+    const seriePos = rpEvolucionPosicion(c).map(s => ({ y: s.pos }));
+    const hist = [...c.resultados].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''))
+      .map(r => [rpFormatearFecha(r.fecha), r.carrera, r.pos != null ? r.pos + 'º' : '—', rpFormatearPuntos(r.puntos), r.contado ? 'Sí' : '—']);
+    const mejores = c.resultados.filter(r => r.pos && r.puntos > 0).sort((a, b) => (b.puntos - a.puntos) || (a.pos - b.pos)).slice(0, 3);
+
+    const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth(), Hp = doc.internal.pageSize.getHeight(), M = 40;
+    // Cabecera de marca
+    const bandH = 86;
+    doc.setFillColor(11, 42, 68); doc.rect(0, 0, W, bandH, 'F');
+    try { doc.addImage(RP_LOGO_B64, 'PNG', M, 22, 120, 120 * 68 / 184); } catch (_) { /* sin logo */ }
+    doc.setTextColor(245, 178, 26); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.text('FICHA DE RENDIMIENTO ' + rpEstado.temporada, W - M, 34, { align: 'right' });
+    doc.setTextColor(255, 255, 255); doc.setFontSize(21); doc.text(c.nombre, W - M, 60, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(190, 214, 230);
+    doc.text(c.equipo || '', W - M, 76, { align: 'right' });
+    // Identificación / periodo
+    let y = bandH + 26;
+    doc.setTextColor(30, 30, 30); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
+    doc.text([t.catLabel || rpEtiquetaCategoria(c.categoria), c.subcatPrincipal, (t.region || ''), 'Puesto ' + puesto + 'º', rpFormatearPuntos(c.puntosTotales) + ' pts'].filter(Boolean).join('    ·    '), M, y);
+    y += 15; doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(115, 115, 115);
+    doc.text('Temporada ' + rpEstado.temporada + (rango ? ' · Resultados ' + rango : ''), M, y);
+    doc.text('Generada el ' + rpFormatearFecha(new Date().toISOString().slice(0, 10)), W - M, y, { align: 'right' });
+    // Estadísticas (4 tarjetas)
+    y += 20;
+    const stats = [['VICTORIAS', st.victorias], ['PODIOS', st.podios], ['TOP-10', st.top10], ['PRUEBAS', st.pruebas]];
+    const cw = (W - 2 * M) / 4;
+    stats.forEach((s, i) => {
+      const bx = M + i * cw;
+      doc.setDrawColor(228, 236, 248); doc.setFillColor(248, 250, 252); doc.roundedRect(bx, y, cw - 8, 46, 6, 6, 'FD');
+      doc.setTextColor(14, 116, 144); doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.text(String(s[1]), bx + (cw - 8) / 2, y + 24, { align: 'center' });
+      doc.setTextColor(120, 120, 120); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.text(s[0], bx + (cw - 8) / 2, y + 39, { align: 'center' });
+    });
+    y += 46 + 24;
+    // Perfil (radar) + valores
+    doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('PERFIL DEL CORREDOR', M, y); y += 10;
+    doc.addImage(rpRadarCanvas(radar), 'PNG', M, y, 210, 210);
+    // valores a la derecha del radar
+    let vy = y + 26;
+    doc.setFontSize(10.5);
+    RP_RADAR_EJES.forEach(([k]) => {
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60); doc.text(k, M + 240, vy);
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(14, 116, 144); doc.text(String(radar[k]), W - M, vy, { align: 'right' });
+      // barra
+      const bx0 = M + 350, bw = W - M - bx0 - 34;
+      doc.setFillColor(233, 238, 242); doc.roundedRect(bx0, vy - 8, bw, 6, 3, 3, 'F');
+      doc.setFillColor(14, 116, 144); doc.roundedRect(bx0, vy - 8, bw * radar[k] / 100, 6, 3, 3, 'F');
+      vy += 26;
+    });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
+    doc.text('0–100 comparado con su categoría · Forma: 50 = en su nivel actual.', M + 240, vy + 2);
+    y += 210 + 22;
+    // Evolución (dos gráficas)
+    doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('EVOLUCIÓN EN LA TEMPORADA', M, y); y += 10;
+    const gW = (W - 2 * M - 20) / 2, gH = gW * 300 / 620;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(70, 70, 70);
+    doc.text('Puntos acumulados', M, y + 2); doc.text('Posición en el ranking (más arriba = mejor)', M + gW + 20, y + 2);
+    doc.addImage(rpLineaCanvas(seriePts, { min0: true }), 'PNG', M, y + 8, gW, gH);
+    doc.addImage(rpLineaCanvas(seriePos, { invertY: true }), 'PNG', M + gW + 20, y + 8, gW, gH);
+    y += 8 + gH + 22;
+    // Mejores resultados
+    if (mejores.length) {
+      doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('MEJORES RESULTADOS', M, y);
+      doc.autoTable({
+        startY: y + 8, body: mejores.map(r => [r.pos + 'º', r.carrera, rpFormatearFecha(r.fecha), rpFormatearPuntos(r.puntos) + ' pts']),
+        theme: 'plain', styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 4 },
+        columnStyles: { 0: { fontStyle: 'bold', textColor: [14, 116, 144], cellWidth: 34 }, 3: { halign: 'right' } },
+        margin: { left: M, right: M }
+      });
+      y = doc.lastAutoTable.finalY + 18;
+    }
+    // Historial completo
+    doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('HISTORIAL DE LA TEMPORADA', M, y);
+    doc.autoTable({
+      startY: y + 8, head: [['Fecha', 'Prueba', 'Pos.', 'Puntos', 'Cuenta']], body: hist,
+      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 3.5, textColor: [40, 40, 40], lineColor: [235, 235, 235], lineWidth: 0.5 },
+      headStyles: { fillColor: [14, 116, 144], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [246, 250, 252] },
+      columnStyles: { 0: { cellWidth: 58 }, 2: { halign: 'center', cellWidth: 34 }, 3: { halign: 'right', cellWidth: 48 }, 4: { halign: 'center', cellWidth: 46 } },
+      margin: { left: M, right: M, bottom: 40 }
+    });
+    // Pie en todas las páginas
+    const total = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i); doc.setFontSize(8); doc.setTextColor(140, 140, 140);
+      doc.text('Ficha personal, no oficial · elaborada por MFPP Cycling · mfppcycling.com/ranking', M, Hp - 22);
+      doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
+    }
+    doc.save('ficha-' + (c.nombre || 'corredor').replace(/[^\w]+/g, '_').toLowerCase() + '-' + rpEstado.temporada + '.pdf');
+    btn.textContent = '✅ Descargada';
+  } catch (_) {
+    btn.textContent = '⚠️ Error, reinténtalo';
+  }
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2400);
+}
+
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const info = document.getElementById('rp-challenge-info');
@@ -3571,6 +3734,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bTar) { rpCompartirTarjeta(bTar); return; }
     const bCmp = e.target.closest('.rp-comparar-btn');
     if (bCmp) { rpMostrarSelectorComparar(rpEstado.modalClave); return; }
+    const bFPdf = e.target.closest('.rp-ficha-pdf-btn');
+    if (bFPdf) { rpDescargarFichaPDF(bFPdf); return; }
     const bCmpItem = e.target.closest('.rp-cmp-item');
     if (bCmpItem) { rpAbrirComparador(rpEstado.compararA, bCmpItem.dataset.cmp); return; }
     const bCmpVolver = e.target.closest('.rp-cmp-volver');
