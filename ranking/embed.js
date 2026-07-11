@@ -51,6 +51,12 @@
       } else if (ev.data.tipo === 'mfpp-rp-listo') {
         // El widget ya tiene datos: ahora sí puede abrir el enlace profundo
         enviarDeeplink();
+      } else if (ev.data.tipo === 'mfpp-rp-deeplink-usado') {
+        // El enlace profundo (ficha/prueba) ya se abrió: limpiar los parámetros
+        // de la URL para que al recargar o volver no se reabra el modal solo.
+        if (location.search) {
+          try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* nada */ }
+        }
       }
     });
     // Fallback: también al cargar el iframe (por si el mensaje 'listo' se pierde)

@@ -3544,10 +3544,12 @@ function rpAplicarDeeplink(get) {
     rpRenderPantalla();
     if (pantallaParam === 'ranking') rpRenderTabla();
   }
+  let abrioModal = false;
   const carreraParam = get('carrera');
   if (carreraParam) {
     if (rpCarreraPorId(carreraParam)) rpAbrirModalCarrera(carreraParam);
     else rpAbrirModalPlanificada(carreraParam);
+    abrioModal = true;
   }
   const ficha = get('ficha');
   if (ficha) {
@@ -3561,7 +3563,14 @@ function rpAplicarDeeplink(get) {
       rpRenderUltimos();
       rpRenderTabla();
       rpAbrirModal(clave);
+      abrioModal = true;
     }
+  }
+  // Enlace profundo de UNA SOLA VEZ: si abrió una ficha/prueba, pedir al padre
+  // que limpie los parámetros de la URL, para que al recargar o volver a la
+  // pestaña no se reabra el modal solo. (Antes se quedaba "pegado".)
+  if (abrioModal && window.parent !== window) {
+    try { window.parent.postMessage({ tipo: 'mfpp-rp-deeplink-usado' }, '*'); } catch (_) { /* nada */ }
   }
 }
 
