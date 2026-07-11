@@ -742,6 +742,42 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
   padding: 2px 8px;
   white-space: nowrap;
 }
+/* ── Barra de acciones de las fichas ──
+   Todos los botones (compartir, copiar, PDF, comparar, tarjeta...) en UNA sola
+   fila, como texto clicable con icono, en vez de píldoras apiladas en 3-4 filas.
+   Los grupos anidados se "aplanan" con display:contents para que sus botones
+   fluyan en la misma fila. */
+.rp-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-top: 14px; }
+.rp-acciones .rp-compartir, .rp-acciones .rp-tarjeta-btns { display: contents; }
+.rp-acciones .rp-compartir-btn,
+.rp-acciones .rp-carrera-pdf-btn,
+.rp-acciones .rp-ficha-pdf-btn,
+.rp-acciones .rp-comparar-btn,
+.rp-acciones .rp-ver-btn,
+.rp-acciones .rp-tarjeta-btn {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  font: inherit; font-size: 0.84rem; font-weight: 700; cursor: pointer;
+  color: var(--rp-color-primario);
+  background: none; border: none; box-shadow: none;
+  border-radius: 8px; padding: 7px 9px; min-height: 34px;
+  transition: background .12s; transform: none;
+}
+.rp-acciones .rp-compartir-btn:hover, .rp-acciones .rp-compartir-btn:focus-visible,
+.rp-acciones .rp-carrera-pdf-btn:hover, .rp-acciones .rp-carrera-pdf-btn:focus-visible,
+.rp-acciones .rp-ficha-pdf-btn:hover, .rp-acciones .rp-ficha-pdf-btn:focus-visible,
+.rp-acciones .rp-comparar-btn:hover, .rp-acciones .rp-comparar-btn:focus-visible,
+.rp-acciones .rp-ver-btn:hover, .rp-acciones .rp-ver-btn:focus-visible,
+.rp-acciones .rp-tarjeta-btn:hover, .rp-acciones .rp-tarjeta-btn:focus-visible {
+  background: var(--rp-color-fondo-alt); box-shadow: none; transform: none;
+  outline: none; text-decoration: underline; border: none;
+}
+/* Acentos de color: WhatsApp en verde; "Ver mi ranking" destacado en dorado */
+.rp-acciones .rp-compartir-wa { color: #1eb457; }
+.rp-acciones .rp-ver-btn { color: #b8860b; }
+.rp-acciones .rp-compartir-btn:disabled, .rp-acciones .rp-carrera-pdf-btn:disabled,
+.rp-acciones .rp-ficha-pdf-btn:disabled, .rp-acciones .rp-comparar-btn:disabled,
+.rp-acciones .rp-ver-btn:disabled, .rp-acciones .rp-tarjeta-btn:disabled { opacity: .5; cursor: default; }
+
 /* Botones Compartir / Copiar enlace en las fichas */
 .rp-compartir { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .rp-compartir-btn {

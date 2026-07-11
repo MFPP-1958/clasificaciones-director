@@ -1799,7 +1799,7 @@ function rpStatsCorredor(c) {
 }
 
 function rpBotonComparar() {
-  return '<button type="button" class="rp-comparar-btn">⚔️ Comparar con otro corredor</button>';
+  return '<button type="button" class="rp-comparar-btn" title="Comparar con otro corredor">⚔️ Comparar</button>';
 }
 
 // Paso 1: elegir rival (misma categoría), con buscador.
@@ -2321,10 +2321,12 @@ function rpAbrirModal(clave) {
     `<span class="rp-stat">🔟 <b>${top10}</b> top-10</span>` +
     `<span class="rp-stat">🚴 <b>${c.pruebasTotales}</b> pruebas</span>` +
     '</div>' +
+    '<div class="rp-acciones">' +
     rpBotonTarjeta() +
     rpBotonesCompartir('Ranking MFPP · ' + c.nombre, rpEnlaceCorredor(c.nombre)) +
     rpBotonComparar() +
     rpBotonFichaPDF() +
+    '</div>' +
     '</header>' +
     rpRenderHighlights(c) +
     rpRenderRadar(c) +
@@ -2636,8 +2638,10 @@ function rpAbrirModalCarrera(raceId) {
     (carrera.km ? `<span class="rp-chip">${rpEscapar(String(carrera.km).replace(/\s*km\.?\s*$/i, ''))} km</span>` : '') +
     `<span class="rp-chip rp-chip-puntos">${nClasificados} clasificados</span>` +
     '</div>' +
+    '<div class="rp-acciones">' +
     rpBotonesCompartir('Clasificación · ' + carrera.nombre, rpEnlaceCarrera(carrera.id)) +
     rpBotonCarreraPDF() +
+    '</div>' +
     '</header>' +
     // Pestañas estilo FirstCycling, solo si la prueba tiene recorrido subido
     (carrera.ruta
