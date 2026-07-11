@@ -1166,16 +1166,17 @@ th.rp-c { text-align: center; }
   .rp-radar-leg { width: 100%; }
 }
 
-/* Botón "Descargar ficha (PDF)" en la ficha del corredor */
-.rp-ficha-pdf-btn {
+/* Botones "Descargar ... (PDF)" en las fichas (corredor y prueba) */
+.rp-ficha-pdf-btn, .rp-carrera-pdf-btn {
   display: inline-flex; align-items: center; gap: 8px; margin-top: 10px;
   font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
   color: var(--rp-color-primario); background: var(--rp-color-fondo-alt);
   border: 1px solid var(--rp-color-borde); border-radius: 99px;
   padding: 10px 18px; min-height: 42px;
 }
-.rp-ficha-pdf-btn:hover, .rp-ficha-pdf-btn:focus-visible { border-color: var(--rp-color-primario); outline: none; }
-.rp-ficha-pdf-btn:disabled { opacity: .6; cursor: default; }
+.rp-ficha-pdf-btn:hover, .rp-ficha-pdf-btn:focus-visible,
+.rp-carrera-pdf-btn:hover, .rp-carrera-pdf-btn:focus-visible { border-color: var(--rp-color-primario); outline: none; }
+.rp-ficha-pdf-btn:disabled, .rp-carrera-pdf-btn:disabled { opacity: .6; cursor: default; }
 
 /* ── Comparador head-to-head ── */
 .rp-comparar-btn {
