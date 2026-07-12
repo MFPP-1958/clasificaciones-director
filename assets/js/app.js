@@ -4101,6 +4101,57 @@ function _calCloseModal(){
   _calEditingId = null;
 }
 
+// Etiqueta del botón "prueba externa" del modal de detalle según su estado.
+function _calSetExternaBtnLabel(isExt){
+  const btn=document.getElementById('calRaceModalExternaBtn'); if(!btn) return;
+  btn.textContent = isExt ? '🌐 Quitar de externas' : '🌐 Marcar como externa';
+  btn.style.background = isExt ? '#64748b' : '#fff';
+  btn.style.color      = isExt ? '#fff' : '#475569';
+  btn.title = isExt
+    ? 'Esta prueba está marcada como externa (no participamos). Pulsa para quitar la marca.'
+    : 'Marcar esta prueba como externa (no participamos): se usa solo para el ranking y no saldrá en tu calendario generado ni en Disponibilidad/Convocatorias.';
+}
+
+// Marca / desmarca la prueba ABIERTA en el modal de detalle como EXTERNA. Sirve
+// para arreglar pruebas que se crearon "normales" (p.ej. al subir directamente su
+// clasificación, sin pasar por el calendario). Cambia SOLO extra.externa en notes,
+// preservando el resto, y refresca calendario + botón sin recargar de Supabase.
+async function _calRaceModalToggleExterna(){
+  if(typeof _calIsReadOnlyUser==='function' && _calIsReadOnlyUser()) return; // ciclistas: no
+  const race = _calRaceModalRaceCache;
+  if(!race || !race.id){ alert('No se pudo identificar la prueba.'); return; }
+  if(typeof _sb==='undefined' || !_sb){ alert('Sin conexión con la base de datos.'); return; }
+  const btn = document.getElementById('calRaceModalExternaBtn');
+  const nuevo = !race.externa;
+  if(nuevo && !confirm(`¿Marcar "${race.raceName||'esta prueba'}" como EXTERNA?\n\nSignifica que NUESTRO EQUIPO NO participa: se usará solo para el ranking/clasificación y no saldrá en tu calendario generado, ni en Disponibilidad ni en Convocatorias. Seguirá visible en el calendario con su distintivo 🌐.`)) return;
+  if(!(await _sbEnsureAuth())){ alert('⛔ Sesión caducada. Sal y vuelve a entrar con el enlace mágico o Google para poder guardar.'); return; }
+  const prevTxt = btn ? btn.textContent : '';
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  try{
+    // Leer notes actuales y cambiar SOLO externa (preserva inscritos, clima, ruta…)
+    let extra={};
+    try{ const {data}=await _sb.from('races').select('notes').eq('id',race.id).single(); if(data&&data.notes) extra=JSON.parse(data.notes); }catch(_){}
+    extra.externa = nuevo;
+    const {error} = await _sb.from('races').update({notes:JSON.stringify(extra)}).eq('id',race.id);
+    if(error){
+      const rls=/row-level security|policy/i.test(error.message||'');
+      alert(rls ? '⛔ Sin permisos para guardar (sesión caducada). Vuelve a entrar con el enlace mágico.' : '❌ No se pudo guardar: '+error.message);
+      if(btn){ btn.disabled=false; btn.textContent=prevTxt; }
+      return;
+    }
+    // Reflejar en memoria (historial + calendario) sin recargar de Supabase
+    race.externa = nuevo;
+    if(Array.isArray(_cachedHistory)){ const h=_cachedHistory.find(r=>String(r.id)===String(race.id)); if(h) h.externa=nuevo; }
+    if(Array.isArray(_calPast)){ const p=_calPast.find(r=>String(r.id)===String(race.id)); if(p) p.externa=nuevo; }
+    if(btn) btn.disabled=false;
+    _calSetExternaBtnLabel(nuevo);
+    if(typeof _calRender==='function') _calRender();
+  }catch(e){
+    alert('❌ Error de conexión. Vuelve a intentarlo.');
+    if(btn){ btn.disabled=false; btn.textContent=prevTxt; }
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════
 // MODAL DETALLE DE CARRERA FINALIZADA (calendario → click sobre carrera azul)
 // Soporta 2 vistas: 'all' = todos los participantes / 'mine' = solo mi equipo
@@ -4132,6 +4183,7 @@ async function _calOpenRaceDetails(raceId){
   if(race.km)        subParts.push(`📏 ${_fmtKm(race.km)}`);
   if(race.avg)       subParts.push(`💨 ${race.avg}`);
   if(sub) sub.innerHTML = subParts.join(' · ');
+  _calSetExternaBtnLabel(!!race.externa);
 
   _calRaceModalRenderCurrent();
 
@@ -15389,7 +15441,9 @@ async function saveHistory(){
       // destruiría datos costosos de regenerar.
       try{
         const oldExtra = JSON.parse(dup.notes||'{}');
-        ['route','weather','lat','lon'].forEach(k => {
+        // 'externa' incluida: re-subir la clasificación NO debe perder la marca de
+        // prueba externa (no participamos) que se hubiera puesto antes.
+        ['route','weather','lat','lon','externa'].forEach(k => {
           if(oldExtra[k] != null) notesObj[k] = oldExtra[k];
         });
         // PRESERVAR la lista de inscritos ya guardada si la carga actual NO trae
