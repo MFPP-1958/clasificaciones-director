@@ -2817,11 +2817,12 @@ async function _dispInit(){
       let extra={}; try{ extra=JSON.parse(r.notes||'{}'); }catch(_){}
       const pseudo={ raceCat:extra.raceCat||extra.cat||'', inscritos:extra.inscritos||[], riders:(r.race_results||[]).map(x=>({cat:x.cat})) };
       const keys=(typeof _raceCatGroupKeys==='function')?_raceCatGroupKeys(pseudo):new Set();
-      return { id:r.id, name:r.name||'', date:r.date||'', localidad:extra.localidad||'', extra, _keys:keys };
+      return { id:r.id, name:r.name||'', date:r.date||'', localidad:extra.localidad||'', externa:!!extra.externa, extra, _keys:keys };
     });
     // ESTRICTO por categoría: si hay categoría activa, SOLO las de esa categoría
     // (las sin categoría no se cuelan en ningún grupo; hay que etiquetarlas).
-    _dispRaces = g ? all.filter(r=> r._keys.has(g)) : all;
+    // Las pruebas EXTERNAS (no participamos) NO se listan en Disponibilidad.
+    _dispRaces = (g ? all.filter(r=> r._keys.has(g)) : all).filter(r=> !r.externa);
     if(!_dispRaces.length){ body.innerHTML=`<div style="padding:40px;text-align:center;color:#9ca3af"><div style="font-size:40px">📭</div><p style="margin-top:8px">No hay ninguna carrera próxima programada${g?' en esta categoría':''}.<br><span style="font-size:12px">Añádela en el Calendario${g?' con el filtro en esta categoría':''}.</span></p></div>`; return; }
     _dispSelectRace(_dispRaces[0].id);
   }catch(e){
@@ -3770,6 +3771,15 @@ function _calPrint(){
   const body     = document.getElementById('calBody');
   if(!body || !title) return;
 
+  // El calendario GENERADO (impreso/PDF) NUNCA incluye las pruebas externas
+  // (aquellas en las que no participamos), da igual si el botón las muestra u
+  // oculta. Renderizamos sin ellas para capturar el HTML y restauramos el estado
+  // al instante en el mismo bloque síncrono (sin parpadeo visible).
+  const _prevShowExt = _calShowExterna;
+  if(_prevShowExt){ _calShowExterna = false; _calRender(); }
+  const bodyHtml = body.innerHTML;
+  if(_prevShowExt){ _calShowExterna = true; _calRender(); }
+
   const titleText = title.textContent || 'Calendario';
   const isAnnual  = _calView === 'annual';
   const teamName  = (typeof myTeam !== 'undefined' && myTeam) ? myTeam : 'Equipo';
@@ -3984,7 +3994,7 @@ function _calPrint(){
 
   <!-- Contenido del calendario -->
   <div id="calPrintBody">
-    ${body.innerHTML}
+    ${bodyHtml}
   </div>
 
   <div class="cal-footer">
@@ -16371,7 +16381,7 @@ async function renderInicio(){
     const histUp = (Array.isArray(_cachedHistory)?_cachedHistory:[]).map(h=>{
       const iso = _parseSpanishDate(h.raceDate)||'';
       const insCats = [...new Set((h.inscritos||[]).map(i=>i.cat).filter(Boolean))].join(' ');
-      return { name:h.raceName, iso, dateStr:iso, localidad:h.localidad||'', cat:insCats, modality:'', fccvId:'', _histId:h.id, _hist:true };
+      return { name:h.raceName, iso, dateStr:iso, localidad:h.localidad||'', cat:insCats, modality:'', fccvId:'', externa:!!h.externa, _histId:h.id, _hist:true };
     }).filter(h=> h.iso && h.iso>=todayIso);
     // Combinar y deduplicar por fecha+nombre (no repetir si estuviera en ambos)
     const _seenUp=new Set();
@@ -16394,6 +16404,7 @@ async function renderInicio(){
     };
     const upcoming = allUpcoming
       .filter(p => {
+        if(p.externa) return false;   // las externas (no participamos) no son "nuestra próxima prueba"
         if(!_gfMatchesGlobalMod(`${p.modality||''} ${p.name||''}`)) return false;
         if(!_inGlobalGroup(p)) return false;
         if(typeof _gfMatchesGlobalGender==='function' && !_gfMatchesGlobalGender(p.cat||'', p.name||'')) return false;
