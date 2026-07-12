@@ -363,8 +363,15 @@ function rpAdaptarCarreras(filas) {
         segundosTotales: Number.isFinite(x.total_seconds) ? x.total_seconds : null
       }))
     };
-    carrera.tipo = rpTipoCarrera(carrera);
-    carrera.participacion = rpNivelParticipacion(carrera);
+    // Clasificación GENERAL OFICIAL de una vuelta, subida a mano (casilla en
+    // Carga y Resumen). Se trata y etiqueta como 'general' y, al llevar el
+    // nombre de la vuelta, hace que la General calculada por tiempos se descarte
+    // sola (ver rpSintetizarGenerales → hayOficial). Es la clasificación buena.
+    carrera.generalOficial = extra.generalOficial === true;
+    carrera.tipo = carrera.generalOficial ? 'general' : rpTipoCarrera(carrera);
+    carrera.participacion = (carrera.generalOficial && rpEsFueraCV(carrera.ccaa))
+      ? { nivel: null, coef: RP_COEFICIENTES.fuera_cv }
+      : rpNivelParticipacion(carrera);
     return carrera;
   }).filter(c => c.temporada !== null);
 }
@@ -2657,6 +2664,14 @@ function rpAbrirModalCarrera(raceId) {
     rpBotonCarreraPDF() +
     '</div>' +
     '</header>' +
+    // Aviso de fiabilidad de la GENERAL de una vuelta: la calculada por tiempos
+    // es una estimación (sin bonificaciones ni desempates); la subida a mano es
+    // la oficial. Así el visitante sabe qué está mirando y no desconfía.
+    (carrera.esGeneral
+      ? '<div class="rp-aviso-general">⏱️ <b>General provisional</b> — calculada sumando los tiempos de cada etapa. No incluye bonificaciones ni desempates oficiales, por lo que algún puesto puede variar respecto a la general oficial de la organización.</div>'
+      : carrera.generalOficial
+        ? '<div class="rp-aviso-general rp-aviso-general-ok">🏆 <b>General oficial</b> de la vuelta.</div>'
+        : '') +
     // Pestañas estilo FirstCycling, solo si la prueba tiene recorrido subido
     (carrera.ruta
       ? '<div class="rp-carrera-tabs" role="tablist" aria-label="Contenido de la prueba">' +

@@ -1359,6 +1359,14 @@ td.rp-cmp-gana { color: var(--rp-color-primario); }
 
 .rp-nota { font-size: 0.78rem; color: var(--rp-color-suave); margin: 8px 0 0; }
 
+/* Aviso de fiabilidad de la GENERAL de una vuelta (provisional/oficial) */
+.rp-aviso-general {
+  font-size: 0.82rem; line-height: 1.4; color: #92400e;
+  background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px;
+  padding: 9px 12px; margin: 10px 0 4px;
+}
+.rp-aviso-general-ok { color: #065f46; background: #ecfdf5; border-color: #6ee7b7; }
+
 /* ── Pie / leyenda ── */
 .rp-pie { margin-top: 18px; font-size: 0.85rem; color: var(--rp-color-suave); }
 .rp-pie summary { cursor: pointer; font-weight: 700; color: var(--rp-color-primario); }

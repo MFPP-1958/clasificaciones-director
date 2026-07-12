@@ -168,8 +168,14 @@ function rpAdaptarCarreras(filas) {
         segundosTotales: Number.isFinite(x.total_seconds) ? x.total_seconds : null
       }))
     };
-    carrera.tipo = rpTipoCarrera(carrera);
-    carrera.participacion = rpNivelParticipacion(carrera);
+    // General OFICIAL de una vuelta subida a mano (casilla en Carga y Resumen):
+    // se trata/etiqueta como 'general' y hace que la calculada por tiempos se
+    // descarte sola. Debe ir sincronizado con ranking-publico.js.
+    carrera.generalOficial = extra.generalOficial === true;
+    carrera.tipo = carrera.generalOficial ? 'general' : rpTipoCarrera(carrera);
+    carrera.participacion = (carrera.generalOficial && rpEsFueraCV(carrera.ccaa))
+      ? { nivel: null, coef: RP_COEFICIENTES.fuera_cv }
+      : rpNivelParticipacion(carrera);
     return carrera;
   }).filter(c => c.temporada !== null);
 }

@@ -554,6 +554,7 @@ function openLoadPanelForNew(){
     const el=$(id); if(el) el.value='';
   });
   if($('raceChallengeCV')) $('raceChallengeCV').checked = false;
+  if($('raceGeneralOficial')) $('raceGeneralOficial').checked = false;
   if($('raceCCAA')) $('raceCCAA').value = '';
   const fn=$('fileName'); if(fn) fn.textContent='';
   const fnI=$('fileNameInscritos'); if(fnI) fnI.textContent='';
@@ -8133,6 +8134,7 @@ async function _sbLoadHistory(){
       circuitType: extra.circuitType || '',
       raceTypeTag: extra.raceTypeTag || '',   // Fase 1.B: tipo de prueba manual (cri/montana/circuito/llana)
       challengeCV: !!extra.challengeCV,
+      generalOficial: !!extra.generalOficial,   // clasificación general oficial de una vuelta
       raceCat: extra.raceCat || '',   // categoría FORZADA de la prueba (override manual)
       ccaa: extra.ccaa || '',
       externa: !!extra.externa,       // prueba externa: nuestro equipo NO participó
@@ -14773,6 +14775,7 @@ async function loadPlanificadaToCarga(id){
     if($('raceCircuitType')) $('raceCircuitType').value = extra.circuitType || '';
     if($('raceStartTime'))   $('raceStartTime').value   = extra.hora_inicio || '';
     if($('raceChallengeCV')) $('raceChallengeCV').checked = !!extra.challengeCV;
+    if($('raceGeneralOficial')) $('raceGeneralOficial').checked = !!extra.generalOficial;
     if($('raceCCAA')) $('raceCCAA').value = extra.ccaa || '';
     try{ _cargaUpdateCVHint(); }catch(e){}
     // Limpiar riders/inscritos: esta prueba aún no tiene datos
@@ -14964,6 +14967,7 @@ async function loadHistoryEntry(id, opts){
   if($('raceCircuitType')) $('raceCircuitType').value = h.circuitType||'';
   if($('raceStartTime'))  $('raceStartTime').value  = h.hora_inicio||'';
   if($('raceChallengeCV')) $('raceChallengeCV').checked = !!h.challengeCV;
+  if($('raceGeneralOficial')) $('raceGeneralOficial').checked = !!h.generalOficial;
   if($('raceCCAA')) $('raceCCAA').value = h.ccaa || '';
   try{ _cargaUpdateCVHint(); }catch(e){}
   // Refrescar chip meteorológico (si hay weather guardada de esta carrera)
@@ -15370,6 +15374,9 @@ async function saveHistory(){
   const localidad=($('raceLocalidad')?.value||'').trim();
   const circuitType=($('raceCircuitType')?.value||'').trim();
   const challengeCV = !!($('raceChallengeCV')?.checked);
+  // Casilla "General oficial de una vuelta": la clasificación que se sube es la
+  // general oficial (reemplaza a la calculada por tiempos en el ranking).
+  const generalOficial = !!($('raceGeneralOficial')?.checked);
   const ccaa = ($('raceCCAA')?.value||'').trim();
   const parsedDate=_parseSpanishDate(raceDateStr);
   if(!parsedDate && raceDateStr){
@@ -15385,7 +15392,7 @@ async function saveHistory(){
   const horaInicio = (document.getElementById('raceStartTime')?.value || '').trim();
   // Objeto base de notes — luego le añadimos campos preservados si existe
   // un duplicado (route, weather, etc. que el formulario no controla).
-  const notesObj = {raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,ccaa};
+  const notesObj = {raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,generalOficial,ccaa};
 
   // ── Buscar duplicados por fecha Y NOMBRE ─────────────────────────────────
   // IMPORTANTE: NO basta con la fecha. Dos pruebas distintas el mismo día
