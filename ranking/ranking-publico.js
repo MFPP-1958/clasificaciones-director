@@ -662,6 +662,11 @@ const rpEstado = {
   temporada: null,
   categoria: null,    // key de la pestaña activa
   subcategoria: '',   // etiqueta de organizador (CAD-1, CAD-2…); '' = todas
+  // "Todas las categorías": SOLO afecta a la vista de PRUEBAS (Últimas carreras
+  // y Próximas), que pasan a mostrar todas las categorías juntas. El ranking de
+  // PUNTOS sigue siendo por categoría (`categoria` conserva un valor real, así
+  // las fichas y la tabla no se rompen).
+  todasCategorias: false,
   // Arranca filtrado por la Comunitat Valenciana (la mayoría de los datos son
   // de aquí). rpRenderRegiones lo valida contra los datos: si una temporada no
   // tuviera corredores CV, cae a '' (todas). La URL ?comunidad=... lo cambia.
@@ -735,7 +740,8 @@ function rpRenderSubtitulo() {
   if (!rpEstado.ranking) { el.textContent = ''; return; }
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   const partes = [];
-  if (cat) partes.push(cat.label);
+  if (rpEstado.todasCategorias) partes.push('Todas las categorías');
+  else if (cat) partes.push(cat.label);
   if (rpEstado.modo === 'challenge') partes.push('Challenge CV Oficial');
   else if (rpEstado.vista === 'equipos') partes.push('Equipos');
   if (rpEstado.region === RP_REGION_SIN) partes.push('Sin comunidad asignada');
@@ -848,7 +854,7 @@ function rpTarjetaCarrera(c, reciente, posRanking) {
 function rpRenderUltimos() {
   const cont = document.getElementById('rp-ultimos');
   // Al cambiar de temporada, pestaña, comunidad o filtro de tipo → reinicia "Ver más"
-  const clave = rpEstado.temporada + '|' + rpEstado.categoria + '|' + rpEstado.region + '|' + (rpEstado.filtroTipoCarrera || '');
+  const clave = rpEstado.temporada + '|' + (rpEstado.todasCategorias ? 'TODAS' : rpEstado.categoria) + '|' + rpEstado.region + '|' + (rpEstado.filtroTipoCarrera || '');
   if (rpEstado._ultimosClave !== clave) {
     rpEstado._ultimosClave = clave;
     rpEstado.ultimosVisibles = 10;
@@ -856,10 +862,12 @@ function rpRenderUltimos() {
   // Todas las carreras de la categoría + comunidad (sin filtrar aún por tipo)
   const base = (rpEstado.carreras || [])
     .filter(c => c.temporada === rpEstado.temporada && c.resultados.length &&
-                 rpGruposDeCarrera(c).has(rpEstado.categoria) && rpCarreraEnRegion(c))
+                 (rpEstado.todasCategorias || rpGruposDeCarrera(c).has(rpEstado.categoria)) && rpCarreraEnRegion(c))
     .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
   if (!base.length) {
-    cont.innerHTML = '<p class="rp-vacio">Aún no hay carreras disputadas de esta categoría con la temporada y comunidad seleccionadas.</p>';
+    cont.innerHTML = rpEstado.todasCategorias
+      ? '<p class="rp-vacio">Aún no hay carreras disputadas con la temporada y comunidad seleccionadas.</p>'
+      : '<p class="rp-vacio">Aún no hay carreras disputadas de esta categoría con la temporada y comunidad seleccionadas.</p>';
     return;
   }
   // Tipos presentes (para las pastillas de filtro), en orden fijo
@@ -878,7 +886,8 @@ function rpRenderUltimos() {
     String(hace7.getDate()).padStart(2, '0');
   // Puesto y puntos de cada corredor en el ranking FILTRADO actual
   const posRanking = new Map();
-  const catActiva = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
+  // Con "Todas las categorías" no hay una única población → sin insignia de puesto.
+  const catActiva = rpEstado.todasCategorias ? null : rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (catActiva) rpPoblacion(catActiva).forEach((cor, i) =>
     posRanking.set(cor.clave, { pos: i + 1, puntos: cor.puntosTotales }));
 
@@ -1055,7 +1064,7 @@ function rpRenderCalendario() {
   const caja = document.getElementById('rp-calendario-caja');
   const cont = document.getElementById('rp-calendario');
   const base = (rpEstado.planificadas || [])
-    .filter(p => rpGruposDePlanificada(p).has(rpEstado.categoria));
+    .filter(p => rpEstado.todasCategorias || rpGruposDePlanificada(p).has(rpEstado.categoria));
   const global = base.filter(p => p.fccvSync);
   // Agenda del equipo: añadidas a mano, con disponibilidad marcada, o
   // pre-inscripciones (si el director subió los inscritos, el equipo va).
@@ -1402,9 +1411,13 @@ function rpRenderSubcats() {
   const catActiva = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   const etiquetasActiva = catActiva ? new Set(catActiva.corredores.flatMap(c => c.subcats)) : new Set();
   if (rpEstado.subcategoria && !etiquetasActiva.has(rpEstado.subcategoria)) rpEstado.subcategoria = '';
-  const seleccion = `${rpEstado.categoria}|${rpEstado.subcategoria || ''}`;
+  // Con "Todas las categorías" activo, ninguna opción de bloque va seleccionada
+  // (un centinela que nunca coincide); si no, la selección normal cat|etiqueta.
+  const seleccion = rpEstado.todasCategorias ? ' ' : `${rpEstado.categoria}|${rpEstado.subcategoria || ''}`;
   sel.style.display = '';
-  sel.innerHTML = rpEstado.ranking.categorias.map(cat => {
+  sel.innerHTML =
+    `<option value="*"${rpEstado.todasCategorias ? ' selected' : ''}>Todas las categorías</option>` +
+    rpEstado.ranking.categorias.map(cat => {
     // Solo etiquetas que pertenecen al bloque: un juvenil con un resultado
     // suelto etiquetado "CADETE" no debe meter esa opción en Juveniles.
     const etiquetas = [...new Set(cat.corredores.flatMap(c => c.subcats))]
@@ -1588,10 +1601,11 @@ function rpRenderPestanas() {
     : `${n} ${rpEstado.vista === 'equipos' && rpEstado.modo !== 'challenge' ? 'equipos' : 'corredores'} de ${c.label} en el ranking`;
   nav.innerHTML = rpEstado.ranking.categorias.map(c => {
     const n = cuenta(c);
+    const activa = !rpEstado.todasCategorias && c.key === rpEstado.categoria;
     return `<button type="button" role="tab" data-cat="${c.key}"` +
-      ` aria-selected="${c.key === rpEstado.categoria}"` +
+      ` aria-selected="${activa}"` +
       ` title="${rpEscapar(titulo(c, n))}"` +
-      ` class="rp-pestana${c.key === rpEstado.categoria ? ' rp-activa' : ''}">` +
+      ` class="rp-pestana${activa ? ' rp-activa' : ''}">` +
       `${rpEscapar(c.label)} <span class="rp-num">${n}</span></button>`;
   }).join('');
 }
@@ -3349,6 +3363,15 @@ async function rpDescargarCarreraPDF(btn) {
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const info = document.getElementById('rp-challenge-info');
+  // "Todas las categorías" es solo para ver PRUEBAS. El ranking de puntos es por
+  // categoría (no se mezclan cadetes con juveniles): invitamos a elegir una.
+  if (rpEstado.todasCategorias) {
+    info.style.display = 'none'; info.innerHTML = '';
+    cont.innerHTML = '<p class="rp-vacio">El ranking de puntos es <b>por categoría</b>: elige una categoría (Cadetes, Juveniles, Sub-23…) en el filtro de arriba o en las pestañas para ver su clasificación.<br><span style="opacity:.8">El filtro «Todas las categorías» sirve para ver <b>todas las pruebas juntas</b> en «Últimas carreras».</span></p>';
+    rpRenderSubtitulo();
+    rpGuardarPrefs();
+    return;
+  }
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (!cat) { cont.innerHTML = ''; info.style.display = 'none'; return; }
   if (rpEstado.modo === 'challenge') { rpRenderTablaChallenge(cat); return; }
@@ -3456,6 +3479,7 @@ function rpGuardarPrefs() {
     localStorage.setItem('rp-prefs', JSON.stringify({
       temporada: rpEstado.temporada,
       categoria: rpEstado.categoria,
+      todasCategorias: rpEstado.todasCategorias,
       region: rpEstado.region,
       subcategoria: rpEstado.subcategoria,
       equipo: rpEstado.equipo,
@@ -3470,6 +3494,7 @@ function rpCargarPrefs() {
     if (!p || typeof p !== 'object') return;
     if (Number.isFinite(p.temporada)) rpEstado.temporada = p.temporada;
     if (typeof p.categoria === 'string') rpEstado.categoria = p.categoria;
+    if (typeof p.todasCategorias === 'boolean') rpEstado.todasCategorias = p.todasCategorias;
     if (typeof p.region === 'string') rpEstado.region = p.region;
     if (typeof p.subcategoria === 'string') rpEstado.subcategoria = p.subcategoria;
     if (typeof p.equipo === 'string') rpEstado.equipo = p.equipo;
@@ -3673,6 +3698,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rp-pestanas').addEventListener('click', e => {
     const btn = e.target.closest('button[data-cat]');
     if (!btn) return;
+    rpEstado.todasCategorias = false;   // elegir una pestaña sale de "todas las categorías"
     rpEstado.categoria = btn.dataset.cat;
     rpEstado.subcategoria = ''; // la etiqueta de otra pestaña no aplica aquí
     rpRenderPestanas();
@@ -3689,12 +3715,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('rp-subcat').addEventListener('change', e => {
-    // value = "clavePestaña|etiqueta" o '' (todas). Si la etiqueta es de otro
-    // bloque, cambiamos de pestaña automáticamente.
+    // Opción especial "Todas las categorías": solo afecta a la vista de pruebas.
+    if (e.target.value === '*') {
+      rpEstado.todasCategorias = true;
+      rpEstado.subcategoria = '';
+      rpRenderPestanas();
+      rpRenderSubcats();
+      rpRenderEquipos();
+      rpRenderCalendario();
+      rpRenderUltimos();
+      rpRenderTabla();
+      return;
+    }
+    // value = "clavePestaña|etiqueta" o '' (todas del bloque). Si la etiqueta es
+    // de otro bloque, cambiamos de pestaña automáticamente.
     const [catKey, etiqueta] = e.target.value ? e.target.value.split('|') : ['', ''];
+    const salíaDeTodas = rpEstado.todasCategorias;
+    rpEstado.todasCategorias = false;
     rpEstado.subcategoria = etiqueta || '';
-    if (catKey && catKey !== rpEstado.categoria) {
-      rpEstado.categoria = catKey;
+    if (salíaDeTodas || (catKey && catKey !== rpEstado.categoria)) {
+      if (catKey) rpEstado.categoria = catKey;
       rpRenderPestanas();
       rpRenderSubcats();
       rpRenderEquipos();
