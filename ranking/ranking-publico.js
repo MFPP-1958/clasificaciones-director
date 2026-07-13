@@ -2537,6 +2537,14 @@ function rpCambiarPestanaCarrera(tab) {
   if (clasif) clasif.hidden = tab !== 'clasificacion';
   if (equipos) equipos.hidden = tab !== 'equipos';
   if (ruta) ruta.hidden = tab !== 'ruta';
+  // El botón de descarga cambia según la vista: individual vs por equipos.
+  const pdfBtn = document.querySelector('.rp-carrera-pdf-btn');
+  if (pdfBtn && !pdfBtn.disabled) {
+    pdfBtn.textContent = tab === 'equipos' ? '📄 Descargar equipos (PDF)' : '📄 Descargar clasificación (PDF)';
+    pdfBtn.title = tab === 'equipos'
+      ? 'Descargar la clasificación por equipos de la prueba en PDF'
+      : 'Descargar la clasificación de la prueba en PDF, con los puntos del ranking';
+  }
   if (tab === 'equipos' && rpEstado._carreraModal) rpRenderEquiposPrueba(rpEstado._carreraModal);
   if (tab === 'ruta' && rpEstado._carreraModal) rpActivarPestanaRuta(rpEstado._carreraModal);
 }
@@ -3441,6 +3449,10 @@ function rpBotonCarreraPDF() {
 async function rpDescargarCarreraPDF(btn) {
   const carrera = rpEstado._carreraModal;
   if (!carrera) return;
+  // Si el visitante está en la pestaña "Equipos", descargamos la clasificación
+  // POR EQUIPOS (no la individual).
+  const eqDiv = document.getElementById('rp-rc-equipos');
+  if (eqDiv && !eqDiv.hidden) return rpDescargarCarreraEquiposPDF(btn);
   const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Generando…';
   try {
     await rpCargarJsPDF();
@@ -3514,6 +3526,76 @@ async function rpDescargarCarreraPDF(btn) {
       doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
     }
     doc.save('clasificacion-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf');
+    btn.textContent = '✅ Descargada';
+  } catch (_) {
+    btn.textContent = '⚠️ Error, reinténtalo';
+  }
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2400);
+}
+
+// PDF de la CLASIFICACIÓN POR EQUIPOS de una prueba (misma cabecera de marca).
+async function rpDescargarCarreraEquiposPDF(btn) {
+  const carrera = rpEstado._carreraModal;
+  if (!carrera) return;
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Generando…';
+  try {
+    await rpCargarJsPDF();
+    const { clasificados, incompletos } = rpClasificacionEquiposPrueba(carrera);
+    const columnas = ['#', 'Equipo', '3 mejores (suma de puestos)', 'Corr.', 'Mejor'];
+    const filas = clasificados.map((e, i) => [
+      (i + 1) + 'º', e.nombre, e.tresMejores.map(p => p + 'º').join(' + ') + ' = ' + e.suma,
+      String(e.corredores), e.mejor + 'º'
+    ]);
+    const meta = [
+      RP_ETIQUETAS_TIPO[carrera.tipo] || carrera.tipo,
+      carrera.km ? String(carrera.km).replace(/\s*km\.?\s*$/i, '') + ' km' : '',
+      clasificados.length + ' equipos clasificados'
+    ].filter(Boolean).join('    ·    ');
+
+    const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth(), Hp = doc.internal.pageSize.getHeight(), M = 40, bandH = 86;
+    doc.setFillColor(11, 42, 68); doc.rect(0, 0, W, bandH, 'F');
+    try { doc.addImage(RP_LOGO_B64, 'PNG', M, 22, 120, 120 * 68 / 184); } catch (_) { /* sin logo */ }
+    doc.setTextColor(245, 178, 26); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('CLASIFICACIÓN POR EQUIPOS', W - M, 26, { align: 'right' });
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14);
+    doc.text(doc.splitTextToSize(carrera.nombre, W - M - 190).slice(0, 2), W - M, 46, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(190, 214, 230);
+    doc.text(rpFormatearFecha(carrera.fecha) + (carrera.localidad ? ' · ' + carrera.localidad : '') + ((rpEsFueraCV(carrera.ccaa) && carrera.ccaa) ? ' · ' + carrera.ccaa : ''), W - M, bandH - 10, { align: 'right' });
+    let y = bandH + 24;
+    doc.setTextColor(60, 60, 60); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(meta, M, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(115, 115, 115);
+    doc.text('Generada el ' + rpFormatearFecha(new Date().toISOString().slice(0, 10)), W - M, y, { align: 'right' });
+    doc.autoTable({
+      startY: y + 12, head: [columnas], body: filas,
+      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 3.5, textColor: [40, 40, 40], lineColor: [235, 235, 235], lineWidth: 0.5 },
+      headStyles: { fillColor: [14, 116, 144], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [246, 250, 252] },
+      columnStyles: { 0: { halign: 'center', cellWidth: 30 }, 2: { halign: 'left' }, 3: { halign: 'center', cellWidth: 38 }, 4: { halign: 'center', cellWidth: 40 } },
+      margin: { left: M, right: M, bottom: 40 },
+      didParseCell: (data) => { if (data.section === 'body' && data.row.index < 3) data.cell.styles.fillColor = [236, 253, 245]; }
+    });
+    if (incompletos.length) {
+      let y2 = doc.lastAutoTable.finalY + 18;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 60);
+      doc.text('Equipos con menos de ' + RP_EQUIPO_TOP_N + ' clasificados (sin clasificación oficial):', M, y2);
+      doc.autoTable({
+        startY: y2 + 8,
+        head: [['Equipo', 'Corr.', 'Mejor']],
+        body: incompletos.map(e => [e.nombre, String(e.corredores), e.mejor != null ? e.mejor + 'º' : '—']),
+        styles: { font: 'helvetica', fontSize: 8, cellPadding: 3, textColor: [90, 90, 90], lineColor: [235, 235, 235], lineWidth: 0.5 },
+        headStyles: { fillColor: [120, 130, 140], textColor: 255, fontStyle: 'bold' },
+        columnStyles: { 1: { halign: 'center', cellWidth: 40 }, 2: { halign: 'center', cellWidth: 44 } },
+        margin: { left: M, right: M, bottom: 40 }
+      });
+    }
+    const total = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i); doc.setFontSize(8); doc.setTextColor(140, 140, 140);
+      doc.text('Clasificación por equipos (suma de los 3 mejores puestos) · no oficial · mfppcycling.com/ranking', M, Hp - 22);
+      doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
+    }
+    doc.save('clasificacion-equipos-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf');
     btn.textContent = '✅ Descargada';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
