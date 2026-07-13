@@ -1370,6 +1370,13 @@ td.rp-cmp-gana { color: var(--rp-color-primario); }
 /* Clasificación por equipos de una prueba (pestaña "Equipos" del modal) */
 .rp-tabla-eqprueba .rp-eq-suma { white-space: nowrap; color: var(--rp-color-suave); }
 .rp-tabla-eqprueba .rp-eq-suma b { color: var(--rp-color-primario); font-size: 1.05em; }
+/* Detalle de un equipo en la prueba (al pulsar su nombre) */
+.rp-volver-eq { background: none; border: none; color: var(--rp-color-primario); font: inherit; font-weight: 700; cursor: pointer; padding: 4px 0; margin-bottom: 4px; }
+.rp-volver-eq:hover, .rp-volver-eq:focus-visible { text-decoration: underline; outline: none; }
+.rp-eq-titulo { margin: 2px 0 10px; font-size: 1.02rem; color: var(--rp-color-primario); }
+.rp-eq-titulo span { font-weight: 400; color: var(--rp-color-suave); font-size: 0.82em; }
+.rp-eq-dnf td { color: var(--rp-color-suave); }
+.rp-eq-dnf td:first-child { color: #b91c1c; font-weight: 700; }
 
 /* ── Pie / leyenda ── */
 .rp-pie { margin-top: 18px; font-size: 0.85rem; color: var(--rp-color-suave); }

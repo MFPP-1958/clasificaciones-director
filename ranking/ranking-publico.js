@@ -361,6 +361,11 @@ function rpAdaptarCarreras(filas) {
         // Tiempo total en segundos: permite calcular la General de una
         // vuelta sumando etapas (como el ciclismo de verdad)
         segundosTotales: Number.isFinite(x.total_seconds) ? x.total_seconds : null
+      })),
+      // Lista de inscritos (startlist) si el director la subió: permite saber
+      // quién tomó la salida y no aparece en la clasificación → DNF/No terminó.
+      inscritos: (Array.isArray(extra.inscritos) ? extra.inscritos : []).map(x => ({
+        bib: x.bib || '', nombre: rpRepararMojibake(x.name || ''), equipo: rpRepararMojibake(x.team || ''), cat: x.cat || ''
       }))
     };
     // Clasificación GENERAL OFICIAL de una vuelta, subida a mano (casilla en
@@ -2579,7 +2584,7 @@ function rpRenderEquiposPrueba(carrera) {
   const filaClas = (e, i) =>
     '<tr>' +
     `<td class="rp-c">${i + 1}</td>` +
-    `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(e.nombre)}</span></td>` +
+    `<td class="rp-col-nombre"><button type="button" class="rp-enlace rp-enlace-suave" data-eqprueba="${rpEscapar(e.clave)}" title="Ver los corredores de ${rpEscapar(e.nombre)} en esta prueba">${rpEscapar(e.nombre)}</button></td>` +
     `<td class="rp-eq-suma">${e.tresMejores.map(p => p + 'º').join(' + ')} = <b>${e.suma}</b></td>` +
     `<td class="rp-c">${e.corredores}</td>` +
     `<td class="rp-c">${e.mejor}º</td>` +
@@ -2596,7 +2601,7 @@ function rpRenderEquiposPrueba(carrera) {
       '<thead><tr><th>Equipo</th><th class="rp-c">Corr.</th><th class="rp-c">Mejor</th></tr></thead><tbody>' +
       incompletos.map(e =>
         '<tr>' +
-        `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(e.nombre)}</span></td>` +
+        `<td class="rp-col-nombre"><button type="button" class="rp-enlace rp-enlace-suave" data-eqprueba="${rpEscapar(e.clave)}" title="Ver los corredores de ${rpEscapar(e.nombre)} en esta prueba">${rpEscapar(e.nombre)}</button></td>` +
         `<td class="rp-c">${e.corredores}</td>` +
         `<td class="rp-c">${e.mejor != null ? e.mejor + 'º' : '—'}</td>` +
         '</tr>').join('') +
@@ -2604,6 +2609,71 @@ function rpRenderEquiposPrueba(carrera) {
   }
   html += `<p class="rp-nota">Clasificación por equipos de <b>esta prueba</b>: suma de los puestos de los ${RP_EQUIPO_TOP_N} mejores corredores de cada equipo (menor = mejor). Incluye a todos los equipos participantes, sea cual sea su comunidad.</p>`;
   cont.innerHTML = html;
+}
+
+// Detalle de UN equipo en UNA prueba: al pulsar su nombre, sus corredores con el
+// puesto que hicieron en esa carrera; y los que tomaron la salida pero no
+// terminan (están en la startlist y no en la clasificación) marcados como DNF.
+function rpDetalleEquipoPrueba(carrera, clave) {
+  const cont = document.getElementById('rp-rc-equipos');
+  if (!cont) return;
+  const vistos = new Set();
+  const finalizan = [];
+  const dnf = [];
+  let nombreEquipo = '';
+  for (const r of (carrera.resultados || [])) {
+    if (rpNormalizarTexto(r.equipo) !== clave) continue;
+    nombreEquipo = nombreEquipo || r.equipo;
+    const k = rpNormalizarClave(r.nombre);
+    if (k) vistos.add(k);
+    const pos = parseInt(r.pos, 10);
+    if (Number.isFinite(pos) && pos >= 1) finalizan.push({ nombre: r.nombre, pos, cat: r.cat || '', tiempo: r.tiempo || '' });
+    else dnf.push({ nombre: r.nombre, cat: r.cat || '' });
+  }
+  // Inscritos del equipo que NO están en la clasificación → no terminaron
+  for (const i of (carrera.inscritos || [])) {
+    if (rpNormalizarTexto(i.equipo) !== clave) continue;
+    nombreEquipo = nombreEquipo || i.equipo;
+    const k = rpNormalizarClave(i.nombre);
+    if (k && vistos.has(k)) continue;
+    if (k) vistos.add(k);
+    dnf.push({ nombre: i.nombre, cat: i.cat || '' });
+  }
+  finalizan.sort((a, b) => a.pos - b.pos);
+  const hayTiempos = finalizan.some(r => r.tiempo);
+  const filaFin = r =>
+    '<tr>' +
+    `<td class="rp-c"><b>${r.pos}º</b></td>` +
+    `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(r.nombre)}</span></td>` +
+    `<td class="rp-c rp-col-mat">${rpEscapar(r.cat)}</td>` +
+    (hayTiempos ? `<td class="rp-c">${rpEscapar(r.tiempo)}</td>` : '') +
+    '</tr>';
+  const filaDnf = r =>
+    '<tr class="rp-eq-dnf">' +
+    '<td class="rp-c">DNF</td>' +
+    `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(r.nombre)}</span></td>` +
+    `<td class="rp-c rp-col-mat">${rpEscapar(r.cat)}</td>` +
+    (hayTiempos ? '<td></td>' : '') +
+    '</tr>';
+  let html =
+    '<button type="button" class="rp-volver-eq" data-eqprueba-volver="1">‹ Volver a equipos</button>' +
+    `<h3 class="rp-eq-titulo">${rpEscapar(nombreEquipo || 'Equipo')} <span>· en esta prueba</span></h3>` +
+    '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
+    '<thead><tr><th>Puesto</th><th>Corredor</th><th class="rp-c rp-col-mat">Cat.</th>' +
+    (hayTiempos ? '<th class="rp-c">Tiempo</th>' : '') +
+    '</tr></thead><tbody>' +
+    finalizan.map(filaFin).join('') +
+    dnf.map(filaDnf).join('') +
+    '</tbody></table></div>';
+  if (!finalizan.length && !dnf.length) {
+    html += '<p class="rp-vacio">No hay corredores de este equipo en esta prueba.</p>';
+  } else if (!dnf.length) {
+    html += '<p class="rp-nota">DNF = no terminó. En esta prueba no consta ninguno del equipo (o no hay lista de inscritos subida para detectarlos).</p>';
+  } else {
+    html += '<p class="rp-nota"><b>DNF</b> = tomó la salida pero no terminó / no aparece en la clasificación.</p>';
+  }
+  cont.innerHTML = html;
+  cont.scrollIntoView({ block: 'nearest' });
 }
 
 async function rpActivarPestanaRuta(carrera) {
@@ -2947,7 +3017,7 @@ function rpRenderTablaEquipos(cat) {
       `<tr class="rp-fila" data-equipo="${rpEscapar(e.clave)}" tabindex="0" aria-label="Ver ficha del equipo ${rpEscapar(e.nombre)}">` +
       `<td class="rp-c rp-rank">${i + 1}</td>` +
       `<td class="rp-c rp-col-evo">${evo}</td>` +
-      `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(e.nombre)}</span></td>` +
+      `<td class="rp-col-nombre"><button type="button" class="rp-enlace rp-enlace-suave" data-eqprueba="${rpEscapar(e.clave)}" title="Ver los corredores de ${rpEscapar(e.nombre)} en esta prueba">${rpEscapar(e.nombre)}</button></td>` +
       `<td class="rp-c">${e.corredores.length}</td>` +
       `<td class="rp-c rp-col-vict">${e.victorias ? '🥇 ' + e.victorias : '—'}</td>` +
       `<td class="rp-c rp-pts">${rpFormatearPuntos(e.puntos)}</td>` +
@@ -3984,6 +4054,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bCP) { rpCopiarEnlace(bCP.dataset.shareUrl, bCP); return; }
     const bTab = e.target.closest('[data-rctab]');
     if (bTab) { rpCambiarPestanaCarrera(bTab.dataset.rctab); return; }
+    const bEqVolver = e.target.closest('[data-eqprueba-volver]');
+    if (bEqVolver) { if (rpEstado._carreraModal) rpRenderEquiposPrueba(rpEstado._carreraModal); return; }
+    const bEqPrueba = e.target.closest('[data-eqprueba]');
+    if (bEqPrueba) { if (rpEstado._carreraModal) rpDetalleEquipoPrueba(rpEstado._carreraModal, bEqPrueba.dataset.eqprueba); return; }
     const bVista = e.target.closest('[data-calvista]');
     if (bVista) { rpEstado.calVista = bVista.dataset.calvista; rpRenderCalendario(); return; }
     const bCorredor = e.target.closest('[data-corredor]');
