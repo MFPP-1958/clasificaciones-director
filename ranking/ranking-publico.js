@@ -2527,10 +2527,83 @@ function rpCambiarPestanaCarrera(tab) {
     b.setAttribute('aria-pressed', String(b.dataset.rctab === tab));
   });
   const clasif = document.getElementById('rp-rc-clasificacion');
+  const equipos = document.getElementById('rp-rc-equipos');
   const ruta = document.getElementById('rp-rc-ruta');
   if (clasif) clasif.hidden = tab !== 'clasificacion';
+  if (equipos) equipos.hidden = tab !== 'equipos';
   if (ruta) ruta.hidden = tab !== 'ruta';
+  if (tab === 'equipos' && rpEstado._carreraModal) rpRenderEquiposPrueba(rpEstado._carreraModal);
   if (tab === 'ruta' && rpEstado._carreraModal) rpActivarPestanaRuta(rpEstado._carreraModal);
+}
+
+// ── Clasificación por EQUIPOS de UNA prueba (estilo federación) ──
+// Agrupa los resultados de la carrera por equipo y puntúa cada uno con la SUMA
+// de los puestos de sus 3 mejores corredores (menor = mejor). Los equipos con
+// menos de 3 clasificados no tienen clasificación oficial: se muestran aparte.
+function rpClasificacionEquiposPrueba(carrera) {
+  const porEquipo = new Map();
+  for (const r of (carrera.resultados || [])) {
+    const nombre = (r.equipo || '').trim();
+    const clave = rpNormalizarTexto(nombre);
+    if (!clave) continue;
+    if (!porEquipo.has(clave)) porEquipo.set(clave, { clave, nombre, puestos: [], corredores: 0 });
+    const e = porEquipo.get(clave);
+    e.corredores++;
+    const pos = parseInt(r.pos, 10);
+    if (Number.isFinite(pos) && pos >= 1) e.puestos.push(pos);
+  }
+  const equipos = [...porEquipo.values()].map(e => {
+    e.puestos.sort((a, b) => a - b);
+    e.mejor = e.puestos.length ? e.puestos[0] : null;
+    e.tresMejores = e.puestos.slice(0, RP_EQUIPO_TOP_N);
+    e.completo = e.puestos.length >= RP_EQUIPO_TOP_N;
+    e.suma = e.completo ? e.tresMejores.reduce((s, p) => s + p, 0) : null;
+    return e;
+  });
+  const clasificados = equipos.filter(e => e.completo)
+    .sort((a, b) => (a.suma - b.suma) || (a.mejor - b.mejor) || a.nombre.localeCompare(b.nombre, 'es'));
+  const incompletos = equipos.filter(e => !e.completo)
+    .sort((a, b) => ((a.mejor ?? 9999) - (b.mejor ?? 9999)) || a.nombre.localeCompare(b.nombre, 'es'));
+  return { clasificados, incompletos, total: equipos.length };
+}
+
+// Dibuja la clasificación por equipos de la prueba en la pestaña "Equipos".
+function rpRenderEquiposPrueba(carrera) {
+  const cont = document.getElementById('rp-rc-equipos');
+  if (!cont) return;
+  const { clasificados, incompletos, total } = rpClasificacionEquiposPrueba(carrera);
+  if (!total) {
+    cont.innerHTML = '<p class="rp-vacio">Esta prueba no tiene equipos con datos suficientes.</p>';
+    return;
+  }
+  const filaClas = (e, i) =>
+    '<tr>' +
+    `<td class="rp-c">${i + 1}</td>` +
+    `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(e.nombre)}</span></td>` +
+    `<td class="rp-eq-suma">${e.tresMejores.map(p => p + 'º').join(' + ')} = <b>${e.suma}</b></td>` +
+    `<td class="rp-c">${e.corredores}</td>` +
+    `<td class="rp-c">${e.mejor}º</td>` +
+    '</tr>';
+  let html = '';
+  if (clasificados.length) {
+    html += '<div class="rp-tabla-historial"><table class="rp-subtabla rp-tabla-eqprueba">' +
+      '<thead><tr><th>#</th><th>Equipo</th><th>3 mejores</th><th class="rp-c">Corr.</th><th class="rp-c">Mejor</th></tr></thead>' +
+      `<tbody>${clasificados.map(filaClas).join('')}</tbody></table></div>`;
+  }
+  if (incompletos.length) {
+    html += `<p class="rp-nota" style="margin-top:14px"><b>Equipos con menos de ${RP_EQUIPO_TOP_N} clasificados</b> (sin clasificación oficial por equipos):</p>` +
+      '<div class="rp-tabla-historial"><table class="rp-subtabla rp-tabla-eqprueba">' +
+      '<thead><tr><th>Equipo</th><th class="rp-c">Corr.</th><th class="rp-c">Mejor</th></tr></thead><tbody>' +
+      incompletos.map(e =>
+        '<tr>' +
+        `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(e.nombre)}</span></td>` +
+        `<td class="rp-c">${e.corredores}</td>` +
+        `<td class="rp-c">${e.mejor != null ? e.mejor + 'º' : '—'}</td>` +
+        '</tr>').join('') +
+      '</tbody></table></div>';
+  }
+  html += `<p class="rp-nota">Clasificación por equipos de <b>esta prueba</b>: suma de los puestos de los ${RP_EQUIPO_TOP_N} mejores corredores de cada equipo (menor = mejor). Incluye a todos los equipos participantes, sea cual sea su comunidad.</p>`;
+  cont.innerHTML = html;
 }
 
 async function rpActivarPestanaRuta(carrera) {
@@ -2672,13 +2745,15 @@ function rpAbrirModalCarrera(raceId) {
       : carrera.generalOficial
         ? '<div class="rp-aviso-general rp-aviso-general-ok">🏆 <b>General oficial</b> de la vuelta.</div>'
         : '') +
-    // Pestañas estilo FirstCycling, solo si la prueba tiene recorrido subido
+    // Pestañas estilo FirstCycling: Clasificación + Equipos siempre; Recorrido
+    // solo si la prueba tiene trazado subido.
+    '<div class="rp-carrera-tabs" role="tablist" aria-label="Contenido de la prueba">' +
+    '<button type="button" data-rctab="clasificacion" class="rp-cal-tab rp-activa" aria-pressed="true">📊 Clasificación</button>' +
+    '<button type="button" data-rctab="equipos" class="rp-cal-tab" aria-pressed="false">👥 Equipos</button>' +
     (carrera.ruta
-      ? '<div class="rp-carrera-tabs" role="tablist" aria-label="Contenido de la prueba">' +
-        '<button type="button" data-rctab="clasificacion" class="rp-cal-tab rp-activa" aria-pressed="true">📊 Clasificación</button>' +
-        '<button type="button" data-rctab="ruta" class="rp-cal-tab" aria-pressed="false">🗺️ Recorrido y perfil</button>' +
-        '</div>'
+      ? '<button type="button" data-rctab="ruta" class="rp-cal-tab" aria-pressed="false">🗺️ Recorrido y perfil</button>'
       : '') +
+    '</div>' +
     '<div id="rp-rc-clasificacion">' +
     '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
     '<thead><tr><th>Pos.</th>' +
@@ -2691,6 +2766,7 @@ function rpAbrirModalCarrera(raceId) {
     (hayTiempos ? 'Tiempo del ganador y diferencia del resto (m.t. = mismo tiempo). ' : '') +
     'Puntos que otorga cada puesto según el sistema del ranking (bono de +3 por terminar incluido). En verde, el podio; en gris, sin posición válida.</p>' +
     '</div>' +
+    '<div id="rp-rc-equipos" hidden></div>' +
     (carrera.ruta ? '<div id="rp-rc-ruta" hidden></div>' : '');
   document.getElementById('rp-modal-ant').disabled = true;
   document.getElementById('rp-modal-sig').disabled = true;

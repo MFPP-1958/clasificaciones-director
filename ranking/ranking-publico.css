@@ -1367,6 +1367,10 @@ td.rp-cmp-gana { color: var(--rp-color-primario); }
 }
 .rp-aviso-general-ok { color: #065f46; background: #ecfdf5; border-color: #6ee7b7; }
 
+/* Clasificación por equipos de una prueba (pestaña "Equipos" del modal) */
+.rp-tabla-eqprueba .rp-eq-suma { white-space: nowrap; color: var(--rp-color-suave); }
+.rp-tabla-eqprueba .rp-eq-suma b { color: var(--rp-color-primario); font-size: 1.05em; }
+
 /* ── Pie / leyenda ── */
 .rp-pie { margin-top: 18px; font-size: 0.85rem; color: var(--rp-color-suave); }
 .rp-pie summary { cursor: pointer; font-weight: 700; color: var(--rp-color-primario); }
