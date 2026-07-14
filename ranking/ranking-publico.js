@@ -2166,12 +2166,73 @@ async function rpCompartirBlob(blob, d) {
     try { await navigator.share({ files: [file], text: texto }); } catch (_) { /* cancelado por el usuario */ }
     return 'compartido';
   }
+  // In-app browser (Instagram/FB) sin Web Share: la descarga se bloquea → pestaña
+  // nueva o aviso de rescate (no fallar en silencio).
+  if (rpEsInAppBrowser()) {
+    try { const u = URL.createObjectURL(blob); const w = window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 60000); if (w) return 'pestana'; } catch (_) { /* nada */ }
+    rpAvisoInApp();
+    return 'rescate';
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = file.name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   return 'descargado';
+}
+
+// ¿Estamos dentro del navegador in-app de una red social (Instagram, Facebook…)?
+// Esos WebView bloquean en silencio la descarga directa de archivos.
+function rpEsInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|Snapchat|TikTok|Pinterest|MicroMessenger/i.test(ua);
+}
+
+// Aviso de rescate cuando la descarga se bloquea (in-app browser). Usamos alert
+// nativo: el widget vive en un iframe alto donde un toast flotante no se
+// posiciona bien, y el alert siempre es visible.
+function rpAvisoInApp() {
+  try {
+    alert('💡 Estás usando el navegador de Instagram/Facebook y no deja descargar archivos.\n\nPara descargar el PDF:\n①  Toca el botón ⋯ (arriba a la derecha)\n②  Elige "Abrir en el navegador" (Chrome/Safari)\n\nYa dentro del navegador, el botón de descargar funcionará. 👍');
+  } catch (_) { /* algunos WebView bloquean alert dentro de iframe */ }
+}
+
+// Entrega un PDF de jsPDF con degradación elegante para redes sociales:
+//  1) Móvil con Web Share de archivos → menú nativo (Guardar en Archivos,
+//     WhatsApp…): esquiva el bloqueo de Instagram.
+//  2) Navegador in-app sin Web Share → intento de pestaña nueva y, si no,
+//     aviso de rescate (no falla en silencio).
+//  3) Escritorio / navegador normal → descarga directa de siempre.
+// Devuelve el resultado para ajustar el texto del botón.
+async function rpEntregarPDF(doc, filename, texto) {
+  const esMovil = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  let blob = null;
+  try { blob = doc.output('blob'); } catch (_) { /* seguimos sin blob */ }
+  const file = blob ? new File([blob], filename, { type: 'application/pdf' }) : null;
+
+  if (esMovil && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: filename, text: texto || '' }); return 'compartido'; }
+    catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; /* sin permiso o falló → seguimos */ }
+  }
+  if (rpEsInAppBrowser()) {
+    if (blob) {
+      try {
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        if (win) return 'pestana';
+      } catch (_) { /* bloqueado por el in-app browser */ }
+    }
+    rpAvisoInApp();
+    return 'rescate';
+  }
+  try { doc.save(filename); return 'descargado'; }
+  catch (_) {
+    if (blob) { try { const url = URL.createObjectURL(blob); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000); return 'pestana'; } catch (_) { /* nada */ } }
+    rpAvisoInApp();
+    return 'rescate';
+  }
 }
 
 async function rpCompartirTarjeta(btn) {
@@ -3271,8 +3332,8 @@ async function rpDescargarPDF(btn) {
         doc.text('Página ' + doc.internal.getNumberOfPages(), W - 40, H - 22, { align: 'right' });
       }
     });
-    doc.save(d.archivo);
-    btn.textContent = '✅ Descargado';
+    const _r = await rpEntregarPDF(doc, d.archivo, 'Ranking MFPP · mfppcycling.com/ranking');
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargado';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }
@@ -3433,8 +3494,8 @@ async function rpDescargarFichaPDF(btn) {
       doc.text('Ficha personal, no oficial · elaborada por MFPP Cycling · mfppcycling.com/ranking', M, Hp - 22);
       doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
     }
-    doc.save('ficha-' + (c.nombre || 'corredor').replace(/[^\w]+/g, '_').toLowerCase() + '-' + rpEstado.temporada + '.pdf');
-    btn.textContent = '✅ Descargada';
+    const _r = await rpEntregarPDF(doc, 'ficha-' + (c.nombre || 'corredor').replace(/[^\w]+/g, '_').toLowerCase() + '-' + rpEstado.temporada + '.pdf', 'Ficha de ' + (c.nombre || '') + ' · Ranking MFPP');
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargada';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }
@@ -3525,8 +3586,8 @@ async function rpDescargarCarreraPDF(btn) {
       doc.text('Clasificación con los puntos del ranking MFPP · no oficial · mfppcycling.com/ranking', M, Hp - 22);
       doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
     }
-    doc.save('clasificacion-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf');
-    btn.textContent = '✅ Descargada';
+    const _r = await rpEntregarPDF(doc, 'clasificacion-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf', 'Clasificación · ' + (carrera.nombre || ''));
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargada';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }
@@ -3595,8 +3656,8 @@ async function rpDescargarCarreraEquiposPDF(btn) {
       doc.text('Clasificación por equipos (suma de los 3 mejores puestos) · no oficial · mfppcycling.com/ranking', M, Hp - 22);
       doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
     }
-    doc.save('clasificacion-equipos-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf');
-    btn.textContent = '✅ Descargada';
+    const _r = await rpEntregarPDF(doc, 'clasificacion-equipos-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf', 'Clasificación por equipos · ' + (carrera.nombre || ''));
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargada';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }
