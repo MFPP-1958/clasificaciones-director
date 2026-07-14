@@ -2166,13 +2166,10 @@ async function rpCompartirBlob(blob, d) {
     try { await navigator.share({ files: [file], text: texto }); } catch (_) { /* cancelado por el usuario */ }
     return 'compartido';
   }
-  // In-app browser (Instagram/FB) sin Web Share: la descarga se bloquea → pestaña
-  // nueva o aviso de rescate (no fallar en silencio).
-  if (rpEsInAppBrowser()) {
-    try { const u = URL.createObjectURL(blob); const w = window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 60000); if (w) return 'pestana'; } catch (_) { /* nada */ }
-    rpAvisoInApp();
-    return 'rescate';
-  }
+  // Embebido en una red social: delegar el compartir en la ventana superior
+  // (el iframe no puede compartir; la página de arriba sí).
+  if (rpDelegarShareAlPadre(file, file.name, texto)) return 'delegado';
+  if (rpEsInAppBrowser()) { rpAvisoInApp(); return 'rescate'; }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = file.name;
@@ -2197,42 +2194,40 @@ function rpAvisoInApp() {
   } catch (_) { /* algunos WebView bloquean alert dentro de iframe */ }
 }
 
-// Entrega un PDF de jsPDF con degradación elegante para redes sociales:
-//  1) Móvil con Web Share de archivos → menú nativo (Guardar en Archivos,
-//     WhatsApp…): esquiva el bloqueo de Instagram.
-//  2) Navegador in-app sin Web Share → intento de pestaña nueva y, si no,
-//     aviso de rescate (no falla en silencio).
-//  3) Escritorio / navegador normal → descarga directa de siempre.
-// Devuelve el resultado para ajustar el texto del botón.
+// Delega el compartir de un archivo en la VENTANA SUPERIOR (la página que embebe
+// el widget). El iframe no tiene permiso 'web-share', pero la página de arriba sí
+// puede abrir el menú nativo del móvil. embed.js recibe el archivo y comparte (o
+// avisa de que se abra en el navegador). Devuelve true si se ha delegado.
+function rpDelegarShareAlPadre(file, filename, texto) {
+  if (!file || !(window.parent && window.parent !== window)) return false;
+  try {
+    window.parent.postMessage({ tipo: 'mfpp-rp-compartir-archivo', file: file, filename: filename, texto: texto || '' }, '*');
+    return true;
+  } catch (_) { return false; }
+}
+
 async function rpEntregarPDF(doc, filename, texto) {
   const esMovil = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ||
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const inApp = rpEsInAppBrowser();
   let blob = null;
   try { blob = doc.output('blob'); } catch (_) { /* seguimos sin blob */ }
   const file = blob ? new File([blob], filename, { type: 'application/pdf' }) : null;
 
+  // 1) Web Share local: funciona si NO estamos embebidos (o el iframe tiene
+  //    permiso web-share). Menú nativo con el archivo real.
   if (esMovil && file && navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: filename, text: texto || '' }); return 'compartido'; }
-    catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; /* sin permiso o falló → seguimos */ }
+    catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; /* sin permiso → seguimos */ }
   }
-  if (rpEsInAppBrowser()) {
-    if (blob) {
-      try {
-        const url = URL.createObjectURL(blob);
-        const win = window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-        if (win) return 'pestana';
-      } catch (_) { /* bloqueado por el in-app browser */ }
-    }
-    rpAvisoInApp();
-    return 'rescate';
-  }
+  // 2) Embebido en móvil/in-app: delegar en la ventana superior (que sí puede
+  //    compartir). Es lo que arregla Instagram (el iframe no puede).
+  if ((esMovil || inApp) && rpDelegarShareAlPadre(file, filename, texto)) return 'delegado';
+  // 3) In-app SIN poder delegar (no embebido) → mensaje de rescate.
+  if (inApp) { rpAvisoInApp(); return 'rescate'; }
+  // 4) Escritorio / navegador normal → descarga directa de siempre.
   try { doc.save(filename); return 'descargado'; }
-  catch (_) {
-    if (blob) { try { const url = URL.createObjectURL(blob); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000); return 'pestana'; } catch (_) { /* nada */ } }
-    rpAvisoInApp();
-    return 'rescate';
-  }
+  catch (_) { rpAvisoInApp(); return 'rescate'; }
 }
 
 async function rpCompartirTarjeta(btn) {
@@ -3333,7 +3328,7 @@ async function rpDescargarPDF(btn) {
       }
     });
     const _r = await rpEntregarPDF(doc, d.archivo, 'Ranking MFPP · mfppcycling.com/ranking');
-    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargado';
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : (_r === 'cancelado' || _r === 'delegado') ? orig : '✅ Descargado';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }
@@ -3495,7 +3490,7 @@ async function rpDescargarFichaPDF(btn) {
       doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
     }
     const _r = await rpEntregarPDF(doc, 'ficha-' + (c.nombre || 'corredor').replace(/[^\w]+/g, '_').toLowerCase() + '-' + rpEstado.temporada + '.pdf', 'Ficha de ' + (c.nombre || '') + ' · Ranking MFPP');
-    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargada';
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : (_r === 'cancelado' || _r === 'delegado') ? orig : '✅ Descargada';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }
@@ -3587,7 +3582,7 @@ async function rpDescargarCarreraPDF(btn) {
       doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
     }
     const _r = await rpEntregarPDF(doc, 'clasificacion-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf', 'Clasificación · ' + (carrera.nombre || ''));
-    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargada';
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : (_r === 'cancelado' || _r === 'delegado') ? orig : '✅ Descargada';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }
@@ -3657,7 +3652,7 @@ async function rpDescargarCarreraEquiposPDF(btn) {
       doc.text('Página ' + i + ' de ' + total, W - M, Hp - 22, { align: 'right' });
     }
     const _r = await rpEntregarPDF(doc, 'clasificacion-equipos-' + (carrera.nombre || 'prueba').replace(/[^\w]+/g, '_').toLowerCase().slice(0, 50) + '.pdf', 'Clasificación por equipos · ' + (carrera.nombre || ''));
-    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : _r === 'cancelado' ? orig : '✅ Descargada';
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : (_r === 'cancelado' || _r === 'delegado') ? orig : '✅ Descargada';
   } catch (_) {
     btn.textContent = '⚠️ Error, reinténtalo';
   }

@@ -57,8 +57,30 @@
         if (location.search) {
           try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* nada */ }
         }
+      } else if (ev.data.tipo === 'mfpp-rp-compartir-archivo' && ev.data.file) {
+        // El widget (dentro del iframe) no puede usar Web Share (falta el permiso
+        // 'web-share' del iframe). Lo hacemos desde AQUÍ, la ventana superior, que
+        // sí puede: así en Instagram/Facebook sale el menú nativo con el ARCHIVO
+        // real (Guardar en Archivos, WhatsApp…), no un enlace blob que caduca.
+        compartirArchivo(ev.data.file, ev.data.filename, ev.data.texto);
       }
     });
+
+    function compartirArchivo(file, filename, texto) {
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+          navigator.share({ files: [file], title: filename || '', text: texto || '' })
+            .catch(function (e) { if (!(e && e.name === 'AbortError')) avisoAbrirEnNavegador(); });
+          return;
+        }
+      } catch (e) { /* seguimos al aviso */ }
+      avisoAbrirEnNavegador();
+    }
+    function avisoAbrirEnNavegador() {
+      try {
+        alert('💡 Para guardar el archivo, abre esta página en tu navegador: toca ⋯ (arriba a la derecha) y elige "Abrir en el navegador" (Chrome/Safari). Allí funciona la descarga. 👍');
+      } catch (e) { /* algunos WebView bloquean alert */ }
+    }
     // Fallback: también al cargar el iframe (por si el mensaje 'listo' se pierde)
     iframe.addEventListener('load', enviarDeeplink);
 
