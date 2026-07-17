@@ -30232,11 +30232,11 @@ function _simExportPDF(){
   const logoSrc = (document.querySelector('img.brand-logo')?.src) || '';
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const now = new Date().toLocaleString('es-ES');
-  // Top 10 — ordenado por predictedPos (fórmula 60/40)
-  const pool = grid.filter(g=>g.predictedPos!=null||g.avgPos!=null);
-  pool.forEach(g=>{ if(g.predictedPos==null){ const rel=g.reliability??30; g.predictedPos=(g.avgPos||99)*(1+(100-rel)/200); } });
-  pool.sort((a,b)=>(a.predictedPos||99)-(b.predictedPos||99));
-  const top10 = pool.slice(0,10);
+  // Top 10 — MISMA FUENTE ÚNICA que el panel en pantalla (_simPredictedPool) y
+  // con el MISMO filtro de categoría activo, para que el PDF coincida EXACTAMENTE
+  // con lo que ve el director. (Antes se reconstruía a mano aquí, sin el filtro
+  // de categoría, y salía un Top 10 distinto.)
+  const top10 = _simPredictedPool(grid, _simActiveCatFilter()).slice(0,10);
   // Ordenar todo el grid por predictedPos
   const gridSorted = grid.slice().sort((a,b)=>{
     const pa = a.predictedPos ?? (a.avgPos!=null?a.avgPos*1.5:null);
