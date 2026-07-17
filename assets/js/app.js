@@ -745,9 +745,14 @@ function _gfMatchesCatGender(catField, nameField){
   const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
   const gfGen = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.gender) || '';
   const blob = `${catField||''} ${nameField||''}`;
-  // Exclusión escuela/infantil/alevín si el filtro es categoría adulta
+  // Exclusión escuela/infantil/alevín si el filtro es categoría adulta… PERO NO
+  // cuando la CATEGORÍA (no el nombre) afirma explícitamente la pedida: una
+  // prueba "Trofeo Escuelas de Ciclismo" marcada como Cadete cuenta como Cadete
+  // (antes la palabra "Escuelas" del nombre la escondía bajo el filtro Cadete).
   const adultas = ['cadete','junior','sub23','elite','master'];
-  if(gfCat && adultas.includes(gfCat) && _GF_MENOR_RE.test(blob)) return false;
+  const _catRe = gfCat ? _GF_CAT_TOKENS[gfCat] : null;
+  const _catAfirmaPedida = !!(_catRe && _catRe.test(catField || ''));
+  if(gfCat && adultas.includes(gfCat) && _GF_MENOR_RE.test(blob) && !_catAfirmaPedida) return false;
   // Tokens de la lista de categorías (descartando basura "..." y vacíos)
   const tokens = String(catField||'').split(/[,;]/)
     .map(s=>s.trim())
