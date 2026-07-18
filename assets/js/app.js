@@ -545,6 +545,17 @@ function _collapseLoadPanel(){
   if(bar) bar.classList.remove('load-bar-open');
 }
 
+// Vacía las cajas de TEXTO PEGADO (inscritos y clasificación) y sus etiquetas de
+// archivo + contador. Se llama al CARGAR otra prueba en Carga y Resumen para que
+// no se arrastre lo pegado en la prueba anterior (fuente de errores). Los datos
+// ya guardados de la prueba viven en los arrays/tablas, no en estas cajas.
+function _cargaLimpiarCajasTexto(){
+  const pi=document.getElementById('pastedInscritos'); if(pi) pi.value='';
+  const pt=document.getElementById('pastedText'); if(pt) pt.value='';
+  const fnI=document.getElementById('fileNameInscritos'); if(fnI) fnI.textContent='';
+  try{ if(typeof _inscPastedCounter==='function') _inscPastedCounter(); }catch(_){}
+}
+
 function openLoadPanelForNew(){
   // Prueba nueva = empezar de cero → descartar borrador y avisos de validación.
   try{ _cargaDraftClear(); const b=document.getElementById('cargaDraftBanner'); if(b){ b.style.display='none'; b.innerHTML=''; } }catch(_){}
@@ -14789,6 +14800,9 @@ async function loadPlanificadaToCarga(id){
     hasValidData = false;
     selectedCompare = [];
     if(typeof _updateInscritosUI === 'function') _updateInscritosUI();
+    // Vaciar las cajas de texto pegado para no arrastrar los inscritos/clasificación
+    // de la prueba anterior (Manuel: al cambiar de prueba deben salir limpias).
+    _cargaLimpiarCajasTexto();
     closeHistoryModal();
     // Llevar al usuario a Carga y Resumen con los paneles abiertos
     setTimeout(()=>{
@@ -26573,6 +26587,9 @@ async function _histAddStartlist(raceId){
     alert('No se ha podido cargar la prueba: '+ (e?.message||e));
     return;
   }
+  // Cajas de texto pegado limpias al cambiar de prueba (los inscritos ya
+  // guardados se muestran en su lista, no en la caja de pegar).
+  try{ _cargaLimpiarCajasTexto(); }catch(_){}
   // Ir a view-carga (loadHistoryEntry navega a view-tabla, lo cambiamos)
   setTimeout(()=>{
     showView('view-carga');
