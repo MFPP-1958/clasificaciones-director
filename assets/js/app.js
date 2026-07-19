@@ -38710,17 +38710,36 @@ function _simOpenPredVsReal(){
     const nkey = (s) => (typeof normalizeForMatching==='function')
       ? normalizeForMatching(s||'')
       : (s||'').toLowerCase().trim();
-    const realByName = new Map();
-    actualRiders.forEach(r => realByName.set(nkey(r.name), { pos: parseInt(r.pos)||0, team: r.team||'', cat: r.cat||'' }));
-    const predByName = new Map();
-    predRanked.forEach((g, i) => predByName.set(nkey(g.name), { predPos: i+1, team: g.team||'', isMyTeam: !!g.isMyTeam }));
+    // Emparejamiento por nombre normalizado ("primer apellido, primer nombre"),
+    // con FALLBACK por CONJUNTO de palabras (independiente del orden) para
+    // nombres COMPUESTOS que esa normalización interpreta mal. Ej.: en inscritos
+    // "Santiago Joel Fernandez" → "joel, santiago" (mal: cree que Joel es
+    // apellido), pero en la clasificación "Fernandez, Santiago Joel" →
+    // "fernandez, santiago" → no casaban y ese acierto no se contaba. El fallback
+    // solo se usa si es INEQUÍVOCO (una única coincidencia de ese conjunto).
+    const tokKey = (s) => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z\s]/g,' ').split(/\s+/).filter(w=>w.length>1).sort().join(' ');
+    const realByName = new Map(), realByTok = new Map(), realTokN = new Map();
+    actualRiders.forEach(r => {
+      const info = { pos: parseInt(r.pos)||0, team: r.team||'', cat: r.cat||'' };
+      realByName.set(nkey(r.name), info);
+      const tk = tokKey(r.name); if(tk){ realByTok.set(tk, info); realTokN.set(tk, (realTokN.get(tk)||0)+1); }
+    });
+    const predByName = new Map(), predByTok = new Map(), predTokN = new Map();
+    predRanked.forEach((g, i) => {
+      const info = { predPos: i+1, team: g.team||'', isMyTeam: !!g.isMyTeam };
+      predByName.set(nkey(g.name), info);
+      const tk = tokKey(g.name); if(tk){ predByTok.set(tk, info); predTokN.set(tk, (predTokN.get(tk)||0)+1); }
+    });
+    const findReal = (name) => { let x = realByName.get(nkey(name)); if(!x){ const tk = tokKey(name); if(tk && realTokN.get(tk)===1) x = realByTok.get(tk); } return x; };
+    const findPred = (name) => { let x = predByName.get(nkey(name)); if(!x){ const tk = tokKey(name); if(tk && predTokN.get(tk)===1) x = predByTok.get(tk); } return x; };
 
     // Estadísticas
     let hitsPresence = 0;          // del predicho top 10, cuántos están en el real top 10
     let hitsExact = 0;             // misma posición exacta
     let positionErrors = [];       // diferencia absoluta para los que están en ambos
     top10Pred.forEach((g, i) => {
-      const real = realByName.get(nkey(g.name));
+      const real = findReal(g.name);
       if(real){
         if(real.pos <= 10) hitsPresence++;
         if(real.pos === (i+1)) hitsExact++;
@@ -38737,7 +38756,7 @@ function _simOpenPredVsReal(){
       let pName='—', pTeam='—', pCat='', pHit='', pExtra='', pMyTeam='', pUncertainty='';
       if(p){
         pName = p.name; pTeam = p.team||''; pCat = p.cat||'';
-        const realOfP = realByName.get(nkey(p.name));
+        const realOfP = findReal(p.name);
         if(realOfP){
           if(realOfP.pos === (i+1)){ pHit='exact'; pExtra=`<span class="pvr-tag pvr-tag-ok">✅ Exacto · ${realOfP.pos}º real</span>`; }
           else if(realOfP.pos <= 10){ pHit='top10';  pExtra=`<span class="pvr-tag pvr-tag-near">🎯 Entró ${realOfP.pos}º (Δ ${Math.abs(realOfP.pos-(i+1))})</span>`; }
@@ -38753,7 +38772,7 @@ function _simOpenPredVsReal(){
       let rName='—', rTeam='—', rCat='', rHit='', rExtra='';
       if(r){
         rName = r.name; rTeam = r.team||''; rCat = r.cat||'';
-        const predOfR = predByName.get(nkey(r.name));
+        const predOfR = findPred(r.name);
         if(predOfR){
           if(predOfR.predPos === (i+1)){ rHit='exact'; rExtra=`<span class="pvr-tag pvr-tag-ok">✅ Predicho ${predOfR.predPos}º</span>`; }
           else if(predOfR.predPos <= 10){ rHit='top10'; rExtra=`<span class="pvr-tag pvr-tag-near">🎯 Predicho ${predOfR.predPos}º (Δ ${Math.abs(predOfR.predPos-(i+1))})</span>`; }
