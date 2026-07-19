@@ -237,16 +237,27 @@
     document.documentElement.classList.add('rp-embebido');
 
     // ── 1. Informar de la altura del contenido ──
+    // Medimos el BODY (no documentElement): document.documentElement.scrollHeight
+    // nunca baja de la altura del iframe, así que una vez el iframe crece NO se
+    // detecta que el contenido encoge (al filtrar a menos resultados el iframe
+    // se quedaba grande y parecía no actualizarse). El body sí encoge con el
+    // contenido, así que crecer Y encoger se detectan bien.
     var ultimaAltura = 0;
+    function medirAltura(){
+      var b = document.body ? Math.ceil(document.body.getBoundingClientRect().height) : 0;
+      return b || Math.ceil(document.documentElement.scrollHeight);
+    }
     function avisarAltura(){
-      var h = Math.ceil(document.documentElement.scrollHeight);
-      if (h !== ultimaAltura) {
+      var h = medirAltura();
+      if (h && h !== ultimaAltura) {
         ultimaAltura = h;
         window.parent.postMessage({ tipo: 'mfpp-rp-altura', altura: h }, '*');
       }
     }
     if ('ResizeObserver' in window) {
-      new ResizeObserver(avisarAltura).observe(document.documentElement);
+      var _ro = new ResizeObserver(avisarAltura);
+      _ro.observe(document.body);
+      _ro.observe(document.documentElement);
     } else {
       setInterval(avisarAltura, 600);
     }
