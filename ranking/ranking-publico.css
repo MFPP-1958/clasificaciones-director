@@ -1367,6 +1367,22 @@ td.rp-cmp-gana { color: var(--rp-color-primario); }
 }
 .rp-aviso-general-ok { color: #065f46; background: #ecfdf5; border-color: #6ee7b7; }
 
+/* Ranking por COMUNIDADES (vista Comunidades del ranking) */
+.rp-comlist { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.rp-com { border: 1px solid var(--rp-color-borde); border-radius: 12px; overflow: hidden; background: #fff; }
+.rp-com-cab { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: none; border: none; cursor: pointer; font: inherit; text-align: left; }
+.rp-com-cab:hover, .rp-com-cab:focus-visible { background: var(--rp-color-fondo-alt); outline: none; }
+.rp-com-rank { flex: 0 0 auto; min-width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--rp-color-primario); color: #fff; font-weight: 800; font-size: 0.82rem; padding: 0 6px; }
+.rp-com-rank-sin { background: var(--rp-color-suave); }
+.rp-com-nombre { flex: 1 1 auto; min-width: 0; font-weight: 800; color: var(--rp-color-primario); display: flex; align-items: center; gap: 6px; }
+.rp-com-meta { flex: 0 0 auto; font-size: 0.85rem; color: var(--rp-color-suave); white-space: nowrap; }
+.rp-com-meta b { color: var(--rp-color-primario); }
+.rp-com-chev { flex: 0 0 auto; color: var(--rp-color-suave); transition: transform .15s; }
+.rp-com-chev.rp-abierto { transform: rotate(180deg); }
+.rp-com-body { padding: 0 8px 8px; }
+.rp-com-gen { color: var(--rp-color-suave); font-weight: 700; }
+@media (max-width: 560px) { .rp-com-meta { font-size: 0.78rem; } .rp-com-nombre { font-size: 0.9rem; } }
+
 /* Clasificación por equipos de una prueba (pestaña "Equipos" del modal) */
 .rp-tabla-eqprueba .rp-eq-suma { white-space: nowrap; color: var(--rp-color-suave); }
 .rp-tabla-eqprueba .rp-eq-suma b { color: var(--rp-color-primario); font-size: 1.05em; }

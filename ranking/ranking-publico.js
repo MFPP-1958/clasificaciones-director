@@ -756,6 +756,7 @@ function rpRenderSubtitulo() {
   else if (cat) partes.push(cat.label);
   if (rpEstado.modo === 'challenge') partes.push('Challenge CV Oficial');
   else if (rpEstado.vista === 'equipos') partes.push('Equipos');
+  else if (rpEstado.vista === 'comunidades') partes.push('Comunidades');
   if (rpEstado.region === RP_REGION_SIN) partes.push('Sin comunidad asignada');
   else if (rpEstado.region) partes.push(rpEstado.regionDisplay || '');
   partes.push('Temporada ' + rpEstado.temporada);
@@ -3659,6 +3660,63 @@ async function rpDescargarCarreraEquiposPDF(btn) {
   setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2400);
 }
 
+// ── Ranking por COMUNIDADES autónomas ──
+// Para la categoría activa, agrupa los corredores por su comunidad y ordena las
+// comunidades por la SUMA de los puntos de sus 5 mejores (fuerza competitiva,
+// justa aunque tengan más o menos corredores). Cada comunidad es una tarjeta
+// desplegable con sus 10 mejores. Muestra TODAS las comunidades (no aplica el
+// filtro de comunidad ni el de equipo; sí la subcategoría).
+const RP_COM_TOP_PTS = 5;   // nº de corredores que suman para la fuerza de la comunidad
+function rpRenderTablaComunidades(cat) {
+  const cont = document.querySelector('.rp-tabla-scroll');
+  const info = document.getElementById('rp-challenge-info');
+  info.style.display = 'none'; info.innerHTML = '';
+  const pobl = cat.corredores.filter(c => !rpEstado.subcategoria || (c.subcats && c.subcats.includes(rpEstado.subcategoria)));
+  // Ya vienen ordenados por puntos → el índice es el puesto GENERAL de la categoría.
+  const rankGeneral = new Map();
+  pobl.forEach((c, i) => rankGeneral.set(c.clave, i + 1));
+  const porCom = new Map();
+  for (const c of pobl) {
+    const key = c.region ? rpNormalizarTexto(c.region) : '__sin__';
+    if (!porCom.has(key)) porCom.set(key, { key, nombre: c.region || 'Sin comunidad asignada', sinRegion: !c.region, corredores: [] });
+    porCom.get(key).corredores.push(c);
+  }
+  const coms = [...porCom.values()].map(com => {
+    com.top = Math.round(com.corredores.slice(0, RP_COM_TOP_PTS).reduce((s, c) => s + (c.puntosTotales || 0), 0) * 100) / 100;
+    com.n = com.corredores.length;
+    return com;
+  }).sort((a, b) => (a.sinRegion !== b.sinRegion) ? (a.sinRegion ? 1 : -1)
+    : (b.top - a.top) || (b.n - a.n) || a.nombre.localeCompare(b.nombre, 'es'));
+  if (!coms.length) { cont.innerHTML = '<p class="rp-vacio">No hay corredores con comunidad asignada en esta categoría.</p>'; return; }
+  let pos = 0;
+  const html = '<div class="rp-comlist">' + coms.map(com => {
+    const rank = com.sinRegion ? '·' : String(++pos);
+    const abierta = rank === '1';
+    const filas = com.corredores.slice(0, 10).map(c => {
+      const g = rankGeneral.get(c.clave);
+      return '<tr class="rp-fila" tabindex="0" role="button" data-clave="' + rpEscapar(c.clave) + '">' +
+        '<td class="rp-c rp-com-gen">' + (g ? g + 'º' : '—') + '</td>' +
+        '<td class="rp-col-nombre"><span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
+        (c.subcatPrincipal ? ' <span class="rp-badge-cat">' + rpEscapar(c.subcatPrincipal) + '</span>' : '') + '</td>' +
+        '<td class="rp-col-eqmodal">' + (c.equipo ? rpEscapar(c.equipo) : '') + '</td>' +
+        '<td class="rp-c rp-pts">' + rpFormatearPuntos(c.puntosTotales) + '</td></tr>';
+    }).join('');
+    return '<div class="rp-com">' +
+      '<button type="button" class="rp-com-cab" aria-expanded="' + (abierta ? 'true' : 'false') + '">' +
+      '<span class="rp-com-rank' + (com.sinRegion ? ' rp-com-rank-sin' : '') + '">' + rank + '</span>' +
+      '<span class="rp-com-nombre">' + rpInsigniaRegion(com.nombre) + ' ' + rpEscapar(com.nombre) + '</span>' +
+      '<span class="rp-com-meta"><b>' + rpFormatearPuntos(com.top) + '</b> pts · ' + com.n + ' corr.</span>' +
+      '<span class="rp-com-chev' + (abierta ? ' rp-abierto' : '') + '" aria-hidden="true">▾</span>' +
+      '</button>' +
+      '<div class="rp-com-body"' + (abierta ? '' : ' hidden') + '>' +
+      '<div class="rp-tabla-historial"><table class="rp-subtabla">' +
+      '<thead><tr><th class="rp-c" title="Puesto en el ranking general de la categoría">Gen.</th><th>Corredor</th><th class="rp-col-eqmodal">Equipo</th><th class="rp-c">Pts</th></tr></thead>' +
+      '<tbody>' + filas + '</tbody></table></div></div></div>';
+  }).join('') + '</div>' +
+    '<p class="rp-nota">Ranking por comunidades: cada comunidad se ordena por la <b>suma de los puntos de sus ' + RP_COM_TOP_PTS + ' mejores</b> corredores. Se muestran los <b>10 mejores</b> de cada una (pulsa para desplegar). «Gen.» es su puesto en el ranking general de la categoría.</p>';
+  cont.innerHTML = html;
+}
+
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const info = document.getElementById('rp-challenge-info');
@@ -3677,6 +3735,7 @@ function rpRenderTabla() {
   info.style.display = 'none';
   info.innerHTML = '';
   if (rpEstado.vista === 'equipos') { rpRenderTablaEquipos(cat); return; }
+  if (rpEstado.vista === 'comunidades') { rpRenderTablaComunidades(cat); return; }
 
   const filtro = rpNormalizarTexto(rpEstado.busqueda);
 
@@ -3797,7 +3856,7 @@ function rpCargarPrefs() {
     if (typeof p.region === 'string') rpEstado.region = p.region;
     if (typeof p.subcategoria === 'string') rpEstado.subcategoria = p.subcategoria;
     if (typeof p.equipo === 'string') rpEstado.equipo = p.equipo;
-    if (p.vista === 'corredores' || p.vista === 'equipos') rpEstado.vista = p.vista;
+    if (p.vista === 'corredores' || p.vista === 'equipos' || p.vista === 'comunidades') rpEstado.vista = p.vista;
     if (p.modo === 'mfpp' || p.modo === 'challenge') rpEstado.modo = p.modo;
   } catch (_) { /* almacenamiento no disponible o corrupto */ }
 }
@@ -4105,6 +4164,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bScatter) { rpAbrirModal(bScatter.dataset.scatterClave); return; }
     const bEquipo = e.target.closest('button[data-equipo]');
     if (bEquipo) { rpAbrirModalEquipo(bEquipo.dataset.equipo); return; }
+    // Desplegar / plegar una comunidad en la vista "Comunidades"
+    const bComCab = e.target.closest('.rp-com-cab');
+    if (bComCab) {
+      const body = bComCab.parentElement.querySelector('.rp-com-body');
+      if (body) {
+        body.hidden = !body.hidden;
+        bComCab.setAttribute('aria-expanded', String(!body.hidden));
+        const chev = bComCab.querySelector('.rp-com-chev');
+        if (chev) chev.classList.toggle('rp-abierto', !body.hidden);
+      }
+      return;
+    }
     const fila = e.target.closest('tr.rp-fila');
     if (!fila) return;
     if (fila.dataset.equipo) rpAbrirModalEquipo(fila.dataset.equipo);
