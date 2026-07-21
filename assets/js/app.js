@@ -17395,10 +17395,30 @@ function _histToggleFav(id, ev){
 // Al ENTRAR a la vista Historial (y al volver a primer plano) se vuelve a leer
 // de Supabase, para que una prueba recién metida —o metida en otro dispositivo—
 // aparezca sin tener que recargar la página. Un flag evita recargas solapadas.
+// Barra de progreso fina en lo alto de la página (indeterminada) para indicar
+// que se están cargando datos. Reutilizable: _topProgress(true) muestra,
+// _topProgress(false) oculta. Se crea sola la primera vez.
+function _topProgress(show){
+  let bar = document.getElementById('_topProgressBar');
+  if(show){
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = '_topProgressBar';
+      bar.setAttribute('role', 'progressbar');
+      bar.setAttribute('aria-label', 'Cargando datos');
+      bar.innerHTML = '<div class="_tp-fill"></div>';
+      document.body.appendChild(bar);
+    }
+    bar.style.display = 'block';
+  } else if(bar){
+    bar.style.display = 'none';
+  }
+}
 let _histRefreshing = false;
 async function _histRefreshData(){
   if(_histRefreshing) return;
   _histRefreshing = true;
+  _topProgress(true);        // barra de "cargando" mientras relee de Supabase
   try{
     _cachedHistory = null;   // fuerza re-lectura desde Supabase en _ensureHistory
     if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
@@ -17407,7 +17427,7 @@ async function _histRefreshData(){
     if(typeof _trendFiltersReady!=='undefined') _trendFiltersReady=false;
     if(typeof renderHistory==='function') await renderHistory();
   }catch(_){}
-  finally{ _histRefreshing = false; }
+  finally{ _histRefreshing = false; _topProgress(false); }
 }
 let _histAutoRefreshBound = false;
 function _histSetupAutoRefresh(){
