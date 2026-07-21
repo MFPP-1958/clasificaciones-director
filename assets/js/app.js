@@ -697,12 +697,12 @@ const _GF_MOD_TOKENS = {
   // modalidad" y las EXCLUYA cuando el filtro es Carretera/BTT/etc.
   bmx:          /\bbmx\b/i,
   cicloturismo: /cicloturis|ciclodeportiv|ciclismo\s+para\s+todos|ciclodep|a\s+partir\s+de\s+\d+\s*a[ñn]?o?s?|gran\s+fondo|\bmarcha\b/i,
-  escuelas:     /\bescuela|\bescola/i
+  escuelas:     /\bescuela|\bescola(s|es)?\b/i    /* \b al final: "escolar" (edad escolar = cadetes) NO cuenta como escuelas */
 };
 // Categorías "menores" que NO deben mezclarse con las adultas competitivas
 // (regla de negocio: una prueba de Cadete mezclada con Escuela/Infantil/
 // Alevín NO es una prueba de cadete "pura" y debe descartarse).
-const _GF_MENOR_RE = /\bescuela|\bescola|\binfantil|\balev[ií]n|\bprincipiant|\bpromesa|\bbenjam[ií]n|\bpre.?infantil|\bpre.?benjam|\bprincipiant/i;
+const _GF_MENOR_RE = /\bescuela|\bescola(s|es)?\b|\binfantil|\balev[ií]n|\bprincipiant|\bpromesa|\bbenjam[ií]n|\bpre.?infantil|\bpre.?benjam|\bprincipiant/i;
 function _gfMatchesGlobalCat(blob){
   const gfCat = (typeof _globalFilters!=='undefined' && _globalFilters && _globalFilters.cat) || '';
   if(!gfCat) return true;
