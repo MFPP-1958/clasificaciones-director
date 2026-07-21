@@ -1114,7 +1114,7 @@ function _gfTriggerCurrentViewRerender(){
       const _hp=document.getElementById('resPanelHeat');
       if(_hp && _hp.style.display!=='none' && typeof _resRenderHeat==='function') _resRenderHeat();
     }
-    if(id==='view-historial'   && typeof renderHistory==='function')     renderHistory();
+    if(id==='view-historial'   && typeof _histRefreshData==='function')  _histRefreshData();
     if(id==='view-tactica'     && typeof renderTactica==='function')     renderTactica();
     if(id==='view-informe-plantilla' && typeof _ipInit==='function')     _ipInit();
     if(id==='view-challenge'         && typeof _chgInit==='function')    _chgInit();
@@ -1319,7 +1319,7 @@ function showView(viewId){
       if(viewId==='view-disponibilidad') { if(typeof _dispInit==='function') _dispInit(); }
       if(viewId==='view-radiovuelta') { if(typeof _rvInit==='function') _rvInit(); }
       if(viewId==='view-laboratorio') { if(typeof _labInit==='function') _labInit(); }
-      if(viewId==='view-historial') renderHistory();
+      if(viewId==='view-historial') _histRefreshData();
       if(viewId==='view-evolucion') renderEvolucion();
       if(viewId==='view-resumen'){ renderResumen(); }
       if(viewId==='view-gestion'){ _gSetTab('users'); }
@@ -17391,7 +17391,35 @@ function _histToggleFav(id, ev){
   _histRender();
 }
 
+// ── Auto-refresco del HISTORIAL (igual que el Calendario) ──
+// Al ENTRAR a la vista Historial (y al volver a primer plano) se vuelve a leer
+// de Supabase, para que una prueba recién metida —o metida en otro dispositivo—
+// aparezca sin tener que recargar la página. Un flag evita recargas solapadas.
+let _histRefreshing = false;
+async function _histRefreshData(){
+  if(_histRefreshing) return;
+  _histRefreshing = true;
+  try{
+    _cachedHistory = null;   // fuerza re-lectura desde Supabase en _ensureHistory
+    if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
+    if(typeof _yearRiderIdxKey!=='undefined'){ _yearRiderIdxKey=null; _yearRiderIdxCache=null; }
+    if(typeof _prFiltersReady!=='undefined') _prFiltersReady=false;
+    if(typeof _trendFiltersReady!=='undefined') _trendFiltersReady=false;
+    if(typeof renderHistory==='function') await renderHistory();
+  }catch(_){}
+  finally{ _histRefreshing = false; }
+}
+let _histAutoRefreshBound = false;
+function _histSetupAutoRefresh(){
+  if(_histAutoRefreshBound) return;
+  _histAutoRefreshBound = true;
+  const isHistActive = ()=>{ const v=document.querySelector('.spa-view.active'); return !!(v && v.id==='view-historial'); };
+  window.addEventListener('pageshow', e=>{ if(e.persisted && isHistActive()) _histRefreshData(); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && isHistActive()) _histRefreshData(); });
+}
+
 async function renderHistory(){
+  _histSetupAutoRefresh();   // enlaza el auto-refresco (una sola vez)
   const box=$('historyBox');
   if(!box) return;
   box.innerHTML='<p style="color:#9ca3af;text-align:center;padding:30px">⏳ Cargando desde Supabase...</p>';
