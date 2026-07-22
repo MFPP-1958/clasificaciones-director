@@ -757,6 +757,7 @@ function rpRenderSubtitulo() {
   if (rpEstado.modo === 'challenge') partes.push('Challenge CV Oficial');
   else if (rpEstado.vista === 'equipos') partes.push('Equipos');
   else if (rpEstado.vista === 'comunidades') partes.push('Comunidades');
+  else if (rpEstado.vista === 'podios') partes.push('Podios');
   if (rpEstado.region === RP_REGION_SIN) partes.push('Sin comunidad asignada');
   else if (rpEstado.region) partes.push(rpEstado.regionDisplay || '');
   partes.push('Temporada ' + rpEstado.temporada);
@@ -3717,6 +3718,71 @@ function rpRenderTablaComunidades(cat) {
   cont.innerHTML = html;
 }
 
+// Vista "Podios": corredores que han subido al podio (1º, 2º o 3º) en CUALQUIER
+// prueba de la categoría. Una fila por corredor, con su medallero (oros/platas/
+// bronces contados sobre TODOS sus resultados, no solo los que puntúan), equipo,
+// comunidad y puntos del ranking. Orden tipo medallero (más oros primero).
+function rpRenderTablaPodios(cat) {
+  const cont = document.querySelector('.rp-tabla-scroll');
+  const info = document.getElementById('rp-challenge-info');
+  info.style.display = 'none'; info.innerHTML = '';
+  // Población filtrada (respeta comunidad/subcategoría/equipo) y su puesto en el
+  // ranking general de la categoría (para el tooltip «Gen.»).
+  const pobl = rpPoblacion(cat);
+  const rankGeneral = new Map();
+  pobl.forEach((c, i) => rankGeneral.set(c.clave, i + 1));
+  const filtro = rpNormalizarTexto(rpEstado.busqueda);
+  const conPodio = [];
+  for (const c of pobl) {
+    let oro = 0, plata = 0, bronce = 0;
+    for (const r of (c.resultados || [])) {
+      if (r.pos === 1) oro++;
+      else if (r.pos === 2) plata++;
+      else if (r.pos === 3) bronce++;
+    }
+    if (!(oro + plata + bronce)) continue;
+    if (filtro &&
+        !rpNormalizarTexto(c.nombre).includes(filtro) &&
+        !rpNormalizarTexto(c.equipo).includes(filtro)) continue;
+    conPodio.push({ c, oro, plata, bronce, gen: rankGeneral.get(c.clave) || 1e9 });
+  }
+  // Medallero: más oros, luego platas, luego bronces; empates por puntos y puesto general.
+  conPodio.sort((a, b) =>
+    (b.oro - a.oro) || (b.plata - a.plata) || (b.bronce - a.bronce) ||
+    ((b.c.puntosTotales || 0) - (a.c.puntosTotales || 0)) || (a.gen - b.gen));
+  if (!conPodio.length) {
+    cont.innerHTML = '<p class="rp-vacio">Ningún corredor de <b>' + rpEscapar(cat.label) +
+      '</b> ha subido al podio (1º, 2º o 3º)' + (filtro ? ' con esa búsqueda' : ' todavía') + '.</p>';
+    rpRenderSubtitulo(); rpGuardarPrefs();
+    return;
+  }
+  const medalla = (n, e) => '<span class="rp-pod-m' + (n ? '' : ' rp-pod-0') + '">' + e + ' ' + n + '</span>';
+  const filas = conPodio.map((p, i) => {
+    const c = p.c;
+    return '<tr class="rp-fila" data-clave="' + rpEscapar(c.clave) + '" tabindex="0" role="button" aria-label="Ver ficha de ' + rpEscapar(c.nombre) + '">' +
+      '<td class="rp-c rp-rank">' + (i + 1) + '</td>' +
+      '<td class="rp-col-nombre"><span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
+      (c.subcatPrincipal ? ' <span class="rp-badge-cat">' + rpEscapar(c.subcatPrincipal) + '</span>' : '') + '</td>' +
+      '<td class="rp-pod-medallas">' + medalla(p.oro, '🥇') + medalla(p.plata, '🥈') + medalla(p.bronce, '🥉') + '</td>' +
+      '<td class="rp-col-eqmodal">' + (c.equipo ? rpEscapar(c.equipo) : '') + '</td>' +
+      '<td class="rp-col-eqmodal rp-pod-com">' + (c.region ? (rpInsigniaRegion(c.region) + ' ' + rpEscapar(c.region)) : '<span class="rp-pod-0">—</span>') + '</td>' +
+      '<td class="rp-c rp-pts">' + rpFormatearPuntos(c.puntosTotales) + '</td></tr>';
+  }).join('');
+  cont.innerHTML =
+    '<div class="rp-tabla-historial"><table class="rp-tabla-podios"><thead><tr>' +
+    '<th class="rp-c">#</th>' +
+    '<th>Ciclista</th>' +
+    '<th title="Podios conseguidos en cualquier prueba: oros (1º), platas (2º) y bronces (3º)">🏅 Podios <span class="rp-pod-leyenda">🥇🥈🥉</span></th>' +
+    '<th class="rp-col-eqmodal">Equipo</th>' +
+    '<th class="rp-col-eqmodal">Comunidad</th>' +
+    '<th class="rp-c">Pts</th>' +
+    '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
+    '<p class="rp-nota">Corredores de <b>' + rpEscapar(cat.label) + '</b> que han hecho <b>podio</b> (1º, 2º o 3º) en <b>cualquier prueba</b> (' +
+    conPodio.length + '). Ordenados por <b>medallero</b> (más oros primero; empates por platas, bronces y puntos). Pulsa una fila para ver la ficha. «Pts» = puntos en el ranking.</p>';
+  rpRenderSubtitulo();
+  rpGuardarPrefs();
+}
+
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const info = document.getElementById('rp-challenge-info');
@@ -3736,6 +3802,7 @@ function rpRenderTabla() {
   info.innerHTML = '';
   if (rpEstado.vista === 'equipos') { rpRenderTablaEquipos(cat); return; }
   if (rpEstado.vista === 'comunidades') { rpRenderTablaComunidades(cat); return; }
+  if (rpEstado.vista === 'podios') { rpRenderTablaPodios(cat); return; }
 
   const filtro = rpNormalizarTexto(rpEstado.busqueda);
 
@@ -3856,7 +3923,7 @@ function rpCargarPrefs() {
     if (typeof p.region === 'string') rpEstado.region = p.region;
     if (typeof p.subcategoria === 'string') rpEstado.subcategoria = p.subcategoria;
     if (typeof p.equipo === 'string') rpEstado.equipo = p.equipo;
-    if (p.vista === 'corredores' || p.vista === 'equipos' || p.vista === 'comunidades') rpEstado.vista = p.vista;
+    if (p.vista === 'corredores' || p.vista === 'equipos' || p.vista === 'comunidades' || p.vista === 'podios') rpEstado.vista = p.vista;
     if (p.modo === 'mfpp' || p.modo === 'challenge') rpEstado.modo = p.modo;
   } catch (_) { /* almacenamiento no disponible o corrupto */ }
 }
@@ -3918,7 +3985,7 @@ function rpAplicarDeeplink(get) {
     rpRenderTabla();
   }
   const vistaParam = get('vista');
-  if (vistaParam === 'equipos' || vistaParam === 'corredores') {
+  if (vistaParam === 'equipos' || vistaParam === 'corredores' || vistaParam === 'comunidades' || vistaParam === 'podios') {
     rpEstado.pantalla = 'ranking';
     rpEstado.vista = vistaParam;
     rpRenderPantalla();

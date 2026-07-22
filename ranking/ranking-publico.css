@@ -1383,6 +1383,32 @@ td.rp-cmp-gana { color: var(--rp-color-primario); }
 .rp-com-gen { color: var(--rp-color-suave); font-weight: 700; }
 @media (max-width: 560px) { .rp-com-meta { font-size: 0.78rem; } .rp-com-nombre { font-size: 0.9rem; } }
 
+/* Vista "Podios": una fila por corredor con su medallero (🥇🥈🥉) */
+.rp-tabla-podios { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.rp-tabla-podios thead th {
+  background: var(--rp-color-fondo-alt); color: var(--rp-color-primario);
+  font-weight: 800; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .03em;
+  padding: 9px 10px; text-align: left; border-bottom: 2px solid var(--rp-color-borde); white-space: nowrap;
+}
+.rp-tabla-podios th.rp-c, .rp-tabla-podios td.rp-c { text-align: center; }
+.rp-tabla-podios tbody td { padding: 9px 10px; border-bottom: 1px solid var(--rp-color-borde); vertical-align: middle; }
+.rp-tabla-podios tbody tr { cursor: pointer; }
+.rp-tabla-podios tbody tr:hover, .rp-tabla-podios tbody tr:focus-visible { background: var(--rp-color-fondo-alt); outline: none; }
+.rp-tabla-podios tbody tr:hover .rp-nombre, .rp-tabla-podios tbody tr:focus-visible .rp-nombre { text-decoration: underline; }
+.rp-tabla-podios .rp-pod-com { color: var(--rp-color-suave); white-space: nowrap; }
+.rp-tabla-podios tbody tr:nth-child(1) .rp-rank { color: #b45309; }
+.rp-pod-medallas { white-space: nowrap; font-weight: 700; }
+.rp-pod-m { display: inline-block; margin-right: 9px; font-variant-numeric: tabular-nums; }
+.rp-pod-m:last-child { margin-right: 0; }
+.rp-pod-0 { opacity: .3; font-weight: 500; }
+.rp-pod-leyenda { font-size: .82em; opacity: .6; }
+@media (max-width: 560px) {
+  .rp-tabla-podios .rp-col-eqmodal { display: none; }
+  .rp-tabla-podios { font-size: 0.82rem; }
+  .rp-tabla-podios thead th, .rp-tabla-podios tbody td { padding: 7px 5px; }
+  .rp-pod-m { margin-right: 6px; }
+}
+
 /* Clasificación por equipos de una prueba (pestaña "Equipos" del modal) */
 .rp-tabla-eqprueba .rp-eq-suma { white-space: nowrap; color: var(--rp-color-suave); }
 .rp-tabla-eqprueba .rp-eq-suma b { color: var(--rp-color-primario); font-size: 1.05em; }
