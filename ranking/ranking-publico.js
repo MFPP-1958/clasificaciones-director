@@ -686,10 +686,11 @@ const rpEstado = {
   equipo: '',         // equipo normalizado; '' = todos
   vista: 'corredores',// 'corredores' | 'equipos' (ranking individual o por equipos)
   modo: 'mfpp',       // 'mfpp' (rendimiento) | 'challenge' (Challenge CV oficial)
-  // Vista principal: al entrar se muestran las últimas carreras con sus
-  // podios (portada estilo FirstCycling); el ranking queda a un toque.
-  // A propósito NO se guarda en preferencias: cada visita arranca aquí.
-  pantalla: 'carreras',   // 'carreras' | 'ranking'
+  // Vista principal: al entrar se muestra el Top 10 del ranking (lo que la
+  // gente quiere ver primero); el ranking completo y las últimas carreras
+  // quedan a un toque. A propósito NO se guarda en preferencias: cada visita
+  // arranca aquí.
+  pantalla: 'top10',   // 'top10' | 'ranking' | 'carreras'
   ultimosVisibles: 10,    // tarjetas de carrera mostradas ("Ver más" amplía)
   _ultimosClave: null,    // temporada|categoría del último render de tarjetas
   modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
