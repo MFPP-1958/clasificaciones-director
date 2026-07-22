@@ -2164,14 +2164,19 @@ async function rpCompartirBlob(blob, d) {
   const file = new File([blob], 'ranking-mfpp' + (d.puesto ? '-' + d.puesto : '') + '.png', { type: 'image/png' });
   const texto = (d.puesto ? `Soy ${d.puesto}º` : 'Estoy') + ` en el Ranking MFPP ${d.temporada} 🏆` +
     (d.puntos != null ? ` — ${d.puntos} pts` : '') + '\nmfppcycling.com/ranking';
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+  const esMovil = rpEsMovilDescarga();
+  // 1) Web Share con archivo (móvil): menú nativo para compartir la imagen.
+  if (esMovil && navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], text: texto }); } catch (_) { /* cancelado por el usuario */ }
     return 'compartido';
   }
-  // Embebido en una red social: delegar el compartir en la ventana superior
-  // (el iframe no puede compartir; la página de arriba sí).
-  if (rpDelegarShareAlPadre(file, file.name, texto)) return 'delegado';
+  // 2) Embebido en móvil/red social: delegar en la ventana superior (el iframe no
+  //    puede compartir; la página de arriba sí). En ESCRITORIO no se delega: se
+  //    descarga directa (paso 4), que es lo que el usuario espera al "guardar".
+  if ((esMovil || rpEsInAppBrowser()) && rpDelegarShareAlPadre(file, file.name, texto)) return 'delegado';
+  // 3) In-app sin poder delegar → aviso de rescate.
   if (rpEsInAppBrowser()) { rpAvisoInApp(); return 'rescate'; }
+  // 4) Escritorio / navegador normal → descarga directa de la imagen.
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = file.name;
@@ -2185,6 +2190,22 @@ async function rpCompartirBlob(blob, d) {
 function rpEsInAppBrowser() {
   const ua = navigator.userAgent || '';
   return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|Snapchat|TikTok|Pinterest|MicroMessenger/i.test(ua);
+}
+
+// ¿Navegador donde el <a download>/doc.save se ignoran y hay que recurrir a Web
+// Share? = teléfonos y tablets SIN ratón. Un equipo con puntero FINO (ratón o
+// trackpad) es ESCRITORIO aunque tenga pantalla táctil: ahí la descarga directa
+// funciona, así que NO debe tratarse como móvil (si no, se delega en la ventana
+// superior y —sin Web Share de archivos en escritorio— salta el aviso erróneo de
+// "abrir en el navegador").
+function rpEsMovilDescarga() {
+  const mm = window.matchMedia;
+  const fino = !!(mm && mm('(pointer: fine)').matches);
+  const soloTactil = !!(mm && mm('(any-pointer: coarse)').matches) && !fino;
+  const uaMovil = /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent || '');
+  const iPad = /iPad/i.test(navigator.userAgent || '') ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent || '') && !fino);
+  return uaMovil || iPad || soloTactil;
 }
 
 // Aviso de rescate cuando la descarga se bloquea (in-app browser). Usamos alert
@@ -2209,8 +2230,7 @@ function rpDelegarShareAlPadre(file, filename, texto) {
 }
 
 async function rpEntregarPDF(doc, filename, texto) {
-  const esMovil = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ||
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  const esMovil = rpEsMovilDescarga();
   const inApp = rpEsInAppBrowser();
   let blob = null;
   try { blob = doc.output('blob'); } catch (_) { /* seguimos sin blob */ }

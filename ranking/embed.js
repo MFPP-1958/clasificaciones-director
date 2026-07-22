@@ -70,11 +70,35 @@
       try {
         if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
           navigator.share({ files: [file], title: filename || '', text: texto || '' })
-            .catch(function (e) { if (!(e && e.name === 'AbortError')) avisoAbrirEnNavegador(); });
+            .catch(function (e) { if (!(e && e.name === 'AbortError')) sinShare(file, filename); });
           return;
         }
-      } catch (e) { /* seguimos al aviso */ }
-      avisoAbrirEnNavegador();
+      } catch (e) { /* seguimos sin Web Share */ }
+      sinShare(file, filename);
+    }
+    // Sin Web Share: en ESCRITORIO (y cualquier navegador normal) descargamos el
+    // archivo directamente desde esta ventana superior — aquí el <a download> SÍ
+    // funciona aunque el iframe no pudiera. Solo en navegadores in-app reales
+    // (Instagram/Facebook…), que bloquean las descargas, mostramos el aviso.
+    function esNavegadorInApp() {
+      return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|Snapchat|TikTok|Pinterest|MicroMessenger/i.test(navigator.userAgent || '');
+    }
+    function sinShare(file, filename) {
+      if (esNavegadorInApp()) { avisoAbrirEnNavegador(); return; }
+      try {
+        var url = URL.createObjectURL(file);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'descarga.pdf';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () {
+          try { document.body.removeChild(a); } catch (e) { /* nada */ }
+          URL.revokeObjectURL(url);
+        }, 1500);
+      } catch (e) {
+        avisoAbrirEnNavegador();
+      }
     }
     function avisoAbrirEnNavegador() {
       try {
