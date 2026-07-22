@@ -97,6 +97,7 @@
         <div id="rp-pantalla" role="tablist" aria-label="Sección">
           <button type="button" role="tab" data-pantalla="carreras" class="rp-nav-tab rp-activa" aria-selected="true">🏁 Últimas carreras</button>
           <button type="button" role="tab" data-pantalla="ranking" class="rp-nav-tab" aria-selected="false">🏆 Ranking</button>
+          <button type="button" role="tab" data-pantalla="top10" class="rp-nav-tab" aria-selected="false">⭐ Top 10</button>
         </div>
         <!-- Opciones que solo aplican dentro de la sección Ranking -->
         <div id="rp-solo-ranking" hidden>
@@ -133,6 +134,9 @@
 
       <!-- Portada: tarjetas de últimas carreras con podio (vista por defecto) -->
       <div id="rp-ultimos" style="display:none"></div>
+
+      <!-- Top 10: tarjetas de los 10 mejores del ranking con sus 3 mejores actuaciones -->
+      <div id="rp-top10" style="display:none"></div>
 
       <div id="rp-challenge-info" style="display:none"></div>
 

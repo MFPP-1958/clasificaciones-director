@@ -806,8 +806,11 @@ function rpRenderPantalla() {
     b.setAttribute('aria-pressed', String(b.dataset.pantalla === rpEstado.pantalla));
   });
   const esRanking = rpEstado.pantalla === 'ranking';
+  const esTop10 = rpEstado.pantalla === 'top10';
+  const esCarreras = rpEstado.pantalla === 'carreras';
   document.getElementById('rp-solo-ranking').hidden = !esRanking;
-  document.getElementById('rp-ultimos').style.display = esRanking ? 'none' : '';
+  document.getElementById('rp-ultimos').style.display = esCarreras ? '' : 'none';
+  document.getElementById('rp-top10').style.display = esTop10 ? '' : 'none';
   document.querySelector('.rp-tabla-scroll').style.display = esRanking ? '' : 'none';
   document.querySelector('.rp-pie').style.display = esRanking ? '' : 'none';
   // El aviso del modo Challenge lo gestiona rpRenderTabla dentro del ranking
@@ -921,6 +924,63 @@ function rpRenderUltimos() {
     (todas.length > visibles.length
       ? `<button type="button" class="rp-ver-mas">Ver más carreras (${todas.length - visibles.length} anteriores)</button>`
       : '');
+}
+
+// ── Pantalla "⭐ Top 10": escaparate de los 10 mejores del ranking ──
+// Mismas tarjetas que la portada, pero cada una es un corredor (los 10 primeros
+// del ranking de la categoría activa) con sus 3 MEJORES actuaciones (los tres
+// resultados que más puntos le dan). Respeta comunidad/subcategoría/equipo.
+function rpRenderTop10() {
+  const cont = document.getElementById('rp-top10');
+  if (!cont) return;
+  if (rpEstado.todasCategorias) {
+    cont.innerHTML = '<p class="rp-vacio">El Top 10 es <b>por categoría</b>: elige una (Cadetes, Juveniles, Sub-23…) en las pestañas de arriba para ver sus 10 mejores.</p>';
+    return;
+  }
+  const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
+  if (!cat) { cont.innerHTML = ''; return; }
+  const pobl = rpPoblacion(cat).slice(0, 10);
+  if (!pobl.length) {
+    cont.innerHTML = '<p class="rp-vacio">Aún no hay corredores en el ranking de esta categoría con los filtros actuales.</p>';
+    return;
+  }
+  const html = '<div class="rp-top10-grid">' + pobl.map((c, i) => {
+    const pos = i + 1;
+    const mejores = (c.resultados || [])
+      .filter(r => r.puntos > 0 && Number.isFinite(r.pos) && r.pos >= 1)
+      .sort((a, b) => b.puntos - a.puntos)
+      .slice(0, 3);
+    const filas = mejores.map(r => {
+      const medalla = (r.pos <= 3) ? '<span class="rp-t10-medalla">' + RP_MEDALLAS_PODIO[r.pos - 1] + '</span>' : '';
+      return '<li>' +
+        '<span class="rp-t10-pos">' + medalla + r.pos + 'º</span>' +
+        '<span class="rp-t10-prueba">' + rpEscapar(r.carrera || '') + '</span>' +
+        '<span class="rp-t10-rpts">' + rpFormatearPuntos(r.puntos) + ' pts</span>' +
+        '</li>';
+    }).join('');
+    const region = c.region ? (rpInsigniaRegion(c.region) + ' ' + rpEscapar(c.region)) : '';
+    const meta = [c.equipo ? rpEscapar(c.equipo) : '', region].filter(Boolean).join(' · ');
+    return '<article class="rp-t10-card' + (pos <= 3 ? ' rp-t10-podio rp-t10-podio-' + pos : '') +
+      '" data-corredor="' + rpEscapar(c.clave) + '" tabindex="0" role="button" aria-label="Ver ficha de ' + rpEscapar(c.nombre) + '">' +
+      '<header class="rp-t10-cab">' +
+      '<span class="rp-t10-rank">' + pos + 'º</span>' +
+      '<span class="rp-t10-id">' +
+      '<span class="rp-t10-nombre">' + rpEscapar(c.nombre) + '</span>' +
+      (c.subcatPrincipal ? ' <span class="rp-badge-cat">' + rpEscapar(c.subcatPrincipal) + '</span>' : '') +
+      (meta ? '<span class="rp-t10-meta">' + meta + '</span>' : '') +
+      '</span>' +
+      '<span class="rp-t10-total">' + rpFormatearPuntos(c.puntosTotales) + '<small>pts</small></span>' +
+      '</header>' +
+      (filas ? '<ul class="rp-t10-mejores">' + filas + '</ul>'
+             : '<p class="rp-t10-sinres">Sin resultados puntuables todavía.</p>') +
+      '<span class="rp-t10-cta">Ver ficha completa ➔</span>' +
+      '</article>';
+  }).join('') + '</div>' +
+    '<p class="rp-nota">Los <b>10 primeros</b> del ranking de <b>' + rpEscapar(cat.label) +
+    '</b> con sus <b>3 mejores actuaciones</b> de la temporada' +
+    (rpEstado.regionDisplay ? ' (' + rpEscapar(rpEstado.regionDisplay) + ')' : '') +
+    '. Pulsa una tarjeta para ver la ficha completa del corredor.</p>';
+  cont.innerHTML = html;
 }
 
 // ── Buscador global (estilo FirstCycling): corredores, equipos y pruebas ──
@@ -3909,6 +3969,7 @@ function rpRenderTodo() {
   rpRenderVista();
   rpRenderCalendario(); // próximas pruebas (independiente de los filtros)
   rpRenderUltimos();    // depende solo de la temporada
+  rpRenderTop10();      // el escaparate Top 10 depende de temporada+categoría+filtros
   rpRenderRegiones();   // antes que las pestañas: valida el filtro de comunidad
   rpRenderPestanas();   // y sus contadores dependen de él
   rpRenderSubcats();
@@ -4013,10 +4074,11 @@ function rpAplicarDeeplink(get) {
     rpRenderTabla();
   }
   const pantallaParam = get('pantalla');
-  if (pantallaParam === 'ranking' || pantallaParam === 'carreras') {
+  if (pantallaParam === 'ranking' || pantallaParam === 'carreras' || pantallaParam === 'top10') {
     rpEstado.pantalla = pantallaParam;
     rpRenderPantalla();
     if (pantallaParam === 'ranking') rpRenderTabla();
+    else if (pantallaParam === 'top10') rpRenderTop10();
   }
   let abrioModal = false;
   const carreraParam = get('carrera');
@@ -4151,11 +4213,13 @@ document.addEventListener('DOMContentLoaded', () => {
     rpRenderEquipos();
     rpRenderCalendario();  // próximas pruebas de la nueva categoría
     rpRenderUltimos();     // últimos resultados de la nueva categoría
+    rpRenderTop10();
     rpRenderTabla();
   });
 
   document.getElementById('rp-equipo').addEventListener('change', e => {
     rpEstado.equipo = e.target.value;
+    rpRenderTop10();
     rpRenderTabla();
   });
 
@@ -4169,6 +4233,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rpRenderEquipos();
       rpRenderCalendario();
       rpRenderUltimos();
+      rpRenderTop10();
       rpRenderTabla();
       return;
     }
@@ -4186,6 +4251,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rpRenderCalendario();
       rpRenderUltimos();
     }
+    rpRenderTop10();
     rpRenderTabla();
   });
 
@@ -4202,6 +4268,7 @@ document.addEventListener('DOMContentLoaded', () => {
       : '';
     rpRenderPestanas();
     rpRenderUltimos(); // la portada de carreras también respeta la comunidad
+    rpRenderTop10();
     rpRenderTabla();
   });
 
@@ -4283,6 +4350,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rpRenderPantalla();
     rpRenderPestanas(); // los contadores cambian de significado (pruebas ↔ corredores)
     if (rpEstado.pantalla === 'ranking') rpRenderTabla();
+    else if (rpEstado.pantalla === 'top10') rpRenderTop10();
     else rpRenderUltimos();
   });
 
@@ -4375,6 +4443,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   document.getElementById('rp-ultimos').addEventListener('click', alClicEnlace);
+  document.getElementById('rp-top10').addEventListener('click', alClicEnlace);
   document.getElementById('rp-calendario').addEventListener('click', alClicEnlace);
 
   // Cerrar la ficha: botón X, toque fuera del cuadro, o tecla Escape.

@@ -669,6 +669,72 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
   text-align: left;
 }
 .rp-carrera-cta:hover, .rp-carrera-cta:focus-visible { text-decoration: underline; outline: none; }
+
+/* Pantalla "⭐ Top 10": tarjetas de los 10 mejores con sus 3 mejores actuaciones */
+.rp-top10-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  padding: 10px 0 4px;
+}
+.rp-t10-card {
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 12px;
+  padding: 12px 14px 10px;
+  background: var(--rp-color-fondo);
+  cursor: pointer;
+  transition: box-shadow .15s, transform .15s, border-color .15s;
+  display: flex;
+  flex-direction: column;
+}
+.rp-t10-card:hover, .rp-t10-card:focus-visible {
+  box-shadow: 0 4px 14px rgba(0,0,0,.08);
+  border-color: var(--rp-color-primario);
+  outline: none;
+}
+.rp-t10-podio { border-left: 4px solid var(--rp-color-acento); }
+.rp-t10-podio-1 { border-left-color: #f0b400; }
+.rp-t10-podio-2 { border-left-color: #9aa2a9; }
+.rp-t10-podio-3 { border-left-color: #c07b45; }
+.rp-t10-cab { display: flex; align-items: flex-start; gap: 10px; }
+.rp-t10-rank {
+  flex: 0 0 auto; min-width: 30px; height: 30px; padding: 0 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--rp-color-primario); color: #fff;
+  font-weight: 800; font-size: .85rem;
+}
+.rp-t10-podio-1 .rp-t10-rank { background: #e8ac00; }
+.rp-t10-podio-2 .rp-t10-rank { background: #90979e; }
+.rp-t10-podio-3 .rp-t10-rank { background: #bd7440; }
+.rp-t10-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.rp-t10-nombre { font-weight: 800; color: var(--rp-color-primario); font-size: 1.02rem; line-height: 1.25; }
+.rp-t10-meta { font-size: .78rem; color: var(--rp-color-suave); margin-top: 2px; }
+.rp-t10-total {
+  flex: 0 0 auto; text-align: right; font-weight: 800; color: var(--rp-color-acento);
+  font-size: 1.15rem; line-height: 1; white-space: nowrap;
+}
+.rp-t10-total small { display: block; font-size: .6rem; font-weight: 700; color: var(--rp-color-suave); margin-top: 3px; }
+.rp-t10-mejores {
+  list-style: none; margin: 10px 0 8px; padding: 8px 0 0;
+  border-top: 1px dashed var(--rp-color-borde);
+  display: flex; flex-direction: column; gap: 5px;
+}
+.rp-t10-mejores li { display: flex; align-items: baseline; gap: 8px; font-size: .84rem; }
+.rp-t10-pos { flex: 0 0 auto; min-width: 44px; font-weight: 700; color: var(--rp-color-primario); display: inline-flex; align-items: baseline; gap: 3px; }
+.rp-t10-medalla { font-size: .95em; }
+.rp-t10-prueba { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-t10-rpts { flex: 0 0 auto; color: var(--rp-color-suave); white-space: nowrap; }
+.rp-t10-sinres {
+  margin: 10px 0 8px; padding: 8px 0 0;
+  border-top: 1px dashed var(--rp-color-borde);
+  font-size: .82rem; color: var(--rp-color-suave);
+}
+.rp-t10-cta { margin-top: auto; font-size: .82rem; font-weight: 700; color: var(--rp-color-primario); }
+.rp-t10-card:hover .rp-t10-cta, .rp-t10-card:focus-visible .rp-t10-cta { text-decoration: underline; }
+@media (max-width: 560px) {
+  .rp-top10-grid { grid-template-columns: 1fr; gap: 8px; padding: 8px 0 2px; }
+}
+
 /* Filtro por tipo de prueba en la portada de Últimas carreras */
 .rp-tipo-filtro {
   grid-column: 1 / -1;
