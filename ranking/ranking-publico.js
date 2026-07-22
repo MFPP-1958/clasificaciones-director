@@ -759,6 +759,7 @@ function rpRenderSubtitulo() {
   else if (rpEstado.vista === 'equipos') partes.push('Equipos');
   else if (rpEstado.vista === 'comunidades') partes.push('Comunidades');
   else if (rpEstado.vista === 'podios') partes.push('Podios');
+  else if (rpEstado.vista === 'rendimiento') partes.push('Rendimiento');
   if (rpEstado.region === RP_REGION_SIN) partes.push('Sin comunidad asignada');
   else if (rpEstado.region) partes.push(rpEstado.regionDisplay || '');
   partes.push('Temporada ' + rpEstado.temporada);
@@ -3864,6 +3865,81 @@ function rpRenderTablaPodios(cat) {
   rpGuardarPrefs();
 }
 
+// Vista "Rendimiento": ordena por la MEDIA de puntos por prueba AJUSTADA por el
+// nº de pruebas (media bayesiana / encogimiento hacia la media). Complementa al
+// ranking oficial —que es acumulativo y premia el volumen— sacando a la luz a los
+// corredores buenos POR CARRERA aunque hayan corrido poco, sin que una sola
+// carrera afortunada dispare a nadie. Nivel = (C·m + Σpuntos) / (C + n), donde
+// m = media general de la categoría (prior) y C = "carreras fantasma" de confianza.
+const RP_REND_C = 5;
+function rpRenderTablaRendimiento(cat) {
+  const cont = document.querySelector('.rp-tabla-scroll');
+  const info = document.getElementById('rp-challenge-info');
+  info.style.display = 'none'; info.innerHTML = '';
+  const pobl = rpPoblacion(cat);
+  const rankGeneral = new Map();
+  pobl.forEach((c, i) => rankGeneral.set(c.clave, i + 1));
+  const filtro = rpNormalizarTexto(rpEstado.busqueda);
+  // 1) nº de pruebas terminadas (posición válida) y suma de sus puntos.
+  const datos = [];
+  let totalN = 0, totalSuma = 0;
+  for (const c of pobl) {
+    let n = 0, suma = 0;
+    for (const r of (c.resultados || [])) {
+      if (Number.isFinite(r.pos) && r.pos >= 1) { n++; suma += (r.puntos || 0); }
+    }
+    if (n < 1) continue;
+    totalN += n; totalSuma += suma;
+    datos.push({ c, n, suma, gen: rankGeneral.get(c.clave) || 1e9 });
+  }
+  if (!datos.length || totalN === 0) {
+    cont.innerHTML = '<p class="rp-vacio">Aún no hay datos de rendimiento para <b>' + rpEscapar(cat.label) + '</b> con los filtros actuales.</p>';
+    rpRenderSubtitulo(); rpGuardarPrefs();
+    return;
+  }
+  // 2) media general de la categoría (prior) y nivel ajustado de cada corredor.
+  const m = totalSuma / totalN;
+  datos.forEach(d => { d.nivel = (RP_REND_C * m + d.suma) / (RP_REND_C + d.n); });
+  // 3) ordenar por nivel; empates por nº de pruebas y por puntos del ranking oficial.
+  datos.sort((a, b) => (b.nivel - a.nivel) || (b.n - a.n) || ((b.c.puntosTotales || 0) - (a.c.puntosTotales || 0)));
+  datos.forEach((d, i) => { d.perfPos = i + 1; });
+  // 4) el buscador filtra la tabla, pero el nº (#) mantiene el puesto real de rendimiento.
+  const visibles = datos.filter(d => !filtro ||
+    rpNormalizarTexto(d.c.nombre).includes(filtro) || rpNormalizarTexto(d.c.equipo).includes(filtro));
+  if (!visibles.length) {
+    cont.innerHTML = '<p class="rp-vacio">Sin corredores para esa búsqueda.</p>';
+    rpRenderSubtitulo(); rpGuardarPrefs();
+    return;
+  }
+  const filas = visibles.map(d => {
+    const c = d.c;
+    const infra = (d.gen < 1e9 && d.gen - d.perfPos >= 5);
+    const gem = infra ? ' <span class="rp-rend-gem" title="Rinde muy por encima de su puesto en el ranking oficial (con relativamente pocas pruebas)">💎</span>' : '';
+    return '<tr class="rp-fila" data-clave="' + rpEscapar(c.clave) + '" tabindex="0" role="button" aria-label="Ver ficha de ' + rpEscapar(c.nombre) + '">' +
+      '<td class="rp-c rp-rank">' + d.perfPos + '</td>' +
+      '<td class="rp-col-nombre"><span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
+      (c.subcatPrincipal ? ' <span class="rp-badge-cat">' + rpEscapar(c.subcatPrincipal) + '</span>' : '') + '</td>' +
+      '<td class="rp-c rp-rend-nivel">' + d.nivel.toFixed(1) + '</td>' +
+      '<td class="rp-c">' + d.n + '</td>' +
+      '<td class="rp-c rp-rend-gen">' + (d.gen < 1e9 ? d.gen + 'º' : '—') + gem + '</td>' +
+      '<td class="rp-col-eqmodal">' + (c.equipo ? rpEscapar(c.equipo) : '') + '</td>' +
+      '<td class="rp-col-eqmodal">' + (c.region ? (rpInsigniaRegion(c.region) + ' ' + rpEscapar(c.region)) : '<span class="rp-pod-0">—</span>') + '</td></tr>';
+  }).join('');
+  cont.innerHTML =
+    '<div class="rp-tabla-historial"><table class="rp-tabla-podios rp-tabla-rend"><thead><tr>' +
+    '<th class="rp-c">#</th>' +
+    '<th>Ciclista</th>' +
+    '<th class="rp-c" title="Media de puntos por prueba AJUSTADA por el nº de pruebas: a quien ha corrido poco se le acerca a la media general hasta que lo demuestre en más carreras. Premia la calidad por carrera, no el volumen.">🎯 Nivel</th>' +
+    '<th class="rp-c" title="Nº de pruebas terminadas que cuentan para la media">Pruebas</th>' +
+    '<th class="rp-c" title="Su puesto en el ranking oficial por puntos. 💎 = rinde muy por encima de ese puesto.">Gen.</th>' +
+    '<th class="rp-col-eqmodal">Equipo</th>' +
+    '<th class="rp-col-eqmodal">Comunidad</th>' +
+    '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
+    '<p class="rp-nota"><b>Ranking de rendimiento</b> de <b>' + rpEscapar(cat.label) + '</b>: ordena por la <b>media de puntos por prueba ajustada</b> (media bayesiana, C=' + RP_REND_C + '). Así un corredor bueno con pocas pruebas no queda sepultado por quien solo acumula muchas carreras, pero hace falta mantener el nivel en <b>varias</b> pruebas para subir. «Nivel» = índice ajustado · «Pruebas» = carreras que cuentan · «Gen.» = puesto en el ranking oficial (💎 = rinde por encima de su puesto). <b>No sustituye al ranking oficial: lo complementa.</b></p>';
+  rpRenderSubtitulo();
+  rpGuardarPrefs();
+}
+
 function rpRenderTabla() {
   const cont = document.querySelector('.rp-tabla-scroll');
   const info = document.getElementById('rp-challenge-info');
@@ -3884,6 +3960,7 @@ function rpRenderTabla() {
   if (rpEstado.vista === 'equipos') { rpRenderTablaEquipos(cat); return; }
   if (rpEstado.vista === 'comunidades') { rpRenderTablaComunidades(cat); return; }
   if (rpEstado.vista === 'podios') { rpRenderTablaPodios(cat); return; }
+  if (rpEstado.vista === 'rendimiento') { rpRenderTablaRendimiento(cat); return; }
 
   const filtro = rpNormalizarTexto(rpEstado.busqueda);
 
@@ -4005,7 +4082,7 @@ function rpCargarPrefs() {
     if (typeof p.region === 'string') rpEstado.region = p.region;
     if (typeof p.subcategoria === 'string') rpEstado.subcategoria = p.subcategoria;
     if (typeof p.equipo === 'string') rpEstado.equipo = p.equipo;
-    if (p.vista === 'corredores' || p.vista === 'equipos' || p.vista === 'comunidades' || p.vista === 'podios') rpEstado.vista = p.vista;
+    if (p.vista === 'corredores' || p.vista === 'equipos' || p.vista === 'comunidades' || p.vista === 'podios' || p.vista === 'rendimiento') rpEstado.vista = p.vista;
     if (p.modo === 'mfpp' || p.modo === 'challenge') rpEstado.modo = p.modo;
   } catch (_) { /* almacenamiento no disponible o corrupto */ }
 }
@@ -4067,7 +4144,7 @@ function rpAplicarDeeplink(get) {
     rpRenderTabla();
   }
   const vistaParam = get('vista');
-  if (vistaParam === 'equipos' || vistaParam === 'corredores' || vistaParam === 'comunidades' || vistaParam === 'podios') {
+  if (vistaParam === 'equipos' || vistaParam === 'corredores' || vistaParam === 'comunidades' || vistaParam === 'podios' || vistaParam === 'rendimiento') {
     rpEstado.pantalla = 'ranking';
     rpEstado.vista = vistaParam;
     rpRenderPantalla();

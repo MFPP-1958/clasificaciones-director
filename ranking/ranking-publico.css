@@ -1475,6 +1475,11 @@ td.rp-cmp-gana { color: var(--rp-color-primario); }
   .rp-pod-m { margin-right: 6px; }
 }
 
+/* Vista "Rendimiento": media de puntos por prueba ajustada (bayesiana) */
+.rp-tabla-rend .rp-rend-nivel { font-weight: 800; color: var(--rp-color-acento); font-variant-numeric: tabular-nums; }
+.rp-tabla-rend .rp-rend-gen { color: var(--rp-color-suave); white-space: nowrap; }
+.rp-rend-gem { cursor: help; }
+
 /* Clasificación por equipos de una prueba (pestaña "Equipos" del modal) */
 .rp-tabla-eqprueba .rp-eq-suma { white-space: nowrap; color: var(--rp-color-suave); }
 .rp-tabla-eqprueba .rp-eq-suma b { color: var(--rp-color-primario); font-size: 1.05em; }
