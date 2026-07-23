@@ -4352,7 +4352,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let tBusqueda = null;
   const buscador = document.getElementById('rp-buscador');
+  const buscadorX = document.getElementById('rp-buscador-x');
+  const rpActualizarBuscadorX = () => { if (buscadorX) buscadorX.hidden = !buscador.value; };
   buscador.addEventListener('input', e => {
+    rpActualizarBuscadorX();               // la X aparece/desaparece al instante
     clearTimeout(tBusqueda);
     tBusqueda = setTimeout(() => {
       rpEstado.busqueda = e.target.value;
@@ -4360,6 +4363,16 @@ document.addEventListener('DOMContentLoaded', () => {
       rpRenderSugerencias();
     }, 150);
   });
+  if (buscadorX) buscadorX.addEventListener('click', () => {
+    clearTimeout(tBusqueda);
+    buscador.value = '';
+    rpEstado.busqueda = '';
+    rpActualizarBuscadorX();
+    rpRenderTabla();
+    rpOcultarSugerencias();
+    buscador.focus();
+  });
+  rpActualizarBuscadorX();
   buscador.addEventListener('focus', () => rpRenderSugerencias());
   buscador.addEventListener('blur', () => setTimeout(rpOcultarSugerencias, 150));
   buscador.addEventListener('keydown', e => {

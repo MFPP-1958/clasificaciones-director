@@ -79,12 +79,14 @@
       <div class="rp-controles">
         <button type="button" id="rp-filtros-btn" aria-expanded="false" aria-controls="rp-filtros">🎚️ Filtros<span id="rp-filtros-num" class="rp-num" hidden></span></button>
         <div class="rp-buscador-caja">
+          <span class="rp-busc-ico" aria-hidden="true">🔍</span>
           <input id="rp-buscador" type="search" placeholder="Buscar corredor, equipo o prueba…" aria-label="Buscar corredor, equipo o prueba" autocomplete="off">
+          <button type="button" id="rp-buscador-x" class="rp-busc-x" aria-label="Limpiar búsqueda" hidden>✕</button>
           <div id="rp-sugerencias" hidden></div>
         </div>
         <div id="rp-filtros">
           <div class="rp-filtros-int">
-            <select id="rp-temporada" aria-label="Temporada"></select>
+            <div class="rp-campo rp-campo-temp"><select id="rp-temporada" aria-label="Temporada"></select></div>
             <select id="rp-region" aria-label="Comunidad autónoma" style="display:none"></select>
             <select id="rp-subcat" aria-label="Categoría" style="display:none"></select>
             <select id="rp-equipo" aria-label="Equipo" style="display:none"></select>
