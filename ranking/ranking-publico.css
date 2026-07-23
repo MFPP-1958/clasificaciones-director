@@ -720,7 +720,11 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
   transition: box-shadow .15s, transform .15s, border-color .15s;
   display: flex;
   flex-direction: column;
+  min-width: 0;      /* que la tarjeta ENCOJA al ancho de su columna (móvil) */
+  overflow: hidden;  /* nada se sale por la derecha */
 }
+/* Filas internas: permiten que el texto de la prueba se recorte con "…" */
+.rp-t10-cab, .rp-t10-mejores li { min-width: 0; }
 .rp-t10-card:hover, .rp-t10-card:focus-visible {
   box-shadow: 0 4px 14px rgba(0,0,0,.08);
   border-color: var(--rp-color-primario);
@@ -766,7 +770,7 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
 .rp-t10-cta { margin-top: auto; font-size: .82rem; font-weight: 700; color: var(--rp-color-primario); }
 .rp-t10-card:hover .rp-t10-cta, .rp-t10-card:focus-visible .rp-t10-cta { text-decoration: underline; }
 @media (max-width: 560px) {
-  .rp-top10-grid { grid-template-columns: 1fr; gap: 8px; padding: 8px 0 2px; }
+  .rp-top10-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 8px 0 2px; }
 }
 
 /* Filtro por tipo de prueba en la portada de Últimas carreras */
