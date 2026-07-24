@@ -40666,14 +40666,13 @@ function _simOpenTop10Report(){
     const { race, grid, kpis } = _simCurrentData;
     const catSelEl = document.getElementById('simCatSelect');
     const catFilter = catSelEl ? (catSelEl.value||'') : '';
-    // Construir el Top 10 igual que la vista (predictedPos asc, filtrado por cat si procede)
-    const pool = grid.filter(g => g.predictedPos != null && (!catFilter || g.cat === catFilter));
-    pool.sort((a,b)=>{
-      const ap = a.predictedPosRaw!=null?a.predictedPosRaw:a.predictedPos;
-      const bp = b.predictedPosRaw!=null?b.predictedPosRaw:b.predictedPos;
-      return ap - bp;
-    });
-    const top10 = pool.slice(0,10);
+    // Top 10 desde la FUENTE ÚNICA (_simPredictedPool): MISMO pool, MISMO orden y
+    // MISMO filtro de categoría que la vista en pantalla y el otro PDF, para que
+    // TODO coincida siempre. (Antes reimplementaba el filtro/orden a mano —solo
+    // predictedPos!=null y orden por predictedPosRaw, que queda DESFASADO respecto
+    // a predictedPos tras los ajustes ELO/terreno— y salía un Top 10 distinto al
+    // de la pantalla: distinto orden e incluso distintos corredores.)
+    const top10 = _simPredictedPool(grid, catFilter).slice(0,10);
     if(!top10.length){ alert('No hay predicciones disponibles para mostrar.'); return; }
 
     const _pdfLogoSrc = document.querySelector('.brand-logo')?.src || '';
