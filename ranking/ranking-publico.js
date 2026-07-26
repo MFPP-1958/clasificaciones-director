@@ -4045,7 +4045,7 @@ function rpRenderTabla() {
       `<td class="rp-c rp-col-cat">${c.subcatPrincipal ? `<span class="rp-badge-cat">${rpEscapar(c.subcatPrincipal)}</span>` : '—'}</td>` +
       // Columna Equipo: en escritorio es una columna normal; en móvil, el
       // CSS la recoloca como 2ª línea a todo el ancho (grid), en una sola línea
-      `<td class="rp-col-equipo">${c.equipo ? `<button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}</td>` +
+      `<td class="rp-col-equipo">${medallas ? `<span class="rp-medallas-mov">${medallas}</span>` : ''}${c.equipo ? `<button type="button" class="rp-enlace rp-enlace-suave" data-equipo="${rpEscapar(rpNormalizarTexto(c.equipo))}">${rpEscapar(c.equipo)}</button>` : ''}</td>` +
       `<td class="rp-c rp-col-pruebas">${c.pruebasContadas}/${c.pruebasTotales}</td>` +
       `<td class="rp-c rp-pts">${rpFormatearPuntos(c.puntosTotales)}</td>` +
       `</tr>`

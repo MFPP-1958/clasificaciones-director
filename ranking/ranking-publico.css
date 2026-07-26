@@ -1140,6 +1140,8 @@ th.rp-c { text-align: center; }
 /* Avatar del corredor (iniciales). De momento SOLO en móvil: en escritorio oculto
    (se activará cuando hagamos el repaso de escritorio). */
 .rp-avatar { display: none; }
+/* Medallas de la 2ª línea (móvil): en escritorio van junto al nombre, aquí ocultas */
+.rp-medallas-mov { display: none; }
 .rp-fila:hover .rp-nombre, .rp-fila:focus-visible .rp-nombre { text-decoration: underline; }
 .rp-pts { font-weight: 800; color: var(--rp-color-acento); white-space: nowrap; }
 .rp-medallas { margin-left: 6px; font-size: 0.85em; }
@@ -1806,15 +1808,23 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   }
   #rp-tabla.rp-tabla-corredores .rp-pts { grid-area: puntos; text-align: right; white-space: nowrap; }
   #rp-tabla.rp-tabla-corredores .rp-col-cat { display: none; }
+  /* 2ª línea: MEDALLAS (fijas) + equipo. El equipo se recorta con … para que las
+     medallas siempre quepan. */
   #rp-tabla.rp-tabla-corredores .rp-col-equipo {
     grid-area: team;
-    display: block;               /* anula el display:none general del móvil */
+    display: flex;                /* anula el display:none general del móvil */
+    align-items: center;
+    gap: 5px;
     min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;      /* equipo largo en 1 línea, con … si no cabe */
+  }
+  #rp-tabla.rp-tabla-corredores .rp-col-nombre .rp-medallas { display: none; }   /* las medallas bajan a la 2ª línea */
+  #rp-tabla.rp-tabla-corredores .rp-medallas-mov {
+    display: inline-flex; flex: none; line-height: 1;
+    font-size: 0.9rem; white-space: nowrap; margin: 0;
   }
   #rp-tabla.rp-tabla-corredores .rp-col-equipo .rp-enlace-suave {
+    flex: 1 1 auto; min-width: 0; display: block;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;   /* equipo largo → "Equipo…" */
     font-size: 0.75rem;
     color: var(--rp-color-suave);
   }
