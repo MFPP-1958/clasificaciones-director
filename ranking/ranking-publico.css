@@ -492,7 +492,7 @@ html, body { overflow-x: hidden; }
 }
 .rp-pdf-btn:hover, .rp-pdf-btn:focus-visible { border-color: var(--rp-color-primario); outline: none; }
 .rp-pdf-btn:disabled { opacity: .6; cursor: default; }
-@media (max-width: 560px) { .rp-pdf-btn { margin-left: 0; width: 100%; justify-content: center; } }
+@media (max-width: 560px) { .rp-pdf-btn { margin-left: 0; width: auto; align-self: flex-end; padding: 7px 14px; min-height: 36px; font-size: 0.8rem; } }
 
 /* ── Bloque plegable: Próximas pruebas ── */
 #rp-calendario-caja {
@@ -1656,6 +1656,12 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
 
   /* Conmutadores compactos */
   .rp-conmutadores { gap: 7px; margin-bottom: 8px; }
+  /* Reducir el "muro": la tabla del ranking aparece antes. "Próximas pruebas"
+     (secundario) baja DEBAJO de la tabla usando flex-order (solo móvil; el HTML
+     y el escritorio no cambian). El pie queda el último. */
+  #rp-contenido { display: flex; flex-direction: column; }
+  .rp-cajas { order: 1; margin-top: 10px; }
+  .rp-pie { order: 2; }
   /* Pestañas de sección: a lo ancho, centradas */
   #rp-pantalla { gap: 0; }
   .rp-nav-tab { flex: 1 1 0; text-align: center; font-size: 0.82rem; padding: 8px 4px; min-height: 40px; }
