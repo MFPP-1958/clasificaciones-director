@@ -1137,6 +1137,9 @@ th.rp-c { text-align: center; }
 }
 /* El nombre es el enlace a la ficha: color distintivo y subrayado al pasar */
 .rp-nombre { font-weight: 700; color: var(--rp-color-primario); }
+/* Avatar del corredor (iniciales). De momento SOLO en móvil: en escritorio oculto
+   (se activará cuando hagamos el repaso de escritorio). */
+.rp-avatar { display: none; }
 .rp-fila:hover .rp-nombre, .rp-fila:focus-visible .rp-nombre { text-decoration: underline; }
 .rp-pts { font-weight: 800; color: var(--rp-color-acento); white-space: nowrap; }
 .rp-medallas { margin-left: 6px; font-size: 0.85em; }
@@ -1775,8 +1778,15 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
     grid-area: name;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     min-width: 0;                 /* deja recortar el nombre */
+  }
+  /* Avatar con iniciales (color por equipo) — da vida al ranking en móvil */
+  #rp-tabla.rp-tabla-corredores .rp-avatar {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 27px; height: 27px; border-radius: 50%;
+    font-size: 0.62rem; font-weight: 800; color: #fff; letter-spacing: .3px;
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.30), 0 1px 2px rgba(15,23,42,.14);
   }
   #rp-tabla.rp-tabla-corredores .rp-nombre {
     min-width: 0;

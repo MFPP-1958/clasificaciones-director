@@ -1274,6 +1274,33 @@ function rpInsigniaRegion(region) {
   return badge ? `<span class="rp-badge-region" title="${rpEscapar(region)}">${rpEscapar(badge)}</span>` : '';
 }
 
+// Avatar del corredor: círculo con sus iniciales (nombre + apellido) y un color
+// ESTABLE derivado del equipo (así los compañeros comparten color y el ranking
+// gana vida en móvil, sin necesitar fotos que no tenemos).
+function rpAvatarColor(clave) {
+  const s = String(clave || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return 'hsl(' + (h % 360) + ', 52%, 42%)';
+}
+function rpIniciales(nombre) {
+  const s = String(nombre || '').trim();
+  if (!s) return '·';
+  if (s.indexOf(',') >= 0) {                 // formato "Apellido, Nombre"
+    const partes = s.split(',');
+    const nom = (partes[1] || '').trim();
+    const ape = (partes[0] || '').trim();
+    return ((nom[0] || '') + (ape[0] || '') || s[0]).toUpperCase();
+  }
+  const w = s.split(/\s+/);
+  return (((w[0] && w[0][0]) || '') + ((w[1] && w[1][0]) || '') || s[0]).toUpperCase();
+}
+function rpAvatar(c) {
+  return '<span class="rp-avatar" aria-hidden="true" style="background:' +
+    rpAvatarColor(c.equipo || c.region || c.nombre) + '">' +
+    rpEscapar(rpIniciales(c.nombre)) + '</span>';
+}
+
 // Población de la pestaña activa tras aplicar los filtros de comunidad y
 // subcategoría. Estos filtros REDEFINEN el ranking (las posiciones se
 // renumeran 1..n sobre la población filtrada); el buscador, en cambio, solo
@@ -4012,7 +4039,7 @@ function rpRenderTabla() {
       `<tr class="rp-fila" data-clave="${rpEscapar(c.clave)}" tabindex="0" aria-label="Ver ficha de ${rpEscapar(c.nombre)}">` +
       `<td class="rp-c rp-rank">${pos}</td>` +
       `<td class="rp-c rp-col-evo">${evo}</td>` +
-      `<td class="rp-col-nombre"><span class="rp-nombre">${rpEscapar(c.nombre)}</span>` +
+      `<td class="rp-col-nombre">${rpAvatar(c)}<span class="rp-nombre">${rpEscapar(c.nombre)}</span>` +
       `${badge}` +
       `${medallas ? `<span class="rp-medallas">${medallas}</span>` : ''}</td>` +
       `<td class="rp-c rp-col-cat">${c.subcatPrincipal ? `<span class="rp-badge-cat">${rpEscapar(c.subcatPrincipal)}</span>` : '—'}</td>` +
