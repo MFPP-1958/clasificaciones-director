@@ -1655,16 +1655,27 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   #rp-filtros.rp-abierto { margin-bottom: 2px; }
 
   /* Conmutadores compactos */
-  .rp-conmutadores { gap: 10px; margin-bottom: 8px; }
+  .rp-conmutadores { gap: 7px; margin-bottom: 8px; }
   /* Pestañas de sección: a lo ancho, centradas */
   #rp-pantalla { gap: 0; }
-  .rp-nav-tab { flex: 1 1 0; text-align: center; font-size: 0.92rem; padding: 9px 8px; min-height: 40px; }
+  .rp-nav-tab { flex: 1 1 0; text-align: center; font-size: 0.82rem; padding: 8px 4px; min-height: 40px; }
   /* Opciones del ranking: cada grupo en su línea, etiqueta a la izquierda y
      pestañas subrayadas (mismo lenguaje que la navegación principal) */
   #rp-solo-ranking { flex-direction: column; align-items: stretch; gap: 4px; }
   .rp-conmut-grupo { align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  #rp-modo, #rp-vista { gap: 12px; }
-  .rp-vista-btn { font-size: 0.86rem; min-height: 40px; padding: 8px 2px; }
+  /* "Ver" y "Puntuación" como PASTILLAS que envuelven (táctil, nada se corta) */
+  #rp-modo, #rp-vista { gap: 6px; flex-wrap: wrap; }
+  .rp-vista-btn {
+    font-size: 0.8rem; min-height: 36px; padding: 7px 11px;
+    border: 1px solid var(--rp-color-borde); border-radius: 999px;
+    background: var(--rp-color-fondo-alt); color: var(--rp-color-suave);
+  }
+  .rp-vista-btn.rp-activa {
+    background: var(--rp-color-primario); color: #fff; border-color: var(--rp-color-primario);
+  }
+  #rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] {
+    background: #b45309; border-color: #b45309; color: #fff;
+  }
 
   /* Portada: tarjetas a una columna, más juntas */
   #rp-ultimos { grid-template-columns: 1fr; gap: 8px; padding: 8px 0 2px; }
@@ -1679,8 +1690,18 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   }
   #rp-calendario-caja summary { font-size: 0.8rem; }
 
-  /* Pestañas de categoría más finas */
-  .rp-pestana { padding: 8px 10px; min-height: 40px; font-size: 0.85rem; }
+  /* Pestañas de categoría como PASTILLAS que envuelven (nada se corta ni se
+     esconde en un scroll horizontal) */
+  #rp-pestanas { flex-wrap: wrap; overflow-x: visible; white-space: normal; border-bottom: none; gap: 7px; margin-bottom: 8px; }
+  .rp-pestana {
+    padding: 6px 11px; min-height: 36px; font-size: 0.82rem;
+    border: 1px solid var(--rp-color-borde); border-radius: 999px;
+    background: var(--rp-color-fondo-alt); margin-bottom: 0;
+  }
+  .rp-pestana.rp-activa {
+    background: var(--rp-color-primario); color: #fff; border-color: var(--rp-color-primario);
+  }
+  .rp-pestana.rp-activa .rp-num { color: rgba(255,255,255,.85); }
 
   /* Modal como hoja inferior: más natural con el pulgar */
   #rp-modal { padding: 12px 0 0; align-items: flex-end; }
