@@ -1663,8 +1663,9 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   .rp-cajas { order: 1; margin-top: 10px; }
   .rp-pie { order: 2; }
   /* Pestañas de sección: a lo ancho, centradas */
-  #rp-pantalla { gap: 0; }
-  .rp-nav-tab { flex: 1 1 0; text-align: center; font-size: 0.82rem; padding: 8px 4px; min-height: 40px; }
+  /* Pestañas de sección en UNA sola línea (cada una su ancho, repartidas) */
+  #rp-pantalla { gap: 2px; justify-content: space-between; }
+  .rp-nav-tab { flex: 0 1 auto; white-space: nowrap; text-align: center; font-size: 0.8rem; padding: 8px 7px; min-height: 40px; }
   /* Opciones del ranking: cada grupo en su línea, etiqueta a la izquierda y
      pestañas subrayadas (mismo lenguaje que la navegación principal) */
   #rp-solo-ranking { flex-direction: column; align-items: stretch; gap: 4px; }
