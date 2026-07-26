@@ -1666,12 +1666,14 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   /* "Ver" y "Puntuación" como PASTILLAS que envuelven (táctil, nada se corta) */
   #rp-modo, #rp-vista { gap: 6px; flex-wrap: wrap; }
   .rp-vista-btn {
-    font-size: 0.8rem; min-height: 36px; padding: 7px 11px;
-    border: 1px solid var(--rp-color-borde); border-radius: 999px;
-    background: var(--rp-color-fondo-alt); color: var(--rp-color-suave);
+    font-size: 0.8rem; min-height: 36px; padding: 7px 12px;
+    border: 1.5px solid #cdd5df; border-radius: 999px;
+    background: #fff; color: #374151;
+    box-shadow: 0 1px 2px rgba(15,23,42,.07);
   }
   .rp-vista-btn.rp-activa {
     background: var(--rp-color-primario); color: #fff; border-color: var(--rp-color-primario);
+    box-shadow: 0 2px 7px rgba(14,116,144,.32);
   }
   #rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] {
     background: #b45309; border-color: #b45309; color: #fff;
@@ -1694,14 +1696,25 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
      esconde en un scroll horizontal) */
   #rp-pestanas { flex-wrap: wrap; overflow-x: visible; white-space: normal; border-bottom: none; gap: 7px; margin-bottom: 8px; }
   .rp-pestana {
-    padding: 6px 11px; min-height: 36px; font-size: 0.82rem;
-    border: 1px solid var(--rp-color-borde); border-radius: 999px;
-    background: var(--rp-color-fondo-alt); margin-bottom: 0;
+    padding: 6px 12px; min-height: 36px; font-size: 0.82rem;
+    border: 1.5px solid #cdd5df; border-radius: 999px;
+    background: #fff; color: #374151; margin-bottom: 0;
+    box-shadow: 0 1px 2px rgba(15,23,42,.07);
   }
   .rp-pestana.rp-activa {
     background: var(--rp-color-primario); color: #fff; border-color: var(--rp-color-primario);
+    box-shadow: 0 2px 7px rgba(14,116,144,.32);
   }
   .rp-pestana.rp-activa .rp-num { color: rgba(255,255,255,.85); }
+
+  /* PODIO: las 3 primeras filas del ranking con tinte suave y barra lateral
+     oro/plata/bronce. Es el toque de color y jerarquía (lo que la gente busca). */
+  #rp-tabla .rp-fila:nth-child(1 of .rp-fila) { background: linear-gradient(90deg,#fff6d6 0%,#fffdf4 62%); box-shadow: inset 4px 0 0 #eab308; }
+  #rp-tabla .rp-fila:nth-child(2 of .rp-fila) { background: linear-gradient(90deg,#eceff4 0%,#fbfcfd 62%); box-shadow: inset 4px 0 0 #94a3b8; }
+  #rp-tabla .rp-fila:nth-child(3 of .rp-fila) { background: linear-gradient(90deg,#fbecd9 0%,#fefbf6 62%); box-shadow: inset 4px 0 0 #c68a4e; }
+  #rp-tabla .rp-fila:nth-child(1 of .rp-fila) .rp-rank { color: #a16207; }
+  #rp-tabla .rp-fila:nth-child(2 of .rp-fila) .rp-rank { color: #64748b; }
+  #rp-tabla .rp-fila:nth-child(3 of .rp-fila) .rp-rank { color: #b45309; }
 
   /* Modal como hoja inferior: más natural con el pulgar */
   #rp-modal { padding: 12px 0 0; align-items: flex-end; }
