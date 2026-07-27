@@ -1170,6 +1170,13 @@ th.rp-c { text-align: center; }
 #rp-tabla .rp-fila:nth-child(1 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #eab308; color: #a16207; }
 #rp-tabla .rp-fila:nth-child(2 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #94a3b8; color: #64748b; }
 #rp-tabla .rp-fila:nth-child(3 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #c68a4e; color: #b45309; }
+/* Mismo podio en las vistas Podios y 🎯 Rendimiento (ambas usan .rp-tabla-podios) */
+.rp-tabla-podios .rp-fila:nth-child(1 of .rp-fila) { background: linear-gradient(90deg,#fff6d6 0%,#fffdf4 62%); }
+.rp-tabla-podios .rp-fila:nth-child(2 of .rp-fila) { background: linear-gradient(90deg,#eceff4 0%,#fbfcfd 62%); }
+.rp-tabla-podios .rp-fila:nth-child(3 of .rp-fila) { background: linear-gradient(90deg,#fbecd9 0%,#fefbf6 62%); }
+.rp-tabla-podios .rp-fila:nth-child(1 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #eab308; color: #a16207; }
+.rp-tabla-podios .rp-fila:nth-child(2 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #94a3b8; color: #64748b; }
+.rp-tabla-podios .rp-fila:nth-child(3 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #c68a4e; color: #b45309; }
 
 /* ── Modal ficha del ciclista ── */
 #rp-modal {

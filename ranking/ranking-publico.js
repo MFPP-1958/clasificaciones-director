@@ -3806,7 +3806,7 @@ function rpRenderTablaComunidades(cat) {
       const g = rankGeneral.get(c.clave);
       return '<tr class="rp-fila" tabindex="0" role="button" data-clave="' + rpEscapar(c.clave) + '">' +
         '<td class="rp-c rp-com-gen">' + (g ? g + 'º' : '—') + '</td>' +
-        '<td class="rp-col-nombre"><span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
+        '<td class="rp-col-nombre">' + rpAvatar(c) + '<span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
         (c.subcatPrincipal ? ' <span class="rp-badge-cat">' + rpEscapar(c.subcatPrincipal) + '</span>' : '') + '</td>' +
         '<td class="rp-col-eqmodal">' + (c.equipo ? rpEscapar(c.equipo) : '') + '</td>' +
         '<td class="rp-c rp-pts">' + rpFormatearPuntos(c.puntosTotales) + '</td></tr>';
@@ -3870,7 +3870,7 @@ function rpRenderTablaPodios(cat) {
     const c = p.c;
     return '<tr class="rp-fila" data-clave="' + rpEscapar(c.clave) + '" tabindex="0" role="button" aria-label="Ver ficha de ' + rpEscapar(c.nombre) + '">' +
       '<td class="rp-c rp-rank">' + (i + 1) + '</td>' +
-      '<td class="rp-col-nombre"><span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
+      '<td class="rp-col-nombre">' + rpAvatar(c) + '<span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
       (c.subcatPrincipal ? ' <span class="rp-badge-cat">' + rpEscapar(c.subcatPrincipal) + '</span>' : '') + '</td>' +
       '<td class="rp-pod-medallas">' + medalla(p.oro, '🥇') + medalla(p.plata, '🥈') + medalla(p.bronce, '🥉') + '</td>' +
       '<td class="rp-col-eqmodal">' + (c.equipo ? rpEscapar(c.equipo) : '') + '</td>' +
@@ -3944,7 +3944,7 @@ function rpRenderTablaRendimiento(cat) {
     const gem = infra ? ' <span class="rp-rend-gem" title="Rinde muy por encima de su puesto en el ranking oficial (con relativamente pocas pruebas)">💎</span>' : '';
     return '<tr class="rp-fila" data-clave="' + rpEscapar(c.clave) + '" tabindex="0" role="button" aria-label="Ver ficha de ' + rpEscapar(c.nombre) + '">' +
       '<td class="rp-c rp-rank">' + d.perfPos + '</td>' +
-      '<td class="rp-col-nombre"><span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
+      '<td class="rp-col-nombre">' + rpAvatar(c) + '<span class="rp-nombre">' + rpEscapar(c.nombre) + '</span>' +
       (c.subcatPrincipal ? ' <span class="rp-badge-cat">' + rpEscapar(c.subcatPrincipal) + '</span>' : '') + '</td>' +
       '<td class="rp-c rp-rend-nivel">' + d.nivel.toFixed(1) + '</td>' +
       '<td class="rp-c">' + d.n + '</td>' +
