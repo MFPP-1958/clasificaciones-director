@@ -4550,6 +4550,43 @@ function _fccvLoadScrape(){
 // Cargar al arrancar el script
 _fccvLoadScrape();
 
+// ── Publicar las fichas FCCV en Supabase (para el calendario de la WEB) ──
+// Sube _fccvDetailsById (fccvId → HTML de la ficha) a la tabla `fccv_fichas`, con
+// una clave = "fecha|nombre_normalizado" que la web usa para casar cada prueba CV
+// del calendario con su ficha. El HTML se guarda tal cual; la web lo saneará y
+// reescribirá los enlaces a fccv.es al pintarlo.
+async function _fccvPublicarFichas(){
+  if(typeof _sb==='undefined' || !_sb){ alert('Supabase no disponible.'); return; }
+  try{ const s=await _sb.auth.getSession(); if(!s||!s.data||!s.data.session){ alert('Inicia sesión (arriba a la derecha) antes de publicar.'); return; } }catch(_){}
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'');
+  const meta = {};
+  (_fccvLastAllRaces||[]).forEach(function(r){ if(r&&r.fccvId){ meta[r.fccvId]={name:r.name||'', date:String(r.date||'').slice(0,10)}; } });
+  if(typeof _fccvLastResults!=='undefined') (_fccvLastResults||[]).forEach(function(r){ if(r&&r.fccvId&&!meta[r.fccvId]){ meta[r.fccvId]={name:r.name||'', date:String(r.date||'').slice(0,10)}; } });
+  const rows=[];
+  Object.keys(_fccvDetailsById||{}).forEach(function(id){
+    const html=_fccvDetailsById[id], m=meta[id];
+    if(!html||!m||!/^\d{4}-\d{2}-\d{2}$/.test(m.date)||!m.name) return;
+    rows.push({ fccv_id:String(id), clave:m.date+'|'+norm(m.name), nombre:m.name, fecha:m.date, html:String(html), actualizado:new Date().toISOString() });
+  });
+  if(!rows.length){ alert('No hay fichas FCCV en caché.\n\nPulsa primero «🔄 Sincronizar con Federación» para descargarlas y vuelve a intentarlo.'); return; }
+  const btn=document.getElementById('fccvPublishBtn'), st=document.getElementById('fccvStatus');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Publicando…'; }
+  let ok=0, fail=0, lastErr='';
+  for(let i=0;i<rows.length;i+=20){
+    const slice=rows.slice(i,i+20);
+    try{
+      const {error}=await _sb.from('fccv_fichas').upsert(slice,{onConflict:'clave'});
+      if(error){ fail+=slice.length; lastErr=error.message||String(error); console.error('[fccv publish]',error); }
+      else ok+=slice.length;
+    }catch(e){ fail+=slice.length; lastErr=e.message||String(e); console.error('[fccv publish]',e); }
+    if(st) st.textContent='Publicando fichas FCCV… '+Math.min(i+20,rows.length)+'/'+rows.length;
+  }
+  if(btn){ btn.disabled=false; btn.textContent='☁️ Publicar fichas en la web'; }
+  if(st) st.textContent='';
+  if(fail){ alert('Se publicaron '+ok+' fichas y '+fail+' fallaron.\n\nError: '+lastErr+'\n\nComprueba que la tabla «fccv_fichas» existe en Supabase con permisos. (Consola F12 para el detalle.)'); }
+  else{ alert('✅ '+ok+' fichas FCCV publicadas.\n\nYa se ven en el calendario de la web: al pulsar «🔎 Ver ficha» en una prueba de la Comunidad Valenciana saldrá la ficha completa.'); }
+}
+
 function _fccvToggle(){
   _fccvPanelOpen = !_fccvPanelOpen;
   const body = document.getElementById('fccvBody');
