@@ -4770,10 +4770,26 @@ function _fccvCleanRaceName(rawName){
 // Dispatcher para el botón "ℹ️ Info" de la lista de carreras del calendario.
 // Recibe nombre, fecha, categoría, modalidad y, si está disponible, el ID FCCV
 // ya guardado al añadir la prueba desde la federación (match inequívoco).
+// Verifica que un fccvId guardado corresponde de verdad a la carrera: comprueba
+// que algún término PROPIO del nombre (quitando genéricos como "Trofeo") aparezca
+// en el HTML de la ficha cacheada. Evita mostrar una ficha equivocada por un
+// enlace antiguo mal asignado (p.ej. "Rafa Valls" enlazado por error a "Almoradí").
+function _fccvIdMatchesRace(id, raceName){
+  const html = _fccvDetailsById && _fccvDetailsById[id];
+  if(!html) return false;
+  const strip = s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const tmp = document.createElement('div'); tmp.innerHTML = html;
+  const textLow = strip(tmp.textContent||'').replace(/\s+/g,' ');
+  const stop = new Set(['trofeo','trofeu','gran','premio','memorial','clasica','clasico','ciclista','cadete','cadetes','junior','open','copa','challenge','etapa','vuelta','ciclo','cross','fira','tots','sants','ayuntamiento','excmo']);
+  const toks = strip(raceName).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(t=>t.length>=4 && !stop.has(t));
+  if(!toks.length) return true;              // nombre solo genérico → no podemos verificar, confiamos
+  return toks.some(t=>textLow.includes(t));  // al menos un término propio aparece en la ficha
+}
 async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
-  // Path rápido: tenemos el ID exacto → abrir directamente
+  // Path rápido: tenemos el ID exacto → abrir directamente (si de verdad corresponde)
   if(fccvId && _fccvDetailsById && _fccvDetailsById[fccvId]){
-    _fccvShowRaceDetails(fccvId); return;
+    if(_fccvIdMatchesRace(fccvId, name)){ _fccvShowRaceDetails(fccvId); return; }
+    fccvId = '';  // el id guardado NO corresponde a esta prueba (enlace antiguo erróneo): lo ignoramos
   }
   // Si la prueba planificada no trae categoría/modalidad propias, usamos los
   // filtros globales de la FCCV como pistas (por defecto Cadete + Carretera +
@@ -4822,6 +4838,12 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     const userTokens = nK.split(' ').filter(t=>t.length>=4);
     sameDay = (_fccvLastAllRaces||[]).filter(c=>{
       if(!c.fccvId) return false;
+      // No aceptar una prueba del mismo nombre en fecha muy distinta (mismo
+      // nombre en otra temporada/modalidad no es la misma prueba).
+      if(ref && c.date){
+        const cd = new Date(c.date+'T12:00:00');
+        if(Math.abs((cd-ref)/86400000) > 30) return false;
+      }
       const cK = norm(c.name);
       if(cK===nK || cK.includes(nK) || nK.includes(cK)) return true;
       const ctok = cK.split(' ').filter(t=>t.length>=4);
@@ -5118,7 +5140,16 @@ function _calFindFccvForRace(r){
   }
   // Si la única candidata del día tiene score positivo, igualmente la devolvemos
   if(onSameDate.length===1 && bestScore>=-20) return onSameDate[0];
-  return bestScore>=24 ? best : null;
+  if(bestScore>=24 && best){
+    // Mismo nombre pero fecha muy distinta → NO es la misma prueba (p.ej. una
+    // carretera en junio vs. un ciclo-cross del mismo nombre en diciembre).
+    if(dateIso && best.date){
+      const diff = Math.abs((new Date(best.date+'T12:00:00') - new Date(dateIso+'T12:00:00'))/86400000);
+      if(diff > 30) return null;
+    }
+    return best;
+  }
+  return null;
 }
 
 function _fccvParseHtml(html, defaultYear){
