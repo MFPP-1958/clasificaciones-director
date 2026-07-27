@@ -391,7 +391,7 @@ html, body { overflow-x: hidden; }
   flex: none;
 }
 #rp-modo, #rp-vista { display: inline-flex; gap: 6px; }
-#rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { color: #b45309; border-bottom-color: #b45309; }
+#rp-modo .rp-vista-btn.rp-activa[data-modo="challenge"] { color: #fff; background: #b45309; border-color: #b45309; box-shadow: 0 2px 7px rgba(180,83,9,.30); }
 
 /* ── Challenge CV oficial (formato del dashboard, tema ámbar) ── */
 .rp-ch-banner {
@@ -469,17 +469,20 @@ html, body { overflow-x: hidden; }
   font: inherit;
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--rp-color-suave);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 6px 4px;
+  color: #374151;
+  background: #fff;
+  border: 1.5px solid #cdd5df;
+  border-radius: 999px;
+  padding: 7px 14px;
   min-height: 38px;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15,23,42,.06);
+  transition: background .15s, border-color .15s, box-shadow .15s, color .15s;
 }
-.rp-vista-btn.rp-activa { color: var(--rp-color-primario); border-bottom-color: var(--rp-color-primario); }
-.rp-vista-btn:focus-visible { outline: 2px solid var(--rp-color-acento); outline-offset: -2px; }
+.rp-vista-btn:hover { border-color: #94a3b8; }
+.rp-vista-btn.rp-activa { color: #fff; background: var(--rp-color-primario); border-color: var(--rp-color-primario); box-shadow: 0 2px 7px rgba(14,116,144,.30); }
+.rp-vista-btn:focus-visible { outline: 2px solid var(--rp-color-acento); outline-offset: 1px; }
 
 /* Botón "Descargar PDF" del ranking */
 .rp-pdf-btn {
@@ -1003,30 +1006,32 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
 /* ── Pestañas de categoría ── */
 #rp-pestanas {
   display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  white-space: nowrap;
-  border-bottom: 2px solid var(--rp-color-borde);
-  margin-bottom: 4px;
-  -webkit-overflow-scrolling: touch;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
 .rp-pestana {
   font: inherit;
   font-weight: 600;
-  font-size: 0.92rem;
-  color: var(--rp-color-suave);
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
-  padding: 10px 14px;
+  font-size: 0.9rem;
+  color: #374151;
+  background: #fff;
+  border: 1.5px solid #cdd5df;
+  border-radius: 999px;
+  padding: 7px 14px;
   cursor: pointer;
-  min-height: 44px;
+  min-height: 40px;
+  box-shadow: 0 1px 2px rgba(15,23,42,.06);
+  transition: background .15s, border-color .15s, box-shadow .15s, color .15s;
 }
+.rp-pestana:hover { border-color: #94a3b8; }
 .rp-pestana.rp-activa {
-  color: var(--rp-color-primario);
-  border-bottom-color: var(--rp-color-primario);
+  color: #fff;
+  background: var(--rp-color-primario);
+  border-color: var(--rp-color-primario);
+  box-shadow: 0 2px 7px rgba(14,116,144,.30);
 }
+.rp-pestana.rp-activa .rp-num { color: rgba(255,255,255,.85); }
 .rp-num {
   font-size: 0.75rem;
   font-weight: 700;
@@ -1137,9 +1142,14 @@ th.rp-c { text-align: center; }
 }
 /* El nombre es el enlace a la ficha: color distintivo y subrayado al pasar */
 .rp-nombre { font-weight: 700; color: var(--rp-color-primario); }
-/* Avatar del corredor (iniciales). De momento SOLO en móvil: en escritorio oculto
-   (se activará cuando hagamos el repaso de escritorio). */
-.rp-avatar { display: none; }
+/* Avatar del corredor (iniciales, color por equipo). Visible en móvil y escritorio. */
+.rp-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  vertical-align: middle;
+  width: 26px; height: 26px; border-radius: 50%; margin-right: 5px;
+  font-size: 0.6rem; font-weight: 800; color: #fff; letter-spacing: .3px;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.30), 0 1px 2px rgba(15,23,42,.14);
+}
 /* Medallas de la 2ª línea (móvil): en escritorio van junto al nombre, aquí ocultas */
 .rp-medallas-mov { display: none; }
 .rp-fila:hover .rp-nombre, .rp-fila:focus-visible .rp-nombre { text-decoration: underline; }
@@ -1151,6 +1161,15 @@ th.rp-c { text-align: center; }
 
 /* Los primeros puestos, destacados */
 .rp-fila:nth-child(1 of .rp-fila) .rp-rank { color: #b45309; }
+/* PODIO: top-3 del ranking con tinte + barra lateral oro/plata/bronce (móvil y
+   escritorio). El tinte va en la fila; la barra en la celda del puesto (así se ve
+   tanto en tabla como en la rejilla móvil). */
+#rp-tabla .rp-fila:nth-child(1 of .rp-fila) { background: linear-gradient(90deg,#fff6d6 0%,#fffdf4 62%); }
+#rp-tabla .rp-fila:nth-child(2 of .rp-fila) { background: linear-gradient(90deg,#eceff4 0%,#fbfcfd 62%); }
+#rp-tabla .rp-fila:nth-child(3 of .rp-fila) { background: linear-gradient(90deg,#fbecd9 0%,#fefbf6 62%); }
+#rp-tabla .rp-fila:nth-child(1 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #eab308; color: #a16207; }
+#rp-tabla .rp-fila:nth-child(2 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #94a3b8; color: #64748b; }
+#rp-tabla .rp-fila:nth-child(3 of .rp-fila) .rp-rank { box-shadow: inset 4px 0 0 #c68a4e; color: #b45309; }
 
 /* ── Modal ficha del ciclista ── */
 #rp-modal {
@@ -1721,12 +1740,7 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
 
   /* PODIO: las 3 primeras filas del ranking con tinte suave y barra lateral
      oro/plata/bronce. Es el toque de color y jerarquía (lo que la gente busca). */
-  #rp-tabla .rp-fila:nth-child(1 of .rp-fila) { background: linear-gradient(90deg,#fff6d6 0%,#fffdf4 62%); box-shadow: inset 4px 0 0 #eab308; }
-  #rp-tabla .rp-fila:nth-child(2 of .rp-fila) { background: linear-gradient(90deg,#eceff4 0%,#fbfcfd 62%); box-shadow: inset 4px 0 0 #94a3b8; }
-  #rp-tabla .rp-fila:nth-child(3 of .rp-fila) { background: linear-gradient(90deg,#fbecd9 0%,#fefbf6 62%); box-shadow: inset 4px 0 0 #c68a4e; }
-  #rp-tabla .rp-fila:nth-child(1 of .rp-fila) .rp-rank { color: #a16207; }
-  #rp-tabla .rp-fila:nth-child(2 of .rp-fila) .rp-rank { color: #64748b; }
-  #rp-tabla .rp-fila:nth-child(3 of .rp-fila) .rp-rank { color: #b45309; }
+  /* (El podio top-3 ahora es base: vale para móvil y escritorio.) */
 
   /* Modal como hoja inferior: más natural con el pulgar */
   #rp-modal { padding: 12px 0 0; align-items: flex-end; }
