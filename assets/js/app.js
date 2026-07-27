@@ -4869,7 +4869,8 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     if(!c.fccvId || !c.date) return false;
     if(!ref) return false;
     const cd = new Date(c.date+'T12:00:00');
-    return Math.abs((cd-ref)/86400000) <= 3;
+    if(Math.abs((cd-ref)/86400000) > 3) return false;
+    return _fccvSameRaceName(name, c.name);   // solo la MISMA prueba, no un vecino de otra carrera
   });
   // Fallback: si no hay nada en ±3 días pero el nombre del usuario coincide
   // razonablemente con alguna prueba, devolvemos esas candidatas igualmente.
@@ -5183,8 +5184,10 @@ function _calFindFccvForRace(r){
     }
     if(score>bestScore){ bestScore = score; best = c; }
   }
-  // Si la única candidata del día tiene score positivo, igualmente la devolvemos
-  if(onSameDate.length===1 && bestScore>=-20) return onSameDate[0];
+  // Si la única candidata del día es plausiblemente la MISMA prueba, la devolvemos.
+  // (Sin el chequeo de nombre, un vecino de OTRA carrera a ±1 día se colaba: p.ej.
+  // "San Hipólito" 25-jul mostraba "Cronoescalada Llucena" 26-jul.)
+  if(onSameDate.length===1 && bestScore>=-20 && _fccvSameRaceName(r.name, onSameDate[0].name)) return onSameDate[0];
   if(bestScore>=24 && best){
     // Sin candidata en la fecha exacta: match "a distancia" → mucho más estricto,
     // para no casar pruebas de la misma serie en pueblos/fechas distintas
