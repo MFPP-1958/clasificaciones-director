@@ -4785,6 +4785,31 @@ function _fccvIdMatchesRace(id, raceName){
   if(!toks.length) return true;              // nombre solo genérico → no podemos verificar, confiamos
   return toks.some(t=>textLow.includes(t));  // al menos un término propio aparece en la ficha
 }
+// Busca, entre las fichas YA cacheadas (_fccvDetailsById), una que corresponda a
+// la carrera por nombre + fecha. Rescate offline e instantáneo para pruebas
+// pasadas que la FCCV ya retiró de su web pública. Devuelve el id o ''.
+function _fccvFindCachedByRace(name, dateIso){
+  if(!_fccvDetailsById) return '';
+  const strip = s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const stop = new Set(['trofeo','trofeu','gran','premio','memorial','clasica','clasico','ciclista','cadete','cadetes','junior','open','copa','challenge','etapa','vuelta','ciclo','cross','fira','tots','sants','ayuntamiento','excmo']);
+  const toks = strip(name).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(t=>t.length>=4 && !stop.has(t));
+  if(!toks.length) return '';
+  let dateRe = null;
+  if(dateIso){
+    const [yy,mm,dd] = dateIso.slice(0,10).split('-');
+    if(yy&&mm&&dd) dateRe = new RegExp(`\\b${dd}[\\/\\-\\. ]${mm}[\\/\\-\\. ]${yy}\\b|\\b${yy}[\\/\\-]${mm}[\\/\\-]${dd}\\b`);
+  }
+  for(const id of Object.keys(_fccvDetailsById)){
+    const html = _fccvDetailsById[id]; if(!html) continue;
+    const tmp = document.createElement('div'); tmp.innerHTML = html;
+    const raw = tmp.textContent||'';
+    const textLow = strip(raw).replace(/\s+/g,' ');
+    if(!toks.some(t=>textLow.includes(t))) continue;   // el nombre debe aparecer
+    if(dateRe && !dateRe.test(raw)) continue;          // y la fecha (si la conocemos)
+    return String(id);
+  }
+  return '';
+}
 async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
   // Path rápido: tenemos el ID exacto → abrir directamente (si de verdad corresponde)
   if(fccvId && _fccvDetailsById && _fccvDetailsById[fccvId]){
@@ -4803,6 +4828,10 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
   const fakeRace = {name, date: dateIso ? new Date(dateIso) : null, cat: cat||'', modality: modality||'', fccvId: fccvId||''};
   let m = _calFindFccvForRace(fakeRace);
   if(m){ _fccvShowRaceDetails(m.fccvId); return; }
+  // Rescate offline: ¿la tenemos ya cacheada de una consulta anterior? (pruebas
+  // pasadas que la FCCV retiró de su web pero cuya ficha guardamos en su día).
+  const cachedId = _fccvFindCachedByRace(name, dateIso);
+  if(cachedId){ _fccvShowRaceDetails(cachedId); return; }
   // No hay match. Si el scrape está vacío, ofrecer sincronizar.
   if(!(_fccvLastAllRaces||[]).length){
     if(confirm('No hay datos de la FCCV cargados.\n¿Sincronizar ahora con la Federación?')){
@@ -4870,6 +4899,16 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
     // Abrir un selector
     _fccvShowPickerForDate(name, dateIso, sameDay);
     return;
+  }
+  // Prueba PASADA sin ficha (ni en el scrape ni cacheada): la FCCV retira de su
+  // web las pruebas ya celebradas, así que rastrear su archivo es lento e inútil.
+  // Avisamos con claridad en vez de dejar el loader girando.
+  if(dateIso){
+    const dref = new Date(dateIso+'T12:00:00');
+    if(!isNaN(dref) && (Date.now() - dref.getTime()) > 2*86400000){
+      alert('La ficha oficial de esta prueba ya no está disponible.\n\nLa FCCV retira de su web las pruebas ya celebradas, así que su reglamento y planos dejan de poder consultarse aquí. (Los datos de la carrera —resultados, corredores— siguen en la aplicación.)');
+      return;
+    }
   }
   // No hay match en el scrape actual. Mostramos un loader y lanzamos sync
   // (con cache: si ya hay URL ganadora guardada para este año, el sync es rápido).
