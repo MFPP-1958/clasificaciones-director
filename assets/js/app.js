@@ -4810,6 +4810,20 @@ function _fccvFindCachedByRace(name, dateIso){
   }
   return '';
 }
+// ¿Son dos nombres LA MISMA prueba? Iguales/contenidos, o comparten un término
+// DISTINTIVO (no genérico de la serie). Evita casar "...Escuelas de Ciclismo
+// BIGASTRO" con "...Escuelas de Ciclismo ALGINET" (misma serie, pueblo distinto).
+function _fccvSameRaceName(a, b){
+  const norm = s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const A=norm(a), B=norm(b);
+  if(!A || !B) return false;
+  if(A===B || A.includes(B) || B.includes(A)) return true;
+  const GEN = new Set(['trofeo','trofeu','gran','premio','memorial','clasica','clasico','ciclista','ciclismo','escuela','escuelas','cadete','cadetes','junior','elite','master','sub23','open','copa','challenge','etapa','vuelta','ciclo','cross','fira','tots','sants','ayuntamiento','ajuntament','excmo','circuito','criterium','campeonato','provincial','autonomico','interclub','villa','ciudad','ruta','carretera','edad','escolar','linea']);
+  const dist = s=>norm(s).split(' ').filter(t=>t.length>=4 && !GEN.has(t) && !/^\d+$/.test(t));
+  const da=dist(a), db=new Set(dist(b));
+  if(!da.length || !db.size) return false;   // sin término distintivo → no afirmamos que sean la misma
+  return da.some(t=>db.has(t));
+}
 async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
   // Path rápido: tenemos el ID exacto → abrir directamente (si de verdad corresponde)
   if(fccvId && _fccvDetailsById && _fccvDetailsById[fccvId]){
@@ -4860,24 +4874,16 @@ async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
   // Fallback: si no hay nada en ±3 días pero el nombre del usuario coincide
   // razonablemente con alguna prueba, devolvemos esas candidatas igualmente.
   if(!sameDay.length && name){
-    const norm = s=>(s||'').toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g,'')
-      .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-    const nK = norm(name);
-    const userTokens = nK.split(' ').filter(t=>t.length>=4);
     sameDay = (_fccvLastAllRaces||[]).filter(c=>{
       if(!c.fccvId) return false;
-      // No aceptar una prueba del mismo nombre en fecha muy distinta (mismo
-      // nombre en otra temporada/modalidad no es la misma prueba).
+      // No aceptar una prueba en fecha muy distinta (mismo nombre en otra
+      // temporada/modalidad no es la misma prueba).
       if(ref && c.date){
         const cd = new Date(c.date+'T12:00:00');
         if(Math.abs((cd-ref)/86400000) > 30) return false;
       }
-      const cK = norm(c.name);
-      if(cK===nK || cK.includes(nK) || nK.includes(cK)) return true;
-      const ctok = cK.split(' ').filter(t=>t.length>=4);
-      const shared = userTokens.filter(t=>ctok.includes(t)).length;
-      return shared>=2; // al menos 2 tokens compartidos
+      // Debe ser LA MISMA prueba (término distintivo), no solo de la misma serie.
+      return _fccvSameRaceName(name, c.name);
     }).slice(0,10);
   }
   // Filtrar por categoría y modalidad si las tenemos
@@ -5180,11 +5186,16 @@ function _calFindFccvForRace(r){
   // Si la única candidata del día tiene score positivo, igualmente la devolvemos
   if(onSameDate.length===1 && bestScore>=-20) return onSameDate[0];
   if(bestScore>=24 && best){
-    // Mismo nombre pero fecha muy distinta → NO es la misma prueba (p.ej. una
-    // carretera en junio vs. un ciclo-cross del mismo nombre en diciembre).
-    if(dateIso && best.date){
-      const diff = Math.abs((new Date(best.date+'T12:00:00') - new Date(dateIso+'T12:00:00'))/86400000);
-      if(diff > 30) return null;
+    // Sin candidata en la fecha exacta: match "a distancia" → mucho más estricto,
+    // para no casar pruebas de la misma serie en pueblos/fechas distintas
+    // (p.ej. "...Escuelas de Ciclismo Bigastro" 19-jul vs "...Alginet" 2-ago, o
+    // una carretera de junio vs. un ciclo-cross del mismo nombre en diciembre).
+    if(!onSameDate.length){
+      if(dateIso && best.date){
+        const diff = Math.abs((new Date(best.date+'T12:00:00') - new Date(dateIso+'T12:00:00'))/86400000);
+        if(diff > 30) return null;
+      }
+      if(!_fccvSameRaceName(r.name, best.name)) return null;
     }
     return best;
   }
