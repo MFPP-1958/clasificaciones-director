@@ -4824,11 +4824,36 @@ function _fccvSameRaceName(a, b){
   if(!da.length || !db.size) return false;   // sin término distintivo → no afirmamos que sean la misma
   return da.some(t=>db.has(t));
 }
+// Normalización de la CLAVE de casado (debe ser IDÉNTICA a la de _fccvPublicarFichas):
+// fecha(YYYY-MM-DD) + '|' + nombre en minúsculas sin acentos ni símbolos.
+function _fccvNormClave(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,''); }
 async function _calOpenFccvInfo(name, dateIso, cat, modality, fccvId){
   // Path rápido: tenemos el ID exacto → abrir directamente (si de verdad corresponde)
   if(fccvId && _fccvDetailsById && _fccvDetailsById[fccvId]){
     if(_fccvIdMatchesRace(fccvId, name)){ _fccvShowRaceDetails(fccvId); return; }
     fccvId = '';  // el id guardado NO corresponde a esta prueba (enlace antiguo erróneo): lo ignoramos
+  }
+  // Fuente AUTORITATIVA: la tabla fccv_fichas de Supabase (lo que ya publicamos).
+  // Funciona aunque el scrape/caché local esté vacío o desincronizado. Casa por
+  // fecha+nombre, así que nunca muestra otra prueba distinta.
+  if(dateIso && typeof _sb!=='undefined' && _sb){
+    try{
+      const d = dateIso.slice(0,10);
+      // 1) clave exacta (fecha|nombre normalizado)
+      let ficha = null;
+      const r1 = await _sb.from('fccv_fichas').select('fccv_id,html,nombre').eq('clave', d + '|' + _fccvNormClave(name)).maybeSingle();
+      if(r1 && r1.data && r1.data.html) ficha = r1.data;
+      // 2) si no, todas las fichas de ESA fecha y casar por nombre distintivo
+      if(!ficha){
+        const r2 = await _sb.from('fccv_fichas').select('fccv_id,html,nombre').eq('fecha', d);
+        if(r2 && r2.data && r2.data.length){ ficha = r2.data.find(f=>f.html && _fccvSameRaceName(name, f.nombre)) || null; }
+      }
+      if(ficha && ficha.html){
+        const id = ficha.fccv_id || ('sb'+d);
+        _fccvDetailsById[id] = ficha.html;     // cachear para futuras aperturas
+        _fccvShowRaceDetails(id); return;
+      }
+    }catch(_){ /* si Supabase falla, seguimos con el emparejado local */ }
   }
   // Si la prueba planificada no trae categoría/modalidad propias, usamos los
   // filtros globales de la FCCV como pistas (por defecto Cadete + Carretera +
