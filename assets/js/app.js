@@ -42129,6 +42129,106 @@ async function _fccvGenerarBoletin(){
   }
 }
 
+// ── Formulario de inscripción RFEC (ANEXO 13) ─────────────────────────────
+// Para pruebas FUERA de la Comunidad Valenciana donde dejan llevar TODA la
+// plantilla (más de 8). El PDF tiene 25 plazas de ciclista y 7 de técnico, sin
+// apartado de reservas: ponemos los titulares 1,2,3…, luego una fila "RESERVAS"
+// y debajo las reservas. Datos fijos del club (Estructura 10) ya establecidos.
+const FCCV_TPL_RFEC = 'assets/templates/rfec-anexo13.pdf';
+const RFEC_CLUB = {
+  club:        'Estructura 10',
+  licencia:    'G24946303',
+  direccion:   'C/NAPOLES 7',
+  email:       'ccestructura10@gmail.com',
+  web:         '',
+  patrocPrinc: 'WIXUM',
+  patrocResto: 'SOL-EUROPA, AZALEA, JONSIL',
+  modalidad:   'Carretera',      // editable por prueba
+  federacion:  'C. Valenciana'   // por defecto; editable por ciclista
+};
+async function _fccvGenerarBoletinCompleto(){
+  if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
+  const v = _fccvValidateBasics({doc:'boletin'});
+  if(_fccvShowValidationErrors(v, 'el Boletín Completo (RFEC)')) return;
+
+  // Resolver licencias (contiguo, saltando las que no se encuentren)
+  const titLics = _fccvSel.titulares.map(_fccvDniToLic).filter(Boolean);
+  const resLics = _fccvSel.reservas.map(_fccvDniToLic).filter(Boolean);
+  const filasNecesarias = titLics.length + (resLics.length ? 1 + resLics.length : 0);
+  if(filasNecesarias > 25){
+    const ok = confirm(`El formulario de la RFEC tiene 25 plazas de ciclista.\n\nCon ${titLics.length} titulares + fila "RESERVAS" + ${resLics.length} reservas necesitas ${filasNecesarias} filas.\n\nSe rellenarán solo las 25 primeras; el resto se quedará fuera.\n\n¿Continuar?`);
+    if(!ok) return;
+  }
+  _fccvFlagFields(null);
+  _fccvGenStatus('⏳ Generando Boletín Completo (RFEC)…', true);
+  try{
+    const buf = await _fccvLoadTemplate(FCCV_TPL_RFEC);
+    const pdf = await PDFLib.PDFDocument.load(buf);
+    const form = pdf.getForm();
+    const firm = _fccvGetFirmante();
+
+    // Cabecera
+    _fccvSetField(form, 'Modalidad', RFEC_CLUB.modalidad);
+    _fccvSetField(form, 'Categoría', document.getElementById('fccvPRcategoria').value);
+    _fccvSetField(form, 'Nombre del club ciclista titular', RFEC_CLUB.club);
+    _fccvSetField(form, 'Nombre del equipo', firm.equipo||'');
+    _fccvSetField(form, 'Licencia N', RFEC_CLUB.licencia);
+    _fccvSetField(form, 'Teléfono',  firm.telefono||'');
+    _fccvSetField(form, 'Dirección', RFEC_CLUB.direccion);
+    _fccvSetField(form, 'Email',     RFEC_CLUB.email);
+    _fccvSetField(form, 'Web',       RFEC_CLUB.web);
+    _fccvSetField(form, 'Nombre del patrocinador principal', RFEC_CLUB.patrocPrinc);
+    _fccvSetField(form, 'Nombre del resto de patrocinadores', RFEC_CLUB.patrocResto);
+
+    // RELACIÓN DE CICLISTAS: titulares → fila "RESERVAS" → reservas
+    let fila = 0;
+    const ponerCiclista = (lic)=>{
+      fila++; if(fila>25) return;
+      _fccvSetField(form, `APELLIDOS${fila}`,  (lic.apellidos||'').trim());
+      _fccvSetField(form, `NOMBRE${fila}`,     (lic.nombre||'').trim());
+      _fccvSetField(form, `DNI${fila}`,        lic.dni||'');
+      _fccvSetField(form, `UCI ID${fila}`,     lic.uciId||'');
+      _fccvSetField(form, `CATEGORÍA${fila}`,  _fccvResolveSpecificCat(lic));
+      _fccvSetField(form, `FEDERACIÓN${fila}`, RFEC_CLUB.federacion);
+    };
+    titLics.forEach(ponerCiclista);
+    if(resLics.length && fila < 25){
+      fila++;
+      if(fila<=25) _fccvSetField(form, `APELLIDOS${fila}`, 'RESERVAS');  // fila separadora
+      resLics.forEach(ponerCiclista);
+    }
+
+    // RELACIÓN DE TÉCNICOS: director + auxiliares (hasta 7)
+    const staffDni = [
+      document.getElementById('fccvStaffDir')?.value,
+      document.getElementById('fccvStaffAux1')?.value,
+      document.getElementById('fccvStaffAux2')?.value
+    ].filter(Boolean);
+    const staffLics = [...new Set(staffDni)].map(_fccvDniToLic).filter(Boolean);
+    staffLics.slice(0,7).forEach((lic,i)=>{
+      const n = i+1;
+      _fccvSetField(form, `APELLIDOS${n}_2`,  (lic.apellidos||'').trim());
+      _fccvSetField(form, `NOMBRE${n}_2`,     (lic.nombre||'').trim());
+      _fccvSetField(form, `DNI${n}_2`,        lic.dni||'');
+      _fccvSetField(form, `TITULACIÓN${n}`,   lic.catLicencia||'');
+      _fccvSetField(form, `FEDERACIÓN${n}_2`, RFEC_CLUB.federacion);
+    });
+
+    try{ form.updateFieldAppearances(); }catch(e){}
+    if(document.getElementById('fccvFlatten')?.checked){
+      try{ form.flatten(); }catch(e){ console.warn('flatten falló', e); }
+    }
+    const bytes = await pdf.save();
+    const dateTag = _fccvSanitizeFileName(document.getElementById('fccvPRfecha').value);
+    const nameTag = _fccvSanitizeFileName(document.getElementById('fccvPRname').value);
+    _fccvDownloadPdf(bytes, `Inscripcion_RFEC_${dateTag}_${nameTag}.pdf`);
+    _fccvGenStatus(`✅ Boletín Completo generado (${titLics.length} titulares + ${resLics.length} reservas)`, true);
+  }catch(e){
+    console.warn('_fccvGenerarBoletinCompleto', e);
+    _fccvGenStatus('❌ Error: '+(e.message||e), false);
+  }
+}
+
 async function _fccvGenerarAutorizacion(){
   if(typeof PDFLib === 'undefined'){ alert('La librería PDF aún no está cargada. Recarga la página (Ctrl/Cmd+Shift+R).'); return; }
   const v = _fccvValidateBasics({doc:'autorizacion'});
