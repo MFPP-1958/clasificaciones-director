@@ -42138,6 +42138,7 @@ const FCCV_TPL_RFEC = 'assets/templates/rfec-anexo13.pdf';
 const RFEC_CLUB = {
   club:        'Estructura 10',
   licencia:    'G24946303',
+  telefono:    '629871330',
   direccion:   'C/NAPOLES 7',
   email:       'ccestructura10@gmail.com',
   web:         '',
@@ -42173,7 +42174,7 @@ async function _fccvGenerarBoletinCompleto(){
     _fccvSetField(form, 'Nombre del club ciclista titular', RFEC_CLUB.club);
     _fccvSetField(form, 'Nombre del equipo', firm.equipo||'');
     _fccvSetField(form, 'Licencia N', RFEC_CLUB.licencia);
-    _fccvSetField(form, 'Teléfono',  firm.telefono||'');
+    _fccvSetField(form, 'Teléfono',  RFEC_CLUB.telefono);
     _fccvSetField(form, 'Dirección', RFEC_CLUB.direccion);
     _fccvSetField(form, 'Email',     RFEC_CLUB.email);
     _fccvSetField(form, 'Web',       RFEC_CLUB.web);
