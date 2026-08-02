@@ -690,7 +690,7 @@ const rpEstado = {
   // gente quiere ver primero); el ranking completo y las últimas carreras
   // quedan a un toque. A propósito NO se guarda en preferencias: cada visita
   // arranca aquí.
-  pantalla: 'top10',   // 'top10' | 'ranking' | 'carreras'
+  pantalla: 'inicio',  // 'inicio' (portada) | 'top10' | 'ranking' | 'carreras'
   ultimosVisibles: 10,    // tarjetas de carrera mostradas ("Ver más" amplía)
   _ultimosClave: null,    // temporada|categoría del último render de tarjetas
   modalEquipo: null,  // equipo normalizado cuya ficha está abierta (o null)
@@ -804,12 +804,18 @@ function rpRenderModo() {
 // Challenge y Corredores/Equipos solo tienen sentido en el ranking).
 function rpRenderPantalla() {
   document.querySelectorAll('#rp-pantalla button[data-pantalla]').forEach(b => {
-    b.classList.toggle('rp-activa', b.dataset.pantalla === rpEstado.pantalla);
-    b.setAttribute('aria-pressed', String(b.dataset.pantalla === rpEstado.pantalla));
+    const activa = b.dataset.pantalla === rpEstado.pantalla;
+    b.classList.toggle('rp-activa', activa);
+    // role="tab" → el estado correcto es aria-selected (no aria-pressed)
+    b.setAttribute('aria-selected', String(activa));
+    b.removeAttribute('aria-pressed');
   });
+  const esInicio = rpEstado.pantalla === 'inicio';
   const esRanking = rpEstado.pantalla === 'ranking';
   const esTop10 = rpEstado.pantalla === 'top10';
   const esCarreras = rpEstado.pantalla === 'carreras';
+  const inicio = document.getElementById('rp-inicio');
+  if (inicio) inicio.style.display = esInicio ? '' : 'none';
   document.getElementById('rp-solo-ranking').hidden = !esRanking;
   document.getElementById('rp-ultimos').style.display = esCarreras ? '' : 'none';
   document.getElementById('rp-top10').style.display = esTop10 ? '' : 'none';
@@ -817,6 +823,162 @@ function rpRenderPantalla() {
   document.querySelector('.rp-pie').style.display = esRanking ? '' : 'none';
   // El aviso del modo Challenge lo gestiona rpRenderTabla dentro del ranking
   if (!esRanking) document.getElementById('rp-challenge-info').style.display = 'none';
+}
+
+// ── Pantalla "🏠 Inicio" (portada) ────────────────────────────────────────
+// Cabecera + "Lo que ha cambiado esta semana" + Top 3 + accesos + autor.
+// TODO el contenido dinámico sale de los datos reales del ranking (nada
+// inventado): líder = 1º de la categoría; mayor subida = quien más puestos
+// gana respecto al ranking "a jornada anterior" (rpEstado.rankingPrevio);
+// última carrera = la más reciente de la categoría+comunidad.
+const RP_CAT_SINGULAR = { cadete: 'cadete', juvenil: 'juvenil', junior: 'júnior', 'sub23': 'sub-23', sub23: 'sub-23', master: 'máster', elite: 'élite', femenino: 'femenino', feminas: 'féminas' };
+function rpCatSingular(cat) {
+  if (!cat) return 'cadete';
+  return RP_CAT_SINGULAR[cat.key] || (cat.label || 'cadete').toLowerCase().replace(/s$/, '');
+}
+// Cambia de pantalla desde la portada (o enfoca el buscador).
+function rpIrA(dest) {
+  if (dest === 'buscar') {
+    const b = document.getElementById('rp-buscador');
+    if (b) { try { b.focus({ preventScroll: false }); } catch (_) { b.focus(); } }
+    return;
+  }
+  if (dest === 'inicio' || dest === 'top10' || dest === 'ranking' || dest === 'carreras') {
+    if (rpEstado.pantalla === dest) return;
+    rpEstado.pantalla = dest;
+    rpRenderPantalla();
+    rpRenderPestanas();
+    if (dest === 'ranking') rpRenderTabla();
+    else if (dest === 'top10') rpRenderTop10();
+    else if (dest === 'carreras') rpRenderUltimos();
+    else rpRenderInicio();
+  }
+}
+function rpRenderInicio() {
+  const cont = document.getElementById('rp-inicio');
+  if (!cont) return;
+  if (!rpEstado.ranking || !rpEstado.ranking.categorias.length) { cont.innerHTML = ''; return; }
+  const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria) || rpEstado.ranking.categorias[0];
+  const catSing = rpCatSingular(cat);
+  const pobl = cat ? rpPoblacion(cat) : [];
+  const lider = pobl[0] || null;
+
+  // Mayor subida respecto a la jornada anterior (mismos filtros)
+  let subida = null;
+  if (cat && rpEstado.rankingPrevio) {
+    const catPrev = rpEstado.rankingPrevio.categorias.find(c => c.key === cat.key);
+    if (catPrev) {
+      const posPrev = new Map(rpPoblacion(catPrev).map((c, i) => [c.clave, i + 1]));
+      let best = 0;
+      pobl.forEach((c, i) => {
+        const pos = i + 1;
+        if (pos > 20) return;                   // solo destacamos subidas DENTRO del top 20 (más relevante)
+        const pAnt = posPrev.get(c.clave);
+        if (pAnt == null) return;               // nuevo en el ranking → no es "subida"
+        const d = pAnt - pos;
+        if (d > best) { best = d; subida = { cor: c, pos, delta: d }; }
+      });
+    }
+  }
+
+  // Última carrera incorporada (de la categoría + comunidad activas)
+  const carrerasCat = (rpEstado.carreras || [])
+    .filter(c => c.temporada === rpEstado.temporada && c.resultados.length &&
+                 (!cat || rpGruposDeCarrera(c).has(cat.key)) && rpCarreraEnRegion(c))
+    .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  const ultCarrera = carrerasCat[0] || null;
+
+  // ── Tarjeta de corredor (mini) reutilizable ──
+  const chip = (etq, color) => `<span class="rp-in-chip" style="--c:${color}">${etq}</span>`;
+  const corChip = (c, extra) => c ? (
+    `<div class="rp-in-nov" style="--c:${extra.color}">` +
+      `<div class="rp-in-nov-cab">${extra.icono} <span>${rpEscapar(extra.titulo)}</span></div>` +
+      `<button type="button" class="rp-enlace rp-in-nov-nombre" data-corredor="${rpEscapar(c.clave)}">${rpEscapar(c.nombre)}</button>` +
+      `<div class="rp-in-nov-sub">${rpEscapar(extra.sub)}</div>` +
+    '</div>'
+  ) : '';
+
+  // Novedades (3 tarjetas). Si no hay "mayor subida" (1ª jornada) mostramos el nº de corredores.
+  const novSubida = subida
+    ? corChip(subida.cor, { color: '#16a34a', icono: '▲', titulo: 'Mayor subida', sub: `Sube ${subida.delta} puesto${subida.delta > 1 ? 's' : ''} · ahora ${subida.pos}º · ${rpFormatearPuntos(subida.cor.puntosTotales)} pts` })
+    : `<div class="rp-in-nov" style="--c:#0e7490"><div class="rp-in-nov-cab">📊 <span>En el ranking</span></div><div class="rp-in-nov-nombre" style="cursor:default">${pobl.length} corredores</div><div class="rp-in-nov-sub">${rpEscapar(cat ? cat.label : '')} · temporada ${rpEstado.temporada}</div></div>`;
+  const novLider = corChip(lider, { color: '#eab308', icono: '🥇', titulo: 'Líder actual', sub: lider ? `${rpFormatearPuntos(lider.puntosTotales)} pts${lider.equipo ? ' · ' + rpEscapar(lider.equipo) : ''}` : '' });
+  const novCarrera = ultCarrera
+    ? `<div class="rp-in-nov" style="--c:#2563eb"><div class="rp-in-nov-cab">🏁 <span>Última carrera</span></div>` +
+      `<button type="button" class="rp-enlace rp-in-nov-nombre" data-carrera="${rpEscapar(ultCarrera.id)}">${rpEscapar(ultCarrera.nombre)}</button>` +
+      `<div class="rp-in-nov-sub">${rpEscapar(rpFormatearFecha(ultCarrera.fecha))} · clasificación completa</div></div>`
+    : '';
+
+  // Top 3 (podio) con "Ver ficha"
+  const oro = ['#eab308', '#94a3b8', '#c68a4e'];
+  const podioCards = pobl.slice(0, 3).map((c, i) => {
+    const region = c.region ? (rpInsigniaRegion(c.region) + ' ' + rpEscapar(c.region)) : '';
+    const meta = [c.equipo ? rpEscapar(c.equipo) : '', (c.subcats && c.subcats[0]) ? rpEscapar(c.subcats[0]) : ''].filter(Boolean).join(' · ');
+    return `<article class="rp-in-podio" style="--c:${oro[i]}" data-corredor="${rpEscapar(c.clave)}" role="button" tabindex="0" aria-label="Ver ficha de ${rpEscapar(c.nombre)}">` +
+      `<div class="rp-in-podio-medalla">${RP_MEDALLAS_PODIO[i]}</div>` +
+      `<div class="rp-in-podio-nombre">${rpEscapar(c.nombre)}</div>` +
+      `<div class="rp-in-podio-pts">${rpFormatearPuntos(c.puntosTotales)} <span>puntos</span></div>` +
+      (meta ? `<div class="rp-in-podio-meta">${meta}</div>` : '') +
+      `<span class="rp-in-podio-btn">Ver ficha</span>` +
+    '</article>';
+  }).join('');
+
+  // Accesos destacados
+  const acceso = (icono, titulo, texto, accion, textoLink) =>
+    `<article class="rp-in-acceso">` +
+      `<div class="rp-in-acceso-ico">${icono}</div>` +
+      `<h3>${titulo}</h3><p>${texto}</p>` +
+      (accion.startsWith('http')
+        ? `<a class="rp-in-acceso-link" href="${accion}" target="_blank" rel="noopener">${textoLink} ↗</a>`
+        : `<button type="button" class="rp-in-acceso-link" data-ir="${accion}">${textoLink} →</button>`) +
+    '</article>';
+
+  cont.innerHTML =
+    // 1-4. Héroe: qué es + texto + acciones + (buscador ya visible arriba)
+    '<section class="rp-in-hero">' +
+      `<p class="rp-in-eyebrow">Temporada ${rpEstado.temporada} · Comunidad Valenciana</p>` +
+      `<h2 class="rp-in-titulo">El ranking ${rpEscapar(catSing)} más completo de la Comunidad Valenciana</h2>` +
+      '<p class="rp-in-lema">Resultados, evolución y próximas carreras. Actualizado personalmente después de cada jornada, sin registro y completamente gratuito.</p>' +
+      '<div class="rp-in-acciones">' +
+        '<button type="button" class="rp-in-btn rp-in-btn-1" data-ir="buscar">🔎 Buscar mi ficha</button>' +
+        '<button type="button" class="rp-in-btn rp-in-btn-2" data-ir="ranking">📋 Ver clasificación</button>' +
+      '</div>' +
+      '<p class="rp-in-ventajas"><span>✓ Sin correo</span><span>✓ Sin registro</span><span>✓ Gratis</span></p>' +
+    '</section>' +
+
+    // 5. Lo que ha cambiado esta semana
+    '<section class="rp-in-bloque">' +
+      '<div class="rp-in-bloque-cab"><h3>📣 Lo que ha cambiado esta semana</h3>' +
+        (ultCarrera ? `<span class="rp-in-fecha">Actualizado: ${rpEscapar(rpFormatearFecha(ultCarrera.fecha))}</span>` : '') +
+      '</div>' +
+      `<div class="rp-in-novedades">${novSubida}${novLider}${novCarrera}</div>` +
+    '</section>' +
+
+    // 6. Top 10 resumido (top 3 + acceso al ranking)
+    (podioCards ? '<section class="rp-in-bloque">' +
+      `<div class="rp-in-bloque-cab"><h3>🏅 Top 3 ${rpEscapar(cat ? cat.label : '')}</h3>` +
+        '<button type="button" class="rp-in-vermas" data-ir="ranking">Ver ranking completo →</button></div>' +
+      `<div class="rp-in-podios">${podioCards}</div>` +
+      '<div class="rp-in-podios-pie"><button type="button" class="rp-in-vermas" data-ir="top10">Ver el Top 10 completo →</button></div>' +
+    '</section>' : '') +
+
+    // 7. Accesos destacados
+    '<section class="rp-in-bloque">' +
+      '<div class="rp-in-accesos">' +
+        acceso('🏁', 'Últimas carreras', 'Podios y clasificaciones completas de las pruebas recién disputadas.', 'carreras', 'Consultar resultados') +
+        acceso('📅', 'Próximas pruebas', 'Calendario cadete de la Comunidad Valenciana, con toda la información de cada prueba.', 'https://mfppcycling.com/calendario/', 'Ver calendario') +
+        acceso('📲', 'Comparte tu evolución', 'Tu ficha personal: posición, mejores resultados y tarjeta para Stories.', 'buscar', 'Buscar mi ficha') +
+      '</div>' +
+    '</section>' +
+
+    // 8-9. El trabajo detrás del ranking + mención discreta como entrenador
+    '<section class="rp-in-autor">' +
+      '<p class="rp-in-autor-eyebrow">El trabajo detrás del ranking</p>' +
+      '<h3 class="rp-in-autor-nombre"><a href="https://mfppcycling.com/sobre-mi/" target="_blank" rel="noopener">Creado y actualizado por Manuel Pérez</a></h3>' +
+      '<p class="rp-in-autor-desc">Este proyecto reúne gratuitamente los resultados del ciclismo cadete valenciano gracias a un trabajo continuo de recopilación, revisión y publicación después de cada jornada.</p>' +
+      '<p class="rp-in-autor-rol">Director de cadetes · Entrenador de ciclismo</p>' +
+      '<a class="rp-in-autor-btn" href="https://mfppcycling.com/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/" target="_blank" rel="noopener">Conocer a Manuel y su método ↗</a>' +
+    '</section>';
 }
 
 // ── Portada "Últimas carreras": tarjetas con podio (estilo FirstCycling) ──
@@ -4075,6 +4237,7 @@ function rpRenderTodo() {
   rpRenderCalendario(); // próximas pruebas (independiente de los filtros)
   rpRenderUltimos();    // depende solo de la temporada
   rpRenderTop10();      // el escaparate Top 10 depende de temporada+categoría+filtros
+  rpRenderInicio();     // la portada depende de temporada+categoría+filtros
   rpRenderRegiones();   // antes que las pestañas: valida el filtro de comunidad
   rpRenderPestanas();   // y sus contadores dependen de él
   rpRenderSubcats();
@@ -4179,11 +4342,13 @@ function rpAplicarDeeplink(get) {
     rpRenderTabla();
   }
   const pantallaParam = get('pantalla');
-  if (pantallaParam === 'ranking' || pantallaParam === 'carreras' || pantallaParam === 'top10') {
+  if (pantallaParam === 'inicio' || pantallaParam === 'ranking' || pantallaParam === 'carreras' || pantallaParam === 'top10') {
     rpEstado.pantalla = pantallaParam;
     rpRenderPantalla();
     if (pantallaParam === 'ranking') rpRenderTabla();
     else if (pantallaParam === 'top10') rpRenderTop10();
+    else if (pantallaParam === 'carreras') rpRenderUltimos();
+    else if (pantallaParam === 'inicio') rpRenderInicio();
   }
   let abrioModal = false;
   const carreraParam = get('carrera');
@@ -4469,7 +4634,8 @@ document.addEventListener('DOMContentLoaded', () => {
     rpRenderPestanas(); // los contadores cambian de significado (pruebas ↔ corredores)
     if (rpEstado.pantalla === 'ranking') rpRenderTabla();
     else if (rpEstado.pantalla === 'top10') rpRenderTop10();
-    else rpRenderUltimos();
+    else if (rpEstado.pantalla === 'carreras') rpRenderUltimos();
+    else rpRenderInicio();
   });
 
   // "Ver más carreras" de la portada (los enlaces de las tarjetas van por
@@ -4513,6 +4679,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Enlaces cruzados: clic en un corredor o una carrera (dentro del modal o
   // en "Últimos resultados") abre la ficha correspondiente.
   const alClicEnlace = e => {
+    const bIr = e.target.closest('[data-ir]');
+    if (bIr) { rpIrA(bIr.dataset.ir); return; }
     const bVer = e.target.closest('.rp-ver-btn');
     if (bVer) { rpPreviewTarjeta(bVer); return; }
     const bTar = e.target.closest('.rp-tarjeta-btn');
@@ -4562,6 +4730,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('rp-ultimos').addEventListener('click', alClicEnlace);
   document.getElementById('rp-top10').addEventListener('click', alClicEnlace);
+  document.getElementById('rp-inicio').addEventListener('click', alClicEnlace);
+  // Enter/Espacio en las tarjetas de podio de la portada (accesibilidad)
+  document.getElementById('rp-inicio').addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.target.closest('[data-corredor],[data-carrera],[data-ir]')) { e.preventDefault(); alClicEnlace(e); }
+  });
   document.getElementById('rp-calendario').addEventListener('click', alClicEnlace);
 
   // Cerrar la ficha: botón X, toque fuera del cuadro, o tecla Escape.

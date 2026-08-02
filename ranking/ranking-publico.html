@@ -97,7 +97,8 @@
       <div class="rp-conmutadores">
         <!-- Navegación principal: dos secciones, como pestañas subrayadas -->
         <div id="rp-pantalla" role="tablist" aria-label="Sección">
-          <button type="button" role="tab" data-pantalla="top10" class="rp-nav-tab rp-activa" aria-selected="true">⭐ Top 10</button>
+          <button type="button" role="tab" data-pantalla="inicio" class="rp-nav-tab rp-activa" aria-selected="true">🏠 Inicio</button>
+          <button type="button" role="tab" data-pantalla="top10" class="rp-nav-tab" aria-selected="false">⭐ Top 10</button>
           <button type="button" role="tab" data-pantalla="ranking" class="rp-nav-tab" aria-selected="false">🏆 Ranking</button>
           <button type="button" role="tab" data-pantalla="carreras" class="rp-nav-tab" aria-selected="false">🏁 Últimas carreras</button>
         </div>
@@ -134,6 +135,9 @@
       <nav id="rp-pestanas" role="tablist" aria-label="Categorías"></nav>
 
       <div id="rp-estado"><p class="rp-cargando">Cargando ranking…</p></div>
+
+      <!-- Portada / Inicio: cabecera + novedades + top 3 + accesos + autor (pantalla por defecto) -->
+      <div id="rp-inicio" style="display:none"></div>
 
       <!-- Portada: tarjetas de últimas carreras con podio (vista por defecto) -->
       <div id="rp-ultimos" style="display:none"></div>

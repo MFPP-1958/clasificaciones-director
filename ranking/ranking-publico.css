@@ -1867,3 +1867,83 @@ button.rp-equipo-sub:hover, button.rp-equipo-sub:focus-visible { color: var(--rp
   .rp-medallas { font-size: 0.78em; }
   .rp-bandera-mini { width: 16px; margin-left: 5px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   PORTADA / INICIO (pantalla por defecto) — mobile-first
+   ══════════════════════════════════════════════════════════════════════ */
+#rp-inicio { display: flex; flex-direction: column; gap: 20px; }
+
+/* 1-4. Héroe */
+.rp-in-hero { background: linear-gradient(150deg, #0b2f6b 0%, #0e7490 100%); color: #fff; border-radius: 16px; padding: 26px 20px; text-align: center; }
+.rp-in-eyebrow { margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: #fcd34d; }
+.rp-in-titulo { margin: 0 0 10px; font-size: 24px; line-height: 1.2; font-weight: 900; }
+.rp-in-lema { margin: 0 auto 18px; max-width: 620px; font-size: 14px; line-height: 1.55; color: #dbeafe; }
+.rp-in-acciones { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.rp-in-btn { border: 0; border-radius: 10px; padding: 12px 18px; font-size: 14px; font-weight: 800; cursor: pointer; }
+.rp-in-btn-1 { background: #eab308; color: #1e293b; }
+.rp-in-btn-1:hover { background: #f5c518; }
+.rp-in-btn-2 { background: #fff; color: #0b2f6b; }
+.rp-in-btn-2:hover { background: #eff6ff; }
+.rp-in-ventajas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 16px 0 0; font-size: 12px; color: #bfdbfe; }
+.rp-in-ventajas span { white-space: nowrap; }
+
+/* Cabecera de bloque */
+.rp-in-bloque-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.rp-in-bloque-cab h3 { margin: 0; font-size: 17px; font-weight: 800; color: #0b2f6b; }
+.rp-in-fecha { font-size: 12px; color: #64748b; }
+.rp-in-vermas { background: none; border: 0; color: #0e7490; font-weight: 700; font-size: 13px; cursor: pointer; padding: 0; }
+.rp-in-vermas:hover { text-decoration: underline; }
+
+/* 5. Lo que ha cambiado esta semana */
+.rp-in-novedades { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.rp-in-nov { background: #fff; border: 1px solid #e5e7eb; border-left: 4px solid var(--c, #0e7490); border-radius: 12px; padding: 12px 14px; }
+.rp-in-nov-cab { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--c, #0e7490); margin-bottom: 4px; }
+.rp-in-nov-cab span { color: #64748b; }
+.rp-in-nov-nombre { display: inline-block; font-size: 16px; font-weight: 800; color: #0f172a; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+button.rp-in-nov-nombre:hover { color: #0e7490; text-decoration: underline; }
+.rp-in-nov-sub { font-size: 12.5px; color: #64748b; margin-top: 2px; }
+
+/* 6. Top 3 (podio) */
+.rp-in-podios { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.rp-in-podio { background: #fff; border: 1px solid #e5e7eb; border-top: 4px solid var(--c); border-radius: 14px; padding: 14px; text-align: center; cursor: pointer; transition: transform .1s, box-shadow .1s; }
+.rp-in-podio:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
+.rp-in-podio:focus-visible { outline: 3px solid #0e7490; outline-offset: 2px; }
+.rp-in-podio-medalla { font-size: 26px; line-height: 1; }
+.rp-in-podio-nombre { font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+.rp-in-podio-pts { font-size: 20px; font-weight: 900; color: #0b2f6b; margin-top: 4px; }
+.rp-in-podio-pts span { font-size: 12px; font-weight: 600; color: #64748b; }
+.rp-in-podio-meta { font-size: 11.5px; color: #64748b; text-transform: uppercase; letter-spacing: .3px; margin-top: 4px; }
+.rp-in-podio-btn { display: inline-block; margin-top: 10px; background: #0e7490; color: #fff; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; }
+.rp-in-podios-pie { text-align: center; margin-top: 12px; }
+
+/* 7. Accesos destacados */
+.rp-in-accesos { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.rp-in-acceso { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; }
+.rp-in-acceso-ico { font-size: 24px; line-height: 1; }
+.rp-in-acceso h3 { margin: 8px 0 4px; font-size: 16px; font-weight: 800; color: #0b2f6b; }
+.rp-in-acceso p { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: #475569; }
+.rp-in-acceso-link { display: inline-block; background: none; border: 0; color: #0e7490; font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 0; text-decoration: none; }
+.rp-in-acceso-link:hover { text-decoration: underline; }
+
+/* 8-9. Autor + entrenador */
+.rp-in-autor { background: #0b1f3a; color: #fff; border-radius: 16px; padding: 26px 20px; text-align: center; }
+.rp-in-autor-eyebrow { margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #38bdf8; }
+.rp-in-autor-nombre { margin: 0 0 10px; font-size: 21px; font-weight: 900; }
+.rp-in-autor-nombre a { color: #fff; text-decoration: none; }
+.rp-in-autor-nombre a:hover { text-decoration: underline; }
+.rp-in-autor-desc { margin: 0 auto 10px; max-width: 560px; font-size: 13.5px; line-height: 1.6; color: #cbd5e1; }
+.rp-in-autor-rol { margin: 0 0 16px; font-size: 12.5px; font-weight: 700; color: #fbbf24; }
+.rp-in-autor-btn { display: inline-block; background: #fff; color: #0b1f3a; border-radius: 10px; padding: 10px 18px; font-size: 14px; font-weight: 800; text-decoration: none; }
+.rp-in-autor-btn:hover { background: #e2e8f0; }
+
+/* Escritorio: rejilla en varias columnas */
+@media (min-width: 720px) {
+  .rp-in-hero { padding: 42px 28px; }
+  .rp-in-titulo { font-size: 31px; }
+  .rp-in-lema { font-size: 15px; }
+  .rp-in-novedades { grid-template-columns: repeat(3, 1fr); }
+  .rp-in-podios { grid-template-columns: repeat(3, 1fr); }
+  .rp-in-accesos { grid-template-columns: repeat(3, 1fr); }
+  .rp-in-autor { padding: 36px 28px; }
+  .rp-in-autor-nombre { font-size: 24px; }
+}
