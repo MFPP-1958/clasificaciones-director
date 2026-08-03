@@ -1947,3 +1947,19 @@ button.rp-in-nov-nombre:hover { color: #0e7490; text-decoration: underline; }
   .rp-in-autor { padding: 36px 28px; }
   .rp-in-autor-nombre { font-size: 24px; }
 }
+
+/* Buscador de la portada (héroe) con sugerencias */
+.rp-in-buscar-wrap { display: flex; flex-direction: column; align-items: stretch; gap: 12px; max-width: 520px; margin: 0 auto; }
+.rp-in-buscar-caja { position: relative; width: 100%; }
+.rp-in-buscar-ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 16px; pointer-events: none; }
+.rp-in-buscar { width: 100%; box-sizing: border-box; padding: 14px 16px 14px 42px; border: 0; border-radius: 12px; font-size: 15px; background: #fff; color: #0f172a; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.rp-in-buscar::placeholder { color: #94a3b8; }
+.rp-in-buscar:focus { outline: 3px solid #eab308; outline-offset: 1px; }
+.rp-in-sug { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 14px 34px rgba(0,0,0,.24); overflow: hidden auto; max-height: 340px; text-align: left; }
+.rp-in-sug .rp-sug { color: #0f172a; }
+.rp-in-buscar-wrap .rp-in-btn-2 { align-self: center; }
+@media (min-width: 560px) {
+  .rp-in-buscar-wrap { flex-direction: row; align-items: center; max-width: 640px; }
+  .rp-in-buscar-caja { flex: 1; }
+  .rp-in-buscar-wrap .rp-in-btn-2 { align-self: stretch; white-space: nowrap; }
+}

@@ -752,6 +752,19 @@ function rpRenderSubtitulo() {
   const el = document.getElementById('rp-subtitulo');
   if (!rpEstado.ranking) { el.textContent = ''; return; }
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
+  // En la PORTADA el contexto NO refleja vistas internas (Challenge CV, Equipos,
+  // Rendimiento…): siempre "Ranking <categoría> · <comunidad> · Temporada N",
+  // para que una selección anterior (p.ej. Challenge) no se cuele en Inicio.
+  if (rpEstado.pantalla === 'inicio') {
+    const p = ['Ranking ' + (rpEstado.todasCategorias ? 'general' : rpCatSingular(cat))];
+    if (rpEstado.region === RP_REGION_SIN) p.push('Sin comunidad asignada');
+    else if (rpEstado.region) p.push(rpEstado.regionDisplay || '');
+    p.push('Temporada ' + rpEstado.temporada);
+    const t = p.filter(Boolean).join(' · ');
+    el.textContent = t;
+    document.title = 'Ranking MFPP Cycling — ' + t;
+    return;
+  }
   const partes = [];
   if (rpEstado.todasCategorias) partes.push('Todas las categorías');
   else if (cat) partes.push(cat.label);
@@ -823,6 +836,7 @@ function rpRenderPantalla() {
   document.querySelector('.rp-pie').style.display = esRanking ? '' : 'none';
   // El aviso del modo Challenge lo gestiona rpRenderTabla dentro del ranking
   if (!esRanking) document.getElementById('rp-challenge-info').style.display = 'none';
+  rpRenderSubtitulo(); // el contexto superior cambia según la pantalla (Inicio ≠ Ranking)
 }
 
 // ── Pantalla "🏠 Inicio" (portada) ────────────────────────────────────────
@@ -839,16 +853,20 @@ function rpCatSingular(cat) {
 // Cambia de pantalla desde la portada (o enfoca el buscador).
 function rpIrA(dest) {
   if (dest === 'buscar') {
-    const b = document.getElementById('rp-buscador');
+    const b = document.getElementById('rp-in-buscar') || document.getElementById('rp-buscador');
     if (b) { try { b.focus({ preventScroll: false }); } catch (_) { b.focus(); } }
     return;
   }
   if (dest === 'inicio' || dest === 'top10' || dest === 'ranking' || dest === 'carreras') {
-    if (rpEstado.pantalla === dest) return;
+    // "Ver clasificación" abre SIEMPRE Ranking → Ranking MFPP → Corredores,
+    // ignorando cualquier vista interna anterior (Challenge CV, Equipos, Podios…).
+    if (dest === 'ranking') { rpEstado.modo = 'mfpp'; rpEstado.vista = 'corredores'; }
+    else if (rpEstado.pantalla === dest) return;
     rpEstado.pantalla = dest;
     rpRenderPantalla();
+    if (dest === 'ranking') { rpRenderModo(); rpRenderVista(); }
     rpRenderPestanas();
-    if (dest === 'ranking') rpRenderTabla();
+    if (dest === 'ranking') { rpRenderTabla(); rpGuardarPrefs(); }
     else if (dest === 'top10') rpRenderTop10();
     else if (dest === 'carreras') rpRenderUltimos();
     else rpRenderInicio();
@@ -939,8 +957,12 @@ function rpRenderInicio() {
       `<p class="rp-in-eyebrow">Temporada ${rpEstado.temporada} · Comunidad Valenciana</p>` +
       `<h2 class="rp-in-titulo">El ranking ${rpEscapar(catSing)} más completo de la Comunidad Valenciana</h2>` +
       '<p class="rp-in-lema">Resultados, evolución y próximas carreras. Actualizado personalmente después de cada jornada, sin registro y completamente gratuito.</p>' +
-      '<div class="rp-in-acciones">' +
-        '<button type="button" class="rp-in-btn rp-in-btn-1" data-ir="buscar">🔎 Buscar mi ficha</button>' +
+      '<div class="rp-in-buscar-wrap">' +
+        '<div class="rp-in-buscar-caja">' +
+          '<span class="rp-in-buscar-ico" aria-hidden="true">🔎</span>' +
+          '<input type="search" id="rp-in-buscar" class="rp-in-buscar" placeholder="Escribe tu nombre o tu equipo…" autocomplete="off" aria-label="Buscar corredor o equipo">' +
+          '<div id="rp-in-sug" class="rp-in-sug" role="listbox" hidden></div>' +
+        '</div>' +
         '<button type="button" class="rp-in-btn rp-in-btn-2" data-ir="ranking">📋 Ver clasificación</button>' +
       '</div>' +
       '<p class="rp-in-ventajas"><span>✓ Sin correo</span><span>✓ Sin registro</span><span>✓ Gratis</span></p>' +
@@ -1203,9 +1225,11 @@ function rpBuscarSugerencias(texto) {
   return resultado.sort((a, b) => a.peso - b.peso).map(x => x.e).slice(0, 8);
 }
 
-function rpRenderSugerencias() {
-  const caja = document.getElementById('rp-sugerencias');
-  const sugerencias = rpBuscarSugerencias(rpEstado.busqueda);
+// Pinta las sugerencias de una búsqueda en un contenedor cualquiera (reutilizado
+// por el buscador global y por el buscador de la portada).
+function rpRenderSugEnCaja(texto, caja) {
+  if (!caja) return;
+  const sugerencias = rpBuscarSugerencias(texto);
   if (!sugerencias.length) { caja.hidden = true; caja.innerHTML = ''; return; }
   caja.innerHTML = sugerencias.map(s =>
     `<button type="button" class="rp-sug" data-sug-tipo="${s.tipo}" data-sug-id="${rpEscapar(s.id)}">` +
@@ -1214,6 +1238,9 @@ function rpRenderSugerencias() {
     `<span class="rp-sug-sub">${rpEscapar(s.sub || '')}</span></button>`
   ).join('');
   caja.hidden = false;
+}
+function rpRenderSugerencias() {
+  rpRenderSugEnCaja(rpEstado.busqueda, document.getElementById('rp-sugerencias'));
 }
 
 function rpOcultarSugerencias() {
@@ -4730,11 +4757,37 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('rp-ultimos').addEventListener('click', alClicEnlace);
   document.getElementById('rp-top10').addEventListener('click', alClicEnlace);
-  document.getElementById('rp-inicio').addEventListener('click', alClicEnlace);
-  // Enter/Espacio en las tarjetas de podio de la portada (accesibilidad)
-  document.getElementById('rp-inicio').addEventListener('keydown', e => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    if (e.target.closest('[data-corredor],[data-carrera],[data-ir]')) { e.preventDefault(); alClicEnlace(e); }
+  const elInicio = document.getElementById('rp-inicio');
+  elInicio.addEventListener('click', alClicEnlace);
+  // Buscador de la portada con sugerencias (reutiliza el índice global de búsqueda)
+  elInicio.addEventListener('input', e => {
+    if (!e.target.closest('#rp-in-buscar')) return;
+    rpRenderSugEnCaja(e.target.value, document.getElementById('rp-in-sug'));
+  });
+  elInicio.addEventListener('mousedown', e => {
+    const b = e.target.closest('#rp-in-sug .rp-sug');
+    if (!b) return;
+    e.preventDefault(); // no perder el foco antes de procesar el clic
+    rpAbrirSugerencia(b.dataset.sugTipo, b.dataset.sugId);
+    const inp = document.getElementById('rp-in-buscar'); if (inp) inp.value = '';
+    const caja = document.getElementById('rp-in-sug'); if (caja) { caja.hidden = true; caja.innerHTML = ''; }
+  });
+  elInicio.addEventListener('focusout', e => {
+    if (!e.target.closest('#rp-in-buscar')) return;
+    setTimeout(() => { const c = document.getElementById('rp-in-sug'); if (c) c.hidden = true; }, 150);
+  });
+  // Teclado: Enter en el buscador abre la 1ª sugerencia; Enter/Espacio en tarjetas
+  elInicio.addEventListener('keydown', e => {
+    if (e.target.closest('#rp-in-buscar')) {
+      if (e.key === 'Enter') {
+        const first = document.querySelector('#rp-in-sug .rp-sug');
+        if (first) { e.preventDefault(); rpAbrirSugerencia(first.dataset.sugTipo, first.dataset.sugId); }
+      }
+      return;
+    }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-corredor],[data-carrera],[data-ir]')) {
+      e.preventDefault(); alClicEnlace(e);
+    }
   });
   document.getElementById('rp-calendario').addEventListener('click', alClicEnlace);
 
