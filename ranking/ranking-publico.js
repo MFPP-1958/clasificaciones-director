@@ -709,12 +709,38 @@ function rpEscapar(s) {
   ));
 }
 
-// ── Analítica GA4 (modo SIN COOKIES) ──────────────────────────────────────
-// Envía SOLO datos agregados: nunca nombres de corredores, correos ni datos
-// personales (son menores). Parámetros permitidos: category, content_type,
-// section, share_method. Ver la carga de GA4 en ranking-publico.html.
+// ── Analítica GA4 por MEASUREMENT PROTOCOL (envío directo, sin gtag.js) ──────
+// El ranking va embebido en un iframe de mfppcycling.com, que tiene su propio
+// Google Tag. Con gtag.js, el tag del padre BLOQUEA el envío del nuestro dentro
+// del iframe (comprobado). Con Measurement Protocol enviamos por fetch directo,
+// sin conflicto. SOLO datos agregados: nunca nombres, correos ni datos personales
+// (menores). Parámetros: category, content_type, section, share_method.
+const RP_GA_MID = 'G-4P6308WJZR';
+const RP_GA_SECRET = 'kaobs0N4SI2TW10WQ9hF3g';   // secreto de API del flujo (Measurement Protocol)
+function rpGACid() {
+  let c = null;
+  try { c = sessionStorage.getItem('rp_ga_cid'); } catch (_) {}
+  if (!c) {
+    c = Math.floor(Math.random() * 1e10) + '.' + Math.floor(Date.now() / 1000);
+    try { sessionStorage.setItem('rp_ga_cid', c); } catch (_) {}
+  }
+  return c;
+}
+const _rpGASid = String(Math.floor(Date.now() / 1000));
 function rpGA(nombre, params) {
-  try { if (typeof gtag === 'function') gtag('event', nombre, params || {}); } catch (_) { /* GA no disponible */ }
+  if (!RP_GA_SECRET || RP_GA_SECRET === 'PENDIENTE_API_SECRET') return; // aún sin secreto
+  try {
+    const debug = /[?&]gadebug=1/.test(location.search);
+    const url = 'https://www.google-analytics.com/' + (debug ? 'debug/' : '') +
+      'mp/collect?measurement_id=' + RP_GA_MID + '&api_secret=' + RP_GA_SECRET;
+    fetch(url, {
+      method: 'POST', mode: 'no-cors', keepalive: true,
+      body: JSON.stringify({
+        client_id: rpGACid(),
+        events: [{ name: nombre, params: Object.assign({ session_id: _rpGASid, engagement_time_msec: 100 }, params || {}) }]
+      })
+    });
+  } catch (_) { /* red no disponible */ }
 }
 const RP_GA_CAT = { cadete: 'cadete', juvenil: 'juvenil', junior: 'juvenil', sub23: 'sub-23', 'sub-23': 'sub-23', femina: 'féminas', feminas: 'féminas', femenina: 'féminas', femenino: 'féminas' };
 function rpGACat() { const k = rpEstado.categoria || ''; return RP_GA_CAT[k] || (k || undefined); }
@@ -4514,6 +4540,7 @@ async function rpIniciar() {
     // hubiera datos, aplicarlo ahora; y avisar de que el widget está listo
     // para recibir enlaces que lleguen más tarde.
     if (rpDeeplinkPendiente) { rpAplicarDeeplink(k => rpDeeplinkPendiente[k]); rpDeeplinkPendiente = null; }
+    rpGA('page_view', { page_location: location.href, page_title: document.title });
     rpGAVista(rpEstado.pantalla); // evento de vista de la pantalla con la que se arranca
     if (window.parent !== window) window.parent.postMessage({ tipo: 'mfpp-rp-listo' }, '*');
     if (new URLSearchParams(location.search).get('debug') === '1') {
