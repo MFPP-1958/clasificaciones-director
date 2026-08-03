@@ -56,18 +56,18 @@
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
-    // Modo SIN COOKIES (opción B): Consent Mode con analytics_storage DENEGADO →
-    // GA4 no pone ninguna cookie; envía mediciones anónimas (cookieless pings)
-    // para el recuento agregado. Sin señales de Google ni publicidad.
+    // MEDICIÓN NORMAL: analytics_storage CONCEDIDO (los datos se ven en GA), pero
+    // PUBLICIDAD DENEGADA (ad_storage/ad_user_data/ad_personalization). Sin señales
+    // de Google, sin personalización de anuncios, IP anonimizada. NUNCA se envían
+    // nombres, correos ni datos personales (menores): solo parámetros agregados.
     gtag('consent', 'default', {
       ad_storage: 'denied',
       ad_user_data: 'denied',
       ad_personalization: 'denied',
-      analytics_storage: 'denied'
+      analytics_storage: 'granted'
     });
     gtag('js', new Date());
     gtag('config', 'G-4P6308WJZR', {
-      client_storage: 'none',
       anonymize_ip: true,
       allow_google_signals: false,
       allow_ad_personalization_signals: false,
