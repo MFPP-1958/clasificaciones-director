@@ -709,6 +709,33 @@ function rpEscapar(s) {
   ));
 }
 
+// ── Analítica GA4 (modo SIN COOKIES) ──────────────────────────────────────
+// Envía SOLO datos agregados: nunca nombres de corredores, correos ni datos
+// personales (son menores). Parámetros permitidos: category, content_type,
+// section, share_method. Ver la carga de GA4 en ranking-publico.html.
+function rpGA(nombre, params) {
+  try { if (typeof gtag === 'function') gtag('event', nombre, params || {}); } catch (_) { /* GA no disponible */ }
+}
+const RP_GA_CAT = { cadete: 'cadete', juvenil: 'juvenil', junior: 'juvenil', sub23: 'sub-23', 'sub-23': 'sub-23', femina: 'féminas', feminas: 'féminas', femenina: 'féminas', femenino: 'féminas' };
+function rpGACat() { const k = rpEstado.categoria || ''; return RP_GA_CAT[k] || (k || undefined); }
+function rpGASeccion() { return ({ inicio: 'inicio', top10: 'top10', ranking: 'ranking', carreras: 'últimas carreras' })[rpEstado.pantalla] || undefined; }
+// Evento de "vista" según la pantalla a la que se entra.
+function rpGAVista(p) {
+  if (p === 'inicio') rpGA('ranking_home_view', { section: 'inicio' });
+  else if (p === 'top10') rpGA('top10_view', { category: rpGACat(), section: 'top10' });
+  else if (p === 'ranking') rpGA('ranking_view', { category: rpGACat(), section: 'ranking' });
+}
+// Uso del buscador: 1 evento como máximo cada 4 s (no spamear al teclear) y
+// SIN el término escrito (podría ser el nombre de un menor).
+let _rpGABuscarT = 0;
+function rpGABuscar(texto) {
+  if ((texto || '').trim().length < 2) return;
+  const t = Date.now();
+  if (t - _rpGABuscarT < 4000) return;
+  _rpGABuscarT = t;
+  rpGA('search', { section: rpGASeccion() });
+}
+
 // Los puntos se muestran SIEMPRE redondeados al entero superior (los
 // decimales de los coeficientes quedan feos en pantalla). El cálculo interno
 // mantiene los decimales: solo se redondea al pintar.
@@ -870,6 +897,7 @@ function rpIrA(dest) {
     else if (dest === 'top10') rpRenderTop10();
     else if (dest === 'carreras') rpRenderUltimos();
     else rpRenderInicio();
+    rpGAVista(dest);
   }
 }
 function rpRenderInicio() {
@@ -2110,6 +2138,7 @@ function rpBotonComparar() {
 
 // Paso 1: elegir rival (misma categoría), con buscador.
 function rpMostrarSelectorComparar(claveA) {
+  rpGA('compare_riders', { category: rpGACat() });
   const a = rpCorredorPorClave(claveA);
   if (!a) return;
   rpEstado.compararA = claveA;
@@ -2531,6 +2560,7 @@ async function rpEntregarPDF(doc, filename, texto) {
 }
 
 async function rpCompartirTarjeta(btn) {
+  rpGA('share', { share_method: 'imagen', content_type: 'corredor' });
   const d = rpEstado.modalTarjeta;
   if (!d) return;
   const orig = btn.textContent;
@@ -2649,6 +2679,7 @@ function rpEnlaceGoogleCal(p) {
 
 // ── Modal de ficha del ciclista ──
 function rpAbrirModal(clave) {
+  rpGA('select_content', { content_type: 'corredor', category: rpGACat() });
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (!cat) return;
   rpSalirDeFichaCarrera();
@@ -3096,6 +3127,7 @@ async function rpActivarPestanaRuta(carrera) {
 }
 
 function rpAbrirModalCarrera(raceId) {
+  rpGA('race_results_view', { content_type: 'carrera', category: rpGACat() });
   const carrera = rpCarreraPorId(raceId);
   if (!carrera) return;
   rpEstado.modalClave = null; // desde una carrera las flechas ‹ › no navegan
@@ -3216,6 +3248,7 @@ function rpAbrirModalCarrera(raceId) {
 // Plantilla ordenada por puntos (los que suman, destacados), estadísticas del
 // equipo completo y navegación ‹ › entre equipos del ranking filtrado.
 function rpAbrirModalEquipo(claveEquipo) {
+  rpGA('team_profile_view', { content_type: 'equipo', category: rpGACat() });
   const cat = rpEstado.ranking.categorias.find(c => c.key === rpEstado.categoria);
   if (!cat) return;
   rpSalirDeFichaCarrera();
@@ -3592,6 +3625,7 @@ function rpDatosPDF() {
 }
 
 async function rpDescargarPDF(btn) {
+  rpGA('pdf_download', { section: 'ranking', category: rpGACat() });
   const d = rpDatosPDF();
   if (!d || !d.filas.length) return;
   const orig = btn.textContent;
@@ -3688,6 +3722,7 @@ function rpLineaCanvas(serie, opts) {
 }
 
 async function rpDescargarFichaPDF(btn) {
+  rpGA('pdf_download', { content_type: 'corredor', category: rpGACat() });
   const c = rpCorredorPorClave(rpEstado.modalClave);
   if (!c) return;
   const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Generando…';
@@ -3803,6 +3838,7 @@ function rpBotonCarreraPDF() {
 }
 
 async function rpDescargarCarreraPDF(btn) {
+  rpGA('pdf_download', { content_type: 'carrera', category: rpGACat() });
   const carrera = rpEstado._carreraModal;
   if (!carrera) return;
   // Si el visitante está en la pestaña "Equipos", descargamos la clasificación
@@ -4478,6 +4514,7 @@ async function rpIniciar() {
     // hubiera datos, aplicarlo ahora; y avisar de que el widget está listo
     // para recibir enlaces que lleguen más tarde.
     if (rpDeeplinkPendiente) { rpAplicarDeeplink(k => rpDeeplinkPendiente[k]); rpDeeplinkPendiente = null; }
+    rpGAVista(rpEstado.pantalla); // evento de vista de la pantalla con la que se arranca
     if (window.parent !== window) window.parent.postMessage({ tipo: 'mfpp-rp-listo' }, '*');
     if (new URLSearchParams(location.search).get('debug') === '1') {
       console.log('[ranking-publico] carreras adaptadas:', rpEstado.carreras);
@@ -4580,6 +4617,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rpEstado.busqueda = e.target.value;
       rpRenderTabla();
       rpRenderSugerencias();
+      rpGABuscar(e.target.value);
     }, 150);
   });
   if (buscadorX) buscadorX.addEventListener('click', () => {
@@ -4663,6 +4701,7 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (rpEstado.pantalla === 'top10') rpRenderTop10();
     else if (rpEstado.pantalla === 'carreras') rpRenderUltimos();
     else rpRenderInicio();
+    rpGAVista(rpEstado.pantalla);
   });
 
   // "Ver más carreras" de la portada (los enlaces de las tarjetas van por
@@ -4724,11 +4763,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (bCmpVolver) { rpAbrirModal(bCmpVolver.dataset.cmpVolver); return; }
     const bWA = e.target.closest('.rp-compartir-wa');
     if (bWA) {
+      rpGA('share', { share_method: 'enlace' });
       window.open('https://wa.me/?text=' + encodeURIComponent(bWA.dataset.shareTxt + '\n' + bWA.dataset.shareUrl), '_blank', 'noopener');
       return;
     }
     const bCP = e.target.closest('.rp-compartir-cp');
-    if (bCP) { rpCopiarEnlace(bCP.dataset.shareUrl, bCP); return; }
+    if (bCP) { rpGA('share', { share_method: 'enlace' }); rpCopiarEnlace(bCP.dataset.shareUrl, bCP); return; }
     const bTab = e.target.closest('[data-rctab]');
     if (bTab) { rpCambiarPestanaCarrera(bTab.dataset.rctab); return; }
     const bEqVolver = e.target.closest('[data-eqprueba-volver]');
@@ -4763,6 +4803,11 @@ document.addEventListener('DOMContentLoaded', () => {
   elInicio.addEventListener('input', e => {
     if (!e.target.closest('#rp-in-buscar')) return;
     rpRenderSugEnCaja(e.target.value, document.getElementById('rp-in-sug'));
+    rpGABuscar(e.target.value);
+  });
+  // Analítica: clic en "Conocer a Manuel y su método" (no bloquea el enlace)
+  elInicio.addEventListener('click', e => {
+    if (e.target.closest('.rp-in-autor-btn')) rpGA('coach_method_click', { section: 'inicio' });
   });
   elInicio.addEventListener('mousedown', e => {
     const b = e.target.closest('#rp-in-sug .rp-sug');

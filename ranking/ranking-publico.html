@@ -47,6 +47,34 @@
   }
   </script>
 
+  <!-- ── Google Analytics 4 · medición del uso del ranking DENTRO del iframe ──
+       Modo SIN COOKIES (client_storage:'none'): no guarda cookies ni identifica a
+       nadie. NUNCA se envían nombres de corredores, correos ni datos personales
+       (son menores); solo parámetros agregados (categoría, sección…). Los eventos
+       se disparan desde ranking-publico.js (helper rpGA). ID: G-4P6308WJZR. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-4P6308WJZR"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    // Modo SIN COOKIES (opción B): Consent Mode con analytics_storage DENEGADO →
+    // GA4 no pone ninguna cookie; envía mediciones anónimas (cookieless pings)
+    // para el recuento agregado. Sin señales de Google ni publicidad.
+    gtag('consent', 'default', {
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'denied'
+    });
+    gtag('js', new Date());
+    gtag('config', 'G-4P6308WJZR', {
+      client_storage: 'none',
+      anonymize_ip: true,
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false,
+      debug_mode: /[?&]gadebug=1/.test(location.search)   // DebugView solo con ?gadebug=1
+    });
+  </script>
+
   <!-- Librería oficial de Supabase (solo cliente; el modo lectura lo garantiza ranking-publico.js) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
