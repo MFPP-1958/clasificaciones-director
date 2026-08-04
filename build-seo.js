@@ -189,7 +189,7 @@ function podioHTML(resultados, posCV) {
   }).join('');
 }
 
-function paginaCarrera(r, extra, ruta, resultados) {
+function paginaCarrera(r, extra, ruta, resultados, rankings) {
   const url = BASE + '/ranking/resultados/' + ruta;
   const localidad = extra.localidad || '';
   const anyo = anyoDe(r.date);
@@ -235,7 +235,12 @@ function paginaCarrera(r, extra, ruta, resultados) {
     'para ver mapa, perfil de altimetría y fichas de corredores.</p>\n' +
     '<h2>Clasificación</h2>\n<div class="tablabox"><table><thead><tr><th class="c">Pos.</th><th class="c">Dorsal</th>' +
     '<th>Corredor</th><th>Equipo</th><th class="c">Cat.</th>' + (hayTiempo ? '<th class="c">Tiempo</th>' : '') +
-    `</tr></thead>\n<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table></div>\n`;
+    `</tr></thead>\n<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table></div>\n` +
+    ((rankings && rankings.length)
+      ? '<h2>Clasificación general del ranking</h2>\n<div class="rnav">' +
+        rankings.map(rc => `<a href="${esc(rc.ruta)}">🏆 Ranking ${esc(rc.label)} ${TEMPORADA}</a>`).join('') +
+        '</div>\n'
+      : '');
   return pagina({ titulo, head, cuerpo });
 }
 
@@ -243,7 +248,7 @@ function paginaCarrera(r, extra, ruta, resultados) {
 // La página más valiosa para SEO ("ranking cadetes ciclismo"). Muestra la
 // clasificación general filtrada por la Comunidad Valenciana (como el widget
 // por defecto), con puesto, corredor, equipo y puntos.
-function paginaRanking(catKey, catLabel, corredores, ruta, todosRankings) {
+function paginaRanking(catKey, catLabel, corredores, ruta, todosRankings, recientes, ultimaISO) {
   const url = BASE + '/ranking/resultados/' + ruta;
   const titulo = `Ranking ${catLabel} ${TEMPORADA} · Ciclismo Comunidad Valenciana | MFPP Cycling`;
   const desc = `Clasificación general del ranking de rendimiento de ${catLabel.toLowerCase()} ` +
@@ -253,6 +258,7 @@ function paginaRanking(catKey, catLabel, corredores, ruta, todosRankings) {
     numberOfItems: corredores.length,
     itemListElement: corredores.slice(0, 50).map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.nombre }))
   };
+  if (ultimaISO) jsonld.dateModified = ultimaISO;
   const head =
     `<meta name="description" content="${esc(desc)}">\n<meta name="robots" content="index, follow">\n` +
     `<link rel="canonical" href="${esc(url)}">\n` +
@@ -279,11 +285,16 @@ function paginaRanking(catKey, catLabel, corredores, ruta, todosRankings) {
     `Pulsa un corredor para ver su ficha completa (historial y evolución) en el <a href="${WEB}/ranking/">ranking interactivo</a>.</p>\n` +
     '<div class="tablabox rk-tabla"><table><thead><tr><th class="c">#</th><th>Corredor</th><th>Equipo</th>' +
     '<th class="c">Cat.</th><th class="c">Pruebas</th><th class="c">Puntos</th></tr></thead>\n' +
-    `<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table></div>\n`;
+    `<tbody>\n${filas || '<tr><td colspan="6">Sin datos.</td></tr>'}\n</tbody></table></div>\n` +
+    ((recientes && recientes.length)
+      ? '<h2>Últimas carreras</h2>\n<div class="rnav">' +
+        recientes.map(it => `<a href="${esc(it.ruta)}">${esc(diaSemana(it.fecha))} ${esc(fmtFecha(it.fecha))} · ${esc(it.nombre)}</a>`).join('') +
+        `</div>\n<p class="intro"><a href="${BASE}/ranking/resultados/">Ver todas las carreras y clasificaciones →</a></p>\n`
+      : '');
   return pagina({ titulo, head, cuerpo });
 }
 
-function paginaHub(items, rankings) {
+function paginaHub(items, rankings, ultimaISO) {
   const url = BASE + '/ranking/resultados/';
   const titulo = 'Ranking y Resultados de Ciclismo Base 2026 · Cadetes y Juveniles | MFPP Cycling';
   const desc = 'Resultados y clasificaciones del ciclismo base de la Comunidad Valenciana: ' +
@@ -293,6 +304,7 @@ function paginaHub(items, rankings) {
     name: titulo, url: url, inLanguage: 'es',
     publisher: { '@type': 'SportsOrganization', name: 'MFPP Cycling', url: WEB, logo: LOGO }
   };
+  if (ultimaISO) jsonld.dateModified = ultimaISO;
   const head =
     `<meta name="description" content="${esc(desc)}">\n<meta name="robots" content="index, follow">\n` +
     `<link rel="canonical" href="${esc(url)}">\n` +
@@ -328,7 +340,11 @@ async function generarSEO(distDir) {
   const filas = await leerCarreras();
   const outDir = path.join(distDir, 'ranking', 'resultados');
   fs.mkdirSync(outDir, { recursive: true });
-  const urls = [{ loc: BASE + '/ranking/resultados/', lastmod: null }];
+
+  // Fecha de la última jornada disputada → lastmod/dateModified de las páginas
+  // "vivas" (hub y rankings), que cambian con cada nueva jornada publicada.
+  const fechas = filas.map(r => String(r.date || '').slice(0, 10)).filter(Boolean).sort();
+  const ultimaISO = fechas.length ? fechas[fechas.length - 1] : null;
 
   // ── Ranking calculado (motor idéntico al widget) ──
   const rk = core.calcularRanking(filas);
@@ -339,12 +355,9 @@ async function generarSEO(distDir) {
     cv.forEach((c, i) => posCV.set(c.clave, { pos: i + 1, puntos: c.puntosTotales }));
     if (cv.length) rankings.push({ key: cat.key, label: cat.label, ruta: 'ranking-' + cat.key + '-' + TEMPORADA + '.html', corredores: cv });
   }
-  for (const rc of rankings) {
-    fs.writeFileSync(path.join(outDir, rc.ruta), paginaRanking(rc.key, rc.label, rc.corredores, rc.ruta, rankings), 'utf8');
-    urls.push({ loc: BASE + '/ranking/resultados/' + rc.ruta, lastmod: null });
-  }
 
-  // ── Páginas por carrera + hub ──
+  // ── Carreras: calculamos rutas/items ANTES para poder enlazarlas desde los
+  // rankings (enlaces internos cruzados). `filas` viene ordenado por fecha desc. ──
   const carreras = filas.filter(r => (r.race_results || []).length);
   const items = [];
   for (const r of carreras) {
@@ -354,20 +367,40 @@ async function generarSEO(distDir) {
       .filter(x => Number.isFinite(parseInt(x.pos, 10)) && parseInt(x.pos, 10) > 0)
       .sort((a, b) => parseInt(a.pos, 10) - parseInt(b.pos, 10));
     const ruta = slug(r.name) + '-' + String(r.id).slice(0, 6) + '.html';
-    fs.writeFileSync(path.join(outDir, ruta), paginaCarrera(r, extra, ruta, resultados), 'utf8');
     items.push({
-      ruta, nombre: r.name, fecha: r.date, localidad: extra.localidad || '',
+      r, extra, resultados, ruta, nombre: r.name, fecha: r.date, localidad: extra.localidad || '',
       tipo: tipoCarrera(r.name, extra), podio: podioHTML(resultados, posCV)
     });
-    urls.push({ loc: BASE + '/ranking/resultados/' + ruta, lastmod: String(r.date || '').slice(0, 10) });
   }
-  fs.writeFileSync(path.join(outDir, 'index.html'), paginaHub(items, rankings), 'utf8');
+  const recientes = items.slice(0, 8); // últimas 8 carreras (para enlazar desde los rankings)
+
+  const urls = [{ loc: BASE + '/ranking/resultados/', lastmod: ultimaISO }];
+
+  // Páginas de RANKING por categoría (con enlaces a las últimas carreras)
+  for (const rc of rankings) {
+    fs.writeFileSync(path.join(outDir, rc.ruta), paginaRanking(rc.key, rc.label, rc.corredores, rc.ruta, rankings, recientes, ultimaISO), 'utf8');
+    urls.push({ loc: BASE + '/ranking/resultados/' + rc.ruta, lastmod: ultimaISO });
+  }
+  // Páginas por CARRERA (con enlaces a los rankings generales)
+  for (const it of items) {
+    fs.writeFileSync(path.join(outDir, it.ruta), paginaCarrera(it.r, it.extra, it.ruta, it.resultados, rankings), 'utf8');
+    urls.push({ loc: BASE + '/ranking/resultados/' + it.ruta, lastmod: String(it.fecha || '').slice(0, 10) });
+  }
+  // HUB
+  fs.writeFileSync(path.join(outDir, 'index.html'), paginaHub(items, rankings, ultimaISO), 'utf8');
+
+  // ── Sitemap: en la RAÍZ del dominio (ranking.mfppcycling.com/sitemap.xml, que
+  // es donde Google lo busca) y también en /ranking/resultados/. + robots.txt. ──
   const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     urls.map(u => '<url><loc>' + esc(u.loc) + '</loc>' +
       (u.lastmod ? '<lastmod>' + u.lastmod + '</lastmod>' : '') + '</url>').join('\n') +
     '\n</urlset>\n';
   fs.writeFileSync(path.join(outDir, 'sitemap.xml'), sitemap, 'utf8');
+  fs.writeFileSync(path.join(distDir, 'sitemap.xml'), sitemap, 'utf8');
+  const robots = 'User-agent: *\nAllow: /\n\nSitemap: ' + BASE + '/sitemap.xml\n';
+  fs.writeFileSync(path.join(distDir, 'robots.txt'), robots, 'utf8');
+
   return carreras.length;
 }
 
