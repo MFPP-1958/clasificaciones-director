@@ -25792,6 +25792,20 @@ function _isCurrentRaceCV(){
   return _isCVRace(pseudo);
 }
 
+// Repara nombres con el apellido DUPLICADO por un mapeo de columnas defectuoso
+// del archivo ("Zarzoso, Zarzoso Marti Aleix" → "Zarzoso, Aleix"). Cuando la 1ª
+// palabra tras la coma es el propio apellido, el nombre real es la ÚLTIMA palabra.
+// Los nombres normales ("Buzdea, Alejandro") se devuelven intactos.
+function _repararNombreDup(name){
+  const s = String(name||'').trim();
+  const m = s.match(/^([^,]+),\s*(.+)$/);
+  if(!m) return s;
+  const ap = (m[1].trim().split(/\s+/)[0])||'';
+  const nmw = m[2].trim().split(/\s+/).filter(Boolean);
+  const _st = x => String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(nmw.length>1 && ap && _st(nmw[0])===_st(ap)) return ap+', '+nmw[nmw.length-1];
+  return s;
+}
 function _postProcessInscritos(arr){
   const year = (typeof _getRaceYear==='function') ? _getRaceYear() : new Date().getFullYear();
   // Index: nameKey → {bibs:Map<bib,count>, cats:Map<cat,count>, team, lastDate}
@@ -25826,8 +25840,8 @@ function _postProcessInscritos(arr){
     let hit = null;
     for(const v of variants){ if(idx.has(v)){ hit = idx.get(v); break; } }
     if(!hit){
-      // No encontrado: dejamos lo que venía
-      return {...ins, _enriched:false, _newRider: true};
+      // No encontrado: dejamos lo que venía (pero con el nombre reparado)
+      return {...ins, name:_repararNombreDup(ins.name), _enriched:false, _newRider: true};
     }
     // Categoría más específica (con dígito) prevalece sobre la genérica de la startlist
     const catsSorted = [...hit.cats.entries()].sort((a,b)=>b[1]-a[1]);
@@ -25839,7 +25853,7 @@ function _postProcessInscritos(arr){
     const fileG = (typeof _calCatGroup==='function') ? _calCatGroup(ins.cat) : null;
     const histG = (typeof _calCatGroup==='function') ? _calCatGroup(bestCat) : null;
     if(fileG && histG && fileG.key!==histG.key){
-      return {...ins, _enriched:false, _newRider:true};   // conserva su categoría del archivo
+      return {...ins, name:_repararNombreDup(ins.name), _enriched:false, _newRider:true};   // conserva su categoría del archivo
     }
     // ── Dorsal ──────────────────────────────────────────────────────────────
     //   1º) dorsal CV CORREGIDO a mano en las láminas (fuente de verdad).
@@ -25862,7 +25876,7 @@ function _postProcessInscritos(arr){
     const bestTeam = ins.team || hit.lastTeam || '';
     return {
       bib: bestBib,
-      name: ins.name,
+      name: _repararNombreDup(ins.name),
       team: bestTeam,
       cat: bestCat.replace(/\s+/g,''),
       _enriched: true
