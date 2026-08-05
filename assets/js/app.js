@@ -26168,6 +26168,198 @@ function clearInscritos(){
   _inscritosSaved=true;   // lista vacía → nada pendiente de guardar
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   EQUIPOS DE LA COMUNITAT VALENCIANA en la lista de inscritos.
+   Objetivo: al cargar una lista de inscritos (aunque la prueba sea de fuera de
+   la CV), sacar el listado de equipos VALENCIANOS que participan y generar una
+   infografía cuadrada para Instagram.
+   Como el histórico es a nivel español (no permite deducir la región del equipo
+   de forma fiable), la marca "es CV" la decide el director con casillas y se
+   RECUERDA (localStorage). Se parte de una propuesta inicial de equipos CV
+   conocidos; el director la ajusta y sus cambios prevalecen para siempre.
+   ══════════════════════════════════════════════════════════════════════════ */
+// Clave normalizada de equipo (sin acentos, sin puntuación, minúsculas)
+function _cvTeamNorm(name){
+  return String(name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,' ').trim();
+}
+// Tokens distintivos de equipos VALENCIANOS conocidos (propuesta inicial).
+// El director confirma/ajusta con casillas; sus decisiones prevalecen.
+const _CV_TEAMS_SEED = [
+  'guerola','juan giner','ulevel','vitaldinspor','grau pascual','saxun','extrusax','primoti',
+  'indeso','mcviman','pinero martinez','triporter','oxiona','magro','victor astasio','maquivi',
+  'planea','nieto del lobo','nutriban','infinobras','grupo sime','llopis','sumistock',
+  'in bike','tadesan','torrent tadesan','nuria','autovivo','evarm','torrevieja','bicicosta',
+  'lemon team','ciclos sarabia','tbg','wixum','entrenamientociclismo'
+];
+function _cvTeamSeedGuess(name){
+  const k=_cvTeamNorm(name); if(!k) return false;
+  // El equipo propio siempre es CV.
+  if(typeof myTeam!=='undefined' && myTeam && _cvTeamNorm(myTeam)===k) return true;
+  return _CV_TEAMS_SEED.some(tok => k.includes(tok));
+}
+// Decisiones recordadas: { claveEquipo: 'cv' | 'no' }
+function _cvTeamsLoadDecisions(){
+  try{ return JSON.parse(localStorage.getItem('cv_team_decisions')||'{}')||{}; }catch(_){ return {}; }
+}
+function _cvTeamsSaveDecisions(map){
+  try{ localStorage.setItem('cv_team_decisions', JSON.stringify(map||{})); }catch(_){}
+}
+// ¿Este equipo es CV? Decisión guardada > propuesta inicial > no.
+function _cvTeamIsCV(name, decisions){
+  const dec = decisions || _cvTeamsLoadDecisions();
+  const k=_cvTeamNorm(name);
+  if(dec[k]==='cv') return true;
+  if(dec[k]==='no') return false;
+  return _cvTeamSeedGuess(name);
+}
+// Agrupa los inscritos cargados por equipo → [{name, key, count, isCV}]
+function _cvTeamsFromInscritos(){
+  const dec=_cvTeamsLoadDecisions();
+  const by=new Map();
+  (typeof inscritos!=='undefined'?inscritos:[]).forEach(i=>{
+    const t=(i.team||'').trim(); if(!t) return;
+    const k=_cvTeamNorm(t);
+    if(!by.has(k)) by.set(k,{name:t, key:k, count:0});
+    by.get(k).count++;
+  });
+  const arr=[...by.values()].map(o=>({...o, isCV:_cvTeamIsCV(o.name,dec)}));
+  // CV primero; dentro de cada grupo, por nº de corredores desc y luego alfabético
+  arr.sort((a,b)=> (b.isCV-a.isCV) || (b.count-a.count) || a.name.localeCompare(b.name));
+  return arr;
+}
+// Guarda la decisión de un equipo y refresca la vista
+function _cvTeamToggle(key, checked){
+  const dec=_cvTeamsLoadDecisions();
+  dec[key] = checked ? 'cv' : 'no';
+  _cvTeamsSaveDecisions(dec);
+  _cvTeamsRender();
+}
+function _cvTeamsClose(){ const m=document.getElementById('_cvTeamsModal'); if(m) m.remove(); }
+function _cvTeamsOpen(){
+  if(!(typeof inscritos!=='undefined' && inscritos.length)){ alert('Primero carga una lista de inscritos.'); return; }
+  _cvTeamsClose();
+  const wrap=document.createElement('div');
+  wrap.id='_cvTeamsModal';
+  wrap.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  wrap.addEventListener('click', e=>{ if(e.target===wrap) _cvTeamsClose(); });
+  wrap.innerHTML=`
+    <div style="background:#fff;border-radius:16px;max-width:640px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden">
+      <div style="background:#ea580c;color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>
+          <div style="font-size:17px;font-weight:900">🟠 Equipos de la Comunitat Valenciana</div>
+          <div id="_cvTeamsSub" style="font-size:12.5px;opacity:.95;margin-top:2px"></div>
+        </div>
+        <button onclick="_cvTeamsClose()" style="background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:9px;width:34px;height:34px;font-size:18px;cursor:pointer;font-weight:800">✕</button>
+      </div>
+      <div style="padding:10px 20px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:12.5px;color:#9a3412">
+        Marca los equipos <b>valencianos</b> que participan. Se <b>recuerdan</b> para la próxima lista. Los que propongo van pre-marcados; revísalos.
+      </div>
+      <div id="_cvTeamsList" style="overflow:auto;padding:8px 12px;flex:1"></div>
+      <div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;background:#fafafa">
+        <button onclick="_cvTeamsCopyText()" class="btn light" style="cursor:pointer">📋 Copiar texto</button>
+        <button onclick="_cvTeamsExportPNG()" class="btn" style="background:#ea580c;border-color:#ea580c;cursor:pointer">🖼️ Generar infografía (PNG)</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  _cvTeamsRender();
+}
+function _cvTeamsRender(){
+  const list=document.getElementById('_cvTeamsList'); if(!list) return;
+  const teams=_cvTeamsFromInscritos();
+  const cv=teams.filter(t=>t.isCV);
+  const cvRiders=cv.reduce((s,t)=>s+t.count,0);
+  const sub=document.getElementById('_cvTeamsSub');
+  if(sub) sub.textContent=`${cv.length} equipos valencianos · ${cvRiders} corredores · (${teams.length} equipos en total)`;
+  const row=(t)=>`
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;${t.isCV?'background:#fff7ed;border:1px solid #fed7aa':'border:1px solid transparent'}">
+      <input type="checkbox" ${t.isCV?'checked':''} onchange="_cvTeamToggle('${t.key.replace(/'/g,"\\'")}', this.checked)" style="width:18px;height:18px;accent-color:#ea580c;cursor:pointer">
+      <span style="flex:1;font-size:13.5px;font-weight:${t.isCV?'800':'600'};color:${t.isCV?'#9a3412':'#334155'}">${escapeHtml(t.name)}</span>
+      <span style="font-size:12px;font-weight:800;color:#64748b;background:#f1f5f9;border-radius:20px;padding:2px 10px;white-space:nowrap">${t.count} 🚴</span>
+    </label>`;
+  const cvSec = cv.length ? cv.map(row).join('') : `<div style="padding:14px;text-align:center;color:#94a3b8;font-size:13px">Aún no hay equipos marcados como valencianos. Marca abajo los que participen.</div>`;
+  const rest = teams.filter(t=>!t.isCV);
+  list.innerHTML = cvSec
+    + (rest.length ? `<div style="font-size:11.5px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:12px 10px 6px">Otros equipos (no valencianos)</div>`+rest.map(row).join('') : '');
+}
+function _cvTeamsCurrentRaceName(){
+  return ((typeof _activeRace!=='undefined' && _activeRace && _activeRace.name) ||
+          (document.getElementById('raceName')&&document.getElementById('raceName').value) || '').trim();
+}
+function _cvTeamsCopyText(){
+  const cv=_cvTeamsFromInscritos().filter(t=>t.isCV);
+  if(!cv.length){ alert('Marca primero los equipos valencianos.'); return; }
+  const race=_cvTeamsCurrentRaceName();
+  const lines=cv.map(t=>`• ${t.name} (${t.count})`).join('\n');
+  const txt=`🟠 Equipos de la Comunitat Valenciana en ${race||'esta prueba'}:\n\n${lines}\n\n${cv.length} equipos · ${cv.reduce((s,t)=>s+t.count,0)} corredores`;
+  const done=()=>{ if(typeof showToast==='function') showToast('📋 Texto copiado','ok',2200); else alert('Texto copiado.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{ prompt('Copia el texto:', txt); }); }
+  else prompt('Copia el texto:', txt);
+}
+// Infografía cuadrada 1080×1080 con los equipos CV + nº de corredores
+function _cvTeamsBuildPosterSVG(){
+  const cv=_cvTeamsFromInscritos().filter(t=>t.isCV);
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const logo=(document.querySelector('.brand-logo')||{}).src||'';
+  const race=_cvTeamsCurrentRaceName();
+  const rdate=(typeof _activeRace!=='undefined'&&_activeRace&&_activeRace.date)?_activeRace.date:'';
+  const fdate=(rdate && typeof formatDateDisplay==='function')?formatDateDisplay(rdate):(rdate||'');
+  const totalRid=cv.reduce((s,t)=>s+t.count,0);
+  const W=1080,H=1080;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system,Segoe UI,Arial,sans-serif">`;
+  s+=`<defs><linearGradient id="cvbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2410c"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs>`;
+  s+=`<rect width="${W}" height="${H}" fill="url(#cvbg)"/>`;
+  s+=`<rect x="44" y="44" width="${W-88}" height="${H-88}" rx="30" fill="#ffffff"/>`;
+  if(logo) s+=`<image href="${logo}" x="78" y="74" height="86" width="250" preserveAspectRatio="xMinYMid meet"/>`;
+  s+=`<text x="${W-78}" y="126" text-anchor="end" font-size="24" font-weight="800" fill="#c2410c">Comunitat Valenciana</text>`;
+  s+=`<text x="${W/2}" y="238" text-anchor="middle" font-size="40" font-weight="900" fill="#9a3412">EQUIPOS VALENCIANOS</text>`;
+  s+=`<text x="${W/2}" y="286" text-anchor="middle" font-size="27" font-weight="800" fill="#ea580c">${esc((race||'').slice(0,54))}</text>`;
+  if(fdate) s+=`<text x="${W/2}" y="324" text-anchor="middle" font-size="22" fill="#78716c">📅 ${esc(fdate)}</text>`;
+  s+=`<line x1="120" y1="352" x2="${W-120}" y2="352" stroke="#fed7aa" stroke-width="3"/>`;
+  // Lista de equipos con nº de corredores
+  const top=384, bottom=H-104, avail=bottom-top;
+  const twoCol = cv.length>11;
+  const per = twoCol ? Math.ceil(cv.length/2) : cv.length;
+  const lh = Math.max(30, Math.min(58, Math.floor(avail/Math.max(per,1))));
+  const fs = Math.max(18, Math.min(30, lh-14));
+  const drawCol=(arr,x0,x1)=>arr.map((t,i)=>{
+    const y=top+26+i*lh;
+    const nm=esc(t.name.length>32?t.name.slice(0,31)+'…':t.name);
+    return `<text x="${x0}" y="${y}" font-size="${fs}" font-weight="700" fill="#1f2937">${nm}</text>`
+         + `<text x="${x1}" y="${y}" text-anchor="end" font-size="${fs}" font-weight="900" fill="#ea580c">${t.count}</text>`;
+  }).join('');
+  if(cv.length===0){
+    s+=`<text x="${W/2}" y="${H/2}" text-anchor="middle" font-size="26" fill="#94a3b8">Marca primero los equipos valencianos</text>`;
+  } else if(twoCol){
+    s+=drawCol(cv.slice(0,per), 96, W*0.47);
+    s+=drawCol(cv.slice(per), W*0.53, W-96);
+  } else {
+    s+=drawCol(cv, 150, W-150);
+  }
+  s+=`<text x="${W/2}" y="${H-64}" text-anchor="middle" font-size="21" font-weight="800" fill="#9a3412">${cv.length} equipos · ${totalRid} corredores de la Comunitat</text>`;
+  s+=`<text x="${W/2}" y="${H-34}" text-anchor="middle" font-size="17" fill="#a8a29e">ranking.mfppcycling.com · MFPP Cycling</text>`;
+  s+=`</svg>`;
+  return {svg:s,W,H};
+}
+async function _cvTeamsExportPNG(){
+  const cv=_cvTeamsFromInscritos().filter(t=>t.isCV);
+  if(!cv.length){ alert('Marca primero los equipos valencianos.'); return; }
+  const {svg,W,H}=_cvTeamsBuildPosterSVG();
+  const cvEl=document.createElement('canvas'); cvEl.width=W; cvEl.height=H;
+  const ctx=cvEl.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  try{
+    if(typeof _infDrawSVGToCanvas==='function') await _infDrawSVGToCanvas(ctx,svg,0,0,W,H);
+    else throw new Error('sin renderizador');
+    cvEl.toBlob(b=>{
+      if(!b){ alert('No se pudo generar la imagen.'); return; }
+      const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u;
+      a.download=`equipos-cv_${(_cvTeamsCurrentRaceName()||'prueba').replace(/[^a-z0-9]+/gi,'-').slice(0,40)}.png`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500);
+      if(typeof showToast==='function') showToast('🖼️ Infografía descargada','ok',2400);
+    },'image/png');
+  }catch(err){ alert('No he podido generar la infografía. Error: '+(err&&err.message||err)); }
+}
+
 // Cruce inscritos × clasificados: devuelve {acabaron, dnf, total}
 // dnf = inscritos que NO aparecen en riders[] (por dorsal o nombre normalizado).
 function computeInscritosStatus(){
@@ -26223,6 +26415,8 @@ function _updateInscritosUI(){
   if(btnSave) btnSave.style.display = n ? 'inline-block' : 'none';
   const btnPdf = document.getElementById('btnExportInscritosPDF');
   if(btnPdf) btnPdf.style.display = n ? 'inline-block' : 'none';
+  const btnCV = document.getElementById('btnCVTeams');
+  if(btnCV) btnCV.style.display = n ? 'inline-block' : 'none';
   if(!n){
     if(status) status.style.display = 'none';
     if(banner) banner.style.display = 'none';
