@@ -10274,8 +10274,13 @@ function normalizeRiderName(rawName, nombre, apellido1, apellido2){
   apellido2 = _stripPosSuffix(apellido2);
 
   if(apellido1){
-    const n=_titleCase((nombre||'').trim());
     const a1=_titleCase((apellido1||'').trim().split(/\s+/)[0]); // solo primer apellido
+    let nWords=(nombre||'').trim().split(/\s+/).filter(Boolean);
+    // Columna "nombre" que en realidad trae el nombre COMPLETO con el apellido
+    // repetido ("Latorre Calvo Marco"): el nombre real es la última palabra.
+    const _lc=x=>_titleCase(x).toLowerCase();
+    if(nWords.length>1 && a1 && _lc(nWords[0])===_lc(a1)) nWords=[nWords[nWords.length-1]];
+    const n=_titleCase(nWords.join(' '));
     return a1?`${a1}, ${n}`:n;
   }
   const raw=(rawName||'').trim();
@@ -10311,18 +10316,23 @@ function normalizeRiderName(rawName, nombre, apellido1, apellido2){
    Works on any format produced by normalizeRiderName or legacy formatName. */
 function normalizeForMatching(name){
   if(!name)return'';
+  const _st=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const s=name.trim();
   const comma=s.match(/^([^,]+),\s*(.+)$/);
   let ap,nm;
   if(comma){
     ap=(comma[1].trim().split(/\s+/)[0])||'';
-    nm=(comma[2].trim().split(/\s+/)[0])||'';
+    const nmw=comma[2].trim().split(/\s+/).filter(Boolean);
+    // Import defectuoso: el "nombre" repite el apellido ("Latorre, Latorre Calvo
+    // Marco"). Si la 1ª palabra del nombre es el propio apellido, el nombre real
+    // es la ÚLTIMA palabra ("Marco"), no la primera.
+    nm=(nmw.length>1 && _st(nmw[0])===_st(ap)) ? nmw[nmw.length-1] : (nmw[0]||'');
   }else{
     const parts=s.split(/\s+/).filter(Boolean);
-    if(parts.length<2)return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if(parts.length<2)return _st(s);
     nm=parts[0]; ap=parts[1];
   }
-  return (ap+', '+nm).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  return _st(ap+', '+nm);
 }
 
 // ── Matcher tolerante al orden (Tier 1.5 fix) ─────────────────────────────
