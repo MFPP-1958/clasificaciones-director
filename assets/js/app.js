@@ -47274,6 +47274,7 @@ function _rvFind(){
   const g=_rvBibMap?_rvBibMap[b]:null;
   if(!g){ card.innerHTML=`<div class="rv-notfound">🔎 No hay ningún corredor con el dorsal <b>${escapeHtml(b)}</b> en la parrilla de esta prueba.</div>`; return; }
   card.innerHTML=_rvCardHtml(g);
+  _rvShowBest(g);   // modal con sus mejores resultados (se cierra y queda la tarjeta)
 }
 // Búsqueda "en vivo" al teclear/elegir del desplegable: muestra la tarjeta solo
 // si el dorsal coincide exactamente; si no, no molesta con mensajes de error.
@@ -47285,7 +47286,83 @@ function _rvFindLive(){
   const g=_rvBibMap?_rvBibMap[b]:null;
   card.innerHTML = g ? _rvCardHtml(g) : '';
 }
-function _rvClear(){ const inp=document.getElementById('rvBib'); if(inp){ inp.value=''; inp.focus(); } const c=document.getElementById('rvCard'); if(c) c.innerHTML=''; }
+function _rvClear(){ const inp=document.getElementById('rvBib'); if(inp){ inp.value=''; inp.focus(); } const c=document.getElementById('rvCard'); if(c) c.innerHTML=''; _rvCloseBest(); }
+
+// ── Historial del corredor: sus resultados en el histórico (para el modal) ──
+function _rvRiderHistory(g){
+  const hist=(typeof _cachedHistory!=='undefined'&&Array.isArray(_cachedHistory))?_cachedHistory:[];
+  const key=(typeof normalizeForMatching==='function')?normalizeForMatching(g&&g.name):'';
+  const res={results:[],count:0,wins:0,podiums:0,top10:0};
+  if(!key) return res;
+  const seen=new Set();
+  hist.forEach(race=>{
+    const riders=race.riders||[];
+    const total=riders.filter(r=>r.pos>0).length;
+    riders.forEach(r=>{
+      if(!(r.pos>0)) return;
+      if(normalizeForMatching(r.name)!==key) return;
+      const dkey=(race.raceName||'')+'|'+(race.raceDate||'');
+      if(seen.has(dkey)) return; seen.add(dkey);
+      res.results.push({pos:r.pos,total,name:race.raceName||'',date:race.raceDate||'',cat:r.cat||''});
+    });
+  });
+  res.count=res.results.length;
+  res.wins=res.results.filter(r=>r.pos===1).length;
+  res.podiums=res.results.filter(r=>r.pos<=3).length;
+  res.top10=res.results.filter(r=>r.pos<=10).length;
+  // mejores posiciones primero; a igualdad, la más reciente
+  res.results.sort((a,b)=> a.pos-b.pos ||
+    String(_parseSpanishDate?(_parseSpanishDate(b.date)||''):'').localeCompare(String(_parseSpanishDate?(_parseSpanishDate(a.date)||''):'')));
+  return res;
+}
+function _rvCloseBest(){ const m=document.getElementById('_rvBestModal'); if(m) m.remove(); }
+function _rvShowBest(g){
+  if(!g) return;
+  const h=_rvRiderHistory(g);
+  const top=h.results.slice(0,5);
+  const nm=escapeHtml(_evolNormName?_evolNormName(g.name):g.name);
+  const medal=p=>p===1?'🥇':p===2?'🥈':p===3?'🥉':`<span style="display:inline-block;min-width:44px;text-align:center;font-size:22px;font-weight:900;color:#0b2f6b">${p}º</span>`;
+  const fdate=d=>{ const iso=_parseSpanishDate?_parseSpanishDate(d):''; return (iso&&typeof formatDateDisplay==='function')?formatDateDisplay(iso):(d||''); };
+  const rows = top.length ? top.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:12px;background:${i%2?'#f8fafc':'#eef4ff'};margin-bottom:8px">
+      <div style="font-size:30px;line-height:1;min-width:48px;text-align:center">${medal(r.pos)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:17px;font-weight:800;color:#0b2f6b;line-height:1.25">${escapeHtml(r.name||'Carrera')}</div>
+        <div style="font-size:14px;color:#64748b;margin-top:2px">${escapeHtml(fdate(r.date))}${r.cat?' · '+escapeHtml(r.cat):''}${r.total?` · <b style="color:#334155">${r.pos}º</b> de ${r.total}`:''}</div>
+      </div>
+    </div>`).join('')
+    : `<div style="text-align:center;padding:26px 16px;color:#475569;font-size:16px;font-weight:700">Sin resultados en el histórico todavía.<br><span style="font-size:13.5px;color:#94a3b8;font-weight:500">Puede ser un corredor nuevo o de fuera de la Comunitat.</span></div>`;
+  const summary = h.count ? `<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:4px 0 14px">
+     <span style="background:#fef9c3;color:#854d0e;border-radius:20px;padding:5px 12px;font-size:14px;font-weight:800">🏆 ${h.wins} victoria${h.wins===1?'':'s'}</span>
+     <span style="background:#f1f5f9;color:#334155;border-radius:20px;padding:5px 12px;font-size:14px;font-weight:800">🥉 ${h.podiums} podio${h.podiums===1?'':'s'}</span>
+     <span style="background:#dcfce7;color:#166534;border-radius:20px;padding:5px 12px;font-size:14px;font-weight:800">🔟 ${h.top10} top-10</span>
+     <span style="background:#e0f2fe;color:#075985;border-radius:20px;padding:5px 12px;font-size:14px;font-weight:800">📋 ${h.count} carreras</span>
+   </div>` : '';
+  _rvCloseBest();
+  const wrap=document.createElement('div');
+  wrap.id='_rvBestModal';
+  wrap.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:14px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) _rvCloseBest(); });
+  wrap.innerHTML=`<div style="background:#fff;border-radius:18px;max-width:540px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.45);overflow:hidden">
+     <div style="background:linear-gradient(90deg,#0b2f6b,#1286c7);color:#fff;padding:16px 18px;display:flex;align-items:center;gap:14px">
+       <div style="background:rgba(255,255,255,.18);border-radius:12px;min-width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900">${escapeHtml(String(g.bib||'—'))}</div>
+       <div style="flex:1;min-width:0">
+         <div style="font-size:20px;font-weight:900;line-height:1.2">${nm}</div>
+         <div style="font-size:13.5px;opacity:.9;margin-top:2px">${escapeHtml(g.team||'—')}${g.cat?' · '+escapeHtml(g.cat):''}</div>
+       </div>
+       <button onclick="_rvCloseBest()" style="background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:10px;width:38px;height:38px;font-size:20px;cursor:pointer;font-weight:800;flex-shrink:0">✕</button>
+     </div>
+     <div style="padding:16px 18px 6px;overflow:auto;flex:1">
+       <div style="text-align:center;font-size:13px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#94a3b8;margin-bottom:12px">${top.length?'⭐ Sus mejores resultados':'Historial'}</div>
+       ${summary}
+       ${rows}
+     </div>
+     <div style="padding:12px 18px;border-top:1px solid #e5e7eb;background:#fafafa">
+       <button onclick="_rvCloseBest()" style="width:100%;background:#0b2f6b;color:#fff;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:800;cursor:pointer">Cerrar</button>
+     </div>
+   </div>`;
+  document.body.appendChild(wrap);
+}
 
 function _rvSaveFuga(){
   const bibsRaw=(document.getElementById('rvFugaBibs')?.value||'');
