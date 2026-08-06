@@ -3479,6 +3479,133 @@ async function _dispExportPDF(){
   w.document.close();
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   HISTORIA (Story) 1080×1920 del PODIO de la clasificación cargada.
+   Imagen vertical 9:16 para Instagram/Facebook: cabecera (prueba, fecha,
+   categoría, género, disciplina, país) + podio (1º/2º/3º con medalla, equipo,
+   tiempo y diferencia) + CTA a mfppcycling.com/ranking. Se rellena solo con
+   `riders` (top-3 por posición) y `_activeRace`. Género se deduce de la
+   categoría (femenina → Mujeres); disciplina por defecto Carretera.
+   ══════════════════════════════════════════════════════════════════════════ */
+function _storyEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _storyFmtTime(t){ t=String(t||'').trim(); return t?t.replace(/^0(?=\d:)/,''):'—'; }
+function _storyFmtGap(sec,pos){
+  if(pos===1) return '—';
+  if(sec==null||sec==='') return '';
+  sec=Math.round(Number(sec)); if(!(sec>0)) return 'm.t.';
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
+  return '+'+(h>0?(h+':'+String(m).padStart(2,'0')):String(m))+':'+String(s).padStart(2,'0');
+}
+function _storyName(raw){
+  const s=String(raw||'').trim(); let given='', sur='';
+  const c=s.match(/^([^,]+),\s*(.+)$/);
+  if(c){ sur=c[1].trim(); given=c[2].trim(); }
+  else { const p=s.split(/\s+/); given=p.shift()||''; sur=p.join(' '); }
+  const tc=x=>x?x.charAt(0).toUpperCase()+x.slice(1).toLowerCase():'';
+  given=(given||s).split(/\s+/).map(tc).join(' ');
+  return { given:given, sur:(sur||'').toUpperCase() };
+}
+function _storyWrap(t,n){
+  const words=String(t||'').split(/\s+/), lines=[]; let cur='';
+  words.forEach(w=>{ if((cur+' '+w).trim().length<=n){ cur=(cur+' '+w).trim(); } else { if(cur)lines.push(cur); cur=w; } });
+  if(cur)lines.push(cur); return lines.length?lines:[''];
+}
+function _storyGenero(cats){ return /fem|mujer|women|f[eé]min/i.test(String(cats||'')) ? 'Mujeres' : 'Hombres'; }
+function _storyFmtFecha(d){
+  const M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const s=String(d||'').trim(); let y,mo,da,m;
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))){ y=m[1]; mo=+m[2]; da=m[3]; }
+  else if((m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/))){ da=m[1].padStart(2,'0'); mo=+m[2]; y=m[3]; }
+  else return s;
+  return da+' '+(M[mo-1]||'')+' '+y;
+}
+function _storyBuildSVG(){
+  const all=(typeof riders!=='undefined'&&Array.isArray(riders))?riders:[];
+  const podio=all.filter(r=>Number(r.pos)>0).sort((a,b)=>Number(a.pos)-Number(b.pos)).slice(0,3);
+  if(!podio.length) return null;
+  const race=((typeof _activeRace!=='undefined'&&_activeRace&&_activeRace.name)||(document.getElementById('raceName')&&document.getElementById('raceName').value)||'Prueba').trim();
+  const dRaw=(typeof _activeRace!=='undefined'&&_activeRace&&_activeRace.date)||(document.getElementById('raceDate')&&document.getElementById('raceDate').value)||'';
+  const fecha=_storyFmtFecha(dRaw);
+  const catRaw=podio[0].cat||'';
+  const grp=(typeof _calCatGroup==='function')?_calCatGroup(catRaw):null;
+  const categoria=(grp&&grp.label)||catRaw||'—';
+  const genero=_storyGenero(podio.map(r=>r.cat||'').join(' '));
+  const disciplina='Carretera', pais='España', WEB='mfppcycling.com/ranking';
+  const logo=(document.querySelector('.brand-logo')||{}).src||'';
+  const esc=_storyEsc, wrap=_storyWrap;
+  const medal={1:'🥇',2:'🥈',3:'🥉'}, rowbg={1:'#fff6da',2:'#eef1f8',3:'#f6ebdc'}, rowln={1:'#e8cf7a',2:'#c9d4e6',3:'#e0c49a'};
+  const W=1080,H=1920,S=[];
+  S.push('<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">');
+  S.push('<defs><linearGradient id="stbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9eff8"/><stop offset="1" stop-color="#f6f1ea"/></linearGradient><filter id="stsh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#1a2b45" flood-opacity="0.14"/></filter></defs>');
+  S.push('<rect width="'+W+'" height="'+H+'" fill="url(#stbg)"/>');
+  S.push('<rect x="44" y="46" width="236" height="100" rx="20" fill="#0b2f6b" filter="url(#stsh)"/>');
+  if(logo) S.push('<image href="'+logo+'" x="62" y="60" height="72" width="200" preserveAspectRatio="xMinYMid meet"/>');
+  S.push('<text x="'+(W-60)+'" y="108" text-anchor="end" font-size="26" font-weight="700" fill="#5b6b82">'+esc(WEB)+'</text>');
+  const tcx=50,tcy=168,tcw=980;
+  const tlines=wrap(race.toUpperCase(),19).slice(0,3);
+  const th=(78+tlines.length*66)+(30+3*52)+50;
+  S.push('<rect x="'+tcx+'" y="'+tcy+'" width="'+tcw+'" height="'+th+'" rx="26" fill="#fff" filter="url(#stsh)"/>');
+  S.push('<rect x="'+tcx+'" y="'+tcy+'" width="12" height="'+th+'" rx="6" fill="#0b2f6b"/>');
+  let ty=tcy+80;
+  tlines.forEach(ln=>{ S.push('<text x="'+(tcx+45)+'" y="'+ty+'" font-size="54" font-weight="800" fill="#14223a" letter-spacing="-0.5">'+esc(ln)+'</text>'); ty+=66; });
+  ty+=34;
+  const meta=(x,y,k,v)=>S.push('<text x="'+x+'" y="'+y+'" font-size="29" font-weight="800" fill="#1f2d44">'+esc(k)+': <tspan font-weight="500" fill="#6b7280">'+esc(v)+'</tspan></text>');
+  meta(tcx+45,ty,'Fecha',fecha); meta(tcx+490,ty,'Categoría',categoria); ty+=52;
+  meta(tcx+45,ty,'Género',genero); meta(tcx+490,ty,'Disciplina',disciplina); ty+=52;
+  meta(tcx+45,ty,'País',pais);
+  const pcx=50,pcy=tcy+th+42,pcw=980,prowh=176,ph=150+prowh*3+30;
+  S.push('<rect x="'+pcx+'" y="'+pcy+'" width="'+pcw+'" height="'+ph+'" rx="26" fill="#fff" filter="url(#stsh)"/>');
+  S.push('<text x="'+(pcx+45)+'" y="'+(pcy+66)+'" font-size="34" font-weight="800" fill="#0b2f6b">Clasificación</text>');
+  S.push('<rect x="'+(pcx+45)+'" y="'+(pcy+80)+'" width="210" height="5" rx="2.5" fill="#1287c7"/>');
+  const CX_NAME=pcx+215,CX_TEAM=pcx+455,CX_TIME=pcx+762,CX_DIF=pcx+922, hy=pcy+130;
+  [[pcx+45,'#','start'],[CX_NAME,'CORREDOR','start'],[CX_TEAM,'EQUIPO','start'],[CX_TIME,'TIEMPO','end'],[CX_DIF,'DIF','end']].forEach(c=>{
+    S.push('<text x="'+c[0]+'" y="'+hy+'" font-size="22" font-weight="800" fill="#9aa3b2" letter-spacing="1" text-anchor="'+c[2]+'">'+esc(c[1])+'</text>');
+  });
+  let ry=hy+22;
+  podio.forEach(r=>{
+    const pos=Number(r.pos), cy=ry+prowh/2, nm=_storyName(r.name);
+    const ini=((nm.given[0]||'')+(nm.sur[0]||'')).toUpperCase();
+    S.push('<rect x="'+(pcx+22)+'" y="'+(ry+8)+'" width="'+(pcw-44)+'" height="'+(prowh-16)+'" rx="18" fill="'+(rowbg[pos]||'#f4f6fa')+'" stroke="'+(rowln[pos]||'#e2e6ee')+'" stroke-width="1.5"/>');
+    S.push('<text x="'+(pcx+68)+'" y="'+(cy+16)+'" font-size="44" text-anchor="middle">'+(medal[pos]||pos)+'</text>');
+    const ax=pcx+160;
+    S.push('<circle cx="'+ax+'" cy="'+cy+'" r="38" fill="#dbe3ef" stroke="#c3cfe0" stroke-width="1.5"/>');
+    S.push('<text x="'+ax+'" y="'+(cy+11)+'" font-size="30" font-weight="800" fill="#5b6b82" text-anchor="middle">'+esc(ini)+'</text>');
+    S.push('<text x="'+CX_NAME+'" y="'+(cy-6)+'" font-size="28" font-weight="500" fill="#48566b">'+esc(nm.given)+'</text>');
+    S.push('<text x="'+CX_NAME+'" y="'+(cy+30)+'" font-size="30" font-weight="800" fill="#14223a">'+esc(nm.sur)+'</text>');
+    const tl=wrap(r.team||'',11).slice(0,3); let tyy=cy-((tl.length-1)*27)/2-2;
+    tl.forEach(ln=>{ S.push('<text x="'+CX_TEAM+'" y="'+tyy+'" font-size="23" font-weight="600" fill="#7a8598">'+esc(ln)+'</text>'); tyy+=27; });
+    S.push('<text x="'+CX_TIME+'" y="'+(cy+11)+'" font-size="30" font-weight="800" fill="#1f2d44" text-anchor="end">'+esc(_storyFmtTime(r.time))+'</text>');
+    const dif=_storyFmtGap(r.gap_seconds,pos), difcol=(dif&&dif!=='—'&&dif!=='m.t.')?'#16a34a':'#9aa3b2';
+    S.push('<text x="'+CX_DIF+'" y="'+(cy+11)+'" font-size="28" font-weight="700" fill="'+difcol+'" text-anchor="end">'+esc(dif||'—')+'</text>');
+    ry+=prowh;
+  });
+  const fy=pcy+ph+92;
+  S.push('<text x="'+(W/2)+'" y="'+fy+'" font-size="46" font-weight="800" fill="#14223a" text-anchor="middle">Clasificación completa 👇</text>');
+  const by=fy+40;
+  S.push('<rect x="130" y="'+by+'" width="820" height="104" rx="52" fill="#0b2f6b" filter="url(#stsh)"/>');
+  S.push('<text x="'+(W/2)+'" y="'+(by+66)+'" font-size="40" font-weight="800" fill="#ffffff" text-anchor="middle">🔗 '+esc(WEB)+'</text>');
+  S.push('</svg>');
+  return { svg:S.join(''), W:W, H:H, race:race };
+}
+async function _storyExportPNG(btn){
+  const built=_storyBuildSVG();
+  if(!built){ alert('Primero carga una clasificación (necesito al menos el podio, los 3 primeros).'); return; }
+  const orig=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='⏳ Generando…'; }
+  try{
+    const cv=document.createElement('canvas'); cv.width=built.W; cv.height=built.H;
+    const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,built.W,built.H);
+    if(typeof _infDrawSVGToCanvas==='function') await _infDrawSVGToCanvas(ctx,built.svg,0,0,built.W,built.H); else throw new Error('sin renderizador de imagen');
+    cv.toBlob(b=>{
+      if(!b){ alert('No se pudo generar la imagen.'); return; }
+      const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u;
+      a.download='historia_'+String(built.race||'prueba').replace(/[^a-z0-9]+/gi,'-').slice(0,40)+'.png';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500);
+      if(typeof showToast==='function') showToast('🖼️ Historia descargada (1080×1920)','ok',2600);
+    },'image/png');
+  }catch(e){ alert('No he podido generar la Historia. Error: '+(e&&e.message||e)); }
+  finally{ if(btn){ setTimeout(()=>{ btn.textContent=orig; btn.disabled=false; },1200); } }
+}
+
 // Grupos de categoría realmente presentes en los datos cargados
 function _calAvailableCats(){
   const present=new Set();
