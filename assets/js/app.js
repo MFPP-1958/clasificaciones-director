@@ -3487,6 +3487,8 @@ async function _dispExportPDF(){
    `riders` (top-3 por posición) y `_activeRace`. Género se deduce de la
    categoría (femenina → Mujeres); disciplina por defecto Carretera.
    ══════════════════════════════════════════════════════════════════════════ */
+// Logo MFPP en versión CLARA (para que contraste sobre el recuadro azul de la Historia)
+const _STORY_LOGO_B64='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALgAAABECAMAAAAFvQ+XAAABv1BMVEUAAAAAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MAn+MArOmI0vWv3vm24fm54vrJ6PvM6fve8f3q9v7s9/7g8v70+v/0+//8/v/9/v/////////////////////////////////////8/v/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////e8f3u+P7r9v7e8f3Z7/3E5vrD5vqq3fis3fis3fit3vis3fih2veQ1PZryvNZxvJ3zfSY1/dRxPFGwvEPue4Gt+0Btu0jvO8wvu/3/P8Aq+gAqugApeYAn+MAsOsAsesAtewBtu0LuO4ove81v/BQw/FZxvJqyvNwy/R1zfSE0PWN0/aU1faW1veh2vej2vip3Piz4Pnj8/7m9P7u+P7x+f7z+v/F5vvJ6PvK6PvU7fzY7v3////Dvu6vAAAAcnRSTlMAECAwQFBgcICQoLDA0ODw8vjz5+jr5+To5fP++/fy8fDu4N7d2dTQz8zIxMC7sKuqpqCenJmXkpCOi4iBgHd0cG5tZmJgW1hVUExKREA9PDMwLiIgHxEQTHOXmKaMdXmPr7zI4snAoIhZWS90g7/QxMh7W8JjAAAKT0lEQVR42s2aiX/bSBXHn2PHdhzH5r4PWRiMqW2CIWAw8hqyWmSIdqPaa3EfC5T7ajILXdpd2rJlm9Iuad8fzNOMR+PxyIrSZrv9fvqxZ0by6Ddv3nuamQbS8DHGhiVsVExkk8FM9qDojGeg6OEydt+Fi8JFBSgmuEQAHDSwZA86gxAkLVzBnsDFMDCEm5aSc2PQAcJBg1asHE0GcCF0UKEMNTPkScuaGlQPpvIAExjDRWChwk+cB+xrbYYEGxMYmB63HBlPTogrws3hoCPnxsBXPZjiTDdSlnhyfEO46RW+HIxBKHswGavBmsCT4xgPM3NBqM+N3YkBYizbXd93e1pgKDf66F//cu3WPZT8tgBPSt/wCSOk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';
 function _storyEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function _storyFmtTime(t){ t=String(t||'').trim(); return t?t.replace(/^0(?=\d:)/,''):'—'; }
 function _storyFmtGap(sec,pos){
@@ -3502,11 +3504,18 @@ function _storyName(raw){
   if(c){ sur=c[1].trim(); given=c[2].trim(); }
   else { const p=s.split(/\s+/); given=p.shift()||''; sur=p.join(' '); }
   const tc=x=>x?x.charAt(0).toUpperCase()+x.slice(1).toLowerCase():'';
-  given=(given||s).split(/\s+/).map(tc).join(' ');
-  return { given:given, sur:(sur||'').toUpperCase() };
+  // 1er nombre completo; los siguientes, a inicial ("Jeencarlo Manuel" → "Jeencarlo M.")
+  const gw=(given||s).split(/\s+/).filter(Boolean).map(tc);
+  let gShort=gw.length?gw[0]:'';
+  if(gw.length>1) gShort+=' '+gw.slice(1).map(w=>(w[0]||'').toUpperCase()+'.').join(' ');
+  return { given:gShort, sur:(sur||'').toUpperCase() };
 }
 function _storyWrap(t,n){
-  const words=String(t||'').split(/\s+/), lines=[]; let cur='';
+  // parte también palabras MÁS LARGAS que n (equipos de una sola palabra tipo
+  // "ENTRENAMIENTOCICLISMO") para que no se salgan de su columna
+  const raw=String(t||'').split(/\s+/), words=[];
+  raw.forEach(w=>{ while(w.length>n){ words.push(w.slice(0,n)); w=w.slice(n); } words.push(w); });
+  const lines=[]; let cur='';
   words.forEach(w=>{ if((cur+' '+w).trim().length<=n){ cur=(cur+' '+w).trim(); } else { if(cur)lines.push(cur); cur=w; } });
   if(cur)lines.push(cur); return lines.length?lines:[''];
 }
@@ -3531,7 +3540,6 @@ function _storyBuildSVG(){
   const categoria=(grp&&grp.label)||catRaw||'—';
   const genero=_storyGenero(podio.map(r=>r.cat||'').join(' '));
   const disciplina='Carretera', pais='España', WEB='mfppcycling.com/ranking';
-  const logo=(document.querySelector('.brand-logo')||{}).src||'';
   const esc=_storyEsc, wrap=_storyWrap;
   const medal={1:'🥇',2:'🥈',3:'🥉'}, rowbg={1:'#fff6da',2:'#eef1f8',3:'#f6ebdc'}, rowln={1:'#e8cf7a',2:'#c9d4e6',3:'#e0c49a'};
   const W=1080,H=1920,S=[];
@@ -3539,7 +3547,8 @@ function _storyBuildSVG(){
   S.push('<defs><linearGradient id="stbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9eff8"/><stop offset="1" stop-color="#f6f1ea"/></linearGradient><filter id="stsh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#1a2b45" flood-opacity="0.14"/></filter></defs>');
   S.push('<rect width="'+W+'" height="'+H+'" fill="url(#stbg)"/>');
   S.push('<rect x="44" y="46" width="236" height="100" rx="20" fill="#0b2f6b" filter="url(#stsh)"/>');
-  if(logo) S.push('<image href="'+logo+'" x="62" y="60" height="72" width="200" preserveAspectRatio="xMinYMid meet"/>');
+  // el logo se dibuja aparte sobre el canvas (los <image> anidados en un SVG
+  // cargado como imagen NO se rasterizan) — ver _storyExportPNG
   S.push('<text x="'+(W-60)+'" y="108" text-anchor="end" font-size="26" font-weight="700" fill="#5b6b82">'+esc(WEB)+'</text>');
   const tcx=50,tcy=168,tcw=980;
   const tlines=wrap(race.toUpperCase(),19).slice(0,3);
@@ -3571,9 +3580,10 @@ function _storyBuildSVG(){
     S.push('<circle cx="'+ax+'" cy="'+cy+'" r="38" fill="#dbe3ef" stroke="#c3cfe0" stroke-width="1.5"/>');
     S.push('<text x="'+ax+'" y="'+(cy+11)+'" font-size="30" font-weight="800" fill="#5b6b82" text-anchor="middle">'+esc(ini)+'</text>');
     S.push('<text x="'+CX_NAME+'" y="'+(cy-6)+'" font-size="28" font-weight="500" fill="#48566b">'+esc(nm.given)+'</text>');
-    S.push('<text x="'+CX_NAME+'" y="'+(cy+30)+'" font-size="30" font-weight="800" fill="#14223a">'+esc(nm.sur)+'</text>');
-    const tl=wrap(r.team||'',11).slice(0,3); let tyy=cy-((tl.length-1)*27)/2-2;
-    tl.forEach(ln=>{ S.push('<text x="'+CX_TEAM+'" y="'+tyy+'" font-size="23" font-weight="600" fill="#7a8598">'+esc(ln)+'</text>'); tyy+=27; });
+    const sf=nm.sur.length>13?25:30;
+    S.push('<text x="'+CX_NAME+'" y="'+(cy+30)+'" font-size="'+sf+'" font-weight="800" fill="#14223a">'+esc(nm.sur)+'</text>');
+    const tl=wrap(r.team||'',13).slice(0,3); let tyy=cy-((tl.length-1)*25)/2-2;
+    tl.forEach(ln=>{ S.push('<text x="'+CX_TEAM+'" y="'+tyy+'" font-size="21" font-weight="600" fill="#7a8598">'+esc(ln)+'</text>'); tyy+=25; });
     S.push('<text x="'+CX_TIME+'" y="'+(cy+11)+'" font-size="30" font-weight="800" fill="#1f2d44" text-anchor="end">'+esc(_storyFmtTime(r.time))+'</text>');
     const dif=_storyFmtGap(r.gap_seconds,pos), difcol=(dif&&dif!=='—'&&dif!=='m.t.')?'#16a34a':'#9aa3b2';
     S.push('<text x="'+CX_DIF+'" y="'+(cy+11)+'" font-size="28" font-weight="700" fill="'+difcol+'" text-anchor="end">'+esc(dif||'—')+'</text>');
@@ -3595,6 +3605,10 @@ async function _storyExportPNG(btn){
     const cv=document.createElement('canvas'); cv.width=built.W; cv.height=built.H;
     const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,built.W,built.H);
     if(typeof _infDrawSVGToCanvas==='function') await _infDrawSVGToCanvas(ctx,built.svg,0,0,built.W,built.H); else throw new Error('sin renderizador de imagen');
+    // Logo MFPP (claro) dibujado APARTE sobre el recuadro azul: los <image>
+    // anidados dentro de un SVG cargado como imagen no se rasterizan en canvas.
+    const _lg=(typeof _STORY_LOGO_B64!=='undefined'&&_STORY_LOGO_B64)?_STORY_LOGO_B64:((document.querySelector('.brand-logo')||{}).src||'');
+    if(_lg){ await new Promise(res=>{ const im=new Image(); im.onload=()=>{ try{ const w=200, h=w*(im.height||68)/(im.width||184); ctx.drawImage(im,62,96-h/2,w,h); }catch(_){} res(); }; im.onerror=()=>res(); im.src=_lg; }); }
     cv.toBlob(b=>{
       if(!b){ alert('No se pudo generar la imagen.'); return; }
       const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u;
