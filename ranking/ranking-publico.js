@@ -1293,6 +1293,7 @@ function rpRenderInscritos() {
     '<div class="rp-insc-cab">' +
       '<label class="rp-insc-sel-label" for="rp-insc-sel">Prueba</label>' +
       `<select id="rp-insc-sel" class="rp-insc-sel" aria-label="Elegir prueba">${opciones}</select>` +
+      '<button type="button" id="rp-insc-pdf" class="rp-pdf-btn" title="Descargar el listado de inscritos en PDF (A4) con el logo, la prueba y cada equipo con sus corredores">⬇️ Descargar PDF</button>' +
     '</div>' +
     `<p class="rp-insc-intro">👥 <b>${equipos.length}</b> equipos · <b>${totalCorr}</b> corredores inscritos${fuera}. Los mejores de cada equipo <b>según el ranking MFPP</b> — no es una clasificación, es quién va a correr.</p>` +
     `<div class="rp-insc-cards">${equipos.map(rpTarjetaEquipoInscritos).join('')}</div>`;
@@ -3827,6 +3828,85 @@ async function rpDescargarPDF(btn) {
   setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2200);
 }
 
+// ── Descargar el LISTADO DE INSCRITOS de una prueba en PDF (A4 vertical) ──
+// Cabecera con logo + nombre y fecha de la prueba, y luego cada equipo con
+// sus corredores (puesto·puntos del ranking MFPP o "sin ranking").
+async function rpDescargarInscritosPDF(btn) {
+  const pruebas = rpInscritosPruebas();
+  const sel = (rpEstado.inscritosPruebaId && pruebas.find(p => p.id === rpEstado.inscritosPruebaId)) || pruebas[0];
+  if (!sel) return;
+  const equipos = rpInscritosEquipos(sel);
+  if (!equipos.length) return;
+  rpGA('pdf_download', { section: 'inscritos', category: rpGACat() });
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Generando…';
+  try {
+    await rpCargarJsPDF();
+    const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth(), bandH = 92;
+    // Cabecera: franja azul marino + logo + etiqueta + nombre de la prueba
+    doc.setFillColor(11, 42, 68); doc.rect(0, 0, W, bandH, 'F');
+    try { doc.addImage(RP_LOGO_B64, 'PNG', 40, 24, 130, 130 * 68 / 184); } catch (_) { /* si falla el logo, seguimos */ }
+    doc.setTextColor(245, 178, 26); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('LISTA DE INSCRITOS', W - 40, 32, { align: 'right' });
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14);
+    const tituloLineas = doc.splitTextToSize(sel.nombre || 'Prueba', W - 210).slice(0, 2);
+    doc.text(tituloLineas, W - 40, 54, { align: 'right' });
+    // Metadatos bajo la franja
+    const meta = [rpFormatearFecha(sel.fecha), sel.localidad, (sel.ccaa && rpEsFueraCV(sel.ccaa)) ? sel.ccaa : ''].filter(Boolean).join(' · ');
+    const totalCorr = equipos.reduce((s, t) => s + t.corredores.length, 0);
+    let y = bandH + 22;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90); doc.setFontSize(9.5);
+    if (meta) doc.text(meta, 40, y);
+    doc.text('Generado el ' + rpFormatearFecha(new Date().toISOString().slice(0, 10)), W - 40, y, { align: 'right' });
+    y += 14;
+    doc.setTextColor(14, 116, 144); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+    doc.text(`${equipos.length} equipos · ${totalCorr} corredores`, 40, y);
+    // Cuerpo: por equipo, una fila-cabecera (colSpan) + sus corredores
+    const body = [];
+    equipos.forEach(t => {
+      body.push([{
+        content: `${t.nombre}   ·   ${t.corredores.length} corredor${t.corredores.length === 1 ? '' : 'es'}`,
+        colSpan: 3,
+        styles: { fillColor: [11, 42, 68], textColor: 255, fontStyle: 'bold', halign: 'left', fontSize: 10, cellPadding: 5 }
+      }]);
+      t.corredores.forEach(r => {
+        body.push([
+          r.nombre || '',
+          r.cat || '',
+          r.rank ? `${r.rank.pos}º · ${rpFormatearPuntos(r.rank.puntos)} pts` : 'sin ranking'
+        ]);
+      });
+    });
+    doc.autoTable({
+      startY: y + 12,
+      head: [['Corredor', 'Categoría', 'Ranking MFPP']],
+      body,
+      styles: { font: 'helvetica', fontSize: 9.5, cellPadding: 4.5, textColor: [40, 40, 40], lineColor: [230, 230, 230], lineWidth: 0.5 },
+      headStyles: { fillColor: [14, 116, 144], textColor: 255, fontStyle: 'bold' },
+      columnStyles: { 1: { cellWidth: 96, halign: 'center' }, 2: { cellWidth: 118, halign: 'right', fontStyle: 'bold', textColor: [14, 116, 144] } },
+      margin: { left: 40, right: 40 },
+      didParseCell: data => {
+        if (data.section === 'body' && data.column.index === 2 && data.cell.raw === 'sin ranking') {
+          data.cell.styles.textColor = [150, 150, 150];
+          data.cell.styles.fontStyle = 'normal';
+        }
+      },
+      didDrawPage: () => {
+        const H = doc.internal.pageSize.getHeight();
+        doc.setFontSize(8); doc.setTextColor(140, 140, 140); doc.setFont('helvetica', 'normal');
+        doc.text('Inscritos · elaborado por MFPP Cycling · mfppcycling.com/ranking', 40, H - 22);
+        doc.text('Página ' + doc.internal.getNumberOfPages(), W - 40, H - 22, { align: 'right' });
+      }
+    });
+    const archivo = 'Inscritos_' + (sel.nombre || 'prueba').replace(/[^a-z0-9]+/gi, '-').slice(0, 40) + '.pdf';
+    const _r = await rpEntregarPDF(doc, archivo, 'Inscritos · ' + (sel.nombre || ''));
+    btn.textContent = _r === 'rescate' ? '📲 Abre en el navegador' : (_r === 'cancelado' || _r === 'delegado') ? orig : '✅ Descargado';
+  } catch (_) {
+    btn.textContent = '⚠️ Error, reinténtalo';
+  }
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2200);
+}
+
 // ── Descargar la FICHA COMPLETA del corredor en PDF ──
 function rpBotonFichaPDF() {
   return '<button type="button" class="rp-ficha-pdf-btn" title="Descargar la ficha completa del corredor en PDF: perfil, estadísticas, evolución e historial de la temporada">📄 Descargar ficha (PDF)</button>';
@@ -4962,6 +5042,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const elInsc = document.getElementById('rp-inscritos');
   if (elInsc) {
     elInsc.addEventListener('click', e => {
+      const pdf = e.target.closest('#rp-insc-pdf');
+      if (pdf) { rpDescargarInscritosPDF(pdf); return; }
       const ver = e.target.closest('.rp-insc-vertodos');
       if (ver) {
         const art = ver.closest('.rp-carrera');
