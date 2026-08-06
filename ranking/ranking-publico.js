@@ -744,7 +744,7 @@ function rpGA(nombre, params) {
 }
 const RP_GA_CAT = { cadete: 'cadete', juvenil: 'juvenil', junior: 'juvenil', sub23: 'sub-23', 'sub-23': 'sub-23', femina: 'féminas', feminas: 'féminas', femenina: 'féminas', femenino: 'féminas' };
 function rpGACat() { const k = rpEstado.categoria || ''; return RP_GA_CAT[k] || (k || undefined); }
-function rpGASeccion() { return ({ inicio: 'inicio', top10: 'top10', ranking: 'ranking', carreras: 'últimas carreras' })[rpEstado.pantalla] || undefined; }
+function rpGASeccion() { return ({ inicio: 'inicio', top10: 'top10', ranking: 'ranking', carreras: 'últimas carreras', inscritos: 'inscritos' })[rpEstado.pantalla] || undefined; }
 // Evento de "vista" según la pantalla a la que se entra.
 function rpGAVista(p) {
   if (p === 'inicio') rpGA('ranking_home_view', { section: 'inicio' });
@@ -880,11 +880,18 @@ function rpRenderPantalla() {
   const esRanking = rpEstado.pantalla === 'ranking';
   const esTop10 = rpEstado.pantalla === 'top10';
   const esCarreras = rpEstado.pantalla === 'carreras';
+  const esInscritos = rpEstado.pantalla === 'inscritos';
   const inicio = document.getElementById('rp-inicio');
   if (inicio) inicio.style.display = esInicio ? '' : 'none';
   document.getElementById('rp-solo-ranking').hidden = !esRanking;
   document.getElementById('rp-ultimos').style.display = esCarreras ? '' : 'none';
   document.getElementById('rp-top10').style.display = esTop10 ? '' : 'none';
+  const inscEl = document.getElementById('rp-inscritos');
+  if (inscEl) inscEl.style.display = esInscritos ? '' : 'none';
+  // Las pestañas de categoría no aplican en Inscritos (cada corredor se ordena
+  // dentro de su propia categoría del ranking) → se ocultan ahí.
+  const pest = document.getElementById('rp-pestanas');
+  if (pest) pest.style.display = esInscritos ? 'none' : '';
   document.querySelector('.rp-tabla-scroll').style.display = esRanking ? '' : 'none';
   document.querySelector('.rp-pie').style.display = esRanking ? '' : 'none';
   // El aviso del modo Challenge lo gestiona rpRenderTabla dentro del ranking
@@ -910,7 +917,7 @@ function rpIrA(dest) {
     if (b) { try { b.focus({ preventScroll: false }); } catch (_) { b.focus(); } }
     return;
   }
-  if (dest === 'inicio' || dest === 'top10' || dest === 'ranking' || dest === 'carreras') {
+  if (dest === 'inicio' || dest === 'top10' || dest === 'ranking' || dest === 'carreras' || dest === 'inscritos') {
     // "Ver clasificación" abre SIEMPRE Ranking → Ranking MFPP → Corredores,
     // ignorando cualquier vista interna anterior (Challenge CV, Equipos, Podios…).
     if (dest === 'ranking') { rpEstado.modo = 'mfpp'; rpEstado.vista = 'corredores'; }
@@ -922,6 +929,7 @@ function rpIrA(dest) {
     if (dest === 'ranking') { rpRenderTabla(); rpGuardarPrefs(); }
     else if (dest === 'top10') rpRenderTop10();
     else if (dest === 'carreras') rpRenderUltimos();
+    else if (dest === 'inscritos') rpRenderInscritos();
     else rpRenderInicio();
     rpGAVista(dest);
   }
@@ -1164,6 +1172,130 @@ function rpRenderUltimos() {
     (todas.length > visibles.length
       ? `<button type="button" class="rp-ver-mas">Ver más carreras (${todas.length - visibles.length} anteriores)</button>`
       : '');
+}
+
+/* ── Pantalla "📋 Inscritos": quién corre cada prueba, por EQUIPOS ─────────
+   Al subir el director la lista de inscritos de una prueba (aunque sea de
+   fuera de la CV), aquí se ve una tarjeta por equipo con sus mejores
+   corredores SEGÚN EL RANKING MFPP y el listado completo de quién participa.
+   No es una clasificación: es la startlist cruzada con el ranking. Solo lee
+   datos ya cargados (rpEstado); ninguna lectura nueva ni escritura. */
+
+// Pruebas que tienen lista de inscritos (startlist), sin duplicar. Las
+// pre-inscripciones (clasificacion futura) y las planificadas del calendario
+// pueden coincidir → nos quedamos con la que trae más inscritos.
+function rpInscritosPruebas() {
+  const pool = [...(rpEstado.carreras || []), ...(rpEstado.planificadas || [])]
+    .filter(c => c && Array.isArray(c.inscritos) && c.inscritos.length);
+  const porClave = new Map();
+  pool.forEach(c => {
+    const clave = rpNormalizarTexto(c.nombre || '') + '|' + (c.fecha || '');
+    const prev = porClave.get(clave);
+    if (!prev || c.inscritos.length > prev.inscritos.length) porClave.set(clave, c);
+  });
+  return [...porClave.values()].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+}
+
+// Puesto y puntos de cada corredor en su categoría del ranking (clave→dato).
+// Usa la MISMA base que el resto del widget (rpPoblacion, con los filtros
+// activos) para que el puesto mostrado aquí coincida con el del ranking.
+function rpInscritosLookupRanking() {
+  const m = new Map();
+  const cats = (rpEstado.ranking && rpEstado.ranking.categorias) || [];
+  cats.forEach(cat => {
+    rpPoblacion(cat).forEach((cor, i) => {
+      if (!m.has(cor.clave)) m.set(cor.clave, { pos: i + 1, puntos: cor.puntosTotales, catLabel: cat.label });
+    });
+  });
+  return m;
+}
+
+// Agrupa los inscritos de una prueba por equipo, con el puesto de ranking de
+// cada corredor. Equipos ordenados por su mejor corredor; corredores dentro
+// del equipo: primero los del ranking (por puesto), luego los "sin ranking".
+function rpInscritosEquipos(prueba) {
+  const lookup = rpInscritosLookupRanking();
+  const porEquipo = new Map();
+  (prueba.inscritos || []).forEach(i => {
+    const equipo = ((i.equipo || '').trim()) || 'Sin equipo';
+    const claveEq = rpNormalizarTexto(equipo);
+    if (!porEquipo.has(claveEq)) porEquipo.set(claveEq, { nombre: equipo, corredores: [] });
+    const clave = rpNormalizarClave(i.nombre || '');
+    porEquipo.get(claveEq).corredores.push({ nombre: i.nombre || '', clave, cat: i.cat || '', rank: lookup.get(clave) || null });
+  });
+  const equipos = [...porEquipo.values()];
+  equipos.forEach(t => {
+    t.corredores.sort((a, b) => {
+      if (a.rank && b.rank) return a.rank.pos - b.rank.pos;
+      if (a.rank) return -1;
+      if (b.rank) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+    t.nRanked = t.corredores.filter(c => c.rank).length;
+    t.mejorPos = (t.corredores[0] && t.corredores[0].rank) ? t.corredores[0].rank.pos : Infinity;
+  });
+  // Equipos con corredores rankeados primero (por su mejor puesto); el resto
+  // ("sin ranking", típicamente de fuera de la CV) al final, alfabético.
+  equipos.sort((a, b) => a.mejorPos - b.mejorPos || b.nRanked - a.nRanked || a.nombre.localeCompare(b.nombre));
+  return equipos;
+}
+
+// Tarjeta de un equipo (mismo formato visual que las tarjetas de carrera).
+function rpTarjetaEquipoInscritos(t) {
+  const linea = (r, i, conMedalla) => {
+    const enlazable = r.clave && rpEstado.clavesRanking.has(r.clave);
+    const nombre = enlazable
+      ? `<button type="button" class="rp-enlace rp-podio-nombre" data-corredor="${rpEscapar(r.clave)}">${rpEscapar(r.nombre)}</button>`
+      : `<span class="rp-podio-nombre">${rpEscapar(r.nombre)}</span>`;
+    const insignia = r.rank
+      ? `<span class="rp-podio-rank" title="Puesto ${r.rank.pos}º del ranking ${rpEscapar(r.rank.catLabel)}">${r.rank.pos}º · ${rpFormatearPuntos(r.rank.puntos)} pts</span>`
+      : '<span class="rp-podio-rank rp-podio-rank-sin" title="Aún no aparece en el ranking (corredor nuevo o de fuera de la Comunitat)">sin ranking</span>';
+    const medalla = (conMedalla && r.rank) ? (RP_MEDALLAS_PODIO[i] || '•') : '•';
+    return '<li>' +
+      `<span class="rp-podio-medalla">${medalla}</span>` +
+      '<span class="rp-podio-datos">' +
+        `<span class="rp-podio-l1">${nombre}${insignia}</span>` +
+        (r.cat ? `<span class="rp-podio-equipo">${rpEscapar(r.cat)}</span>` : '') +
+      '</span></li>';
+  };
+  const top3 = t.corredores.slice(0, 3).map((r, i) => linea(r, i, true)).join('');
+  const todos = t.corredores.map((r, i) => linea(r, i, false)).join('');
+  const n = t.corredores.length;
+  return '<article class="rp-carrera rp-insc-equipo">' +
+    '<header class="rp-carrera-cab">' +
+      `<span class="rp-carrera-fecha">👥 ${n} corredor${n === 1 ? '' : 'es'}</span>` +
+      (t.nRanked ? `<span class="rp-chip-part" title="Corredores de este equipo con puesto en el ranking MFPP">${t.nRanked} en el ranking</span>` : '') +
+    '</header>' +
+    `<h3 class="rp-carrera-nombre">${rpEscapar(t.nombre)}</h3>` +
+    `<ul class="rp-podio-lista">${top3}</ul>` +
+    `<button type="button" class="rp-carrera-cta rp-insc-vertodos" aria-expanded="false" data-n="${n}">Ver los ${n} corredores que participan ➔</button>` +
+    `<div class="rp-insc-todos" hidden><ul class="rp-podio-lista rp-insc-lista">${todos}</ul></div>` +
+    '</article>';
+}
+
+function rpRenderInscritos() {
+  const cont = document.getElementById('rp-inscritos');
+  if (!cont) return;
+  const pruebas = rpInscritosPruebas();
+  if (!pruebas.length) {
+    cont.innerHTML = '<p class="rp-vacio">Aún no hay listas de inscritos publicadas. Cuando el director suba los inscritos de una prueba, aparecerán aquí sus equipos y corredores ordenados por el ranking.</p>';
+    return;
+  }
+  let sel = rpEstado.inscritosPruebaId && pruebas.find(p => p.id === rpEstado.inscritosPruebaId);
+  if (!sel) { sel = pruebas[0]; rpEstado.inscritosPruebaId = sel.id; }
+  const opciones = pruebas.map(p =>
+    `<option value="${rpEscapar(p.id)}"${p.id === sel.id ? ' selected' : ''}>${rpEscapar(rpFormatearFecha(p.fecha))} · ${rpEscapar(p.nombre)}</option>`
+  ).join('');
+  const equipos = rpInscritosEquipos(sel);
+  const totalCorr = equipos.reduce((s, t) => s + t.corredores.length, 0);
+  const fuera = sel.ccaa && rpEsFueraCV(sel.ccaa) ? ` · <b>${rpEscapar(sel.ccaa)}</b>` : '';
+  cont.innerHTML =
+    '<div class="rp-insc-cab">' +
+      '<label class="rp-insc-sel-label" for="rp-insc-sel">Prueba</label>' +
+      `<select id="rp-insc-sel" class="rp-insc-sel" aria-label="Elegir prueba">${opciones}</select>` +
+    '</div>' +
+    `<p class="rp-insc-intro">👥 <b>${equipos.length}</b> equipos · <b>${totalCorr}</b> corredores inscritos${fuera}. Los mejores de cada equipo <b>según el ranking MFPP</b> — no es una clasificación, es quién va a correr.</p>` +
+    `<div class="rp-insc-cards">${equipos.map(rpTarjetaEquipoInscritos).join('')}</div>`;
 }
 
 // ── Pantalla "⭐ Top 10": escaparate de los 10 mejores del ranking ──
@@ -4431,12 +4563,13 @@ function rpAplicarDeeplink(get) {
     rpRenderTabla();
   }
   const pantallaParam = get('pantalla');
-  if (pantallaParam === 'inicio' || pantallaParam === 'ranking' || pantallaParam === 'carreras' || pantallaParam === 'top10') {
+  if (pantallaParam === 'inicio' || pantallaParam === 'ranking' || pantallaParam === 'carreras' || pantallaParam === 'top10' || pantallaParam === 'inscritos') {
     rpEstado.pantalla = pantallaParam;
     rpRenderPantalla();
     if (pantallaParam === 'ranking') rpRenderTabla();
     else if (pantallaParam === 'top10') rpRenderTop10();
     else if (pantallaParam === 'carreras') rpRenderUltimos();
+    else if (pantallaParam === 'inscritos') rpRenderInscritos();
     else if (pantallaParam === 'inicio') rpRenderInicio();
   }
   let abrioModal = false;
@@ -4727,6 +4860,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rpEstado.pantalla === 'ranking') rpRenderTabla();
     else if (rpEstado.pantalla === 'top10') rpRenderTop10();
     else if (rpEstado.pantalla === 'carreras') rpRenderUltimos();
+    else if (rpEstado.pantalla === 'inscritos') rpRenderInscritos();
     else rpRenderInicio();
     rpGAVista(rpEstado.pantalla);
   });
@@ -4824,6 +4958,32 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('rp-ultimos').addEventListener('click', alClicEnlace);
   document.getElementById('rp-top10').addEventListener('click', alClicEnlace);
+  // Inscritos: enlaces a fichas + botón "Ver todos" (desplegar) + selector de prueba
+  const elInsc = document.getElementById('rp-inscritos');
+  if (elInsc) {
+    elInsc.addEventListener('click', e => {
+      const ver = e.target.closest('.rp-insc-vertodos');
+      if (ver) {
+        const art = ver.closest('.rp-carrera');
+        const caja = art && art.querySelector('.rp-insc-todos');
+        if (caja) {
+          const abrir = caja.hidden;
+          caja.hidden = !abrir;
+          ver.setAttribute('aria-expanded', String(abrir));
+          const n = ver.dataset.n || '';
+          ver.textContent = abrir ? 'Ocultar corredores ▲' : `Ver los ${n} corredores que participan ➔`;
+        }
+        return;
+      }
+      alClicEnlace(e);
+    });
+    elInsc.addEventListener('change', e => {
+      const sel = e.target.closest('#rp-insc-sel');
+      if (!sel) return;
+      rpEstado.inscritosPruebaId = sel.value;
+      rpRenderInscritos();
+    });
+  }
   const elInicio = document.getElementById('rp-inicio');
   elInicio.addEventListener('click', alClicEnlace);
   // Buscador de la portada con sugerencias (reutiliza el índice global de búsqueda)

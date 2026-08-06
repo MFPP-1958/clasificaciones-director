@@ -707,6 +707,27 @@ a.rp-cal-chip { text-decoration: none; display: inline-block; }
 }
 .rp-carrera-cta:hover, .rp-carrera-cta:focus-visible { text-decoration: underline; outline: none; }
 
+/* Pantalla "📋 Inscritos": quién corre cada prueba, por equipos (mismas tarjetas) */
+.rp-insc-cab { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; flex-wrap: wrap; }
+.rp-insc-sel-label { font-size: 0.85rem; font-weight: 700; color: var(--rp-color-suave); }
+.rp-insc-sel {
+  flex: 1; min-width: 200px; max-width: 560px;
+  font: inherit; font-size: 0.95rem; font-weight: 600;
+  color: var(--rp-color-texto);
+  background: var(--rp-color-fondo-alt);
+  border: 1px solid var(--rp-color-borde);
+  border-radius: 10px; padding: 9px 12px; cursor: pointer;
+}
+.rp-insc-intro { margin: 0 0 14px; font-size: 0.9rem; color: var(--rp-color-suave); line-height: 1.45; }
+.rp-insc-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.rp-podio-rank-sin { color: var(--rp-color-suave); background: var(--rp-color-fondo-alt); border-style: dashed; }
+.rp-insc-todos { margin-top: 2px; border-top: 1px dashed var(--rp-color-borde); }
+.rp-insc-todos .rp-insc-lista { margin: 8px 0 0; }
+
 /* Pantalla "⭐ Top 10": tarjetas de los 10 mejores con sus 3 mejores actuaciones */
 .rp-top10-grid {
   display: grid;
