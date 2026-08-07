@@ -3620,6 +3620,112 @@ async function _storyExportPNG(btn){
   finally{ if(btn){ setTimeout(()=>{ btn.textContent=orig; btn.disabled=false; },1200); } }
 }
 
+/* ══ HISTORIA por EQUIPOS: podio de equipos = suma de tiempos de los 3 mejores ══
+   Reutiliza el mismo cálculo que el ranking por equipos de la app (top-3 por
+   posición con tiempo, suma de totalSeconds). En empate EXACTO de tiempo se
+   aplica la regla estándar: menor suma de posiciones y luego el mejor corredor. */
+function _storyFmtTotal(sec){
+  if(typeof formatTeamTotalSeconds==='function'){ try{ return formatTeamTotalSeconds(sec); }catch(_){} }
+  sec=Math.max(0,Math.round(Number(sec)||0)); const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+  return (h>0?(h+':'+String(m).padStart(2,'0')):String(m))+':'+String(s).padStart(2,'0');
+}
+function _storyTeamsBuildSVG(){
+  const all=(typeof riders!=='undefined'&&Array.isArray(riders))?riders:[];
+  const map={};
+  all.forEach(r=>{ const t=(r.team||'').trim(); if(!t) return; (map[t]=map[t]||[]).push(r); });
+  const rows=Object.keys(map).map(t=>{
+    const withTime=map[t].filter(r=>r.totalSeconds!=null).slice().sort((a,b)=>Number(a.pos)-Number(b.pos));
+    const top3=withTime.slice(0,3);
+    if(top3.length<3) return null;
+    const total=top3.reduce((s,r)=>s+Number(r.totalSeconds),0);
+    return { team:t, top3:top3, total:total, sumPos:top3.reduce((s,r)=>s+Number(r.pos||0),0), bestPos:Number(top3[0].pos||0) };
+  }).filter(Boolean).sort((a,b)=> (a.total-b.total) || (a.sumPos-b.sumPos) || (a.bestPos-b.bestPos));
+  const podio=rows.slice(0,3);
+  if(!podio.length) return null;
+  const first=podio[0].total;
+  const race=((typeof _activeRace!=='undefined'&&_activeRace&&_activeRace.name)||(document.getElementById('raceName')&&document.getElementById('raceName').value)||'Prueba').trim();
+  const dRaw=(typeof _activeRace!=='undefined'&&_activeRace&&_activeRace.date)||(document.getElementById('raceDate')&&document.getElementById('raceDate').value)||'';
+  const fecha=_storyFmtFecha(dRaw);
+  const catRaw=(podio[0].top3[0].cat)||'';
+  const grp=(typeof _calCatGroup==='function')?_calCatGroup(catRaw):null;
+  const categoria=(grp&&grp.label)||catRaw||'—';
+  const genero=_storyGenero(podio.map(e=>e.top3.map(r=>r.cat||'').join(' ')).join(' '));
+  const disciplina='Carretera', pais='España', WEB='mfppcycling.com/ranking';
+  const esc=_storyEsc, wrap=_storyWrap;
+  const surTC=nm=>{ const s=(String(nm||'').split(',')[0]).trim().split(/\s+/)[0]||''; return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():''; };
+  const medal={1:'🥇',2:'🥈',3:'🥉'}, rowbg={1:'#fff6da',2:'#eef1f8',3:'#f6ebdc'}, rowln={1:'#e8cf7a',2:'#c9d4e6',3:'#e0c49a'};
+  const W=1080,H=1920,S=[];
+  S.push('<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">');
+  S.push('<defs><linearGradient id="stbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9eff8"/><stop offset="1" stop-color="#f6f1ea"/></linearGradient><filter id="stsh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#1a2b45" flood-opacity="0.14"/></filter></defs>');
+  S.push('<rect width="'+W+'" height="'+H+'" fill="url(#stbg)"/>');
+  S.push('<rect x="44" y="46" width="236" height="100" rx="20" fill="#0b2f6b" filter="url(#stsh)"/>');
+  S.push('<text x="'+(W-60)+'" y="108" text-anchor="end" font-size="26" font-weight="700" fill="#5b6b82">'+esc(WEB)+'</text>');
+  const tcx=50,tcy=168,tcw=980;
+  const tlines=wrap(race.toUpperCase(),19).slice(0,3);
+  const th=(78+tlines.length*66)+(30+3*52)+50;
+  S.push('<rect x="'+tcx+'" y="'+tcy+'" width="'+tcw+'" height="'+th+'" rx="26" fill="#fff" filter="url(#stsh)"/>');
+  S.push('<rect x="'+tcx+'" y="'+tcy+'" width="12" height="'+th+'" rx="6" fill="#0b2f6b"/>');
+  let ty=tcy+80;
+  tlines.forEach(ln=>{ S.push('<text x="'+(tcx+45)+'" y="'+ty+'" font-size="54" font-weight="800" fill="#14223a" letter-spacing="-0.5">'+esc(ln)+'</text>'); ty+=66; });
+  ty+=34;
+  const meta=(x,y,k,v)=>S.push('<text x="'+x+'" y="'+y+'" font-size="29" font-weight="800" fill="#1f2d44">'+esc(k)+': <tspan font-weight="500" fill="#6b7280">'+esc(v)+'</tspan></text>');
+  meta(tcx+45,ty,'Fecha',fecha); meta(tcx+490,ty,'Categoría',categoria); ty+=52;
+  meta(tcx+45,ty,'Género',genero); meta(tcx+490,ty,'Disciplina',disciplina); ty+=52;
+  meta(tcx+45,ty,'País',pais);
+  const pcx=50,pcy=tcy+th+42,pcw=980,prowh=192,ph=170+prowh*3+26;
+  S.push('<rect x="'+pcx+'" y="'+pcy+'" width="'+pcw+'" height="'+ph+'" rx="26" fill="#fff" filter="url(#stsh)"/>');
+  S.push('<text x="'+(pcx+45)+'" y="'+(pcy+64)+'" font-size="34" font-weight="800" fill="#0b2f6b">Clasificación</text>');
+  S.push('<text x="'+(pcx+300)+'" y="'+(pcy+64)+'" font-size="24" font-weight="700" fill="#94a3b8">por equipos · 3 mejores</text>');
+  S.push('<rect x="'+(pcx+45)+'" y="'+(pcy+78)+'" width="210" height="5" rx="2.5" fill="#1287c7"/>');
+  const CX_TEAM=pcx+150,CX_TIME=pcx+792,CX_DIF=pcx+922, hy=pcy+130;
+  [[pcx+45,'#','start'],[CX_TEAM,'EQUIPO','start'],[CX_TIME,'TIEMPO','end'],[CX_DIF,'DIF','end']].forEach(c=>{
+    S.push('<text x="'+c[0]+'" y="'+hy+'" font-size="22" font-weight="800" fill="#9aa3b2" letter-spacing="1" text-anchor="'+c[2]+'">'+esc(c[1])+'</text>');
+  });
+  let ry=hy+22;
+  podio.forEach((e,i)=>{
+    const pos=i+1, cy=ry+prowh/2;
+    S.push('<rect x="'+(pcx+22)+'" y="'+(ry+8)+'" width="'+(pcw-44)+'" height="'+(prowh-16)+'" rx="18" fill="'+(rowbg[pos]||'#f4f6fa')+'" stroke="'+(rowln[pos]||'#e2e6ee')+'" stroke-width="1.5"/>');
+    S.push('<text x="'+(pcx+72)+'" y="'+(cy+16)+'" font-size="46" text-anchor="middle">'+(medal[pos]||pos)+'</text>');
+    const tn=wrap(e.team,22).slice(0,2); let ny=cy-((tn.length-1)*36)-6;
+    tn.forEach(ln=>{ S.push('<text x="'+CX_TEAM+'" y="'+ny+'" font-size="31" font-weight="800" fill="#14223a">'+esc(ln)+'</text>'); ny+=36; });
+    const ridersTxt=e.top3.map(r=>Number(r.pos)+'º '+surTC(r.name)).join(' · ');
+    const rl=wrap(ridersTxt,42).slice(0,2); let ry2=ny+8;
+    rl.forEach(ln=>{ S.push('<text x="'+CX_TEAM+'" y="'+ry2+'" font-size="21" font-weight="600" fill="#7a8598">'+esc(ln)+'</text>'); ry2+=26; });
+    S.push('<text x="'+CX_TIME+'" y="'+(cy+11)+'" font-size="31" font-weight="800" fill="#1f2d44" text-anchor="end">'+esc(_storyFmtTotal(e.total))+'</text>');
+    const dif=_storyFmtGap(e.total-first, i+1);   // '—' líder · 'm.t.' empate · '+M:SS' resto
+    const difcol=(dif!=='—'&&dif!=='m.t.')?'#16a34a':'#9aa3b2';
+    S.push('<text x="'+CX_DIF+'" y="'+(cy+11)+'" font-size="27" font-weight="700" fill="'+difcol+'" text-anchor="end">'+esc(dif)+'</text>');
+    ry+=prowh;
+  });
+  const fy=pcy+ph+90;
+  S.push('<text x="'+(W/2)+'" y="'+fy+'" font-size="46" font-weight="800" fill="#14223a" text-anchor="middle">Clasificación completa 👇</text>');
+  const by=fy+40;
+  S.push('<rect x="130" y="'+by+'" width="820" height="104" rx="52" fill="#0b2f6b" filter="url(#stsh)"/>');
+  S.push('<text x="'+(W/2)+'" y="'+(by+66)+'" font-size="40" font-weight="800" fill="#ffffff" text-anchor="middle">🔗 '+esc(WEB)+'</text>');
+  S.push('</svg>');
+  return { svg:S.join(''), W:W, H:H, race:race };
+}
+async function _storyTeamsExportPNG(btn){
+  const built=_storyTeamsBuildSVG();
+  if(!built){ alert('No puedo generar la clasificación por equipos: hacen falta equipos con al menos 3 corredores con tiempo en la clasificación cargada.'); return; }
+  const orig=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='⏳ Generando…'; }
+  try{
+    const cv=document.createElement('canvas'); cv.width=built.W; cv.height=built.H;
+    const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,built.W,built.H);
+    if(typeof _infDrawSVGToCanvas==='function') await _infDrawSVGToCanvas(ctx,built.svg,0,0,built.W,built.H); else throw new Error('sin renderizador de imagen');
+    const _lg=(typeof _STORY_LOGO_B64!=='undefined'&&_STORY_LOGO_B64)?_STORY_LOGO_B64:((document.querySelector('.brand-logo')||{}).src||'');
+    if(_lg){ await new Promise(res=>{ const im=new Image(); im.onload=()=>{ try{ const w=200, h=w*(im.height||68)/(im.width||184); ctx.drawImage(im,62,96-h/2,w,h); }catch(_){} res(); }; im.onerror=()=>res(); im.src=_lg; }); }
+    cv.toBlob(b=>{
+      if(!b){ alert('No se pudo generar la imagen.'); return; }
+      const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u;
+      a.download='historia-equipos_'+String(built.race||'prueba').replace(/[^a-z0-9]+/gi,'-').slice(0,40)+'.png';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500);
+      if(typeof showToast==='function') showToast('🏆 Historia por equipos descargada','ok',2600);
+    },'image/png');
+  }catch(e){ alert('No he podido generar la Historia por equipos. Error: '+(e&&e.message||e)); }
+  finally{ if(btn){ setTimeout(()=>{ btn.textContent=orig; btn.disabled=false; },1200); } }
+}
+
 // Grupos de categoría realmente presentes en los datos cargados
 function _calAvailableCats(){
   const present=new Set();
