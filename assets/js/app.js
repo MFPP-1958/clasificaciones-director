@@ -48960,6 +48960,10 @@ function _simApplyShrinkage(grid){
   const N=grid.length, neutral=(N+1)/2, K=3;
   grid.forEach(g=>{
     if(g.predictedPos==null) return;
+    // Forma de VUELTA: las etapas previas de esta misma vuelta son evidencia
+    // directa y fuerte (mismos rivales, muy reciente) → NO encoger hacia el
+    // centro del pelotón, aunque sean "solo" 2-3 etapas.
+    if(g.vueltaForm) { g._shrunk=false; return; }
     const n=g.raceCount||0;
     if(n>=6) { g._shrunk=false; return; }   // con historial suficiente, no se toca
     const w=n/(n+K);
