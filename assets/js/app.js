@@ -29971,6 +29971,23 @@ function _simBuildData(raceId){
     races: historicalRaces.map(h=>({ name:h.raceName||'(sin nombre)', date:h.raceDate||'', n:(h.riders||[]).length, tt:_simIsTimeTrial(h), w:(_compatByRaceId.get(h.id)||1) }))
                           .sort((a,b)=>(_parseSpanishDate(b.date)||'').localeCompare(_parseSpanishDate(a.date)||''))
   };
+  // ── VUELTA (etapas): incorporar las etapas PREVIAS de esta misma vuelta al
+  //    historial (auto por nombre) para que el motor las trate como FORMA RECIENTE,
+  //    pero SIN sustituir al resto de señales: terreno, especialidad (CRI/montaña),
+  //    historial completo… siguen contando "como en una carrera de una etapa".
+  //    Se fuerzan a estar aunque el filtro de compatibilidad las descartara por tipo,
+  //    con peso = similitud de tipo con la etapa objetivo (con suelo).
+  const _vuelta = _simDetectVuelta(race, hist);
+  const _vueltaStageIds = new Set();
+  if(_vuelta){
+    _vuelta.prevStages.forEach(st=>{
+      _vueltaStageIds.add(st.id);
+      if(!historicalRaces.some(h=>h.id===st.id)) historicalRaces.push(st);
+      const w = _compatByRaceId.has(st.id) ? _compatByRaceId.get(st.id) : Math.max(0.5, _simStageTypeSim(race, st));
+      _compatByRaceId.set(st.id, w);
+    });
+    _simCompatInfo.vuelta = { clave:_vuelta.clave, etapaNum:_vuelta.stageNum, etapasPrevias:_vuelta.prevStages.length };
+  }
   // Index: nameKey → array de {pos, total, raceDate, cat, team}
   const byRider = new Map();
   // Index: teamKey → array de posiciones de cualquier corredor
@@ -30003,22 +30020,6 @@ function _simBuildData(raceId){
   // — Tier 2: precomputar quality index por carrera del histórico
   // Devuelve Map<raceId, qualityWeight>. Pesos > 1 = carrera fuerte, < 1 = floja
   const _raceQualityWeight = _simComputeQualityIndex(historicalRaces);
-  // ── VUELTA: forma inmediata de las etapas previas de ESTA vuelta (auto por nombre).
-  //    Se indexan SIEMPRE (aunque el tipo difiera y el filtro de compatibilidad las
-  //    hubiera descartado), ponderadas por similitud de tipo con la etapa objetivo.
-  const _vuelta = _simDetectVuelta(race, hist);
-  const byRiderVuelta = new Map();
-  if(_vuelta){
-    _vuelta.prevStages.forEach(st=>{
-      const stW=_simStageTypeSim(race, st);
-      (st.riders||[]).forEach(r=>{
-        const nk=normalizeForMatching(r.name||''); if(!nk || !(r.pos>0)) return;
-        if(!byRiderVuelta.has(nk)) byRiderVuelta.set(nk,[]);
-        byRiderVuelta.get(nk).push({ pos:r.pos, order:st._stageNum||0, typeSim:stW });
-      });
-    });
-    _simCompatInfo.vuelta = { clave:_vuelta.clave, etapaNum:_vuelta.stageNum, etapasPrevias:_vuelta.prevStages.length };
-  }
   const grid = inscritos.map((ins, idx)=>{
     const nk = normalizeForMatching(ins.name||'');
     // Resolver categoría específica desde el histórico si la del inscrito es genérica
@@ -30236,33 +30237,17 @@ function _simBuildData(raceId){
         treeNode.push('B:deb-sin-club');
       }
     }
-    // ── Ponderación de VUELTA: la forma en las etapas previas de ESTA vuelta manda
-    //    (peso wV creciente con las etapas corridas), ponderada por recencia (orden
-    //    de etapa) y similitud de tipo con la etapa objetivo. Es evidencia directa.
-    const _vHits = nk ? (byRiderVuelta.get(nk)||[]) : [];
-    let vueltaForm = false;
-    if(_vHits.length){
-      const _vs=_vHits.slice().sort((a,b)=>(b.order||0)-(a.order||0));   // etapa más reciente primero
-      const _recW=[0.5,0.3,0.2,0.15,0.1];
-      let _vSum=0,_vW=0;
-      _vs.forEach((h,i)=>{ const w=(_recW[i]||0.08)*(0.5+0.5*(h.typeSim||1)); _vSum+=h.pos*w; _vW+=w; });
-      const _vueltaMean = _vW>0 ? _vSum/_vW : null;
-      if(_vueltaMean!=null){
-        const _n=_vHits.length;
-        const _wV = _n>=3 ? 0.70 : _n===2 ? 0.60 : 0.55;
-        const _base = (predictedPos!=null) ? predictedPos : _vueltaMean;
-        predictedPos = _wV*_vueltaMean + (1-_wV)*_base;
-        if(predLower==null || predUpper==null){ predLower=predictedPos*0.82; predUpper=predictedPos*1.2; }
-        reliability = Math.max(reliability||0, Math.min(85, 40+_n*12));
-        if(status==='team-fb' || status==='deb') status='vuelta-form';
-        confidence = _n>=2 ? 'media' : (confidence==='nula'?'baja':confidence);
-        vueltaForm=true;
-        treeNode.push('V:vuelta-form-'+_n);
-      }
-    }
+    // ── Marca de FORMA DE VUELTA: el corredor tiene resultados en etapas previas de
+    //    esta vuelta (ya incluidas ARRIBA en su historial y tratadas como forma
+    //    reciente por el motor, JUNTO con terreno/especialidad/historial completo —
+    //    "como en una carrera de una etapa"). Solo se usa para no encogerlo
+    //    (shrinkage) y para contar como dato válido en el aviso de cobertura.
+    const _vStages = (nk && hits && hits.length) ? hits.filter(h => _vueltaStageIds.has(h.raceId)).length : 0;
+    const vueltaForm = _vStages > 0;
+    if(vueltaForm){ treeNode.push('V:vuelta-'+_vStages+'et'); if(status==='team-fb' || status==='deb') status='vuelta-form'; }
     return {
       idx,
-      vueltaForm, vueltaStages: _vHits.length,
+      vueltaForm, vueltaStages: _vStages,
       bib: ins.bib || '',
       name: ins.name || '',
       team: ins.team || '',
