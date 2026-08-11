@@ -3494,9 +3494,9 @@ function _storyFmtTime(t){ t=String(t||'').trim(); return t?t.replace(/^0(?=\d:)
 function _storyFmtGap(sec,pos){
   if(pos===1) return '—';
   if(sec==null||sec==='') return '';
-  sec=Math.round(Number(sec)); if(!(sec>0)) return 'm.t.';
-  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
-  return '+'+(h>0?(h+':'+String(m).padStart(2,'0')):String(m))+':'+String(s).padStart(2,'0');
+  const ms=Math.round(Number(sec)*1000); if(!(ms>0)) return 'm.t.';
+  const whole=Math.floor(ms/1000), h=Math.floor(whole/3600), m=Math.floor((whole%3600)/60), s=whole%60;
+  return '+'+(h>0?(h+':'+String(m).padStart(2,'0')):String(m))+':'+String(s).padStart(2,'0')+_fracSuffix(sec);
 }
 function _storyName(raw){
   const s=String(raw||'').trim(); let given='', sur='';
@@ -9132,23 +9132,34 @@ function parseKmValue(){const raw=String($('raceKm').value||'').replace(',', '.'
 function normalizeTimeStr(t){
   if(!t) return '';
   let s=cleanSpaces(String(t)).trim();
-  // Eliminar milisegundos: "01:25:19.000" o "01:25:19,000" → "01:25:19"
-  s=s.replace(/(\d{2})[.,]\d+$/, '$1');
+  // CONSERVAR las centésimas/milésimas: en cronos (cronoescalada/CRI) el orden
+  // depende de esos decimales. Separamos la parte decimal y la re-adjuntamos.
+  // Solo se descartan los decimales TODO-CEROS ("01:25:19.000" → "01:25:19").
+  let frac='';
+  const fm=s.match(/^(.*\d{2})[.,](\d+)$/);
+  if(fm){ s=fm[1]; frac=/^0+$/.test(fm[2])?'':('.'+fm[2]); }
   // Normalizar a HH:MM:SS para evitar ambigüedad (11:51 podría ser 11h o 11min)
   // Formato 3 partes H:MM:SS → zero-pad HH
   const three=s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
-  if(three) return String(three[1]).padStart(2,'0')+':'+three[2]+':'+three[3];
+  if(three) return String(three[1]).padStart(2,'0')+':'+three[2]+':'+three[3]+frac;
   // Formato 2 partes M:SS o MM:SS (típico de pruebas cadete <1h) → 00:MM:SS
   const two=s.match(/^(\d{1,2}):(\d{2})$/);
-  if(two) return '00:'+String(two[1]).padStart(2,'0')+':'+two[2];
-  return s;
+  if(two) return '00:'+String(two[1]).padStart(2,'0')+':'+two[2]+frac;
+  return s+frac;
+}
+// Sufijo decimal (centésimas/milésimas) de un valor en segundos: ".69", ".005" o ''
+function _fracSuffix(sec){
+  const totalMs=Math.round(Number(sec)*1000), ms=((totalMs%1000)+1000)%1000;
+  if(ms===0) return '';
+  return ('.'+String(ms).padStart(3,'0')).replace(/0+$/,'');
 }
 function timeToSeconds(t){
   t=normalizeTimeStr(String(t||'')).replace(/^a\s+/i,'');
-  const m=t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  const m=t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:[.,](\d+))?$/);
   if(!m) return null;
   const a=Number(m[1]), b=Number(m[2]), c=m[3]!=null?Number(m[3]):null;
-  return c==null ? a*60+b : a*3600+b*60+c;
+  const frac=m[4]!=null?Number('0.'+m[4]):0;   // centésimas/milésimas
+  return (c==null ? a*60+b : a*3600+b*60+c) + frac;
 }
 function gapSecondsFromTime(t,pos){
   if(pos===1) return 0;
@@ -9159,16 +9170,17 @@ function gapSecondsFromTime(t,pos){
 // Formato HH:MM:SS siempre — usado en la columna TIEMPO para evitar ambigüedad
 function formatHMS(sec){
   if(sec==null || Number.isNaN(sec)) return '—';
-  sec=Math.round(sec);
-  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
-  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  const whole=Math.floor(Math.round(Number(sec)*1000)/1000);
+  const h=Math.floor(whole/3600), m=Math.floor((whole%3600)/60), s=whole%60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+_fracSuffix(sec);
 }
 function formatSeconds(sec){
   if(sec==null || Number.isNaN(sec)) return '—';
-  sec=Math.round(sec);
-  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
-  if(h>0) return h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-  return m+':'+String(s).padStart(2,'0');
+  const whole=Math.floor(Math.round(Number(sec)*1000)/1000);
+  const h=Math.floor(whole/3600), m=Math.floor((whole%3600)/60), s=whole%60;
+  const dec=_fracSuffix(sec);
+  if(h>0) return h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+dec;
+  return m+':'+String(s).padStart(2,'0')+dec;
 }
 // Propaga la CCAA dentro de cada equipo: si algún corredor del equipo tiene
 // CCAA conocida, todos los demás del mismo equipo heredan esa CCAA.
@@ -14754,9 +14766,9 @@ function renderCompare(){
 
 function formatTeamTotalSeconds(sec){
   if(sec==null || Number.isNaN(sec)) return '—';
-  sec=Math.round(sec);
-  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
-  return h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  const whole=Math.floor(Math.round(Number(sec)*1000)/1000);
+  const h=Math.floor(whole/3600), m=Math.floor((whole%3600)/60), s=whole%60;
+  return h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+_fracSuffix(sec);
 }
 function setTeamRankingMode(mode){
   teamRankingMode = (mode==='points') ? 'points' : 'time';
