@@ -29863,6 +29863,37 @@ function _simRaceCompatWeight(target, hist){
 }
 
 // Construye el grid analizado: para cada inscrito, calcula sus métricas históricas
+// ── VUELTA por etapas: detecta si la prueba objetivo es "Etapa N-<vuelta>" y
+//    localiza las etapas PREVIAS (1..N-1) de la misma vuelta en el histórico.
+//    Auto por nombre (misma lógica de agrupación que la general de vuelta).
+function _simVueltaClave(nombre){
+  const m=String(nombre||'').match(/^\s*etapa\s*(\d+)\s*[-–—:.]?\s*(.+)$/i);
+  if(!m) return null;
+  const resto=String(m[2]).replace(/[-\s]*cri\.?\s*$/i,'');
+  const clave=resto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'');
+  return clave ? { stageNum:parseInt(m[1],10), clave } : null;
+}
+function _simDetectVuelta(race, hist){
+  const t=_simVueltaClave(race&&race.raceName); if(!t) return null;
+  const tIso=(_parseSpanishDate(race&&race.raceDate)||'');
+  const prev=[];
+  (hist||[]).forEach(h=>{
+    if(!h || h.id===(race&&race.id)) return;
+    const hc=_simVueltaClave(h.raceName); if(!hc || hc.clave!==t.clave) return;
+    const hIso=(_parseSpanishDate(h.raceDate)||'');
+    const isPrev = (Number.isFinite(hc.stageNum)&&Number.isFinite(t.stageNum)) ? hc.stageNum<t.stageNum : (!!hIso&&!!tIso&&hIso<tIso);
+    if(isPrev && (h.riders||[]).some(r=>r.pos>0)) prev.push(Object.assign({}, h, {_stageNum:hc.stageNum}));
+  });
+  if(!prev.length) return null;
+  prev.sort((a,b)=>(a._stageNum||0)-(b._stageNum||0));
+  return { clave:t.clave, stageNum:t.stageNum, prevStages:prev };
+}
+// Similitud de TIPO de etapa (1 = mismo tipo; menor si difieren): cronoescalada,
+// contrarreloj (CRI) o carrera en masa (línea/circuito).
+function _simStageTypeSim(target, stage){
+  const bucket=r=>{ try{ return _simIsHillClimb(r)?'hc':(_simIsTimeTrial(r)?'cri':'masa'); }catch(_){ return 'masa'; } };
+  return bucket(target)===bucket(stage) ? 1.0 : 0.55;
+}
 function _simBuildData(raceId){
   const hist = _cachedHistory || [];
   // La prueba puede estar en el histórico O ser una planificada con inscritos
@@ -29972,6 +30003,22 @@ function _simBuildData(raceId){
   // — Tier 2: precomputar quality index por carrera del histórico
   // Devuelve Map<raceId, qualityWeight>. Pesos > 1 = carrera fuerte, < 1 = floja
   const _raceQualityWeight = _simComputeQualityIndex(historicalRaces);
+  // ── VUELTA: forma inmediata de las etapas previas de ESTA vuelta (auto por nombre).
+  //    Se indexan SIEMPRE (aunque el tipo difiera y el filtro de compatibilidad las
+  //    hubiera descartado), ponderadas por similitud de tipo con la etapa objetivo.
+  const _vuelta = _simDetectVuelta(race, hist);
+  const byRiderVuelta = new Map();
+  if(_vuelta){
+    _vuelta.prevStages.forEach(st=>{
+      const stW=_simStageTypeSim(race, st);
+      (st.riders||[]).forEach(r=>{
+        const nk=normalizeForMatching(r.name||''); if(!nk || !(r.pos>0)) return;
+        if(!byRiderVuelta.has(nk)) byRiderVuelta.set(nk,[]);
+        byRiderVuelta.get(nk).push({ pos:r.pos, order:st._stageNum||0, typeSim:stW });
+      });
+    });
+    _simCompatInfo.vuelta = { clave:_vuelta.clave, etapaNum:_vuelta.stageNum, etapasPrevias:_vuelta.prevStages.length };
+  }
   const grid = inscritos.map((ins, idx)=>{
     const nk = normalizeForMatching(ins.name||'');
     // Resolver categoría específica desde el histórico si la del inscrito es genérica
@@ -30189,8 +30236,33 @@ function _simBuildData(raceId){
         treeNode.push('B:deb-sin-club');
       }
     }
+    // ── Ponderación de VUELTA: la forma en las etapas previas de ESTA vuelta manda
+    //    (peso wV creciente con las etapas corridas), ponderada por recencia (orden
+    //    de etapa) y similitud de tipo con la etapa objetivo. Es evidencia directa.
+    const _vHits = nk ? (byRiderVuelta.get(nk)||[]) : [];
+    let vueltaForm = false;
+    if(_vHits.length){
+      const _vs=_vHits.slice().sort((a,b)=>(b.order||0)-(a.order||0));   // etapa más reciente primero
+      const _recW=[0.5,0.3,0.2,0.15,0.1];
+      let _vSum=0,_vW=0;
+      _vs.forEach((h,i)=>{ const w=(_recW[i]||0.08)*(0.5+0.5*(h.typeSim||1)); _vSum+=h.pos*w; _vW+=w; });
+      const _vueltaMean = _vW>0 ? _vSum/_vW : null;
+      if(_vueltaMean!=null){
+        const _n=_vHits.length;
+        const _wV = _n>=3 ? 0.70 : _n===2 ? 0.60 : 0.55;
+        const _base = (predictedPos!=null) ? predictedPos : _vueltaMean;
+        predictedPos = _wV*_vueltaMean + (1-_wV)*_base;
+        if(predLower==null || predUpper==null){ predLower=predictedPos*0.82; predUpper=predictedPos*1.2; }
+        reliability = Math.max(reliability||0, Math.min(85, 40+_n*12));
+        if(status==='team-fb' || status==='deb') status='vuelta-form';
+        confidence = _n>=2 ? 'media' : (confidence==='nula'?'baja':confidence);
+        vueltaForm=true;
+        treeNode.push('V:vuelta-form-'+_n);
+      }
+    }
     return {
       idx,
+      vueltaForm, vueltaStages: _vHits.length,
       bib: ins.bib || '',
       name: ins.name || '',
       team: ins.team || '',
@@ -30234,6 +30306,21 @@ function _simBuildData(raceId){
   // entre corredores. predictedPos se redondea pero NO se capa, para que dos
   // corredores con predicción 90 y 130 mantengan su orden relativo. El cap
   // visual se aplica solo en el render (etiqueta "72+" si supera el pelotón).
+  // ── NOVATO sin ningún dato (ni historial, ni equipo, ni etapas de la vuelta):
+  //    en vez de mandarlo al fondo, perfil NEUTRO = mediana de la parrilla conocida
+  //    (base del pelotón de su categoría). Marcado como 'neutro' para el render.
+  {
+    const _known = grid.filter(g=>g.predictedPos!=null).map(g=>g.predictedPos).sort((a,b)=>a-b);
+    const _medPel = _known.length ? _known[Math.floor(_known.length/2)] : Math.round((totalInsRef||60)/2);
+    grid.forEach(g=>{
+      if(g.predictedPos!=null) return;
+      g.predictedPos=_medPel; g.status='neutro'; g.confidence='nula';
+      g.reliability=(g.reliability!=null)?g.reliability:15;
+      g.rangeClass='neutro';
+      g.predLower=_medPel*0.7; g.predUpper=Math.min(totalInsRef||99, _medPel*1.4);
+      g.treeNode=(g.treeNode||[]).concat('N:neutro-peloton');
+    });
+  }
   const _capN = inscritos.length || 60;
   grid.forEach(g=>{
     if(g.predictedPos == null) return;
@@ -30722,7 +30809,7 @@ function _simRenderTop10(grid, catFilter){
   // ── Aviso de FIABILIDAD: si la mayoría del Top 10 son "fallback" (sin
   // histórico compatible —p.ej. una CRI sin otras CRI previas de la categoría—)
   // la predicción es orientativa. Lo avisamos para no inducir a error.
-  const _fb = top.filter(g => g.status==='team-fb' || !g.hasHistory).length;
+  const _fb = top.filter(g => (g.status==='team-fb' || !g.hasHistory) && !g.vueltaForm).length;
   const _withHist = top.length - _fb;
   const tt = (_simCompatInfo && _simCompatInfo.typeLabel) ? _simCompatInfo.typeLabel : 'este tipo de prueba';
   let _warnHtml = '';
