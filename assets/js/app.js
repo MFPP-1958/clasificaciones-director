@@ -39468,15 +39468,53 @@ function _simComputeVueltaGC(race){
   const gc=[...acum.values()].filter(a=>a.n===stages.length).sort((x,y)=>(x.seg-y.seg)||(x.sumPos-y.sumPos)||(x.bestPos-y.bestPos));
   return { stages:stages.length, clave:t.clave, gc };
 }
-// Abre "Predicho vs Real" pero comparando contra la GENERAL de la vuelta (no una etapa)
-function _simOpenGeneralPredVsReal(){
+// Predicción "DESDE EL INICIO": predice la lista de salida de la vuelta usando el
+// historial PREVIO, EXCLUYENDO todas las etapas de esta vuelta (como si aún no se
+// hubiera corrido ninguna). Devuelve el ranking predicho (mismos objetos del grid).
+function _simPredictVueltaFromStart(race){
+  const t=_simVueltaClave(race&&race.raceName); if(!t) return null;
+  const hist=_cachedHistory||[];
+  const vueltaIds=new Set(hist.filter(h=>{ const c=_simVueltaClave(h&&h.raceName); return c&&c.clave===t.clave; }).map(h=>h.id));
+  const stages=hist.filter(h=>vueltaIds.has(h.id)).map(h=>({h,sn:(_simVueltaClave(h.raceName)||{}).stageNum||0})).sort((a,b)=>a.sn-b.sn).map(x=>x.h);
+  const first=stages[0]; if(!first) return null;
+  const savedHist=_cachedHistory, savedCur=_simCurrentData, savedRaceId=savedCur&&savedCur.race&&savedCur.race.id;
+  let out=null;
+  try{
+    // dejamos la 1ª etapa (como prueba objetivo, con su lista de salida) pero
+    // quitamos TODAS las etapas de la vuelta del historial usable.
+    _cachedHistory = hist.filter(h => h.id===first.id || !vueltaIds.has(h.id));
+    _simBuildData(first.id);
+    if(_simCurrentData && _simCurrentData.grid){
+      out = _simPredictedPool(_simCurrentData.grid, (typeof _simActiveCatFilter==='function'?_simActiveCatFilter():null));
+    }
+  }catch(_){}
+  finally{
+    _cachedHistory = savedHist;
+    try{ if(savedRaceId) _simBuildData(savedRaceId); else _simCurrentData=savedCur; }catch(_){ _simCurrentData=savedCur; }
+  }
+  return out;
+}
+// Abre "Predicho vs Real" comparando contra la GENERAL de la vuelta. mode:
+//   'inicio' = predicción hecha ANTES de la vuelta (solo historial previo)
+//   'actual' = predicción de la etapa cargada (ya conoce las etapas anteriores)
+function _simOpenGeneralPredVsReal(mode){
   if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
-  const gc=_simComputeVueltaGC(_simCurrentData.race);
+  mode = (mode==='actual') ? 'actual' : 'inicio';
+  const race=_simCurrentData.race;
+  const gc=_simComputeVueltaGC(race);
   if(!gc || gc.gc.length<3){ alert('Aún no hay general calculable: hacen falta al menos 2 etapas de la vuelta con corredores que las acaben todas.'); return; }
   const realRiders=gc.gc.map((a,i)=>({ name:a.name, pos:i+1, team:a.team, cat:a.cat }));
-  const nombreVuelta=(_simCurrentData.race.raceName||'').replace(/^\s*etapa\s*\d+\s*[-–—:.]?\s*/i,'').replace(/[-\s]*CRI\.?\s*$/i,'').trim();
-  const metaHtml=`<div class="pvr-race-meta"><b>General — ${escapeHtml(nombreVuelta)}</b> · 🏁 ${gc.stages} etapas · ${gc.gc.length} corredores que acabaron todas</div>`;
-  _simOpenPredVsReal({ realRiders, titleSuffix:' — General de la vuelta', metaHtml });
+  let predRankedOverride=null;
+  if(mode==='inicio'){
+    predRankedOverride=_simPredictVueltaFromStart(race);
+    if(!predRankedOverride || !predRankedOverride.length){ alert('No he podido calcular la predicción "desde el inicio" (¿faltan datos de la 1ª etapa?). Muestro la actual.'); mode='actual'; predRankedOverride=null; }
+  }
+  const nombreVuelta=(race.raceName||'').replace(/^\s*etapa\s*\d+\s*[-–—:.]?\s*/i,'').replace(/[-\s]*CRI\.?\s*$/i,'').trim();
+  const modoTxt = mode==='inicio' ? 'predicho ANTES de la vuelta (solo historial previo)' : 'predicho con lo corrido hasta esta etapa';
+  const metaHtml=`<div class="pvr-race-meta"><b>General — ${escapeHtml(nombreVuelta)}</b> · 🏁 ${gc.stages} etapas · ${gc.gc.length} acabaron todas · <span style="color:#b45309;font-weight:700">${modoTxt}</span></div>`;
+  const _bt=(m,lbl)=>`<button onclick="_simOpenGeneralPredVsReal('${m}')" class="no-print" style="border:0;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer;${mode===m?'background:#b45309;color:#fff':'background:#f1f5f9;color:#475569'}">${lbl}</button>`;
+  const modeToggleHtml=`<div class="no-print" style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap"><span style="font-size:11.5px;color:#6b7280;font-weight:700">Predicho:</span>${_bt('inicio','🚦 Desde el inicio')}${_bt('actual','📊 Con lo corrido')}</div>`;
+  _simOpenPredVsReal({ realRiders, predRankedOverride, titleSuffix:' — General de la vuelta', metaHtml, modeToggleHtml });
 }
 function _simOpenPredVsReal(opts){
   try{
@@ -39490,7 +39528,7 @@ function _simOpenPredVsReal(opts){
     }
     // Predicho: MISMA fuente que el panel "Top 10 esperado" para que coincidan
     // exactamente (incluye corredores de respaldo y respeta el filtro de cat).
-    const predRanked = _simPredictedPool(grid, _simActiveCatFilter());
+    const predRanked = opts.predRankedOverride || _simPredictedPool(grid, _simActiveCatFilter());
     const top10Pred = predRanked.slice(0, 10);
     const top10Real = actualRiders.slice(0, 10);
 
@@ -39708,6 +39746,7 @@ function _simOpenPredVsReal(opts){
             <div style="min-width:0">
               <h2 style="margin:0;font-size:20px;color:#0b2f6b">🎯 Predicho vs Real${opts.titleSuffix||''}</h2>
               ${meta}
+              ${opts.modeToggleHtml||''}
             </div>
           </div>
           <div class="pvr-actions no-print">
