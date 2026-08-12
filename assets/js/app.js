@@ -30545,6 +30545,14 @@ function _simRenderCurrent(){
       const b=document.getElementById(id);
       if(b) b.style.display = _hasResults ? 'inline-block' : 'none';
     });
+    // Botón "Predicho vs Real (General)": solo si la prueba es una etapa de una
+    // vuelta y ya hay general calculable (≥3 corredores que acabaron todas).
+    const _gb=document.getElementById('simGeneralPredVsRealBtn');
+    if(_gb){
+      let _gcOk=false;
+      try{ const _gc=_simComputeVueltaGC(race); _gcOk=!!(_gc && _gc.gc && _gc.gc.length>=3); }catch(_){}
+      _gb.style.display = _gcOk ? 'inline-block' : 'none';
+    }
   }catch(e){}
   // Meta de la carrera — estado SOLO por fecha (no por tener o no clasificación)
   const ridersN = (race.riders||[]).length;
@@ -39435,13 +39443,49 @@ function _t10B_postRender(top, base){
 //     - Botón Imprimir/PDF (window.print con CSS de impresión inyectado)
 // ════════════════════════════════════════════════════════════════════════
 
-function _simOpenPredVsReal(){
+// Calcula la GENERAL de la vuelta a la que pertenece `race` (suma de tiempos de
+// las etapas; SOLO corredores que acaban TODAS; misma regla que ranking-core.js).
+// Desempate: menor suma de posiciones y luego el mejor corredor.
+function _simComputeVueltaGC(race){
+  const hist=_cachedHistory||[];
+  const t=(typeof _simVueltaClave==='function')?_simVueltaClave(race&&race.raceName):null;
+  if(!t) return null;
+  const stages=hist.filter(h=>{ const c=_simVueltaClave(h&&h.raceName); return c && c.clave===t.clave; })
+    .map(h=>({ h, sn:((_simVueltaClave(h.raceName)||{}).stageNum)||0 }))
+    .sort((a,b)=>a.sn-b.sn).map(x=>x.h);
+  if(stages.length<2) return null;
+  const acum=new Map();
+  stages.forEach((st,i)=>{
+    (st.riders||[]).forEach(r=>{
+      const pos=parseInt(r.pos,10);
+      const ts=Number(r.totalSeconds!=null?r.totalSeconds:r.total_seconds);
+      if(!(pos>0) || !Number.isFinite(ts)) return;
+      const k=normalizeForMatching(r.name||''); if(!k) return;
+      if(i===0) acum.set(k,{seg:ts,n:1,name:r.name,team:r.team||'',cat:r.cat||'',sumPos:pos,bestPos:pos});
+      else { const a=acum.get(k); if(a && a.n===i){ a.seg+=ts; a.n++; a.sumPos+=pos; a.bestPos=Math.min(a.bestPos,pos); a.name=r.name; } }
+    });
+  });
+  const gc=[...acum.values()].filter(a=>a.n===stages.length).sort((x,y)=>(x.seg-y.seg)||(x.sumPos-y.sumPos)||(x.bestPos-y.bestPos));
+  return { stages:stages.length, clave:t.clave, gc };
+}
+// Abre "Predicho vs Real" pero comparando contra la GENERAL de la vuelta (no una etapa)
+function _simOpenGeneralPredVsReal(){
+  if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
+  const gc=_simComputeVueltaGC(_simCurrentData.race);
+  if(!gc || gc.gc.length<3){ alert('Aún no hay general calculable: hacen falta al menos 2 etapas de la vuelta con corredores que las acaben todas.'); return; }
+  const realRiders=gc.gc.map((a,i)=>({ name:a.name, pos:i+1, team:a.team, cat:a.cat }));
+  const nombreVuelta=(_simCurrentData.race.raceName||'').replace(/^\s*etapa\s*\d+\s*[-–—:.]?\s*/i,'').replace(/[-\s]*CRI\.?\s*$/i,'').trim();
+  const metaHtml=`<div class="pvr-race-meta"><b>General — ${escapeHtml(nombreVuelta)}</b> · 🏁 ${gc.stages} etapas · ${gc.gc.length} corredores que acabaron todas</div>`;
+  _simOpenPredVsReal({ realRiders, titleSuffix:' — General de la vuelta', metaHtml });
+}
+function _simOpenPredVsReal(opts){
   try{
+    opts = opts || {};
     if(!_simCurrentData){ alert('Selecciona una prueba primero.'); return; }
     const { race, grid } = _simCurrentData;
-    const actualRiders = (race.riders||[]).slice().filter(r=>r.pos).sort((a,b)=>(parseInt(a.pos)||999)-(parseInt(b.pos)||999));
+    const actualRiders = (opts.realRiders ? opts.realRiders.slice() : (race.riders||[]).slice()).filter(r=>r.pos).sort((a,b)=>(parseInt(a.pos)||999)-(parseInt(b.pos)||999));
     if(actualRiders.length < 3){
-      alert('Esta prueba aún no tiene clasificación final cargada.');
+      alert(opts.realRiders ? 'Aún no hay general calculable (hacen falta al menos 2 etapas con corredores que acaben todas).' : 'Esta prueba aún no tiene clasificación final cargada.');
       return;
     }
     // Predicho: MISMA fuente que el panel "Top 10 esperado" para que coincidan
@@ -39638,7 +39682,7 @@ function _simOpenPredVsReal(){
       }
     }
 
-    const meta = `
+    const meta = opts.metaHtml || `
       <div class="pvr-race-meta">
         <b>${escapeHtml(race.raceName||'')}</b>
         ${race.raceDate?` · 📅 ${escapeHtml(race.raceDate)}`:''}
@@ -39662,7 +39706,7 @@ function _simOpenPredVsReal(){
           <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
             ${_pdfLogoSrc ? `<img src="${_pdfLogoSrc}" alt="MFPP Cycling Specialist" class="pvr-logo">` : ''}
             <div style="min-width:0">
-              <h2 style="margin:0;font-size:20px;color:#0b2f6b">🎯 Predicho vs Real</h2>
+              <h2 style="margin:0;font-size:20px;color:#0b2f6b">🎯 Predicho vs Real${opts.titleSuffix||''}</h2>
               ${meta}
             </div>
           </div>
