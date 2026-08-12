@@ -8564,7 +8564,7 @@ async function _sbLoadHistory(){
         const challengePoints = (isChallenge && r.pos > 0) ? calcularPuntosChallenge(r.pos) : null;
         return {
           id:r.id, raceId:race.id, // ← claves para poder borrar la fila individual
-          pos:r.pos, bib:r.bib, name:normName, team:r.team, cat:r.cat,
+          pos:r.pos, bib:r.bib, name:(typeof _homonimoTag==='function'?_homonimoTag(normName, r.team):normName), team:r.team, cat:r.cat,
           time:normalizeTimeStr(r.time),
           gapSeconds:r.gap_seconds, totalSeconds:r.total_seconds,
           region:(extra.regions||{})[r.name]||(extra.regions||{})[normName]||'',
@@ -10576,7 +10576,14 @@ function normalizeRiderName(rawName, nombre, apellido1, apellido2){
 function normalizeForMatching(name){
   if(!name)return'';
   const _st=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  const s=name.trim();
+  let s=name.trim();
+  // Sufijo de desambiguación de HOMÓNIMOS: "Apellido, Nombre (EQUIPO)". La parte
+  // (EQUIPO) se conserva en la clave para distinguir a dos ciclistas del mismo
+  // nombre. Solo lo añade la app (en la ingesta) a los nombres marcados como
+  // homónimos. Los nombres sin "(...)" se comportan EXACTAMENTE igual que antes.
+  let disamb='';
+  const dm=s.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  if(dm){ s=dm[1].trim(); const d=_st(dm[2]).replace(/[^a-z0-9]+/g,''); if(d) disamb=' ('+d+')'; }
   const comma=s.match(/^([^,]+),\s*(.+)$/);
   let ap,nm;
   if(comma){
@@ -10588,10 +10595,150 @@ function normalizeForMatching(name){
     nm=(nmw.length>1 && _st(nmw[0])===_st(ap)) ? nmw[nmw.length-1] : (nmw[0]||'');
   }else{
     const parts=s.split(/\s+/).filter(Boolean);
-    if(parts.length<2)return _st(s);
+    if(parts.length<2)return _st(s)+disamb;
     nm=parts[0]; ap=parts[1];
   }
-  return _st(ap+', '+nm);
+  return _st(ap+', '+nm)+disamb;
+}
+// ── HOMÓNIMOS (dos ciclistas distintos con el mismo nombre) ──────────────────
+// Registro manual (el director marca los nombres a diferenciar). Para esos
+// nombres, en la INGESTA se añade el equipo al nombre → "Ivan Sanchez (TBG-WIXUM)"
+// vs "Ivan Sanchez (EL NIETO DEL LOBO)". Así se distinguen en TODO (177 sitios)
+// y cuadran inscritos↔clasificación (equipo canonicalizado). El resto no se toca.
+let _homonimosSet = (()=>{ try{ return new Set(JSON.parse(localStorage.getItem('homonimos_keys')||'[]')); }catch(_){ return new Set(); } })();
+function _homonimosSave(){ try{ localStorage.setItem('homonimos_keys', JSON.stringify([..._homonimosSet])); }catch(_){} }
+// Clave BASE (sin desambiguación) de un nombre, para consultar el registro.
+function _homonimoBaseKey(name){ return normalizeForMatching(String(name||'').replace(/\s*\([^)]*\)\s*$/,'')); }
+// Si el nombre está marcado como homónimo, le añade "(equipo canónico)".
+function _homonimoTag(name, team){
+  if(!name || !team || !_homonimosSet || !_homonimosSet.size) return name;
+  if(/\([^)]*\)\s*$/.test(name)) return name;                 // ya lleva desambiguación
+  if(!_homonimosSet.has(_homonimoBaseKey(name))) return name; // no marcado
+  const ct = (typeof getCanonicalTeam==='function') ? getCanonicalTeam(team) : team;
+  return ct ? (name + ' (' + ct + ')') : name;
+}
+
+// ── Homónimos: sugerir y confirmar ────────────────────────────────────────
+// Detecta posibles homónimos (mismo nombre, distinto equipo) recorriendo el
+// historial. Señal FUERTE = el mismo nombre aparece en ≥2 equipos CANÓNICOS
+// distintos ACTIVOS EL MISMO AÑO (un corredor solo está en un equipo por
+// temporada; cambiar de equipo ocurre ENTRE temporadas). Así se evita
+// confundir un cambio de equipo con dos personas. El usuario CONFIRMA.
+function _homonimoYear(raceDate){
+  const m=String(raceDate||'').match(/(20\d{2})/); return m?m[1]:'';
+}
+function _homonimoDetectCandidates(){
+  const hist=(typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory))?_cachedHistory:[];
+  const byBase=new Map(); // baseKey -> { display, teams: Map(canonTeam -> {rawTeam,count,years:Set}) }
+  hist.forEach(race=>{
+    const yr=_homonimoYear(race.raceDate||race.date||'');
+    (race.riders||[]).forEach(r=>{
+      const rawName=String(r.name||''); if(!rawName) return;
+      const rawTeam=String(r.team||'').trim(); if(!rawTeam) return;
+      const base=_homonimoBaseKey(rawName); if(!base || base.indexOf(',')<0) return; // necesita apellido+nombre
+      const ct=(typeof getCanonicalTeam==='function')?getCanonicalTeam(rawTeam):rawTeam;
+      if(!ct) return;
+      if(!byBase.has(base)) byBase.set(base,{ display:rawName.replace(/\s*\([^)]*\)\s*$/,''), teams:new Map() });
+      const e=byBase.get(base);
+      if(!e.teams.has(ct)) e.teams.set(ct,{ rawTeam, count:0, years:new Set() });
+      const t=e.teams.get(ct); t.count++; if(yr) t.years.add(yr);
+    });
+  });
+  const out=[];
+  byBase.forEach((e,base)=>{
+    // equipos "reales" (≥2 resultados) para descartar erratas puntuales
+    const teams=[...e.teams.values()].filter(t=>t.count>=2);
+    if(teams.length<2){
+      // ya marcado a mano → mostrarlo igual aunque no cumpla el umbral
+      if(!_homonimosSet.has(base)) return;
+    }
+    // ¿hay ≥2 equipos que compartan al menos un AÑO? (solapamiento temporal)
+    let overlap=false;
+    for(let i=0;i<teams.length && !overlap;i++)
+      for(let j=i+1;j<teams.length && !overlap;j++)
+        for(const y of teams[i].years) if(teams[j].years.has(y)){ overlap=true; break; }
+    const flagged=_homonimosSet.has(base);
+    if(!overlap && !flagged) return;
+    out.push({
+      base, display:e.display, flagged, overlap,
+      teams:[...e.teams.values()].sort((a,b)=>b.count-a.count)
+             .map(t=>({team:t.rawTeam, canon:(typeof getCanonicalTeam==='function')?getCanonicalTeam(t.rawTeam):t.rawTeam,
+                       count:t.count, years:[...t.years].sort()}))
+    });
+  });
+  // más equipos y con solapamiento primero; marcados arriba
+  out.sort((a,b)=> (b.flagged-a.flagged) || (b.overlap-a.overlap) || (b.teams.length-a.teams.length) || a.display.localeCompare(b.display));
+  return out;
+}
+function _homonimoClose(){
+  const m=document.getElementById('_homonimoModal'); if(m) m.remove();
+  // Al cerrar, si hubo cambios re-tageamos: invalidar historial para que se
+  // vuelva a cargar con las nuevas marcas la próxima vez que se use.
+  if(_homonimoDirty){
+    _homonimoDirty=false;
+    _cachedHistory=null;
+    if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB();
+    if(typeof _sbLoadHistory==='function'){ _sbLoadHistory().then(h=>{ _cachedHistory=h; if(typeof invalidateTeamRegionDB==='function') invalidateTeamRegionDB(); }); }
+    if(typeof showToast==='function') showToast('✅ Homónimos guardados. Vuelve a cargar inscritos/predicción para aplicarlos.','ok',3800);
+  }
+}
+let _homonimoDirty=false;
+function _homonimoToggle(base, checked){
+  if(checked) _homonimosSet.add(base); else _homonimosSet.delete(base);
+  _homonimosSave(); _homonimoDirty=true; _homonimoRender();
+}
+function _homonimoOpen(){
+  _homonimoClose();
+  const cands=_homonimoDetectCandidates();
+  const wrap=document.createElement('div');
+  wrap.id='_homonimoModal';
+  wrap.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  wrap.addEventListener('click', e=>{ if(e.target===wrap) _homonimoClose(); });
+  wrap.innerHTML=`
+    <div style="background:#fff;border-radius:16px;max-width:660px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden">
+      <div style="background:#7c3aed;color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>
+          <div style="font-size:17px;font-weight:900">👥 Homónimos (mismo nombre, distinto equipo)</div>
+          <div id="_homonimoSub" style="font-size:12.5px;opacity:.95;margin-top:2px"></div>
+        </div>
+        <button onclick="_homonimoClose()" style="background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:9px;width:34px;height:34px;font-size:18px;cursor:pointer;font-weight:800">✕</button>
+      </div>
+      <div style="padding:10px 20px;background:#f5f3ff;border-bottom:1px solid #ddd6fe;font-size:12.5px;color:#5b21b6">
+        Marca los que sean de <b>verdad dos personas distintas</b>. Al marcarlo, la app les añade el equipo al nombre para diferenciarlos en <b>todo</b> (inscritos, clasificaciones, predicción). Los que <b>propongo</b> comparten nombre y aparecen en <b>varios equipos el mismo año</b>: revísalos.
+      </div>
+      <div id="_homonimoList" style="overflow:auto;padding:8px 12px;flex:1"></div>
+      <div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;background:#fafafa">
+        <button onclick="_homonimoClose()" class="btn" style="background:#7c3aed;border-color:#7c3aed;cursor:pointer">Hecho</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  _homonimoRender(cands);
+}
+function _homonimoRender(cands){
+  const list=document.getElementById('_homonimoList'); if(!list) return;
+  const arr=cands||_homonimoDetectCandidates();
+  const marcados=arr.filter(c=>c.flagged).length;
+  const sub=document.getElementById('_homonimoSub');
+  if(sub) sub.textContent=`${marcados} marcado(s) como homónimos · ${arr.length} candidato(s) detectado(s)`;
+  if(!arr.length){
+    list.innerHTML=`<div style="padding:24px 14px;text-align:center;color:#94a3b8;font-size:13px">No se han detectado nombres repetidos en varios equipos el mismo año.<br>Si conoces un caso que no aparece, súbelo con su clasificación y volverá a analizarse.</div>`;
+    return;
+  }
+  const esc=(typeof escapeHtml==='function')?escapeHtml:(s=>String(s||''));
+  const row=(c)=>{
+    const teams=c.teams.map(t=>`<span style="display:inline-block;font-size:11.5px;font-weight:700;color:#334155;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:2px 9px;margin:2px 3px 0 0;white-space:nowrap">${esc(t.team)} · ${t.count}${t.years.length?' · '+esc(t.years.join('/')):''}</span>`).join('');
+    const bj=String(c.base).replace(/'/g,"\\'");
+    return `
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:4px;${c.flagged?'background:#f5f3ff;border:1px solid #ddd6fe':'border:1px solid #eef2f7'}">
+      <input type="checkbox" ${c.flagged?'checked':''} onchange="_homonimoToggle('${bj}', this.checked)" style="width:18px;height:18px;accent-color:#7c3aed;cursor:pointer;margin-top:1px">
+      <span style="flex:1">
+        <span style="font-size:13.5px;font-weight:${c.flagged?'800':'700'};color:${c.flagged?'#5b21b6':'#1e293b'}">${esc(c.display)}</span>
+        ${c.overlap?'<span title="Aparece en varios equipos el mismo año" style="font-size:11px;font-weight:800;color:#b45309;margin-left:6px">⚠ mismo año</span>':''}
+        <div style="margin-top:4px">${teams}</div>
+      </span>
+    </label>`;
+  };
+  list.innerHTML=arr.map(row).join('');
 }
 
 // ── Matcher tolerante al orden (Tier 1.5 fix) ─────────────────────────────
@@ -26100,7 +26247,7 @@ function _postProcessInscritos(arr){
     for(const v of variants){ if(idx.has(v)){ hit = idx.get(v); break; } }
     if(!hit){
       // No encontrado: dejamos lo que venía (pero con el nombre reparado)
-      return {...ins, name:_repararNombreDup(ins.name), _enriched:false, _newRider: true};
+      return {...ins, name:_homonimoTag(_repararNombreDup(ins.name), ins.team), _enriched:false, _newRider: true};
     }
     // Categoría más específica (con dígito) prevalece sobre la genérica de la startlist
     const catsSorted = [...hit.cats.entries()].sort((a,b)=>b[1]-a[1]);
@@ -26112,7 +26259,7 @@ function _postProcessInscritos(arr){
     const fileG = (typeof _calCatGroup==='function') ? _calCatGroup(ins.cat) : null;
     const histG = (typeof _calCatGroup==='function') ? _calCatGroup(bestCat) : null;
     if(fileG && histG && fileG.key!==histG.key){
-      return {...ins, name:_repararNombreDup(ins.name), _enriched:false, _newRider:true};   // conserva su categoría del archivo
+      return {...ins, name:_homonimoTag(_repararNombreDup(ins.name), ins.team), _enriched:false, _newRider:true};   // conserva su categoría del archivo
     }
     // ── Dorsal ──────────────────────────────────────────────────────────────
     //   1º) dorsal CV CORREGIDO a mano en las láminas (fuente de verdad).
@@ -26135,7 +26282,7 @@ function _postProcessInscritos(arr){
     const bestTeam = ins.team || hit.lastTeam || '';
     return {
       bib: bestBib,
-      name: _repararNombreDup(ins.name),
+      name: _homonimoTag(_repararNombreDup(ins.name), bestTeam || ins.team),
       team: bestTeam,
       cat: bestCat.replace(/\s+/g,''),
       _enriched: true
