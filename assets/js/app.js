@@ -44728,56 +44728,121 @@ async function _routeOnEffortOnlySelected(ev){
   }
 }
 
-// — Pregunta al director a qué corredor pertenece el esfuerzo —
-function _routeAskRider(filename){
-  // Extraer pistas del nombre del archivo:
-  //   "KarlesCubedo-24-05-2026.fit"  →  primer segmento "KarlesCubedo"
-  //   Split por mayúsculas:  ["Karles", "Cubedo"]
-  // Suposición típica: nombre primero, luego apellido.
-  const stem = filename.replace(/\.[^.]+$/, '');
+// Adivina el corredor de un esfuerzo a partir del nombre del archivo.
+// Prioridad: (1) un corredor DE ESTA PRUEBA cuyo nombre encaje con el archivo,
+// (2) una licencia importada, (3) lo que se saque del propio nombre del archivo.
+function _routeGuessRiderFromFilename(filename){
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  const stem = String(filename||'').replace(/\.[^.]+$/, '');
   const firstSeg = stem.split(/[\s_\-]+/)[0] || '';
   const camelParts = firstSeg.split(/(?=[A-Z])/).filter(s => s.length > 0);
-  let guessName = camelParts[0] || '';
-  let guessApellido = camelParts[1] || '';
+  const guessName = camelParts[0] || '';
+  const guessApellido = camelParts[1] || '';
+  // Tokens ≥3 del nombre de archivo (para casar con corredores de la prueba)
+  const fileTokens = norm(stem).split(' ').filter(t => t.length >= 3);
 
-  // Buscar coincidencia con las licencias importadas para usar el formato
-  // canónico de la app: "Apellido1, Nombre" (igual que renderiza el resto).
-  let guess = '';
+  // (1) ¿Coincide con un corredor de ESTA prueba? (lo más fiable)
+  try{
+    const riders = (_routeCurrent && _routeCurrent.race && Array.isArray(_routeCurrent.race.riders)) ? _routeCurrent.race.riders : [];
+    if(riders.length && fileTokens.length){
+      let best=null, bestScore=0;
+      riders.forEach(r=>{
+        const rn = norm(r.name);
+        const rTokens = rn.split(' ').filter(Boolean);
+        let score=0;
+        fileTokens.forEach(ft=>{ if(rTokens.some(rt => rt===ft || rt.startsWith(ft) || ft.startsWith(rt))) score++; });
+        if(score>bestScore){ bestScore=score; best=r; }
+      });
+      if(best && bestScore>=1) return best.name; // ya viene "Apellido, Nombre" (canónico de la app)
+    }
+  }catch(e){ /* silencioso */ }
+
+  // (2) Coincidencia con licencias importadas → formato canónico "Apellido, Nombre"
   try{
     if(typeof _fccvGetLicencias === 'function'){
-      const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
-      const np = norm(guessName);
-      const ap = norm(guessApellido);
+      const np = norm(guessName), ap = norm(guessApellido);
       const all = _fccvGetLicencias();
-      // Probamos en orden: (nombre+apellido), (apellido+nombre), (cualquier
-      // coincidencia de nombre), (cualquier coincidencia de apellido).
-      let match =
+      const match =
         (np && ap && all.find(l => norm(l.nombre).startsWith(np)    && norm(l.apellidos).startsWith(ap)))    ||
         (np && ap && all.find(l => norm(l.apellidos).startsWith(np) && norm(l.nombre).startsWith(ap)))    ||
         (np && all.find(l => norm(l.nombre).startsWith(np)))   ||
         (ap && all.find(l => norm(l.apellidos).startsWith(ap)));
       if(match){
         const ap1 = (match.apellidos||'').trim().split(/\s+/)[0];
-        // Capitalizar primero la primera letra del nombre y apellido para
-        // ser consistentes con cómo se ve en el resto de la app.
         const titleCase = s => s ? s.split(/\s+/).map(w => w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ') : '';
-        guess = `${titleCase(ap1)}, ${titleCase(match.nombre||'')}`;
+        return `${titleCase(ap1)}, ${titleCase(match.nombre||'')}`;
       }
     }
   }catch(e){ /* silencioso */ }
 
-  // Fallback: si no hay match con licencias, formateamos lo que se haya
-  // sacado del nombre del archivo siguiendo la convención "Apellido, Nombre".
-  if(!guess){
-    if(guessApellido) guess = `${guessApellido}, ${guessName}`;
-    else              guess = guessName;
-  }
+  // (3) Fallback: lo que se saque del propio nombre del archivo
+  if(guessApellido) return `${guessApellido}, ${guessName}`;
+  return guessName;
+}
 
-  const choice = prompt(
-    `Este archivo contiene datos de esfuerzo (potencia/FC).\n\n¿De qué corredor son? · Formato: Apellido, Nombre\n\nDeja vacío para "Sin asignar".`,
-    guess
-  );
-  return (choice||'').trim() || null;
+// — Pregunta al director a qué corredor pertenece el esfuerzo. Modal con el
+//   nombre PROPUESTO ya escrito + un desplegable con los corredores de la
+//   prueba (para elegir sin teclear). Devuelve Promise<string|null>. —
+let _routeRiderResolve = null;
+function _routeAskRider(filename){
+  return new Promise(resolve=>{
+    // Si ya hay un modal abierto, ciérralo sin resolver el anterior.
+    const prev = document.getElementById('_routeRiderModal'); if(prev) prev.remove();
+    _routeRiderResolve = resolve;
+    const guess = _routeGuessRiderFromFilename(filename) || '';
+    const esc = (typeof escapeHtml==='function') ? escapeHtml : (s=>String(s||''));
+    // Corredores de esta prueba (dedup por nombre, alfabético) para el desplegable
+    let opts = '';
+    try{
+      const riders = (_routeCurrent && _routeCurrent.race && Array.isArray(_routeCurrent.race.riders)) ? _routeCurrent.race.riders : [];
+      const seen = new Set();
+      const names = [];
+      riders.forEach(r=>{ const n=(r.name||'').trim(); if(n && !seen.has(n)){ seen.add(n); names.push(n); } });
+      names.sort((a,b)=>a.localeCompare(b));
+      opts = names.map(n=>`<option value="${esc(n)}"${n===guess?' selected':''}>${esc(n)}</option>`).join('');
+    }catch(e){}
+    const ov = document.createElement('div');
+    ov.id = '_routeRiderModal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+    ov.addEventListener('click', e=>{ if(e.target===ov) _routeRiderCancel(); });
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:16px;max-width:460px;width:100%;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden">
+        <div style="background:#0369a1;color:#fff;padding:15px 18px">
+          <div style="font-size:16px;font-weight:900">🚴 ¿De qué corredor es este .fit?</div>
+          <div style="font-size:12px;opacity:.9;margin-top:3px">Trae datos de potencia/pulso. Confirma el corredor o elígelo de la lista.</div>
+        </div>
+        <div style="padding:16px 18px">
+          <label style="font-size:12px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Corredor · Formato: Apellido, Nombre</label>
+          <input id="_routeRiderInput" type="text" value="${esc(guess)}" placeholder="Ej: Cubedo, Karles"
+                 style="width:100%;box-sizing:border-box;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none"
+                 onkeydown="if(event.key==='Enter')_routeRiderSave()">
+          ${opts ? `
+          <div style="font-size:11.5px;font-weight:700;color:#64748b;margin:12px 0 4px">…o elige de los corredores de esta prueba:</div>
+          <select id="_routeRiderSelect" onchange="var i=document.getElementById('_routeRiderInput'); if(this.value)i.value=this.value"
+                  style="width:100%;box-sizing:border-box;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;background:#fff">
+            <option value="">— elegir de la lista —</option>
+            ${opts}
+          </select>` : ''}
+        </div>
+        <div style="padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;background:#fafafa">
+          <button onclick="_routeRiderCancel()" style="background:transparent;color:#64748b;border:0;font-weight:700;font-size:13.5px;cursor:pointer;padding:9px 12px">Sin asignar</button>
+          <button onclick="_routeRiderSave()" style="background:#0369a1;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:13.5px;cursor:pointer;padding:9px 18px">Guardar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    setTimeout(()=>{ const i=document.getElementById('_routeRiderInput'); if(i){ i.focus(); i.select(); } }, 40);
+  });
+}
+function _routeRiderClose(){ const m=document.getElementById('_routeRiderModal'); if(m) m.remove(); }
+function _routeRiderSave(){
+  const i=document.getElementById('_routeRiderInput');
+  const v=(i && i.value || '').trim();
+  _routeRiderClose();
+  const r=_routeRiderResolve; _routeRiderResolve=null; if(r) r(v || null);
+}
+function _routeRiderCancel(){
+  _routeRiderClose();
+  const r=_routeRiderResolve; _routeRiderResolve=null; if(r) r(null);
 }
 
 async function _routeDeleteRoute(){
