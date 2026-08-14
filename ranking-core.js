@@ -19,6 +19,9 @@ const RP_PUNTOS_ETAPA = {
   11: 11, 12: 9, 13: 8, 14: 7, 15: 6, 16: 5, 17: 4, 18: 3, 19: 2, 20: 1
 };
 const RP_BONO_FINALIZAR = 3;
+// Plus FIJO por ganar/subir al podio de la general de una vuelta (además de
+// los 100/80/65… × coef). Debe coincidir con ranking-publico.js.
+const RP_BONO_GENERAL = { 1: 30, 2: 20, 3: 10 };
 const RP_MAX_RESULTADOS_CONTADOS = 12;
 const RP_COEFICIENTES = { ordinaria: 1.00, challenge: 1.30, fuera_cv: 1.35 };
 const RP_PAISES = new Set([
@@ -125,8 +128,9 @@ function rpPuntosResultado(pos, tipo, coefPart = 1) {
   }
   if (tipo === 'general') {
     const base = RP_PUNTOS_BASE[p] || 0;
-    const puntos = Math.round(base * coefPart * 100) / 100;
-    return { base, coef: coefPart, bono: 0, puntos };
+    const bonoPodio = RP_BONO_GENERAL[p] || 0;   // plus por ganar/podio de la vuelta
+    const puntos = Math.round((base * coefPart + bonoPodio) * 100) / 100;
+    return { base, coef: coefPart, bono: bonoPodio, puntos };
   }
   const base = RP_PUNTOS_BASE[p] || 0;
   const coef = tipo === 'ordinaria' ? coefPart : (RP_COEFICIENTES[tipo] ?? 1);

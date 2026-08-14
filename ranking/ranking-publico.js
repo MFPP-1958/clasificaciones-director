@@ -72,6 +72,11 @@ const RP_PUNTOS_ETAPA = {
 // Bono de regularidad: +3 por terminar una prueba (posición válida).
 const RP_BONO_FINALIZAR = 3;
 
+// Plus por GANAR (o subir al podio de) la general de una vuelta por etapas.
+// Se suma FIJO (no lo escala el coeficiente) a los puntos de la general, además
+// de lo que ya lleva (100/80/65… × coef). Premia el hecho de ganar la vuelta.
+const RP_BONO_GENERAL = { 1: 30, 2: 20, 3: 10 };
+
 // Solo suman los 12 mejores resultados de cada corredor por temporada.
 const RP_MAX_RESULTADOS_CONTADOS = 12;
 
@@ -290,8 +295,9 @@ function rpTipoCarrera(carrera) {
 // coefPart = coeficiente de participación de la carrera (1 / 1.10 / 1.20).
 // Multiplica ordinarias y etapas; challenge y fuera_cv mantienen el suyo.
 // La General de una vuelta usa la tabla completa con su coeficiente ya
-// resuelto (participación, o ×1.35 si la vuelta fue fuera de la CV) y SIN
-// bono de +3: la general no es una carrera corrida aparte.
+// resuelto (participación, o ×1.35 si la vuelta fue fuera de la CV). No lleva
+// el +3 de terminar (no es una carrera corrida aparte), pero SÍ un plus fijo
+// al podio (RP_BONO_GENERAL: ganador +30, 2º +20, 3º +10) por ganar la vuelta.
 function rpPuntosResultado(pos, tipo, coefPart = 1) {
   const p = parseInt(pos, 10);
   if (!Number.isFinite(p) || p <= 0) return { base: 0, coef: 0, bono: 0, puntos: 0 };
@@ -302,8 +308,9 @@ function rpPuntosResultado(pos, tipo, coefPart = 1) {
   }
   if (tipo === 'general') {
     const base = RP_PUNTOS_BASE[p] || 0;
-    const puntos = Math.round(base * coefPart * 100) / 100;
-    return { base, coef: coefPart, bono: 0, puntos };
+    const bonoPodio = RP_BONO_GENERAL[p] || 0;   // plus por ganar/podio de la vuelta
+    const puntos = Math.round((base * coefPart + bonoPodio) * 100) / 100;
+    return { base, coef: coefPart, bono: bonoPodio, puntos };
   }
   const base = RP_PUNTOS_BASE[p] || 0;
   const coef = tipo === 'ordinaria' ? coefPart : (RP_COEFICIENTES[tipo] ?? 1);
