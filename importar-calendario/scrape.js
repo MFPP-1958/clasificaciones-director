@@ -127,11 +127,14 @@ async function scrapeSmartweb(browser, fed, url){
         // timestamp oculto en la 1ª celda (fecha exacta)
         const hidden = tds[0] ? tds[0].querySelector('div[style*="display:none"]') : null;
         const ts = hidden ? hidden.textContent.trim() : '';
+        // Enlace "MÁS" → ficha de la prueba (tiene TODAS las categorías, sin recortar)
+        const mas = tr.querySelector('a[href*="prueba"]');
         return {
           ts,
           fechaTxt: cell(0), modalidad: cell(1), categorias: cell(2),
           clase: cell(3), prueba: cell(4), lugar: cell(5),
           club: cell(6), observaciones: cell(7),
+          masUrl: mas ? mas.href : '',
           rowText: tr.innerText.replace(/\s+/g,' ').trim(), rowClass: tr.className || ''
         };
       });
@@ -146,10 +149,12 @@ async function scrapeSmartweb(browser, fed, url){
         fecha: tsToISO(r.ts) || '',
         localidad, provincia,
         modalidad: normModalidad(r.modalidad) || 'Carretera',
-        categorias: parseCategorias(r.categorias).join(', '),
+        categorias: parseCategorias(r.categorias).join(','),
         sexo: parseSexo(r.categorias),
         observaciones: _norm(r.observaciones),
-        estado: parseEstado(r.rowText, r.rowClass)
+        estado: parseEstado(r.rowText, r.rowClass),
+        _rawCat: r.categorias || '',      // texto de la tabla (puede venir recortado con "…")
+        _masUrl: r.masUrl || ''           // ficha para sacar TODAS las categorías
       });
     }
   } catch(e){
@@ -198,7 +203,7 @@ async function scrapeCataluna(browser){
           localidad: _norm(r.lloc[0]||''),
           provincia: _norm(r.lloc[1]||''),
           modalidad: normModalidad(r.moda[0]||'') || 'Carretera',
-          categorias: parseCategorias(especialitat).join(', '),
+          categorias: parseCategorias(especialitat).join(','),
           sexo: parseSexo(especialitat),
           observaciones: _norm(r.cursa.slice(1).join(' · ')),   // Copa/Campionat en 2ª línea
           estado: parseEstado(r.cursa.join(' '), '')
@@ -210,6 +215,49 @@ async function scrapeCataluna(browser){
     console.error(`  ⚠️  Cataluña: ${e.message}`);
   } finally { await ctx.close(); }
   return rows;
+}
+
+// ── Enriquecer categorías recortadas ──────────────────────────────────────
+// Las webs recortan la columna Categorías ("Elite, Elite Fem., Junior…").
+// Para las recortadas, abrimos su ficha (enlace "MÁS", HTML servido, sin JS)
+// y sacamos TODAS las categorías. Así el filtro por categoría es fiable.
+function _estaRecortada(txt){ return /(\.\.\.|…)\s*$/.test(String(txt||'')); }
+async function _fetchFullCats(url){
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 AppleWebKit/537.36 Chrome/120.0 Safari/537.36' },
+    signal: AbortSignal.timeout(20000)
+  });
+  if(!res.ok) return '';
+  const html = await res.text();
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+  const m = text.match(/Categor[ií]as?\s*:?\s*(.+?)\s*(?:Lugar\b|Fecha\b|Hora\b|Organizador\b|INFORMACI[OÓ]N DE LA INSCRIP)/i);
+  return m ? m[1].trim() : '';
+}
+async function enrichCategorias(rows){
+  const targets = rows.filter(r => _estaRecortada(r._rawCat) && r._masUrl);
+  if(!targets.length) return;
+  console.error(`  Enriqueciendo categorías de ${targets.length} pruebas recortadas (abriendo su ficha)…`);
+  let i = 0, done = 0, changed = 0;
+  async function worker(){
+    while(i < targets.length){
+      const r = targets[i++];
+      try{
+        const full = await _fetchFullCats(r._masUrl);
+        const cats = parseCategorias(full);
+        if(cats.length){
+          const before = r.categorias;
+          r.categorias = cats.join(',');
+          r.sexo = parseSexo(full);
+          if(r.categorias !== before) changed++;
+        }
+      }catch(e){ /* si falla, se queda con lo recortado */ }
+      done++;
+      if(done % 50 === 0) console.error(`    …${done}/${targets.length}`);
+    }
+  }
+  const N = Math.min(8, targets.length);
+  await Promise.all(Array.from({ length: N }, worker));
+  console.error(`  ✓ categorías completadas · ${changed} pruebas ampliadas`);
 }
 
 async function main(){
@@ -233,6 +281,10 @@ async function main(){
   // Solo futuras: descartar sin fecha o anteriores a hoy (por si alguna web cuela pasadas)
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
   const fut = all.filter(r => r.fecha && r.fecha >= hoy);
+  // Completar las categorías recortadas (solo sobre las futuras, para no abrir de más)
+  await enrichCategorias(fut);
+  // Limpiar campos temporales del enriquecimiento
+  fut.forEach(r => { delete r._rawCat; delete r._masUrl; });
   console.error(`\n  TOTAL: ${fut.length} pruebas futuras (descartadas ${all.length - fut.length} sin fecha/pasadas)`);
   process.stdout.write(JSON.stringify(fut, null, 2));
 }
