@@ -34,6 +34,9 @@
     #calfed .fld label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:#7a7a7a; font-weight:600; }
     #calfed select,#calfed input[type=text],#calfed input[type=date]{ font:inherit; font-size:13px; padding:6px 8px; border:1px solid #d4d2cc; border-radius:6px; background:#fff; min-width:130px; }
     #calfed input[type=text]{ min-width:170px; }
+    #calfed .cf-check{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:#444; cursor:pointer; text-transform:none; letter-spacing:0; font-weight:500; white-space:nowrap; padding:6px 2px; min-width:110px; }
+    #calfed .cf-check input{ width:15px; height:15px; cursor:pointer; margin:0; }
+    #calfed .cf-check.dis{ opacity:.4; cursor:default; }
     #calfed .btn{ font:inherit; font-size:12.5px; padding:7px 12px; border:1px solid #d4d2cc; border-radius:6px; background:#fff; cursor:pointer; color:#444; }
     #calfed .btn:hover{ background:#f0efec; }
     #calfed .meta{ margin:12px 2px 8px; font-size:12.5px; color:#6b6b6b; }
@@ -228,6 +231,9 @@
         <option value="12">Diciembre</option>
       </select>
     </div>
+    <div class="fld"><label>Del mes</label>
+      <label class="cf-check" title="Al elegir un mes se muestran solo las pruebas de hoy en adelante. M&aacute;rcalo para ver tambi&eacute;n las que ya han pasado."><input type="checkbox" id="cf_verpasadas"> Ver pasadas</label>
+    </div>
     <div class="fld"><label>Categor&iacute;a</label>
       <select id="cf_cat">
         <option value="cadete">Cadete</option>
@@ -340,7 +346,7 @@
     var DEF={cat:"cadete",sex:"M",mod:"Carretera",fed:"C. Valenciana",txt:""};
     var $=function(id){return document.getElementById(id);};
     var els={cat:$("cf_cat"),sex:$("cf_sex"),mod:$("cf_mod"),fed:$("cf_fed"),txt:$("cf_txt")};
-    var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
+    var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), elVerPas=$("cf_verpasadas"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
 
     function hoyISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
     Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
@@ -498,8 +504,12 @@
     function apply(){
       var f={}; Object.keys(els).forEach(function(k){f[k]=els[k].value;});
       var q=(f.txt||"").trim().toLowerCase(), desde=elDes.value||"", stF=(elSt ? elSt.value : ""), mes=(elMes ? elMes.value : "");
-      // Al elegir un mes concreto se muestra TODO ese mes (se ignora "Desde", que se desactiva).
+      var hoyStr=hoyISO();
+      var verPas=(elVerPas ? elVerPas.checked : false);   // ver también las pruebas ya pasadas del mes
+      // Al elegir un mes concreto se muestra ese mes (se ignora "Desde", que se desactiva).
+      // La casilla "Ver pasadas" solo tiene sentido con un mes elegido.
       if(elDes) elDes.disabled=!!mes;
+      if(elVerPas){ elVerPas.disabled=!mes; var lbl=elVerPas.parentNode; if(lbl){ if(mes){ lbl.classList.remove("dis"); } else { lbl.classList.add("dis"); } } }
       var out=rows.filter(function(r){
         var st=(r.estado||"activa").toLowerCase().trim();
         // Filtro de ESTADO: "" = todo menos retiradas · activa · incidencia (aplazada/anulada) · all
@@ -511,7 +521,10 @@
         if(f.sex){ if((r.sexo||"").indexOf(f.sex)<0) return false; }
         if(f.mod){ if(r.modalidad!==f.mod) return false; }
         if(f.fed){ if(r.federacion!==f.fed) return false; }
-        if(mes){ if((r.fecha||"").slice(5,7)!==mes) return false; }
+        if(mes){
+          if((r.fecha||"").slice(5,7)!==mes) return false;
+          if(!verPas){ if((r.fecha||"")<hoyStr) return false; }   // por defecto: solo de hoy en adelante
+        }
         else if(desde){ if(r.fecha<desde) return false; }
         if(q){ if(((r.prueba||"")+" "+(r.localidad||"")+" "+(r.provincia||"")).toLowerCase().indexOf(q)<0) return false; }
         return true;
@@ -697,8 +710,9 @@
     elDes.addEventListener("input",apply);
     if(elMes) elMes.addEventListener("change",apply);
     if(elSt) elSt.addEventListener("change",apply);
+    if(elVerPas) elVerPas.addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";apply();});
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;apply();});
 
     cargar();
   })();
