@@ -1,0 +1,706 @@
+<!--
+  ============================================================================
+  PESTANA "CALENDARIO FEDERATIVO"  ·  para WordPress
+  ----------------------------------------------------------------------------
+  COMO USARLO:
+   1. En WordPress, crea una pagina nueva titulada "Calendario".
+   2. Anade un bloque "HTML personalizado" (Custom HTML).
+   3. Pega TODO este archivo dentro del bloque.
+   4. Publica y anade la pagina al menu principal (Apariencia -> Menus).
+  La anon key (publica, solo lectura) ya esta puesta abajo. Nunca uses aqui la
+  "service_role key".
+  IMPORTANTE: no edites esta pagina con Elementor (la sobreescribe). Usa solo el
+  editor de bloques.
+  Los textos fijos van en entidades HTML (&oacute;, &ntilde;...) para que los
+  acentos se vean bien sea cual sea la codificacion del sitio.
+  ============================================================================
+-->
+<div id="calfed">
+  <script data-no-optimize="1" data-no-defer="1" data-cfasync="false">
+    window.CALFED_CONFIG = {
+      SUPABASE_URL:      "https://neeamkhbtoqsdxvsaogd.supabase.co",
+      SUPABASE_ANON_KEY: "sb_publishable_R7anMfu6xfwlr7Ew3kMUbg_N1mqNRJb"
+    };
+  </script>
+
+  <style>
+    #calfed { --azul:#2b5486; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; color:#1a1a1a; box-sizing:border-box; width:100vw; max-width:100vw; margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw); padding:0 clamp(16px,3vw,48px); }
+    #calfed *{ box-sizing:border-box; }
+    #calfed h2{ font-size:20px; margin:0 0 2px; font-weight:650; }
+    #calfed .sub{ font-size:13px; color:#6b6b6b; margin:0 0 10px; }
+    #calfed .nota{ font-size:12.5px; line-height:1.5; color:#5c5c5c; background:#f7f7f5; border-left:3px solid var(--azul); border-radius:4px; padding:9px 12px; margin:0 0 16px; }
+    #calfed .controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; background:#f7f7f5; border:1px solid #e6e4df; border-radius:8px; padding:12px; }
+    #calfed .fld{ display:flex; flex-direction:column; gap:4px; }
+    #calfed .fld label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:#7a7a7a; font-weight:600; }
+    #calfed select,#calfed input[type=text],#calfed input[type=date]{ font:inherit; font-size:13px; padding:6px 8px; border:1px solid #d4d2cc; border-radius:6px; background:#fff; min-width:130px; }
+    #calfed input[type=text]{ min-width:170px; }
+    #calfed .btn{ font:inherit; font-size:12.5px; padding:7px 12px; border:1px solid #d4d2cc; border-radius:6px; background:#fff; cursor:pointer; color:#444; }
+    #calfed .btn:hover{ background:#f0efec; }
+    #calfed .meta{ margin:12px 2px 8px; font-size:12.5px; color:#6b6b6b; }
+    #calfed .meta b{ color:#1a1a1a; }
+    #calfed table{ width:100%; border-collapse:collapse; font-size:13px; }
+    #calfed th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:#7a7a7a; font-weight:600; padding:8px; border-bottom:1.5px solid #d4d2cc; cursor:pointer; white-space:nowrap; }
+    #calfed td{ padding:9px 8px; border-bottom:1px solid #eeece7; vertical-align:top; }
+    #calfed tr:hover td{ background:#fafaf8; }
+    #calfed .d-day{ font-weight:650; font-size:14px; }
+    #calfed .d-mon{ font-size:10.5px; color:#8a8a8a; text-transform:uppercase; }
+    #calfed .nm{ font-weight:550; line-height:1.35; }
+    #calfed .obs{ font-size:11.5px; color:#8a8a8a; margin-top:2px; }
+    #calfed .prov{ font-size:11.5px; color:#8a8a8a; }
+    #calfed .tag{ display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:10px; background:#eceae4; color:#55524b; margin:1px 3px 1px 0; white-space:nowrap; }
+    #calfed .tag.cad{ background:#e0ebf7; color:#29517d; }
+    #calfed .tag.jun{ background:#e4f0e2; color:#35603a; }
+    #calfed .tag.f{ background:#f7e6ef; color:#86416a; }
+    #calfed a.src{ color:var(--azul); text-decoration:none; font-size:12px; white-space:nowrap; }
+    #calfed a.src:hover{ text-decoration:underline; }
+    #calfed .estado{ padding:40px 12px; text-align:center; color:#8a8a8a; font-size:13.5px; }
+    #calfed .tabla-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    /* Botón "Ver ficha" (antes era un enlace) */
+    #calfed button.src{ background:none; border:none; padding:0; font:inherit; color:var(--azul); font-size:12px; white-space:nowrap; cursor:pointer; }
+    #calfed button.src:hover{ text-decoration:underline; }
+    /* Modal de ficha de la prueba (info disponible + botón a la web oficial) */
+    #calfed .cf-modal-ov{ position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:999999; display:none; align-items:center; justify-content:center; padding:16px; }
+    #calfed .cf-modal-ov.open{ display:flex; }
+    #calfed .cf-modal{ background:#fff; width:100%; max-width:600px; max-height:88vh; overflow:auto; border-radius:14px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+    #calfed .cf-modal-cab{ position:sticky; top:0; background:var(--azul); color:#fff; padding:16px 46px 14px 18px; }
+    #calfed .cf-modal-cab h3{ margin:0; font-size:17px; font-weight:700; line-height:1.25; color:#fff !important; }
+    #calfed .cf-m-sub{ margin:5px 0 0; font-size:12.5px; color:#dce6f2 !important; }
+    #calfed .cf-modal-x{ position:absolute; top:12px; right:12px; width:30px; height:30px; border:none; border-radius:8px; background:rgba(255,255,255,.2); color:#fff; font-size:15px; cursor:pointer; }
+    #calfed .cf-modal-x:hover{ background:rgba(255,255,255,.32); }
+    #calfed .cf-modal-body{ padding:8px 18px; }
+    #calfed .cf-row{ display:flex; gap:12px; padding:9px 0; border-bottom:1px solid #f0eee9; font-size:14px; }
+    #calfed .cf-row:last-child{ border-bottom:none; }
+    #calfed .cf-row .k{ flex:0 0 92px; color:#8a8a8a; font-weight:700; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; padding-top:2px; }
+    #calfed .cf-row .v{ flex:1; min-width:0; }
+    #calfed .cf-modal-foot{ padding:14px 18px 18px; display:flex; gap:10px; flex-wrap:wrap; }
+    /* Ficha oficial FCCV embebida (pruebas de la Comunidad Valenciana) */
+    #calfed .cf-loading{ padding:26px 4px; text-align:center; color:#8a8a8a; font-size:13.5px; }
+    #calfed .cf-ficha-fccv{ font-size:13.5px; line-height:1.55; color:#242424; word-wrap:break-word; }
+    #calfed .cf-ficha-fccv img{ max-width:100%; width:auto; height:auto; max-height:88px; vertical-align:middle; margin-right:8px; border-radius:6px; }
+    #calfed .cf-ficha-fccv table{ width:100%; max-width:100%; border-collapse:collapse; margin:8px 0; }
+    #calfed .cf-ficha-fccv td, #calfed .cf-ficha-fccv th{ padding:6px 8px; border:1px solid #eceae5; vertical-align:top; }
+    #calfed .cf-ficha-fccv a{ color:var(--azul); word-break:break-word; cursor:pointer; text-decoration:underline; }
+    #calfed .cf-ficha-fccv h1, #calfed .cf-ficha-fccv h2, #calfed .cf-ficha-fccv h3, #calfed .cf-ficha-fccv h4{ font-size:15px; margin:12px 0 6px; line-height:1.25; }
+    #calfed .cf-ficha-fccv ul, #calfed .cf-ficha-fccv ol{ padding-left:20px; margin:8px 0; }
+    #calfed .cf-ficha-fccv iframe{ max-width:100%; }
+    #calfed .cf-ficha-fccv .close, #calfed .cf-ficha-fccv [data-dismiss="modal"]{ display:none; }  /* botón cerrar propio de la FCCV (ya tenemos la X) */
+    #calfed .cf-btn-of{ flex:1 1 200px; text-align:center; background:var(--azul); color:#fff; text-decoration:none; padding:11px 14px; border-radius:9px; font-weight:700; font-size:14px; }
+    #calfed .cf-btn-of:hover{ background:#22456e; }
+    #calfed .cf-btn-cerrar{ background:#eceae4; color:#444; border:none; padding:11px 16px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; }
+    #calfed .cf-btn-cerrar:hover{ background:#e0ded7; }
+    /* Botones "Añadir al calendario" (Apple/Mac .ics y Google Calendar) */
+    #calfed .cal-add{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    #calfed .cal-btn{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:#3c3c3c; text-decoration:none; background:#fff; border:1px solid #d4d2cc; border-radius:7px; padding:4px 8px; cursor:pointer; white-space:nowrap; line-height:1; }
+    #calfed .cal-btn:hover{ background:#f2f1ee; border-color:#b9b6ae; }
+    #calfed .cal-btn:focus-visible{ outline:2px solid var(--azul); outline-offset:1px; }
+    #calfed .cal-btn svg{ display:block; flex:none; }
+    #calfed .cal-ics svg{ fill:#111; }
+    #calfed th.c-add-h, #calfed td.c-add{ white-space:nowrap; }
+    /* Estado de la prueba (aplazada/anulada/retirada) */
+    #calfed .cf-check{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#5c5c5c; cursor:pointer; user-select:none; }
+    #calfed .cf-check input{ width:16px; height:16px; cursor:pointer; }
+    #calfed input:disabled{ opacity:.45; cursor:not-allowed; background:#f0efec; }
+    #calfed .est{ display:inline-block; font-size:10px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; padding:2px 7px; border-radius:10px; margin-left:7px; vertical-align:middle; white-space:nowrap; }
+    #calfed .est-apl{ background:#fdedd3; color:#b45309; }
+    #calfed .est-anu{ background:#fbdedc; color:#b91c1c; }
+    #calfed .est-ret{ background:#eceae4; color:#6b6b6b; }
+    #calfed .nm-txt.est-tachado{ text-decoration:line-through; color:#8a8a8a; }
+
+    /* ---- MOVIL: cada prueba como ficha, con todos los datos ---- */
+    @media (max-width:640px){
+      #calfed .controls{ padding:10px; gap:8px; }
+      #calfed .fld{ flex:1 1 44%; }
+      #calfed select,#calfed input[type=text],#calfed input[type=date]{ width:100%; min-width:0; font-size:16px; }
+      #calfed .btn{ flex:1 1 100%; }
+      #calfed .tabla-wrap{ overflow:visible; }
+      #calfed thead{ display:none; }
+      #calfed table,#calfed tbody,#calfed tr,#calfed td{ display:block; width:100%; }
+      #calfed table{ font-size:14px; }
+      #calfed tr{ border:1px solid #e6e4df; border-radius:10px; background:#fff; padding:12px 14px; margin:0 0 10px; }
+      #calfed tr:hover td{ background:transparent; }
+      #calfed td{ border:0; padding:0; }
+      #calfed .hide-sm{ display:block; }
+      #calfed td[data-lbl]::before{ content:attr(data-lbl); display:block; font-size:9.5px; text-transform:uppercase;
+        letter-spacing:.6px; color:#a0a0a0; font-weight:700; margin:9px 0 1px; }
+      #calfed .c-fecha{ display:inline-flex; align-items:baseline; gap:5px; background:var(--azul); color:#fff;
+        border-radius:6px; padding:3px 9px; margin-bottom:7px; }
+      #calfed .c-fecha .d-day{ font-size:15px; color:#fff; }
+      #calfed .c-fecha .d-mon{ font-size:10.5px; color:#dce6f2; }
+      #calfed .c-prueba .nm{ font-size:15.5px; line-height:1.3; }
+      #calfed .c-prueba .obs{ font-size:12px; margin-top:3px; }
+      #calfed .c-loc .loc{ font-weight:550; }
+      #calfed .c-src{ margin-top:11px; padding-top:9px; border-top:1px solid #f0eee9; }
+      #calfed a.src, #calfed button.src{ font-size:13px; }
+      #calfed .c-add{ margin-top:11px; padding-top:9px; border-top:1px solid #f0eee9; }
+      #calfed .cal-btn{ font-size:13px; padding:7px 11px; }
+    }
+
+    /* ================= v2 · MEJORAS VISUALES (jerarquía, meses, chips) ================= */
+    #calfed{ --azul-dark:#22456e; --cian:#1287c7; --tinta:#1a2433; --suave:#6b7280; --linea:#e7e5df; }
+    #calfed h2{ font-size:24px; font-weight:800; letter-spacing:-.01em; color:var(--tinta); margin-bottom:3px; }
+    #calfed .sub{ font-size:13.5px; color:var(--suave); }
+    #calfed .meta{ font-size:13px; color:var(--suave); }
+    #calfed .meta b{ color:var(--tinta); }
+    /* Chips de acceso rápido */
+    #calfed .cf-chips{ display:flex; flex-wrap:wrap; gap:7px; margin:12px 0 2px; align-items:center; }
+    #calfed .cf-chips-lbl{ font-size:11.5px; font-weight:700; color:#8a8577; text-transform:uppercase; letter-spacing:.4px; margin-right:2px; }
+    /* Botones-espejo: solo muestran el filtro activo (no se pulsan) */
+    #calfed .cf-chip{ font:inherit; font-size:12.5px; font-weight:650; border-radius:999px; padding:6px 13px; line-height:1; cursor:default; user-select:none; }
+    #calfed .cf-chip.on{ background:var(--azul); border:1px solid var(--azul); color:#fff; }
+    #calfed .cf-chip.off{ background:#f3f1ec; border:1px solid #e4e1d9; color:#8a8577; }
+    /* Cabecera de MES (pegajosa) */
+    #calfed .cf-mes-row td{ padding:0; border:0; background:none; }
+    #calfed .cf-mes-row:hover td{ background:none; }
+    #calfed .cf-mes{ position:sticky; top:0; z-index:5; display:flex; align-items:baseline; gap:10px;
+      background:linear-gradient(90deg,#eaf0f7,#f7f7f5); border-top:2px solid var(--azul);
+      padding:9px 13px; margin:16px 0 2px; border-radius:9px 9px 0 0; }
+    #calfed .cf-mes-lbl{ font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.7px; color:var(--azul); }
+    #calfed .cf-mes-n{ font-size:11.5px; font-weight:600; color:var(--suave); }
+    /* Tile de FECHA (protagonista) */
+    #calfed td.c-fecha{ width:64px; }
+    #calfed .cf-datetile{ display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+      min-width:54px; padding:6px 7px; background:var(--azul); color:#fff; border-radius:11px; line-height:1; box-shadow:0 1px 2px rgba(20,40,70,.14); }
+    #calfed .cf-datetile .d-dow{ font-size:9px; font-weight:700; letter-spacing:.9px; color:#c3d4e8; text-transform:uppercase; }
+    #calfed .cf-datetile .d-day{ font-size:22px; font-weight:800; color:#fff; margin:1px 0; }
+    #calfed .cf-datetile .d-mon{ font-size:9.5px; font-weight:700; letter-spacing:.7px; color:#c3d4e8; text-transform:uppercase; }
+    /* Jerarquía: nombre de prueba con más peso; secundarios más tenues */
+    #calfed td.c-prueba .nm{ font-size:15px; font-weight:700; color:var(--tinta); line-height:1.3; }
+    #calfed td.c-prueba .obs{ color:#8a8a8a; }
+    #calfed .c-loc .loc{ font-weight:600; color:#2f3846; }
+    #calfed td.c-fed{ font-size:12.5px; color:#55524b; }
+    #calfed td{ vertical-align:middle; }
+    #calfed tr:hover td{ background:#f4f7fb; }
+    /* Fila de HOY, resaltada */
+    #calfed tr.is-hoy td{ background:#eef7fe; }
+    #calfed tr.is-hoy:hover td{ background:#e6f2fc; }
+    #calfed tr.is-hoy .cf-datetile{ background:var(--cian); box-shadow:0 0 0 2px #bfe0f5; }
+    #calfed .est{ font-size:9.5px; }
+    /* Botones "Añadir": un pelín más limpios */
+    #calfed .cal-btn{ border-radius:8px; }
+
+    /* ---- MÓVIL v2: fichas con más aire y fecha protagonista ---- */
+    @media (max-width:640px){
+      #calfed h2{ font-size:21px; }
+      #calfed .cf-chips{ gap:6px; margin:12px 0 4px; }
+      #calfed .cf-chip{ font-size:13px; padding:7px 13px; }
+      #calfed .cf-mes{ margin:12px 0 4px; padding:8px 12px; }
+      #calfed tr{ padding:14px 15px; border:1px solid #e6e4df; border-radius:13px; box-shadow:0 1px 4px rgba(20,30,50,.05); margin-bottom:11px; }
+      #calfed td.c-fecha{ width:auto; background:none; padding:0; margin:0 0 9px; display:block; }
+      #calfed .cf-datetile{ flex-direction:row; align-items:baseline; gap:7px; min-width:0; padding:6px 12px; border-radius:9px; }
+      #calfed .cf-datetile .d-dow{ font-size:10.5px; }
+      #calfed .cf-datetile .d-day{ font-size:18px; margin:0; }
+      #calfed .cf-datetile .d-mon{ font-size:11px; }
+      #calfed td.c-prueba .nm{ font-size:16.5px; }
+      #calfed td[data-lbl]::before{ margin-top:10px; }
+      #calfed .c-src, #calfed .c-add{ margin-top:12px; }
+    }
+
+    /* ---- ESCRITORIO: filas cebra (evitar que se vea plano sobre el fondo del tema) ---- */
+    @media (min-width:641px){
+      #calfed tbody tr:not(.cf-mes-row) td{ background:#ffffff; }
+      #calfed tbody tr.cf-alt td{ background:#eef2f8; }
+      #calfed tbody tr:not(.cf-mes-row):hover td{ background:#dfeaf8; }
+      #calfed tbody tr.is-hoy td{ background:#e6f3fe; }
+      #calfed tbody tr.is-hoy:hover td{ background:#d7ebfc; }
+    }
+  </style>
+
+  <h2>Calendario federativo de ciclismo</h2>
+  <p class="sub">Pruebas de las federaciones auton&oacute;micas de Espa&ntilde;a</p>
+  <p class="nota">Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, as&iacute; que puede haber cambios de &uacute;ltima hora: antes de desplazarte, confirma los detalles en la web oficial de la federaci&oacute;n (tienes el enlace en la columna &laquo;Fuente&raquo;).</p>
+
+  <div class="controls">
+    <div class="fld"><label>Desde</label><input type="date" id="cf_desde"></div>
+    <div class="fld"><label>Mes</label>
+      <select id="cf_mes">
+        <option value="">&mdash; Todos los meses &mdash;</option>
+        <option value="01">Enero</option>
+        <option value="02">Febrero</option>
+        <option value="03">Marzo</option>
+        <option value="04">Abril</option>
+        <option value="05">Mayo</option>
+        <option value="06">Junio</option>
+        <option value="07">Julio</option>
+        <option value="08">Agosto</option>
+        <option value="09">Septiembre</option>
+        <option value="10">Octubre</option>
+        <option value="11">Noviembre</option>
+        <option value="12">Diciembre</option>
+      </select>
+    </div>
+    <div class="fld"><label>Categor&iacute;a</label>
+      <select id="cf_cat">
+        <option value="cadete">Cadete</option>
+        <option value="junior">Junior / juvenil</option>
+        <option value="sub23">Sub-23</option>
+        <option value="elite">&Eacute;lite</option>
+        <option value="master">M&aacute;ster</option>
+        <option value="escuelas">Escuelas</option>
+        <option value="">&mdash; Todas &mdash;</option>
+      </select>
+    </div>
+    <div class="fld"><label>Sexo</label>
+      <select id="cf_sex">
+        <option value="M">Masculino</option>
+        <option value="F">Femenino</option>
+        <option value="">&mdash; Ambos &mdash;</option>
+      </select>
+    </div>
+    <div class="fld"><label>Modalidad</label>
+      <select id="cf_mod">
+        <option value="Carretera">Carretera</option>
+        <option value="BTT">BTT</option>
+        <option value="Ciclocross">Ciclocross</option>
+        <option value="Pista">Pista</option>
+        <option value="BMX">BMX</option>
+        <option value="Gravel">Gravel</option>
+        <option value="">&mdash; Todas &mdash;</option>
+      </select>
+    </div>
+    <div class="fld"><label>Federaci&oacute;n</label><select id="cf_fed"><option value="">&mdash; Todas &mdash;</option></select></div>
+    <div class="fld"><label>Buscar</label><input type="text" id="cf_txt" placeholder="prueba o localidad&hellip;"></div>
+    <div class="fld"><label>Estado</label>
+      <select id="cf_st">
+        <option value="">Todas (sin retiradas)</option>
+        <option value="activa">Solo activas</option>
+        <option value="incidencia">Aplazadas / anuladas</option>
+        <option value="all">Todas (incl. retiradas)</option>
+      </select>
+    </div>
+    <button class="btn" id="cf_reset">Restablecer</button>
+  </div>
+
+  <!-- Resumen de filtros activos: espejo de los desplegables de arriba (se
+       rellena por JS en renderChips(); no es clicable). -->
+  <div class="cf-chips" id="cf_chips"></div>
+
+  <div class="meta" id="cf_count"></div>
+
+  <div class="tabla-wrap">
+  <table>
+    <thead><tr>
+      <th data-k="fecha">Fecha</th>
+      <th data-k="prueba">Prueba</th>
+      <th data-k="localidad">Localidad</th>
+      <th data-k="federacion">Federaci&oacute;n</th>
+      <th class="hide-sm">Categor&iacute;as</th>
+      <th data-k="modalidad" class="hide-sm">Modalidad</th>
+      <th class="hide-sm">Fuente</th>
+      <th class="c-add-h">A&ntilde;adir</th>
+    </tr></thead>
+    <tbody id="cf_tb"></tbody>
+  </table>
+  </div>
+  <div class="estado" id="cf_estado">Cargando pruebas&hellip;</div>
+
+  <!-- Modal de ficha de la prueba (info que tenemos + enlace a la web oficial) -->
+  <div class="cf-modal-ov" id="cf_modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="cf-modal">
+      <div class="cf-modal-cab">
+        <button type="button" class="cf-modal-x" id="cf_modal_x" aria-label="Cerrar">&#10005;</button>
+        <h3 id="cf_m_nombre"></h3>
+        <p class="cf-m-sub" id="cf_m_sub"></p>
+      </div>
+      <div class="cf-modal-body" id="cf_m_body"></div>
+      <div class="cf-modal-foot">
+        <a class="cf-btn-of" id="cf_m_oficial" target="_blank" rel="noopener"></a>
+        <button type="button" class="cf-btn-cerrar" id="cf_m_cerrar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script data-no-optimize="1" data-no-defer="1" data-cfasync="false">
+  (function(){
+    var C = window.CALFED_CONFIG || {};
+    var FUENTES = {
+      "Andalucía":"https://andaluciaciclismo.com/es/smartweb/seccion/calendario/andalucia/2026",
+      "Aragón":"https://aragonciclismo.com/index.php/es/smartweb/seccion/calendario/aragon/2026",
+      "Asturias":"https://ciclismoasturiano.es/es/smartweb/seccion/calendario/asturias/2026",
+      "Baleares":"https://webfcib.es/es/smartweb/seccion/calendario/baleares/2026",
+      "Canarias":"https://ciclismocanario.es/index.php/es/smartweb/seccion/calendario/canarias/2026",
+      "Cantabria":"https://fcciclismo.com/index.php/es/smartweb/seccion/calendario/cantabria/2026",
+      "Castilla-La Mancha":"https://yosoyciclista.com/index.php/es/smartweb/seccion/calendario/castillalamancha/2026",
+      "Castilla y León":"https://fedciclismocyl.com/es/smartweb/seccion/calendario/castillaleon/2026",
+      "Cataluña":"https://www.ciclisme.cat/calendari/carretera",
+      "Madrid":"https://fmciclismo.com/es/smartweb/seccion/calendario/madrid/2026",
+      "C. Valenciana":"https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/2026",
+      "Euskadi":"https://fvascicli.eus/index.php/es/smartweb/seccion/calendario/euskadi/2026",
+      "Extremadura":"https://ciclismoextremadura.es/es/smartweb/seccion/calendario/extremadura/2026",
+      "Galicia":"https://fgalegaciclismo.es/es/smartweb/seccion/calendario/galicia/2026",
+      "La Rioja":"https://yosoyciclista.com/index.php/es/smartweb/seccion/calendario/larioja/2026",
+      "Murcia":"https://yosoyciclista.com/index.php/es/smartweb/seccion/calendario/murcia/2026",
+      "Navarra":"https://fnciclismo.es/es/smartweb/seccion/calendario/navarra/2026"
+    };
+    var MESES=["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+    var MESLARGO=["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+    var DIAS=["LUN","MAR","MIE","JUE","VIE","SAB","DOM"];   // getDay(): 0=Dom → índice (getDay()+6)%7
+    var CATLBL={cadete:"Cadete",junior:"Junior",sub23:"Sub-23",elite:"&Eacute;lite",master:"M&aacute;ster",escuelas:"Escuelas"};
+    // Por defecto: MES ACTUAL + Cadete + Masculino + Carretera + C. Valenciana
+    // (es lo que más se consulta; quien quiera otra cosa cambia el filtro).
+    var DEF={cat:"cadete",sex:"M",mod:"Carretera",fed:"C. Valenciana",txt:""};
+    var $=function(id){return document.getElementById(id);};
+    var els={cat:$("cf_cat"),sex:$("cf_sex"),mod:$("cf_mod"),fed:$("cf_fed"),txt:$("cf_txt")};
+    var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
+
+    function hoyISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+    Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
+    elDes.value=hoyISO();
+    if(elMes) elMes.value=String(new Date().getMonth()+1).padStart(2,"0");   // por defecto: mes actual
+
+    // ── Añadir una prueba al calendario (Apple/Mac .ics y Google Calendar) ──
+    var APPLE_SVG='<svg viewBox="0 0 384 512" width="15" height="15" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zM262.1 104.5c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>';
+    var GCAL_SVG='<svg viewBox="0 0 48 48" width="15" height="15" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>';
+    function _pad2(n){ return String(n).padStart(2,"0"); }
+    function _icsDate(iso){ return String(iso||"").replace(/-/g,"").slice(0,8); }
+    function _nextDay(iso){ var p=String(iso||"").split("-"); if(p.length<3) return _icsDate(iso); var dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); dt.setUTCDate(dt.getUTCDate()+1); return dt.getUTCFullYear()+_pad2(dt.getUTCMonth()+1)+_pad2(dt.getUTCDate()); }
+    function _decode(s){ var d=document.createElement("div"); d.innerHTML=String(s||""); return d.textContent||""; }
+    function _evFields(r){
+      var loc=[r.localidad,r.provincia].filter(Boolean).join(", ");
+      var cats=_decode((r.categorias||"").split(",").filter(Boolean).map(function(c){return CATLBL[c]||c;}).join(", "));
+      var sexo=r.sexo==="F"?"Femenino":(r.sexo==="MF"?"Masculino y femenino":"Masculino");
+      var fuente=FUENTES[r.federacion]||"";
+      var desc=[r.federacion, cats?("Categorías: "+cats):"", "Sexo: "+sexo, r.modalidad?("Modalidad: "+r.modalidad):"", r.observaciones||"", fuente?("Más info: "+fuente):""].filter(Boolean).join("\n");
+      return { title:(r.prueba||"Prueba"), loc:loc, desc:desc, url:fuente, start:_icsDate(r.fecha), end:_nextDay(r.fecha) };
+    }
+    function _icsEsc(s){ return String(s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n"); }
+    function _buildICS(r){
+      var e=_evFields(r), n=new Date();
+      var stamp=n.getUTCFullYear()+_pad2(n.getUTCMonth()+1)+_pad2(n.getUTCDate())+"T"+_pad2(n.getUTCHours())+_pad2(n.getUTCMinutes())+_pad2(n.getUTCSeconds())+"Z";
+      var uid="mfpp-"+e.start+"-"+Math.random().toString(36).slice(2,9)+"@mfppcycling.com";
+      return ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//MFPP Cycling//Calendario Federativo//ES","CALSCALE:GREGORIAN","METHOD:PUBLISH","BEGIN:VEVENT","UID:"+uid,"DTSTAMP:"+stamp,"DTSTART;VALUE=DATE:"+e.start,"DTEND;VALUE=DATE:"+e.end,"SUMMARY:"+_icsEsc(e.title),e.loc?("LOCATION:"+_icsEsc(e.loc)):null,"DESCRIPTION:"+_icsEsc(e.desc),e.url?("URL:"+e.url):null,"END:VEVENT","END:VCALENDAR"].filter(function(x){return x!=null;}).join("\r\n");
+    }
+    // OJO: los separadores van como \u0026 (no '&') porque WordPress re-codifica los '&' literales
+    // del contenido (a &#038;) y romperia la query de Google (el titulo saldria vacio).
+    function _gcalUrl(r){ var e=_evFields(r); return "https://calendar.google.com/calendar/render?action=TEMPLATE\u0026text="+encodeURIComponent(e.title)+"\u0026dates="+e.start+"/"+e.end+"\u0026details="+encodeURIComponent(e.desc)+"\u0026location="+encodeURIComponent(e.loc); }
+    function _slug(s){ return (String(s||"prueba").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40))||"prueba"; }
+    function _abrirICS(r){
+      try{
+        var blob=new Blob([_buildICS(r)],{type:"text/calendar;charset=utf-8"});
+        var url=URL.createObjectURL(blob);
+        var ua=navigator.userAgent||"";
+        var esApple=/iPad|iPhone|iPod/.test(ua) || /^((?!chrome|android|crios|fxios|edg|opr).)*safari/i.test(ua);
+        var a=document.createElement("a"); a.href=url;
+        // Safari/iPhone: sin "download" -> lo ABRE la app Calendario (ofrece Anadir,
+        // como Google). Chrome y demas: descarga directa con nombre legible.
+        if(esApple){ a.target="_blank"; a.rel="noopener"; } else { a.download=_slug(r.prueba)+".ics"; }
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ try{document.body.removeChild(a);}catch(_){} },100);
+        setTimeout(function(){ URL.revokeObjectURL(url); },60000);
+      }catch(_){ /* no rompe la pagina */ }
+    }
+
+    function cargar(){
+      if(!C.SUPABASE_URL || C.SUPABASE_URL.indexOf("TU-PROYECTO")>=0){
+        $("cf_estado").textContent="Falta configurar SUPABASE_URL y SUPABASE_ANON_KEY en la parte de arriba del bloque.";
+        return;
+      }
+      var url=C.SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/pruebas_federativas?select=*\u0026order=fecha.asc";
+      var _sep=String.fromCharCode(38), _PAG=1000, _acc=[];   // 38 = '&' (ASCII; WordPress no lo recodifica)
+      // Supabase devuelve como maximo 1000 filas por peticion: paginamos con
+      // offset hasta traerlas TODAS (antes se perdian las pruebas mas tardias).
+      function _pagina(off){
+        return fetch(url+_sep+"limit="+_PAG+_sep+"offset="+off,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:"Bearer "+C.SUPABASE_ANON_KEY}})
+          .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+          .then(function(chunk){ chunk=chunk||[]; _acc=_acc.concat(chunk); return chunk.length===_PAG?_pagina(off+_PAG):_acc; });
+      }
+      _pagina(0)
+        .then(function(data){
+          rows=data||[];
+          var feds=Array.from(new Set(rows.map(function(r){return r.federacion;}))).sort(function(a,b){return a.localeCompare(b,"es");});
+          feds.forEach(function(f){var o=document.createElement("option");o.value=f;o.textContent=f;els.fed.appendChild(o);});
+          // Modalidades DINÁMICAS desde los datos reales: así aparecen Cicloturismo,
+          // Trial… automáticamente y el filtro nunca se desincroniza de la base.
+          var mods=Array.from(new Set(rows.map(function(r){return r.modalidad;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,"es");});
+          els.mod.innerHTML="";
+          mods.forEach(function(m){var o=document.createElement("option");o.value=m;o.textContent=m;els.mod.appendChild(o);});
+          var oTodasMod=document.createElement("option");oTodasMod.value="";oTodasMod.textContent="— Todas —";els.mod.appendChild(oTodasMod);
+          els.mod.value=DEF.mod;   // "" → Todas
+          // Última actualización del dataset (para la cabecera).
+          var ua=rows.map(function(r){return r.actualizado||"";}).filter(Boolean).sort();
+          ultAct=ua.length?ua[ua.length-1]:"";
+          // Federación por defecto: C. Valenciana (ahora que ya existen las opciones).
+          // Si ese año no hubiera pruebas de la CV, se queda en "Todas".
+          if([].some.call(els.fed.options,function(o){return o.value===DEF.fed;})) els.fed.value=DEF.fed;
+          $("cf_estado").style.display="none";
+          apply();
+        })
+        .catch(function(e){ $("cf_estado").textContent="No se pudieron cargar las pruebas: "+e.message; });
+    }
+
+    // ── Deduplicado al pintar (no toca la base de datos) ──
+    // Muchas federaciones traen la misma prueba dos veces por diferencias de
+    // tildes/mayúsculas/puntuación ("San Hipólito" vs "San Hipolito"). Fusionamos
+    // por fecha + nombre normalizado + federación, y nos quedamos con la versión
+    // "más cuidada" (con tildes, mayúsculas correctas y bien separada).
+    function _normDup(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\b(19|20)\d\d\b/g," ").replace(/[^a-z0-9]+/g,""); }
+    function _scoreNombre(s){
+      s=String(s||"");
+      var tildes=/[áéíóúñüàèìòù]/i.test(s)?2:0;
+      var mixto=(/[a-záéíóúñ]/.test(s) ? (/[A-ZÁÉÍÓÚÑ]/.test(s)?1:0) : 0);   // no todo mayúsculas
+      var espacios=(s.match(/\s/g)||[]).length*0.05;                   // desempate suave
+      return tildes+mixto+espacios;
+    }
+    function _dedupe(list){
+      // 1) Fusión EXACTA por fecha + nombre normalizado + federación.
+      var byKey={};
+      list.forEach(function(r){
+        var k=(r.fecha||"")+"|"+_normDup(r.prueba)+"|"+(r.federacion||"");
+        var prev=byKey[k];
+        if(!prev || _scoreNombre(r.prueba)>_scoreNombre(prev.prueba)) byKey[k]=r;
+      });
+      var arr=Object.keys(byKey).map(function(k){return byKey[k];});
+      // 2) Fusión por PREFIJO dentro de la misma fecha+federación (mismo evento con
+      //    nombre corto vs largo: "Camporrobles" ⊂ "Camporrobles - IV Memorial…").
+      //    Conservador: el nombre corto debe tener >=14 caracteres normalizados.
+      var grupos={};
+      arr.forEach(function(r){ var g=(r.fecha||"")+"|"+(r.federacion||""); (grupos[g]=grupos[g]||[]).push(r); });
+      var fuera=[];
+      Object.keys(grupos).forEach(function(g){
+        var it=grupos[g].map(function(r){ return {r:r,n:_normDup(r.prueba)}; });
+        for(var i=0;i<it.length;i++){ for(var j=0;j<it.length;j++){
+          if(i===j) continue;
+          var a=it[i].n, b=it[j].n;   // ¿b (corto) es prefijo de a (largo)?
+          var esPref = (b.length>=14) ? (a.length>b.length) : false;
+          if(esPref) esPref = (a.indexOf(b)===0);
+          if(esPref){
+            var quita=(_scoreNombre(it[i].r.prueba)>_scoreNombre(it[j].r.prueba))?it[j].r:it[i].r;
+            if(fuera.indexOf(quita)<0) fuera.push(quita);
+          }
+        }}
+      });
+      return arr.filter(function(r){ return fuera.indexOf(r)<0; });
+    }
+    function _fechaCorta(s){ var p=String(s||"").slice(0,10).split("-"); return p.length===3?(p[2]+"/"+p[1]+"/"+p[0]):String(s||""); }
+
+    // Botones-espejo: reflejan lo que hay seleccionado en los desplegables de
+    // arriba (no se pulsan). Azul = filtro activo; gris = "todas / ambos".
+    function _selTxt(sel){ var o = sel ? sel.options[sel.selectedIndex] : null; return o ? o.text : ""; }
+    function _mesLbl(){
+      if(elMes){ if(elMes.value){ return _selTxt(elMes); } }
+      return "Desde " + _fechaCorta(elDes.value || hoyISO());
+    }
+    function _syncChips(){
+      var box = $("cf_chips"); if(!box) return;
+      var pills = [
+        { txt: "\uD83D\uDCC5 " + _mesLbl(), on: true },
+        { txt: els.cat.value ? _selTxt(els.cat) : "Todas las categor\u00edas", on: !!els.cat.value },
+        { txt: els.sex.value ? _selTxt(els.sex) : "Ambos sexos",          on: !!els.sex.value },
+        { txt: els.mod.value ? _selTxt(els.mod) : "Todas las modalidades", on: !!els.mod.value },
+        { txt: els.fed.value ? _selTxt(els.fed) : "Toda Espa\u00f1a",          on: !!els.fed.value }
+      ];
+      var html = '<span class="cf-chips-lbl">Mostrando:</span>';
+      pills.forEach(function(p){
+        html += '<span class="cf-chip ' + (p.on ? "on" : "off") + '">' + _esc(p.txt) + '</span>';
+      });
+      box.innerHTML = html;
+    }
+
+    function apply(){
+      var f={}; Object.keys(els).forEach(function(k){f[k]=els[k].value;});
+      var q=(f.txt||"").trim().toLowerCase(), desde=elDes.value||"", stF=(elSt ? elSt.value : ""), mes=(elMes ? elMes.value : "");
+      // Al elegir un mes concreto se muestra TODO ese mes (se ignora "Desde", que se desactiva).
+      if(elDes) elDes.disabled=!!mes;
+      var out=rows.filter(function(r){
+        var st=(r.estado||"activa").toLowerCase().trim();
+        // Filtro de ESTADO: "" = todo menos retiradas · activa · incidencia (aplazada/anulada) · all
+        if(stF==="activa"){ if(st!=="activa") return false; }
+        else if(stF==="incidencia"){ if(!(st==="aplazada" || st==="anulada")) return false; }
+        else if(stF!=="all"){ if(st==="retirada") return false; }
+        var cats=(r.categorias||"").split(",");
+        if(f.cat){ if(cats.indexOf(f.cat)<0) return false; }
+        if(f.sex){ if((r.sexo||"").indexOf(f.sex)<0) return false; }
+        if(f.mod){ if(r.modalidad!==f.mod) return false; }
+        if(f.fed){ if(r.federacion!==f.fed) return false; }
+        if(mes){ if((r.fecha||"").slice(5,7)!==mes) return false; }
+        else if(desde){ if(r.fecha<desde) return false; }
+        if(q){ if(((r.prueba||"")+" "+(r.localidad||"")+" "+(r.provincia||"")).toLowerCase().indexOf(q)<0) return false; }
+        return true;
+      });
+      out=_dedupe(out);   // quitar duplicados por tildes/mayúsculas antes de pintar
+      out.sort(function(a,b){var A=(a[sortKey]||"")+"",B=(b[sortKey]||"")+"";var c=A.localeCompare(B,"es",{numeric:true});return sortAsc?c:-c;});
+      render(out);
+      var nf=new Set(out.map(function(r){return r.federacion;})).size;
+      var nm=new Set(out.map(function(r){return r.modalidad;}).filter(Boolean)).size;
+      var updTxt=ultAct?(" &middot; actualizado el <b>"+_fechaCorta(ultAct)+"</b>"):"";
+      $("cf_count").innerHTML="<b>"+out.length+"</b> prueba"+(out.length===1?"":"s")+
+        " &middot; <b>"+nf+"</b> federaci"+(nf===1?"&oacute;n":"ones")+
+        " &middot; <b>"+nm+"</b> modalidad"+(nm===1?"":"es")+updTxt;
+      try{ _syncChips(); }catch(_){}
+    }
+
+    function render(list){
+      var tb=$("cf_tb"); tb.innerHTML="";
+      if(!list.length){ $("cf_estado").style.display="block"; $("cf_estado").textContent="Ninguna prueba con esos filtros."; return; }
+      $("cf_estado").style.display="none";
+      var hoy=hoyISO();
+      var agrupaMes=(sortKey==="fecha");   // agrupamos por mes solo al ordenar por fecha (orden por defecto)
+      var cuentaMes={};
+      if(agrupaMes) list.forEach(function(r){ var mk=(r.fecha||"").slice(0,7); cuentaMes[mk]=(cuentaMes[mk]||0)+1; });
+      var frag=document.createDocumentFragment(), mesActual="", ri=0;
+      list.forEach(function(r){
+        var d=(r.fecha||"").split("-");
+        if(agrupaMes){
+          var mk=(r.fecha||"").slice(0,7);
+          if(mk!==mesActual){
+            mesActual=mk;
+            var hr=document.createElement("tr"); hr.className="cf-mes-row";
+            hr.innerHTML='<td class="cf-mes" colspan="8"><span class="cf-mes-lbl">'+(MESLARGO[(+d[1]||1)-1]||"")+' '+(d[0]||"")+'</span><span class="cf-mes-n">'+cuentaMes[mk]+' prueba'+(cuentaMes[mk]===1?'':'s')+'</span></td>';
+            frag.appendChild(hr);
+          }
+        }
+        var st=(r.estado||"activa").toLowerCase().trim();
+        var estBadge = st==="aplazada" ? '<span class="est est-apl">Aplazada</span>'
+                     : st==="anulada"  ? '<span class="est est-anu">Anulada</span>'
+                     : st==="retirada" ? '<span class="est est-ret">Retirada</span>' : '';
+        var cats=(r.categorias||"").split(",").filter(Boolean).map(function(c){
+          var cls=c==="cadete"?"cad":(c==="junior"?"jun":"");
+          return '<span class="tag '+cls+'">'+(CATLBL[c]||c)+'</span>';
+        }).join("");
+        var sexTag=r.sexo==="F"?'<span class="tag f">Fem</span>':(r.sexo==="MF"?'<span class="tag">M+F</span>':"");
+        var dow=DIAS[(new Date((r.fecha||"")+"T00:00:00").getDay()+6)%7]||"";
+        var tr=document.createElement("tr");
+        var _cls=(r.fecha===hoy?"is-hoy":"");
+        if(ri%2===1) _cls+=(_cls?" ":"")+"cf-alt";
+        if(_cls) tr.className=_cls;
+        ri++;
+        tr.innerHTML='<td class="c-fecha"><div class="cf-datetile"><span class="d-dow">'+dow+'</span><span class="d-day">'+(d[2]||"")+'</span><span class="d-mon">'+(MESES[(+d[1]||1)-1]||"")+'</span></div></td>'+
+          '<td class="c-prueba"><div class="nm"><span class="nm-txt"></span>'+estBadge+'</div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
+          '<td class="c-loc" data-lbl="Localidad"><div class="loc"></div><div class="prov"></div></td>'+
+          '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
+          '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
+          '<td class="hide-sm c-mod" data-lbl="Modalidad">'+(r.modalidad||"")+'</td>'+
+          '<td class="hide-sm c-src"><button type="button" class="src cf-verficha">&#128269; Ver ficha</button></td>'+
+          '<td class="c-add"><div class="cal-add">'+
+            '<a class="cal-btn cal-ics" role="button" tabindex="0" title="A&ntilde;adir al Calendario de Mac/iPhone">'+APPLE_SVG+'<span>Mac</span></a>'+
+            '<a class="cal-btn cal-gcal" target="_blank" rel="noopener" title="A&ntilde;adir a Google Calendar">'+GCAL_SVG+'<span>Google</span></a>'+
+          '</div></td>';
+        tr.querySelector(".nm-txt").textContent=r.prueba||"";
+        if(st==="anulada") tr.querySelector(".nm-txt").classList.add("est-tachado");
+        if(r.observaciones) tr.querySelector(".obs").textContent=r.observaciones;
+        tr.querySelector(".loc").textContent=r.localidad||"";
+        tr.querySelector(".prov").textContent=r.provincia||"";
+        tr.children[3].textContent=r.federacion||"";
+        tr.querySelector(".cf-verficha").addEventListener("click",function(){ abrirFicha(r); });
+        tr.querySelector(".cal-gcal").href=_gcalUrl(r);
+        tr.querySelector(".cal-ics").addEventListener("click",function(e){ e.preventDefault(); _abrirICS(r); });
+        tr.querySelector(".cal-ics").addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _abrirICS(r); } });
+        frag.appendChild(tr);
+      });
+      tb.appendChild(frag);
+    }
+
+    // ── Modal "Ver ficha": muestra la info disponible + botón a la web oficial ──
+    function _esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    // Ficha básica (nuestros datos) — para el resto de federaciones o si no hay ficha FCCV
+    function _fichaBasica(r){
+      var st=(r.estado||"activa").toLowerCase().trim();
+      var estHtml = st==="aplazada" ? '<span class="est est-apl">Aplazada</span>'
+                  : st==="anulada"  ? '<span class="est est-anu">Anulada</span>'
+                  : st==="retirada" ? '<span class="est est-ret">Retirada</span>' : "";
+      var loc=[r.localidad,r.provincia].filter(Boolean).join(", ");
+      var cats=_decode((r.categorias||"").split(",").filter(Boolean).map(function(c){return CATLBL[c]||c;}).join(", "));
+      var sexo=r.sexo==="F"?"Femenino":(r.sexo==="MF"?"Masculino y femenino":"Masculino");
+      function row(k,v){ return v ? ('<div class="cf-row"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>') : ""; }
+      var html = row("Estado", estHtml)
+               + row("Localidad", _esc(loc))
+               + row("Categor&iacute;as", _esc(cats))
+               + row("Sexo", _esc(sexo))
+               + row("Modalidad", _esc(r.modalidad||""))
+               + row("Observaciones", _esc(r.observaciones||""));
+      return html || '<p style="color:#8a8a8a;padding:10px 0">Sin datos adicionales.</p>';
+    }
+    // Clave de casado (DEBE coincidir con la del admin al publicar): fecha|nombre_normalizado
+    function _normFicha(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,""); }
+    // Sanea la ficha FCCV (quita <script>/handlers) y reescribe enlaces relativos → fccv.es
+    function _sanearFicha(html){
+      return String(html||"")
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
+        .replace(/<button\b[^>]*>[\s\S]*?<\/button>/gi,"")   // botones propios de la FCCV (el "x" de cerrar, etc.)
+        .replace(/ on[a-z]+\s*=\s*"[^"]*"/gi,"")
+        .replace(/ on[a-z]+\s*=\s*'[^']*'/gi,"")
+        // Quitar clases de framework (modal, modal-dialog, float-left, width-30…):
+        // el tema de WordPress las estiliza y descoloca la ficha (título en rojo,
+        // plano flotando cortado). Sin clases, manda solo nuestro CSS + estilos inline.
+        .replace(/\sclass\s*=\s*"[^"]*"/gi,"")
+        .replace(/\sclass\s*=\s*'[^']*'/gi,"")
+        .replace(/\sdata-(?:toggle|target|dismiss)\s*=\s*"[^"]*"/gi,"")
+        .replace(/(href|src)=(["'])\/(?!\/)/g,"$1=$2https://fccv.es/")
+        .replace(/(href|src)=(["'])(?!https?:|mailto:|tel:|#|data:)([^"']+)\2/g,"$1=$2https://fccv.es/$3$2")
+        // Enlaces a archivos (plano.jpeg, reglamento.pdf…): quitamos el href y lo
+        // guardamos en data-cfhref para que el "lightbox" del tema NO los reconozca
+        // como enlace a imagen. Los abrimos nosotros (ver _pintarFicha).
+        .replace(/\bhref=("https?:\/\/[^"]*")/gi,'data-cfhref=$1')
+        .replace(/\bhref=('https?:\/\/[^']*')/gi,"data-cfhref=$1");
+    }
+    // Pinta la ficha FCCV e intercepta los clics en sus enlaces (plano, reglamento)
+    // para abrirlos NOSOTROS en una pestaña nueva. Así cortamos el evento antes de
+    // que el "lightbox" del tema de WordPress lo capture y muestre el plano cortado.
+    function _pintarFicha(body, html){
+      body.innerHTML='<div class="cf-ficha-fccv">'+_sanearFicha(html)+'</div>';
+      var cont=body.querySelector(".cf-ficha-fccv");
+      if(!cont) return;
+      cont.addEventListener("click", function(e){
+        var t=e.target, a=null;
+        while(t && t!==cont){ if(t.tagName==="A" && (t.getAttribute("data-cfhref")||t.getAttribute("href"))){ a=t; break; } t=t.parentNode; }
+        if(a){
+          var dest=a.getAttribute("data-cfhref")||a.getAttribute("href");
+          e.preventDefault(); e.stopPropagation();
+          if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+          window.open(dest,"_blank","noopener");
+        }
+      }, true);
+    }
+    function abrirFicha(r){
+      var ov=$("cf_modal"); if(!ov) return;
+      $("cf_m_nombre").textContent = r.prueba || "Prueba";
+      var d=(r.fecha||"").split("-");
+      var fechaTxt = d.length>=3 ? (d[2]+" "+(MESES[(+d[1]||1)-1]||"")+" "+d[0]) : (r.fecha||"");
+      $("cf_m_sub").textContent = [r.federacion, fechaTxt].filter(Boolean).join(" · ");
+      var fuente=FUENTES[r.federacion]||"";
+      var of=$("cf_m_oficial");
+      if(fuente){ of.href=fuente; of.style.display=""; of.textContent="Ver en la web oficial de "+r.federacion+" ↗"; }
+      else { of.style.display="none"; }
+      var body=$("cf_m_body");
+      ov.classList.add("open"); ov.setAttribute("aria-hidden","false");
+      document.body.style.overflow="hidden";
+      // Comunidad Valenciana: intentar la ficha COMPLETA de la FCCV (guardada en Supabase)
+      if((r.federacion||"")==="C. Valenciana" && C.SUPABASE_URL){
+        body.innerHTML='<p class="cf-loading">Cargando ficha oficial de la FCCV&hellip;</p>';
+        var AMP=String.fromCharCode(38);   // '&' vía código para que WordPress no lo re-codifique
+        var clave=(r.fecha||"")+"|"+_normFicha(r.prueba);
+        var url=C.SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/fccv_fichas?clave=eq."+encodeURIComponent(clave)+AMP+"select=html"+AMP+"limit=1";
+        fetch(url,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:"Bearer "+C.SUPABASE_ANON_KEY}})
+          .then(function(res){ return res.ok?res.json():[]; })
+          .then(function(arr){
+            if(arr && arr.length && arr[0] && arr[0].html){ _pintarFicha(body, arr[0].html); }
+            else { body.innerHTML=_fichaBasica(r); }
+          })
+          .catch(function(){ body.innerHTML=_fichaBasica(r); });
+      } else {
+        body.innerHTML=_fichaBasica(r);
+      }
+    }
+    function cerrarFicha(){
+      var ov=$("cf_modal"); if(!ov) return;
+      ov.classList.remove("open"); ov.setAttribute("aria-hidden","true");
+      document.body.style.overflow="";
+    }
+    if($("cf_modal_x")) $("cf_modal_x").addEventListener("click",cerrarFicha);
+    if($("cf_m_cerrar")) $("cf_m_cerrar").addEventListener("click",cerrarFicha);
+    if($("cf_modal")) $("cf_modal").addEventListener("click",function(e){ if(e.target===this) cerrarFicha(); });
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape") cerrarFicha(); });
+
+    Array.prototype.forEach.call(document.querySelectorAll('#calfed th[data-k]'),function(th){
+      th.addEventListener("click",function(){var k=th.dataset.k; if(k===sortKey)sortAsc=!sortAsc; else{sortKey=k;sortAsc=true;} apply();});
+    });
+    Object.keys(els).forEach(function(k){els[k].addEventListener("input",apply);});
+    elDes.addEventListener("input",apply);
+    if(elMes) elMes.addEventListener("change",apply);
+    if(elSt) elSt.addEventListener("change",apply);
+    // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";apply();});
+
+    cargar();
+  })();
+  </script>
+</div>
