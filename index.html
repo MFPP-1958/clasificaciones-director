@@ -2868,6 +2868,11 @@
           <button class="btn light" onclick="_rvInit()" style="padding:6px 12px;font-size:12px">🔄 Recargar</button>
         </div>
         <div id="rvBody">
+          <!-- Selector de prueba: por defecto la cargada; puedes elegir otra -->
+          <div class="rv-raceselect">
+            <label for="rvRaceSelect">📋 Prueba:</label>
+            <select id="rvRaceSelect" onchange="_rvPickRace(this.value)"></select>
+          </div>
           <!-- Salida real + cronómetro de carrera (Fase 1) -->
           <div id="rvSalidaBar" class="rv-salida-bar"></div>
           <!-- Buscador exprés -->

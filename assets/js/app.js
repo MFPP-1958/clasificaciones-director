@@ -47756,6 +47756,8 @@ function _csOpenSVGWindow(svg, filename){
 let _rvBibMap = null;     // bib(string) -> grid item
 let _rvSt = { breakaway:null, attacks:[], passes:[] };
 let _rvPassDraft = null;  // {type, bibs:[]}
+let _rvSelectedRaceId = null;   // prueba elegida a mano en el desplegable de RV
+let _rvLastActiveId = '';       // última prueba cargada vista (para seguirla por defecto)
 
 function _rvRaceId(){ return (_simCurrentData && _simCurrentData.race && _simCurrentData.race.id)
   || (typeof _activeRace!=='undefined' && _activeRace && _activeRace.id) || (typeof _simSelectedRaceId!=='undefined' && _simSelectedRaceId) || ''; }
@@ -47851,18 +47853,47 @@ function _rvAutoPickRaceId(){
   return cands[0].id || '';
 }
 
+// Rellena el desplegable de pruebas de Radio Vuelta. Lista TODAS las pruebas
+// del histórico (las que tienen inscritos primero), ordenadas por fecha desc,
+// y marca la que está seleccionada ahora.
+function _rvPopulateRaceSelect(currentId){
+  const sel=document.getElementById('rvRaceSelect'); if(!sel) return;
+  const hist=(typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory))?_cachedHistory.slice():[];
+  hist.sort((a,b)=> (_parseSpanishDate(b.raceDate)||'').localeCompare(_parseSpanishDate(a.raceDate)||''));
+  const conIns=hist.filter(r=> r && r.id && Array.isArray(r.inscritos) && r.inscritos.length>0);
+  const sinIns=hist.filter(r=> r && r.id && !(Array.isArray(r.inscritos) && r.inscritos.length>0));
+  const opt=r=>{ const nm=(r.raceName||r.name||'(sin nombre)'); const f=r.raceDate?(' · '+r.raceDate):''; return `<option value="${escapeAttr(String(r.id))}"${String(r.id)===String(currentId)?' selected':''}>${escapeHtml(nm+f)}</option>`; };
+  let html='';
+  if(conIns.length) html+='<optgroup label="Con inscritos">'+conIns.map(opt).join('')+'</optgroup>';
+  if(sinIns.length) html+='<optgroup label="Sin inscritos (no se puede usar en el coche)">'+sinIns.map(opt).join('')+'</optgroup>';
+  sel.innerHTML = html || '<option value="">(no hay pruebas)</option>';
+}
+// El director elige otra prueba en el desplegable de RV.
+function _rvPickRace(id){
+  if(!id) return;
+  _rvSelectedRaceId=id;
+  if(typeof _simSelectedRaceId!=='undefined') _simSelectedRaceId=id;
+  _rvInit();
+}
+
 async function _rvInit(){
   const body=document.getElementById('rvBody'); if(!body) return;
   const nameEl=document.getElementById('rvRaceName');
   // Asegurar historial y el grid de predicción de la prueba activa
   try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
-  // Si no hay ninguna prueba seleccionada, abrir AUTOMÁTICAMENTE la última con
-  // lista de inscritos de tu categoría → te ahorra ir al Simulador a elegirla.
-  let id=_rvRaceId();
-  if(!id){ id=_rvAutoPickRaceId(); if(id) _simSelectedRaceId=id; }
+  // Elegir la prueba de Radio Vuelta con esta prioridad:
+  //   1) la que has elegido A MANO en el desplegable de RV (_rvSelectedRaceId)
+  //   2) por defecto, la que tengas CARGADA (la del header, _activeRace)
+  //   3) si no hay ninguna, la última con inscritos de tu categoría (auto)
+  // Si cargas una prueba NUEVA en la app, RV la sigue (se borra la elección a mano).
+  const _actId=(typeof _activeRace!=='undefined' && _activeRace && _activeRace.id)?_activeRace.id:'';
+  if(_actId && _actId!==_rvLastActiveId){ _rvSelectedRaceId=null; _rvLastActiveId=_actId; }
+  let id = _rvSelectedRaceId || _actId || _rvAutoPickRaceId();
+  if(id) _simSelectedRaceId=id;
   if(id && (!_simCurrentData || !_simCurrentData.race || _simCurrentData.race.id!==id) && typeof _simBuildData==='function'){
     try{ _simBuildData(id); }catch(_){}
   }
+  _rvPopulateRaceSelect(id);
   const gridAll=(_simCurrentData && Array.isArray(_simCurrentData.grid))?_simCurrentData.grid:[];
   // Respetar el GRUPO DE CATEGORÍA GLOBAL: en el coche solo manejamos dorsales
   // de TU categoría (si el evento mezcla cadete+juvenil, no aparecen los otros).

@@ -1680,6 +1680,11 @@ details.sim-help .sim-help-body .tip{
 .rv-panel{max-width:1000px;margin:0 auto}
 .rv-racename{font-size:15px;font-weight:800;color:#3730a3}
 .rv-empty{text-align:center;padding:40px 16px;color:#6b7280}
+/* Selector de prueba de Radio Vuelta */
+.rv-raceselect{display:flex;align-items:center;gap:8px;margin:2px 0 12px;flex-wrap:wrap}
+.rv-raceselect label{font-size:13px;font-weight:800;color:#3730a3;white-space:nowrap}
+.rv-raceselect select{flex:1;min-width:220px;font-size:15px;font-weight:700;color:#0b2f6b;padding:10px 12px;border:2px solid #c7d2fe;border-radius:12px;background:#fff;cursor:pointer}
+body.rv-mode-car #view-radiovuelta .rv-raceselect select{font-size:18px;padding:12px 14px}
 /* Salida real + cronómetro de carrera (Fase 1) */
 .rv-salida-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:2px 0 14px;min-height:8px}
 .rv-salida-btn{font-size:18px;font-weight:900;background:#15803d;color:#fff;border:none;border-radius:14px;padding:12px 22px;cursor:pointer;white-space:nowrap}
