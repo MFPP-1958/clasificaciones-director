@@ -48054,7 +48054,7 @@ async function _rvInit(){
   _rvLoad();
   await _rvSyncLoad();            // trae lo guardado en la nube y lo fusiona con lo local
   _rvRenderSalida();
-  _rvRenderFuga(); _rvRenderAtaques(); _rvRenderPasos(); _rvRenderDiario();
+  _rvRenderFuga(); _rvRenderAtaques(); _rvRenderPasos(); _rvRenderDiario(); _rvRenderDescolgados();
   const bib=document.getElementById('rvBib'); if(bib){ bib.value=''; setTimeout(()=>bib.focus(),150); }
   document.getElementById('rvCard').innerHTML='';
 }
@@ -48421,7 +48421,117 @@ function _rvQuickMecanico(){ let b=(document.getElementById('rvBib')&&document.g
 function _rvQuickAvit(){ _rvLogEvent({type:'avit'}); }
 function _rvQuickAtaque(){ const b=(document.getElementById('rvBib')&&document.getElementById('rvBib').value||'').trim(); const info=b?_rvBibInfo(b):null; _rvLogEvent({type:'ataque_mio', bib:b||'', name:info?info.name:'', team:info?info.team:''}); }
 function _rvQuickNota(){ const t=(prompt('Nota rapida:')||'').trim(); if(!t) return; _rvLogEvent({type:'nota', text:t}); }
-function _rvDelEvent(i){ if(!_rvSt.events) return; _rvSt.events.splice(i,1); _rvSave(); _rvPersistSoon(); _rvRenderDiario(); }
+function _rvDelEvent(i){ if(!_rvSt.events) return; _rvSt.events.splice(i,1); _rvSave(); _rvPersistSoon(); _rvRenderDiario(); _rvRenderDescolgados(); }
+
+// ── Resolvedor reutilizable: dorsal directo / número a asignar / nombre ────
+// Igual que el buscador (con asignación de dorsal para listas sin dorsal),
+// pero pintando en el área que se le indique y ejecutando un callback cb(g).
+let _rvResolveCb=null, _rvResolvePendingBib=null;
+function _rvResolveRider(value, areaId, cb){
+  const v=(value||'').trim(); if(!v) return;
+  const area=document.getElementById(areaId);
+  if(_rvBibMap && _rvBibMap[v]){ if(area) area.innerHTML=''; cb(_rvBibMap[v]); return; }
+  if(/^\d+$/.test(v)){
+    if(!area){ return; }
+    _rvResolveCb=cb; _rvResolvePendingBib=v;
+    area.innerHTML='<div class="rv-assign"><div class="rv-assign-h">El dorsal <b>'+escapeHtml(v)+'</b> no está en la lista. Escribe el <b>nombre</b> y púlsalo para asignarlo y registrar:</div>'
+      +'<input id="rvResolveQ" class="rv-input" type="text" placeholder="Nombre del corredor" autocomplete="off" oninput="_rvResolveLive()" onkeydown="if(event.key===\'Enter\')_rvResolveLive()">'
+      +'<div id="rvResolveRes"></div></div>';
+    setTimeout(()=>{ const f=document.getElementById('rvResolveQ'); if(f) f.focus(); },60);
+    return;
+  }
+  const res=_rvNameResults(v);
+  if(res.length===1){ if(area) area.innerHTML=''; cb(res[0]); return; }
+  if(res.length>1){ _rvResolveCb=cb; _rvResolvePendingBib=null; _rvNameCache=res; if(area) area.innerHTML=_rvResolveListHtml(res); return; }
+  if(area) area.innerHTML='<div class="rv-notfound">🔎 No encontré "'+escapeHtml(v)+'" en la parrilla.</div>';
+}
+function _rvResolveListHtml(res){
+  _rvNameCache=res;
+  const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
+  return '<div class="rv-nameres-wrap">'+res.map((g,i)=>{ const bib=String(g.bib||'').trim();
+    return '<button class="rv-nameres" onclick="_rvResolvePick('+i+')">'+(bib?('<span class="rv-nameres-bib">'+escapeHtml(bib)+'</span>'):'')+'<span class="rv-nameres-nm">'+escapeHtml(nn(g.name))+'</span>'+(g.team?'<span class="rv-nameres-tm">'+escapeHtml(g.team)+'</span>':'')+'</button>';
+  }).join('')+'</div>';
+}
+function _rvResolveLive(){
+  const q=(document.getElementById('rvResolveQ')?.value||'').trim();
+  const box=document.getElementById('rvResolveRes'); if(!box) return;
+  if(q.length<2){ box.innerHTML=''; return; }
+  const res=_rvNameResults(q); _rvNameCache=res;
+  box.innerHTML = res.length ? _rvResolveListHtml(res) : '<div class="rv-hint">Sin coincidencias en la parrilla.</div>';
+}
+function _rvResolvePick(i){
+  const g=_rvNameCache && _rvNameCache[i]; if(!g) return;
+  let rider=g;
+  if(_rvResolvePendingBib){
+    if(!_rvSt.bibs) _rvSt.bibs={};
+    _rvSt.bibs[_rvResolvePendingBib]=_rvNK(g.name);
+    _rvBibMap[_rvResolvePendingBib]=Object.assign({},g,{bib:_rvResolvePendingBib});
+    _rvSave(); _rvPersistSoon();
+    rider=_rvBibMap[_rvResolvePendingBib];
+  }
+  const cb=_rvResolveCb; _rvResolveCb=null; _rvResolvePendingBib=null;
+  if(cb) cb(rider);
+}
+
+// ── Descolgados (se van quedando) ─────────────────────────────────────────
+function _rvAddDescolgado(){
+  const inp=document.getElementById('rvDescBib'); const v=(inp&&inp.value||'').trim();
+  if(!v){ if(typeof showToast==='function') showToast('Escribe un dorsal o nombre','warn'); return; }
+  _rvResolveRider(v, 'rvDescArea', g=>{
+    _rvLogEvent({type:'descolgado', bib:g.bib||'', name:g.name, team:g.team});
+    if(inp) inp.value='';
+    const area=document.getElementById('rvDescArea'); if(area) area.innerHTML='';
+    _rvRenderDescolgados();
+  });
+}
+function _rvRenderDescolgados(){
+  const el=document.getElementById('rvDescolgados'); if(!el) return;
+  const list=(_rvSt.events||[]).map((e,i)=>({e,i})).filter(x=>x.e.type==='descolgado');
+  if(!list.length){ el.innerHTML='<div class="rv-hint">Aún no hay descolgados. Mete el dorsal o nombre y pulsa "Se queda".</div>'; return; }
+  const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
+  el.innerHTML=list.map(x=>{ const e=x.e; const t=new Date(e.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); const wt=_rvWhenTag(e);
+    return '<div class="rv-desc-row"><span class="rv-diario-t">'+t+'</span><span class="rv-desc-who">🔻 <b>'+escapeHtml(String(e.bib||'—'))+'</b> '+escapeHtml(nn(e.name||''))+(e.team?' <span style="color:#94a3b8">('+escapeHtml(e.team)+')</span>':'')+'</span>'+(wt?'<span class="rv-diario-when">'+escapeHtml(wt)+'</span>':'')+'<button class="rv-atk-del" title="Borrar" onclick="_rvDelEvent('+x.i+')">✕</button></div>';
+  }).join('');
+}
+
+// ── Top 10 predicho EN VIVO: con lo que le va pasando a cada uno ───────────
+function _rvLiveBadges(g){
+  const nk=_rvNK(g.name); const bib=String(g.bib||'').trim();
+  const mn=n=> !!n && _rvNK(n)===nk;
+  const mb=b=> !!bib && String(b)===bib;
+  const B=[];
+  if((_rvSt.events||[]).some(e=>e.type==='descolgado' && (mn(e.name)||mb(e.bib)))) B.push('<span class="rv-lb rv-lb-desc">🔻 Descolgado</span>');
+  const inBk=_rvSt.breakaway && (_rvSt.breakaway.bibs||[]).map(String).includes(bib);
+  const inAtk=(_rvSt.attacks||[]).some(a=>(a.names||[]).some(n=>mn(n.name)));
+  if(inBk) B.push('<span class="rv-lb rv-lb-fuga">🚀 En fuga</span>');
+  else if(inAtk) B.push('<span class="rv-lb rv-lb-fuga">🚀 Fuga</span>');
+  if((_rvSt.passes||[]).some(p=>p.type==='volante' && (p.top||[]).some(n=>mn(n&&n.name)))) B.push('<span class="rv-lb rv-lb-vol">🏁 M. volante</span>');
+  if((_rvSt.passes||[]).some(p=>p.type==='montana' && (p.top||[]).some(n=>mn(n&&n.name)))) B.push('<span class="rv-lb rv-lb-mon">⛰️ Montaña</span>');
+  if((_rvSt.events||[]).some(e=>e.type==='mecanico' && (mn(e.name)||mb(e.bib)))) B.push('<span class="rv-lb rv-lb-mec">🔧 Mecánico</span>');
+  if((_rvSt.events||[]).some(e=>e.type==='ataque_mio' && (mn(e.name)||mb(e.bib)))) B.push('<span class="rv-lb rv-lb-atk">⚡ Ataque</span>');
+  return B.join(' ');
+}
+function _rvTop10Modal(){
+  const src=(_rvGrid && _rvGrid.length)?_rvGrid:((_simCurrentData && Array.isArray(_simCurrentData.grid))?_simCurrentData.grid:[]);
+  const top=src.filter(g=>g.predictedPos!=null).slice().sort((a,b)=>(a.predictedPos||999)-(b.predictedPos||999)).slice(0,10);
+  const old=document.getElementById('_rvTop10Modal'); if(old) old.remove();
+  const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
+  const rows = top.length ? top.map((g,i)=>{
+    const badges=_rvLiveBadges(g);
+    const mine=g.isMyTeam;
+    return '<div class="rv-t10-row'+(mine?' rv-t10-mine':'')+(badges?' rv-t10-hit':'')+'">'
+      +'<div class="rv-t10-rank">'+(i+1)+'º</div>'
+      +'<div class="rv-t10-info"><div class="rv-t10-name">'+(g.bib?('<b>'+escapeHtml(String(g.bib))+'</b> '):'')+escapeHtml(nn(g.name))+(mine?' <span class="rv-mine-tag">⭐</span>':'')+'</div>'
+      +'<div class="rv-t10-team">'+escapeHtml(g.team||'')+' · pred. '+Math.round(g.predictedPos)+'º</div>'
+      +(badges?('<div class="rv-t10-badges">'+badges+'</div>'):'')+'</div></div>';
+  }).join('') : '<div class="rv-hint" style="padding:20px;text-align:center">No hay predicción para esta prueba. Ábrela en el Simulador para generar el Top 10.</div>';
+  const ov=document.createElement('div'); ov.id='_rvTop10Modal'; ov.className='rv-tac-modal-ov';
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  ov.innerHTML='<div class="rv-tac-modal" style="max-width:560px"><div class="rv-tac-modal-h" style="background:#1e3a8a"><h3>🎯 Top 10 predicho · en vivo</h3><button onclick="document.getElementById(\'_rvTop10Modal\').remove()">✕</button></div>'
+    +'<div class="rv-tac-modal-b" style="display:block">'+rows+'</div>'
+    +'<div class="rv-tac-modal-f">Las etiquetas de color muestran lo que le va pasando a cada uno (fuga, meta volante, montaña, mecánico, descolgado…). Vuelve a abrirlo para actualizar.</div></div>';
+  document.body.appendChild(ov);
+}
 function _rvRenderDiario(){
   const el=document.getElementById('rvDiario'); if(!el) return;
   const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
@@ -48431,6 +48541,7 @@ function _rvRenderDiario(){
     if(e.type==='mecanico'){ icon='🔧'; label='Mecanico'; sub=e.bib?('Dorsal '+e.bib+(e.name&&e.name!=='Dorsal '+e.bib?' · '+nn(e.name):'')):''; }
     else if(e.type==='avit'){ icon='🍔'; label='Avituallamiento'; }
     else if(e.type==='ataque_mio'){ icon='⚡'; label='Ataque de mi equipo'; sub=e.bib?('Dorsal '+e.bib+(e.name?' · '+nn(e.name):'')):''; }
+    else if(e.type==='descolgado'){ icon='🔻'; label='Se queda'; sub=e.bib?('Dorsal '+e.bib+(e.name?' · '+nn(e.name):'')):(e.name?nn(e.name):''); }
     else if(e.type==='nota'){ icon='📝'; label='Nota'; sub=e.text||''; }
     items.push({at:e.at, when:_rvWhenTag(e), icon, label, sub, del:i});
   });

@@ -2865,6 +2865,7 @@
           <h2 style="margin:0">📻 Panel de Radio Vuelta</h2>
           <span id="rvRaceName" class="rv-racename"></span>
           <button class="btn light" id="rvCarModeBtn" onclick="_rvToggleCarMode()" style="padding:6px 12px;font-size:12px;margin-left:auto" title="Texto más grande y mayor contraste para leer dentro del coche">🚗 Modo coche</button>
+          <button class="btn light" onclick="_rvTop10Modal()" style="padding:6px 12px;font-size:12px;background:#1e3a8a;color:#fff;border-color:#1e3a8a" title="Top 10 predicho de esta prueba, con lo que le va pasando a cada uno en vivo">🎯 Top 10 en vivo</button>
           <button class="btn light" onclick="_rvTacticalModal()" style="padding:6px 12px;font-size:12px" title="Ranking de la temporada: quién disputa metas volantes, montaña y fugas">🏆 Perfiles</button>
           <button class="btn light" onclick="_rvInit()" style="padding:6px 12px;font-size:12px">🔄 Recargar</button>
         </div>
@@ -2895,6 +2896,18 @@
               <button class="rv-btn-save" onclick="_rvSaveFuga()">FIJAR FUGA</button>
             </div>
             <div id="rvFugaActiva"></div>
+          </div>
+
+          <!-- Se van quedando (descolgados) -->
+          <div class="rv-block">
+            <div class="rv-block-h">🔻 Se van quedando (descolgados)</div>
+            <div class="rv-fuga-form">
+              <input id="rvDescBib" class="rv-input" type="text" placeholder="Dorsal o nombre del que se queda" autocomplete="off"
+                onkeydown="if(event.key==='Enter')_rvAddDescolgado()">
+              <button class="rv-btn-save" style="background:#b45309" onclick="_rvAddDescolgado()">🔻 Se queda</button>
+            </div>
+            <div id="rvDescArea"></div>
+            <div id="rvDescolgados"></div>
           </div>
 
           <!-- Ataques del día -->
