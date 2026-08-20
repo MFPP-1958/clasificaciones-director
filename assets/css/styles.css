@@ -1680,6 +1680,20 @@ details.sim-help .sim-help-body .tip{
 .rv-panel{max-width:1000px;margin:0 auto}
 .rv-racename{font-size:15px;font-weight:800;color:#3730a3}
 .rv-empty{text-align:center;padding:40px 16px;color:#6b7280}
+/* Salida real + cronómetro de carrera (Fase 1) */
+.rv-salida-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:2px 0 14px;min-height:8px}
+.rv-salida-btn{font-size:18px;font-weight:900;background:#15803d;color:#fff;border:none;border-radius:14px;padding:12px 22px;cursor:pointer;white-space:nowrap}
+.rv-salida-btn:active{transform:scale(.97)}
+.rv-salida-hint{font-size:12.5px;color:#6b7280}
+.rv-salida-on{font-size:14px;font-weight:900;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:999px;padding:6px 14px;white-space:nowrap}
+.rv-race-clock{font-size:26px;font-weight:900;color:#0b2f6b;font-variant-numeric:tabular-nums;letter-spacing:1px}
+.rv-salida-reset{font-size:16px;font-weight:900;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:10px;width:38px;height:38px;cursor:pointer}
+.rv-sync{font-size:12px;font-weight:700;margin-left:auto;white-space:nowrap}
+.rv-sync-ok{color:#15803d}.rv-sync-pending{color:#b45309}.rv-sync-error{color:#9a3412}
+.rv-diario-when{font-size:12px;font-weight:800;color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:1px 7px;margin-left:2px;white-space:nowrap}
+body.rv-mode-car #view-radiovuelta .rv-salida-btn{font-size:24px;padding:16px 30px}
+body.rv-mode-car #view-radiovuelta .rv-race-clock{font-size:38px}
+body.rv-mode-car #view-radiovuelta .rv-salida-on{font-size:19px}
 /* Buscador exprés */
 .rv-search{display:flex;gap:10px;align-items:stretch;margin:6px 0 14px;flex-wrap:wrap}
 .rv-bibinput{flex:1;min-width:140px;font-size:40px;font-weight:900;text-align:center;letter-spacing:2px;padding:14px 16px;border:3px solid #c7d2fe;border-radius:16px;color:#0b2f6b;outline:none}

@@ -47763,6 +47763,81 @@ function _rvKey(){ return 'rv_'+_rvRaceId(); }
 function _rvLoad(){ try{ const s=localStorage.getItem(_rvKey()); _rvSt = s?JSON.parse(s):{breakaway:null,attacks:[],passes:[]}; }catch(_){ _rvSt={breakaway:null,attacks:[],passes:[]}; } if(!_rvSt.attacks)_rvSt.attacks=[]; if(!_rvSt.passes)_rvSt.passes=[]; if(!_rvSt.events)_rvSt.events=[]; }
 function _rvSave(){ try{ localStorage.setItem(_rvKey(), JSON.stringify(_rvSt)); }catch(_){} }
 
+// ── Fase 1 · Persistencia en Supabase + cronómetro de salida ──────────────
+// Guardamos TODO el estado en races.notes.radiovuelta (mismo camino que el
+// recorrido/clima). Al subir el estado COMPLETO cada vez, si no hay cobertura
+// no se pierde nada: el navegador lo conserva y el próximo guardado con éxito
+// lo pone al día. Cada evento lleva un id propio (eid) para poder fusionar el
+// diario de este dispositivo con el de la nube sin duplicar.
+function _rvEid(){ return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9); }
+function _rvSalidaAt(){ return (_rvSt && _rvSt.salida && _rvSt.salida.at) ? _rvSt.salida.at : null; }
+function _rvAvg(){ try{ const r=_simCurrentData&&_simCurrentData.race; const a=r?parseFloat(String(r.avg||'').replace(',','.')):NaN; return Number.isFinite(a)&&a>0?a:null; }catch(_){ return null; } }
+function _rvMinCarrera(at){ const s=_rvSalidaAt(); if(!s||!at||at<s) return null; return Math.round((at-s)/60000); }
+function _rvKmEst(at){ const s=_rvSalidaAt(), av=_rvAvg(); if(!s||!av||!at||at<s) return null; return Math.round(av*((at-s)/3600000)*10)/10; }
+// Sella un evento con id, minuto de carrera y km estimado en el momento de crearlo.
+function _rvStamp(ev){ const at=(ev&&ev.at)||Date.now(); ev.at=at; if(!ev.eid) ev.eid=_rvEid(); const mn=_rvMinCarrera(at); if(mn!=null) ev.min=mn; const km=_rvKmEst(at); if(km!=null) ev.km=km; return ev; }
+// Etiqueta "min 47 · ≈km 38" para los renders (vacío si no hay salida marcada).
+function _rvWhenTag(e){ const p=[]; if(e&&e.min!=null) p.push('min '+e.min); if(e&&e.km!=null) p.push('≈km '+e.km); return p.join(' · '); }
+
+let _rvSyncState='idle';   // idle | ok | pending | error
+let _rvPersistT=null;
+function _rvSetSync(s){ _rvSyncState=s; const el=document.getElementById('rvSync'); if(el){ const m={ok:'☁️ Guardado en la nube',pending:'⏳ Guardando…',error:'📵 Sin conexión · guardado en este dispositivo',idle:''}; el.textContent=m[s]||''; el.className='rv-sync rv-sync-'+s; } }
+// Guarda el estado completo en races.notes.radiovuelta.
+async function _rvPersist(){
+  const id=_rvRaceId(); if(!id || !_sb) return;
+  _rvSetSync('pending');
+  try{
+    const { data, error } = await _sb.from('races').select('notes').eq('id', id).single();
+    if(error || !data) throw new Error((error&&error.message)||'lectura');
+    let extra={}; try{ extra=JSON.parse(data.notes||'{}'); }catch(_){}
+    extra.radiovuelta = _rvSt;
+    const { error: upErr } = await _sb.from('races').update({ notes: JSON.stringify(extra) }).eq('id', id);
+    if(upErr) throw new Error(upErr.message);
+    if(Array.isArray(_cachedHistory)){ const h=_cachedHistory.find(x=>x.id===id); if(h) h.radiovuelta=_rvSt; }
+    _rvSetSync('ok');
+  }catch(e){ _rvSetSync('error'); }
+}
+function _rvPersistSoon(){ if(_rvPersistT) clearTimeout(_rvPersistT); _rvPersistT=setTimeout(_rvPersist, 800); }
+
+// Une el estado de la nube con el local sin perder ni duplicar (por eid).
+function _rvMerge(remote){
+  if(!remote || typeof remote!=='object') return;
+  const uni=(a,b)=>{ const seen=new Set(), out=[]; [...(a||[]),...(b||[])].forEach(x=>{ const k=(x&&x.eid)?x.eid:JSON.stringify(x); if(seen.has(k))return; seen.add(k); out.push(x); }); return out; };
+  _rvSt.passes  = uni(_rvSt.passes,  remote.passes ).sort((x,y)=>(y.at||0)-(x.at||0));
+  _rvSt.attacks = uni(_rvSt.attacks, remote.attacks).sort((x,y)=>(y.at||0)-(x.at||0));
+  _rvSt.events  = uni(_rvSt.events,  remote.events ).sort((x,y)=>(y.at||0)-(x.at||0));
+  const newer=(a,b)=>{ if(!a) return b||null; if(!b) return a; return (b.at||0)>(a.at||0)?b:a; };
+  _rvSt.breakaway = newer(_rvSt.breakaway, remote.breakaway);
+  _rvSt.salida    = newer(_rvSt.salida,    remote.salida);
+}
+// Trae lo guardado en la nube para esta prueba y lo fusiona con lo local.
+async function _rvSyncLoad(){
+  const id=_rvRaceId(); if(!id || !_sb) return;
+  try{
+    const { data } = await _sb.from('races').select('notes').eq('id', id).single();
+    let extra={}; try{ extra=JSON.parse((data&&data.notes)||'{}'); }catch(_){}
+    if(extra && extra.radiovuelta){ _rvMerge(extra.radiovuelta); _rvSave(); _rvSetSync('ok'); }
+  }catch(_){ /* sin conexión: seguimos con lo local */ }
+}
+
+// ── Salida real + cronómetro de carrera ──
+let _rvRaceTimer=null;
+function _rvSetSalida(){
+  if(_rvSalidaAt()){ if(!confirm('Ya hay una salida marcada. ¿Reiniciar el cronómetro a AHORA?')) return; }
+  _rvSt.salida={ at:Date.now(), eid:_rvEid() };
+  _rvSave(); _rvPersistSoon(); _rvRenderSalida();
+  if(typeof showToast==='function') showToast('🏁 Salida marcada · cronómetro en marcha','ok',2200);
+}
+function _rvRaceStopTimer(){ if(_rvRaceTimer){ clearInterval(_rvRaceTimer); _rvRaceTimer=null; } }
+function _rvRenderSalida(){
+  const el=document.getElementById('rvSalidaBar'); if(!el) return;
+  const s=_rvSalidaAt();
+  if(!s){ _rvRaceStopTimer(); el.innerHTML='<button class="rv-salida-btn" onclick="_rvSetSalida()">🏁 Marcar SALIDA real</button><span class="rv-salida-hint">Al dar la salida, cada evento guardará el minuto de carrera.</span>'; return; }
+  el.innerHTML='<span class="rv-salida-on">🏁 En carrera</span><span class="rv-race-clock" id="rvRaceClock">0:00</span><button class="rv-salida-reset" onclick="_rvSetSalida()" title="Reiniciar la hora de salida">↻</button><span class="rv-sync" id="rvSync"></span>';
+  const tick=()=>{ const c=document.getElementById('rvRaceClock'); if(c) c.textContent=_rvFmtElapsed(Date.now()-s); };
+  tick(); _rvRaceStopTimer(); _rvRaceTimer=setInterval(tick,1000); _rvSetSync(_rvSyncState);
+}
+
 // Elige por defecto la prueba más reciente CON lista de inscritos que encaje con
 // el grupo de categoría global. Así Radio Vuelta se abre directo, sin pasar por
 // el Simulador a seleccionarla.
@@ -47827,6 +47902,8 @@ async function _rvInit(){
     dl.innerHTML=sorted.map(g=>`<option value="${escapeAttr(String(g.bib))}">${escapeAttr(String(g.bib))} · ${escapeAttr(_evolNormName?_evolNormName(g.name):g.name)}${g.team?' ('+escapeAttr(g.team)+')':''}${g.isMyTeam?' ⭐':''}</option>`).join('');
   }
   _rvLoad();
+  await _rvSyncLoad();            // trae lo guardado en la nube y lo fusiona con lo local
+  _rvRenderSalida();
   _rvRenderFuga(); _rvRenderAtaques(); _rvRenderPasos(); _rvRenderDiario();
   const bib=document.getElementById('rvBib'); if(bib){ bib.value=''; setTimeout(()=>bib.focus(),150); }
   document.getElementById('rvCard').innerHTML='';
@@ -47995,8 +48072,8 @@ function _rvSaveFuga(){
   const gap=(document.getElementById('rvFugaGap')?.value||'').trim();
   const bibs=bibsRaw.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
   if(!bibs.length){ if(typeof showToast==='function') showToast('Escribe al menos un dorsal','warn'); return; }
-  _rvSt.breakaway={ bibs, gap, at:Date.now() };
-  _rvSave(); _rvRenderFuga();
+  _rvSt.breakaway=_rvStamp({ bibs, gap, at:Date.now() });
+  _rvSave(); _rvPersistSoon(); _rvRenderFuga();
   const bi=document.getElementById('rvFugaBibs'); if(bi) bi.value=''; const gi=document.getElementById('rvFugaGap'); if(gi) gi.value='';
 }
 function _rvRenderFuga(){
@@ -48011,19 +48088,20 @@ function _rvRenderFuga(){
 function _rvCatchFuga(){
   const bk=_rvSt.breakaway; if(!bk) return;
   const names=(bk.bibs||[]).map(b=>{ const g=_rvBibMap&&_rvBibMap[b]; return g?{bib:b,name:g.name,team:g.team}:{bib:b,name:'Dorsal '+b,team:''}; });
-  _rvSt.attacks.unshift({ bibs:bk.bibs, gap:bk.gap||'', names, at:Date.now() });
-  _rvSt.breakaway=null; _rvSave(); _rvRenderFuga(); _rvRenderAtaques(); _rvRenderDiario();
+  _rvSt.attacks.unshift(_rvStamp({ bibs:bk.bibs, gap:bk.gap||'', names, at:Date.now() }));
+  _rvSt.breakaway=null; _rvSave(); _rvPersistSoon(); _rvRenderFuga(); _rvRenderAtaques(); _rvRenderDiario();
 }
 function _rvRenderAtaques(){
   const el=document.getElementById('rvAtaques'); if(!el) return;
   if(!_rvSt.attacks.length){ el.innerHTML='<div class="rv-hint">Aún no se ha cazado ninguna fuga hoy.</div>'; return; }
   el.innerHTML=_rvSt.attacks.map((a,i)=>{
     const t=new Date(a.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const wt=_rvWhenTag(a);
     const who=a.names.map(n=>`<b>${escapeHtml(String(n.bib))}</b> ${escapeHtml(_evolNormName?_evolNormName(n.name):n.name)}${n.team?` <span style="color:#94a3b8">(${escapeHtml(n.team)})</span>`:''}`).join(' · ');
-    return `<div class="rv-atk"><div class="rv-atk-h">🕐 ${t}${a.gap?` · llegó a tener ⏱ ${escapeHtml(a.gap)}`:''}<button class="rv-atk-del" title="Borrar" onclick="_rvDelAtaque(${i})">✕</button></div><div class="rv-atk-who">${who}</div></div>`;
+    return `<div class="rv-atk"><div class="rv-atk-h">🕐 ${t}${wt?` · ${escapeHtml(wt)}`:''}${a.gap?` · llegó a tener ⏱ ${escapeHtml(a.gap)}`:''}<button class="rv-atk-del" title="Borrar" onclick="_rvDelAtaque(${i})">✕</button></div><div class="rv-atk-who">${who}</div></div>`;
   }).join('');
 }
-function _rvDelAtaque(i){ _rvSt.attacks.splice(i,1); _rvSave(); _rvRenderAtaques(); _rvRenderDiario(); }
+function _rvDelAtaque(i){ _rvSt.attacks.splice(i,1); _rvSave(); _rvPersistSoon(); _rvRenderAtaques(); _rvRenderDiario(); }
 
 function _rvPassMode(type){
   _rvPassDraft={ type, bibs:['','',''] };
@@ -48047,29 +48125,30 @@ function _rvLogPass(){
   const bibs=[0,1,2].map(i=>(document.getElementById('rvPass'+i)?.value||'').trim());
   if(!bibs.some(Boolean)){ if(typeof showToast==='function') showToast('Mete al menos el 1º','warn'); return; }
   const top=bibs.map(b=>{ if(!b) return null; const g=_rvBibMap&&_rvBibMap[b]; return { bib:b, name:g?g.name:'Dorsal '+b, team:g?g.team:'' }; });
-  _rvSt.passes.unshift({ type:_rvPassDraft.type, top, at:Date.now() });
-  _rvSave(); _rvPassCancel(); _rvRenderPasos(); _rvRenderDiario();
+  _rvSt.passes.unshift(_rvStamp({ type:_rvPassDraft.type, top, at:Date.now() }));
+  _rvSave(); _rvPersistSoon(); _rvPassCancel(); _rvRenderPasos(); _rvRenderDiario();
 }
 function _rvRenderPasos(){
   const el=document.getElementById('rvPasos'); if(!el) return;
   if(!_rvSt.passes.length){ el.innerHTML='<div class="rv-hint">Aún no hay pasos registrados.</div>'; return; }
   el.innerHTML=_rvSt.passes.map((p,i)=>{
     const t=new Date(p.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+    const wt=_rvWhenTag(p);
     const ic=p.type==='volante'?'🏁':'⛰️'; const tl=p.type==='volante'?'Meta volante':'Premio montaña';
     const ord=p.top.filter(Boolean).map((n,j)=>`<span class="rv-pass-row"><b>${j+1}º</b> <b>${escapeHtml(String(n.bib))}</b> ${escapeHtml(_evolNormName?_evolNormName(n.name):n.name)}</span>`).join('');
-    return `<div class="rv-paso"><div class="rv-paso-h">${ic} ${tl} · ${t}<button class="rv-atk-del" onclick="_rvDelPaso(${i})">✕</button></div><div class="rv-paso-ord">${ord}</div></div>`;
+    return `<div class="rv-paso"><div class="rv-paso-h">${ic} ${tl} · ${t}${wt?` · ${escapeHtml(wt)}`:''}<button class="rv-atk-del" onclick="_rvDelPaso(${i})">✕</button></div><div class="rv-paso-ord">${ord}</div></div>`;
   }).join('');
 }
-function _rvDelPaso(i){ _rvSt.passes.splice(i,1); _rvSave(); _rvRenderPasos(); _rvRenderDiario(); }
+function _rvDelPaso(i){ _rvSt.passes.splice(i,1); _rvSave(); _rvPersistSoon(); _rvRenderPasos(); _rvRenderDiario(); }
 
 // Diario de carrera: eventos rapidos + linea de tiempo (ataques, pasos y eventos)
 function _rvBibInfo(b){ const g=_rvBibMap&&_rvBibMap[b]; return g?{bib:b,name:g.name,team:g.team}:{bib:b,name:'Dorsal '+b,team:''}; }
-function _rvLogEvent(ev){ if(!_rvSt.events)_rvSt.events=[]; _rvSt.events.unshift(Object.assign({at:Date.now()},ev)); _rvSave(); _rvRenderDiario(); if(typeof showToast==='function') showToast('Anotado en el diario','ok',1500); }
+function _rvLogEvent(ev){ if(!_rvSt.events)_rvSt.events=[]; _rvSt.events.unshift(_rvStamp(Object.assign({at:Date.now()},ev))); _rvSave(); _rvPersistSoon(); _rvRenderDiario(); if(typeof showToast==='function') showToast('Anotado en el diario','ok',1500); }
 function _rvQuickMecanico(){ let b=(document.getElementById('rvBib')&&document.getElementById('rvBib').value||'').trim(); if(!b){ b=(prompt('Dorsal con problema mecanico (deja vacio para anotar sin dorsal):')||'').trim(); } const info=b?_rvBibInfo(b):null; _rvLogEvent({type:'mecanico', bib:b||'', name:info?info.name:'', team:info?info.team:''}); }
 function _rvQuickAvit(){ _rvLogEvent({type:'avit'}); }
 function _rvQuickAtaque(){ const b=(document.getElementById('rvBib')&&document.getElementById('rvBib').value||'').trim(); const info=b?_rvBibInfo(b):null; _rvLogEvent({type:'ataque_mio', bib:b||'', name:info?info.name:'', team:info?info.team:''}); }
 function _rvQuickNota(){ const t=(prompt('Nota rapida:')||'').trim(); if(!t) return; _rvLogEvent({type:'nota', text:t}); }
-function _rvDelEvent(i){ if(!_rvSt.events) return; _rvSt.events.splice(i,1); _rvSave(); _rvRenderDiario(); }
+function _rvDelEvent(i){ if(!_rvSt.events) return; _rvSt.events.splice(i,1); _rvSave(); _rvPersistSoon(); _rvRenderDiario(); }
 function _rvRenderDiario(){
   const el=document.getElementById('rvDiario'); if(!el) return;
   const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
@@ -48080,13 +48159,13 @@ function _rvRenderDiario(){
     else if(e.type==='avit'){ icon='🍔'; label='Avituallamiento'; }
     else if(e.type==='ataque_mio'){ icon='⚡'; label='Ataque de mi equipo'; sub=e.bib?('Dorsal '+e.bib+(e.name?' · '+nn(e.name):'')):''; }
     else if(e.type==='nota'){ icon='📝'; label='Nota'; sub=e.text||''; }
-    items.push({at:e.at, icon, label, sub, del:i});
+    items.push({at:e.at, when:_rvWhenTag(e), icon, label, sub, del:i});
   });
-  (_rvSt.attacks||[]).forEach(a=>{ const who=(a.names||[]).map(n=>n.bib).join(', '); items.push({at:a.at, icon:'🏆', label:'Fuga cazada', sub:(a.gap?'⏱ '+a.gap+' · ':'')+'dorsales '+who}); });
-  (_rvSt.passes||[]).forEach(p=>{ const ic=p.type==='volante'?'🏁':'⛰️'; const tl=p.type==='volante'?'Meta volante':'Premio montana'; const ord=(p.top||[]).filter(Boolean).map((n,j)=>(j+1)+'º '+n.bib).join(' · '); items.push({at:p.at, icon:ic, label:tl, sub:ord}); });
+  (_rvSt.attacks||[]).forEach(a=>{ const who=(a.names||[]).map(n=>n.bib).join(', '); items.push({at:a.at, when:_rvWhenTag(a), icon:'🏆', label:'Fuga cazada', sub:(a.gap?'⏱ '+a.gap+' · ':'')+'dorsales '+who}); });
+  (_rvSt.passes||[]).forEach(p=>{ const ic=p.type==='volante'?'🏁':'⛰️'; const tl=p.type==='volante'?'Meta volante':'Premio montana'; const ord=(p.top||[]).filter(Boolean).map((n,j)=>(j+1)+'º '+n.bib).join(' · '); items.push({at:p.at, when:_rvWhenTag(p), icon:ic, label:tl, sub:ord}); });
   if(!items.length){ el.innerHTML='<div class="rv-hint">Sin eventos aun. Usa los botones para registrar mecanicos, avituallamientos, ataques o notas. Aqui veras tambien las fugas cazadas y los pasos, por orden de hora.</div>'; return; }
   items.sort((a,b)=>(b.at||0)-(a.at||0));
-  el.innerHTML=items.map(it=>{ const t=new Date(it.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); const del=(it.del!=null)?('<button class="rv-atk-del" title="Borrar" onclick="_rvDelEvent('+it.del+')">✕</button>'):''; return '<div class="rv-diario-item"><span class="rv-diario-t">'+t+'</span><span class="rv-diario-ic">'+it.icon+'</span><span class="rv-diario-tx"><b>'+escapeHtml(it.label)+'</b>'+(it.sub?(' · '+escapeHtml(it.sub)):'')+'</span>'+del+'</div>'; }).join('');
+  el.innerHTML=items.map(it=>{ const t=new Date(it.at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); const del=(it.del!=null)?('<button class="rv-atk-del" title="Borrar" onclick="_rvDelEvent('+it.del+')">✕</button>'):''; const wt=it.when?(' <span class="rv-diario-when">'+escapeHtml(it.when)+'</span>'):''; return '<div class="rv-diario-item"><span class="rv-diario-t">'+t+'</span><span class="rv-diario-ic">'+it.icon+'</span><span class="rv-diario-tx"><b>'+escapeHtml(it.label)+'</b>'+(it.sub?(' · '+escapeHtml(it.sub)):'')+wt+'</span>'+del+'</div>'; }).join('');
 }
 
 // ════════════════════════════════════════════════════════════════════════════

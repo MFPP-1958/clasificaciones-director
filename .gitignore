@@ -5,3 +5,7 @@ backups/
 
 # Local Netlify folder
 .netlify
+
+# Imágenes/capturas generadas (solo local, no se suben)
+ranking/imagenes/
+backups-supabase/
