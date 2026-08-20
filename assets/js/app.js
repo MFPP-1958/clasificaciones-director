@@ -47754,6 +47754,8 @@ function _csOpenSVGWindow(svg, filename){
 // refresco sin cobertura.
 // ════════════════════════════════════════════════════════════════════════════
 let _rvBibMap = null;     // bib(string) -> grid item
+let _rvGrid = [];         // parrilla completa (para buscar por NOMBRE si no hay dorsal)
+let _rvNameCache = [];    // resultados de la última búsqueda por nombre (para pinchar)
 let _rvSt = { breakaway:null, attacks:[], passes:[] };
 let _rvPassDraft = null;  // {type, bibs:[]}
 let _rvSelectedRaceId = null;   // prueba elegida a mano en el desplegable de RV
@@ -47831,11 +47833,27 @@ function _rvSetSalida(){
   if(typeof showToast==='function') showToast('🏁 Salida marcada · cronómetro en marcha','ok',2200);
 }
 function _rvRaceStopTimer(){ if(_rvRaceTimer){ clearInterval(_rvRaceTimer); _rvRaceTimer=null; } }
+function _rvStopSalida(){ if(!_rvSt.salida) return; _rvSt.salida.fin=Date.now(); _rvSave(); _rvPersistSoon(); _rvRenderSalida(); if(typeof showToast==='function') showToast('⏹ Cronómetro parado','ok',1800); }
+function _rvResumeSalida(){ if(!_rvSt.salida) return; delete _rvSt.salida.fin; _rvSave(); _rvPersistSoon(); _rvRenderSalida(); }
 function _rvRenderSalida(){
   const el=document.getElementById('rvSalidaBar'); if(!el) return;
   const s=_rvSalidaAt();
   if(!s){ _rvRaceStopTimer(); el.innerHTML='<button class="rv-salida-btn" onclick="_rvSetSalida()">🏁 Marcar SALIDA real</button><span class="rv-salida-hint">Al dar la salida, cada evento guardará el minuto de carrera.</span>'; return; }
-  el.innerHTML='<span class="rv-salida-on">🏁 En carrera</span><span class="rv-race-clock" id="rvRaceClock">0:00</span><button class="rv-salida-reset" onclick="_rvSetSalida()" title="Reiniciar la hora de salida">↻</button><span class="rv-sync" id="rvSync"></span>';
+  const fin=(_rvSt.salida && _rvSt.salida.fin)?_rvSt.salida.fin:null;
+  if(fin){
+    // Carrera terminada: reloj CONGELADO en el tiempo final
+    _rvRaceStopTimer();
+    el.innerHTML='<span class="rv-salida-fin">🏁 Carrera terminada</span><span class="rv-race-clock">'+_rvFmtElapsed(fin-s)+'</span>'
+      +'<button class="rv-salida-resume" onclick="_rvResumeSalida()" title="Volver a poner el cronómetro en marcha">▶ Reanudar</button>'
+      +'<button class="rv-salida-reset" onclick="_rvSetSalida()" title="Marcar una nueva hora de salida (a ahora)">↻</button>'
+      +'<span class="rv-sync" id="rvSync"></span>';
+    _rvSetSync(_rvSyncState); return;
+  }
+  // Carrera en marcha: reloj corriendo + botón PARAR
+  el.innerHTML='<span class="rv-salida-on">🏁 En carrera</span><span class="rv-race-clock" id="rvRaceClock">0:00</span>'
+    +'<button class="rv-salida-stop" onclick="_rvStopSalida()" title="Parar el cronómetro (fin de carrera)">⏹ Parar</button>'
+    +'<button class="rv-salida-reset" onclick="_rvSetSalida()" title="Reiniciar la hora de salida (a ahora)">↻</button>'
+    +'<span class="rv-sync" id="rvSync"></span>';
   const tick=()=>{ const c=document.getElementById('rvRaceClock'); if(c) c.textContent=_rvFmtElapsed(Date.now()-s); };
   tick(); _rvRaceStopTimer(); _rvRaceTimer=setInterval(tick,1000); _rvSetSync(_rvSyncState);
 }
@@ -47923,8 +47941,11 @@ async function _rvInit(){
   }
   body.querySelectorAll('.rv-search,.rv-block').forEach(el=>el.style.display='');
   // Mapa de dorsales (solo categoría activa)
+  _rvGrid = grid;
   _rvBibMap={};
   grid.forEach(g=>{ const b=String(g.bib||'').trim(); if(b) _rvBibMap[b]=g; });
+  // Asignaciones MANUALES de dorsal (para listas SIN dorsal): _rvSt.bibs = {bib: claveNombre}
+  if(_rvSt && _rvSt.bibs){ Object.keys(_rvSt.bibs).forEach(b=>{ const key=_rvSt.bibs[b]; const g=grid.find(x=>_rvNK(x.name)===key); if(g) _rvBibMap[b]=Object.assign({},g,{bib:b}); }); }
   // Autocompletar dorsales: mi equipo primero, luego por dorsal
   const dl=document.getElementById('rvBibList');
   if(dl){
@@ -48001,14 +48022,71 @@ function _rvCardHtml(g, opts){
   </div>`;
 }
 
+// ── Búsqueda por NOMBRE + asignación de dorsal (para listas SIN dorsal) ────
+function _rvNK(s){ return (typeof normalizeForMatching==='function')?normalizeForMatching(s):String(s||'').toLowerCase(); }
+function _rvNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+// Corredores de la parrilla cuyo nombre contiene TODAS las palabras escritas.
+function _rvNameResults(q){
+  const toks=_rvNorm(q).split(/\s+/).filter(t=>t.length>=2);
+  if(!toks.length) return [];
+  return (_rvGrid||[]).filter(g=>{ const n=_rvNorm(g.name); return toks.every(t=>n.indexOf(t)>=0); }).slice(0,15);
+}
+function _rvNameListHtml(res, pendingBib){
+  _rvNameCache=res;
+  const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
+  const rows=res.map((g,i)=>{ const bib=String(g.bib||'').trim();
+    return '<button class="rv-nameres" onclick="_rvPickName('+i+','+(pendingBib?("'"+String(pendingBib)+"'"):'null')+')">'
+      +(bib?('<span class="rv-nameres-bib">'+escapeHtml(bib)+'</span>'):'')
+      +'<span class="rv-nameres-nm">'+escapeHtml(nn(g.name))+'</span>'
+      +(g.team?'<span class="rv-nameres-tm">'+escapeHtml(g.team)+'</span>':'')+(g.isMyTeam?' ⭐':'')+'</button>';
+  }).join('');
+  return '<div class="rv-nameres-wrap">'+rows+'</div>';
+}
+function _rvPickName(i, pendingBib){
+  const g=_rvNameCache && _rvNameCache[i]; if(!g) return;
+  const card=document.getElementById('rvCard'), inp=document.getElementById('rvBib');
+  if(pendingBib){
+    if(!_rvSt.bibs) _rvSt.bibs={};
+    _rvSt.bibs[pendingBib]=_rvNK(g.name);
+    _rvBibMap[pendingBib]=Object.assign({},g,{bib:pendingBib});
+    _rvSave(); _rvPersistSoon();
+    if(inp) inp.value=pendingBib;
+    if(typeof showToast==='function') showToast('✅ Dorsal '+pendingBib+' asignado a '+(_evolNormName?_evolNormName(g.name):g.name),'ok',2600);
+    const gg=_rvBibMap[pendingBib]; if(card) card.innerHTML=_rvCardHtml(gg); _rvShowBest(gg);
+  } else {
+    if(card) card.innerHTML=_rvCardHtml(g); _rvShowBest(g);
+  }
+}
+// El dorsal buscado no está: pedir el nombre (del papel) para asignarlo.
+function _rvAssignPrompt(bib){
+  const card=document.getElementById('rvCard'); if(!card) return;
+  const bs=escapeHtml(bib);
+  card.innerHTML='<div class="rv-assign"><div class="rv-assign-h">El dorsal <b>'+bs+'</b> no está en la lista (¿lista sin dorsales?). Escribe el <b>nombre</b> del papel y púlsalo para asignárselo:</div>'
+    +'<input id="rvAssignQ" class="rv-input" type="text" placeholder="Nombre del corredor" autocomplete="off" oninput="_rvAssignLive(\''+bs+'\')" onkeydown="if(event.key===\'Enter\')_rvAssignLive(\''+bs+'\')">'
+    +'<div id="rvAssignRes"></div></div>';
+  setTimeout(()=>{ const f=document.getElementById('rvAssignQ'); if(f) f.focus(); },100);
+}
+function _rvAssignLive(bib){
+  const q=(document.getElementById('rvAssignQ')?.value||'').trim();
+  const box=document.getElementById('rvAssignRes'); if(!box) return;
+  if(q.length<2){ box.innerHTML=''; return; }
+  const res=_rvNameResults(q);
+  box.innerHTML = res.length ? _rvNameListHtml(res, bib) : '<div class="rv-hint">Sin coincidencias en la parrilla.</div>';
+}
+
 function _rvFind(){
   const inp=document.getElementById('rvBib'); const card=document.getElementById('rvCard');
-  const b=(inp?.value||'').trim();
-  if(!b){ if(card) card.innerHTML=''; return; }
-  const g=_rvBibMap?_rvBibMap[b]:null;
-  if(!g){ card.innerHTML=`<div class="rv-notfound">🔎 No hay ningún corredor con el dorsal <b>${escapeHtml(b)}</b> en la parrilla de esta prueba.</div>`; return; }
-  card.innerHTML=_rvCardHtml(g);
-  _rvShowBest(g);   // modal con sus mejores resultados (se cierra y queda la tarjeta)
+  const v=(inp?.value||'').trim();
+  if(!v){ if(card) card.innerHTML=''; return; }
+  // 1) ¿dorsal directo (en la parrilla o ya asignado a mano)?
+  if(_rvBibMap && _rvBibMap[v]){ card.innerHTML=_rvCardHtml(_rvBibMap[v]); _rvShowBest(_rvBibMap[v]); return; }
+  // 2) es un número (dorsal) que NO está → ofrecer asignarlo a un corredor
+  if(/^\d+$/.test(v)){ _rvAssignPrompt(v); return; }
+  // 3) buscar por NOMBRE
+  const res=_rvNameResults(v);
+  if(res.length===1){ card.innerHTML=_rvCardHtml(res[0]); _rvShowBest(res[0]); return; }
+  if(res.length>1){ card.innerHTML=_rvNameListHtml(res, null); return; }
+  card.innerHTML='<div class="rv-notfound">🔎 No encontré ningún corredor con el dorsal o nombre <b>'+escapeHtml(v)+'</b> en esta prueba.</div>';
 }
 // Búsqueda "en vivo" al teclear/elegir del desplegable: muestra la tarjeta solo
 // si el dorsal coincide exactamente; si no, no molesta con mensajes de error.
