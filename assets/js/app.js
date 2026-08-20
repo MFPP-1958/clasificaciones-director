@@ -8554,6 +8554,7 @@ async function _sbLoadHistory(){
       lat: extra.lat || null,
       lon: extra.lon || null,
       inscritos: Array.isArray(extra.inscritos) ? extra.inscritos : [],
+      radiovuelta: (extra.radiovuelta && typeof extra.radiovuelta==='object') ? extra.radiovuelta : null,   // Fase 2: eventos de Radio Vuelta guardados
       riders: (race.race_results||[]).sort((a,b)=>a.pos-b.pos).map(r=>{
         const normName=normalizeRiderName(r.name);
         // Si la carrera está marcada como Challenge, calculamos en el momento
@@ -47993,6 +47994,67 @@ function _rvPerfil(g){
   return { icon, label, reason };
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// FASE 2 · PERFIL TÁCTICO — suma los eventos de Radio Vuelta de TODAS las
+// pruebas y los agrega por corredor (por nombre normalizado): metas volantes
+// y premios de montaña disputados/ganados, fugas y ataques. Cacheado.
+// ════════════════════════════════════════════════════════════════════════
+let _rvTacCache=null, _rvTacToken='';
+function _rvTacKey(n){ return (typeof normalizeForMatching==='function')?normalizeForMatching(n):String(n||'').toLowerCase(); }
+function _rvTacTokenNow(){
+  const hist=Array.isArray(_cachedHistory)?_cachedHistory:[]; let t='';
+  hist.forEach(r=>{ const rv=r&&r.radiovuelta; if(rv) t+=r.id+':'+((rv.passes||[]).length)+','+((rv.attacks||[]).length)+','+((rv.events||[]).length)+'|'; });
+  return t;
+}
+function _rvTacticalProfile(){
+  const tok=_rvTacTokenNow();
+  if(_rvTacCache && _rvTacToken===tok) return _rvTacCache;
+  const map=new Map();
+  const bump=(name, field, rid, disp)=>{ if(!name) return; const k=_rvTacKey(name); if(!k) return; let e=map.get(k); if(!e){ e={name:name, volDisp:0,volWin:0,monDisp:0,monWin:0,fugas:0,ataques:0,races:new Set()}; map.set(k,e); } e[field]=(e[field]||0)+1; if(rid) e.races.add(rid); if(disp) e.name=name; };
+  (Array.isArray(_cachedHistory)?_cachedHistory:[]).forEach(r=>{
+    const rv=r&&r.radiovuelta; if(!rv) return; const rid=r.id;
+    (rv.passes||[]).forEach(p=>{ (p.top||[]).filter(Boolean).forEach((n,idx)=>{ const nm=n&&n.name; if(!nm) return;
+      if(p.type==='volante'){ bump(nm,'volDisp',rid,1); if(idx===0) bump(nm,'volWin',rid); }
+      else if(p.type==='montana'){ bump(nm,'monDisp',rid,1); if(idx===0) bump(nm,'monWin',rid); } }); });
+    (rv.attacks||[]).forEach(a=>{ (a.names||[]).forEach(n=>{ if(n&&n.name) bump(n.name,'fugas',rid,1); }); });
+    (rv.events||[]).forEach(e=>{ if(e && e.type==='ataque_mio' && e.name) bump(e.name,'ataques',rid,1); });
+  });
+  _rvTacCache=map; _rvTacToken=tok; return map;
+}
+function _rvTacticalFor(name){ return _rvTacticalProfile().get(_rvTacKey(name))||null; }
+// Línea de perfil táctico para la tarjeta del corredor.
+function _rvTacticalHtml(name){
+  const t=_rvTacticalFor(name); if(!t) return '';
+  const P=[];
+  if(t.volDisp) P.push('🏁 '+t.volDisp+' meta'+(t.volDisp===1?'':'s')+' volante'+(t.volWin?(' ('+t.volWin+' 🥇)'):''));
+  if(t.monDisp) P.push('⛰️ '+t.monDisp+' montaña'+(t.monWin?(' ('+t.monWin+' 🥇)'):''));
+  if(t.fugas)   P.push('🚀 '+t.fugas+' fuga'+(t.fugas===1?'':'s'));
+  if(t.ataques) P.push('⚡ '+t.ataques+' ataque'+(t.ataques===1?'':'s'));
+  if(!P.length) return '';
+  return '<div class="rv-card-tactical"><span class="rv-tac-title">📻 Perfil táctico (temporada)</span>'+P.map(p=>'<span class="rv-tac-chip">'+p+'</span>').join('')+'</div>';
+}
+
+// Ranking táctico de la temporada: quién disputa/gana metas volantes, montaña y fugas.
+function _rvTacticalModal(){
+  const arr=[..._rvTacticalProfile().values()];
+  const nn=s=>(_evolNormName?_evolNormName(s):s)||'';
+  if(!arr.length){ alert('Aún no hay datos tácticos.\n\nSe van generando a medida que registras metas volantes, premios de montaña, fugas y ataques en Radio Vuelta.'); return; }
+  const list=(items, fmt, empty)=> items.length? '<ol class="rv-tac-ol">'+items.map(x=>'<li><span class="rv-tac-nm">'+escapeHtml(nn(x.name))+'</span><span class="rv-tac-ct">'+fmt(x)+'</span></li>').join('')+'</ol>' : '<div class="rv-hint">'+empty+'</div>';
+  const byVol=arr.filter(x=>x.volDisp).sort((a,b)=> (b.volDisp-a.volDisp)||(b.volWin-a.volWin)).slice(0,10);
+  const byMon=arr.filter(x=>x.monDisp).sort((a,b)=> (b.monDisp-a.monDisp)||(b.monWin-a.monWin)).slice(0,10);
+  const byFuga=arr.filter(x=>x.fugas).sort((a,b)=> b.fugas-a.fugas).slice(0,10);
+  const old=document.getElementById('_rvTacModal'); if(old) old.remove();
+  const ov=document.createElement('div'); ov.id='_rvTacModal'; ov.className='rv-tac-modal-ov';
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  ov.innerHTML='<div class="rv-tac-modal"><div class="rv-tac-modal-h"><h3>🏆 Perfiles tácticos de la temporada</h3><button onclick="document.getElementById(\'_rvTacModal\').remove()">✕</button></div>'
+    +'<div class="rv-tac-modal-b">'
+    +'<div class="rv-tac-col"><h4>🏁 Metas volantes</h4>'+list(byVol, x=>x.volDisp+' disp.'+(x.volWin?' · '+x.volWin+' 🥇':''), 'Sin datos aún')+'</div>'
+    +'<div class="rv-tac-col"><h4>⛰️ Premios de montaña</h4>'+list(byMon, x=>x.monDisp+' disp.'+(x.monWin?' · '+x.monWin+' 🥇':''), 'Sin datos aún')+'</div>'
+    +'<div class="rv-tac-col"><h4>🚀 Fugas</h4>'+list(byFuga, x=>x.fugas+' fuga'+(x.fugas===1?'':'s'), 'Sin datos aún')+'</div>'
+    +'</div><div class="rv-tac-modal-f">Se construye con lo que registras en Radio Vuelta. Cuantas más pruebas anotes, mejor el perfil.</div></div>';
+  document.body.appendChild(ov);
+}
+
 function _rvCardHtml(g, opts){
   opts=opts||{};
   const gen=_rvGenLabel(g.cat);
@@ -48019,6 +48081,7 @@ function _rvCardHtml(g, opts){
       <div class="rv-stat"><div class="rv-stat-l">Perfil</div><div class="rv-stat-v" style="font-size:24px">${perf.icon}</div><div class="rv-stat-s">${perf.label||(g.hasHistory?'—':'incógnita')}</div></div>
     </div>
     ${perf.reason?`<div class="rv-card-reason">🎯 ${escapeHtml(perf.reason)}</div>`:''}
+    ${!opts.small?_rvTacticalHtml(g.name):''}
   </div>`;
 }
 
