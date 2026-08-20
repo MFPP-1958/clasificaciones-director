@@ -30434,6 +30434,18 @@ function _simBuildData(raceId){
     };
   });
 
+  // ── FASE 3 · Perfil TÁCTICO (Radio Vuelta) como variable visible ──────────
+  // Adjuntamos a cada corredor su perfil táctico agregado (metas volantes,
+  // montaña, fugas, ataques) y un ROL derivado. NO altera la posición predicha
+  // (muestras manuales pequeñas); es contexto para la decisión del director.
+  try{
+    grid.forEach(g=>{
+      const t=(typeof _rvTacticalFor==='function')?_rvTacticalFor(g.name):null;
+      g.tactical = t || null;
+      g.tacticalRole = t ? _rvTacticalRole(t) : '';
+    });
+  }catch(_){}
+
   // ── ACOTAR posiciones para visualización ─────────────────────────────────
   // Estrategia: guardamos predictedPosRaw (sin capar) para sortear y comparar
   // entre corredores. predictedPos se redondea pero NO se capa, para que dos
@@ -30999,6 +31011,7 @@ function _simRenderTop10(grid, catFilter){
       <div class="sim-top-info">
         <div class="sim-top-name">${confDot}${g.isMyTeam?'🔵 ':''}${escapeHtml(g.name)} ${trendIcon}${terrainBadge}${g._shrunk?`<span class="sim-fewdata" title="Predicción prudente: solo ${g._shrunkN} carrera(s). Muy poca información, tómala con cautela.">⚠️ pocos datos</span>`:''}${(typeof _simAlertBadges==='function')?_simAlertBadges(g):''} <button class="sim-why-btn" onclick="_simWhy('${escapeAttr(g.name)}')" title="¿Por qué este puesto?">🔍 ¿por qué?</button></div>
         <div class="sim-top-team">${escapeHtml(g.team||'(sin equipo)')}${g.cat?' · '+escapeHtml(g.cat):''}${g.bib?' · #'+escapeHtml(g.bib):''}${g.status==='team-fb'?' · <span style="color:#3730a3;font-weight:700">[fallback equipo]</span>':''}</div>
+        ${(typeof _simTacticalBadge==='function')?_simTacticalBadge(g):''}
         ${(typeof _simProbMeter==='function')?_simProbMeter(g):''}
       </div>
       <div class="sim-top-metrics">
@@ -31012,6 +31025,15 @@ function _simRenderTop10(grid, catFilter){
   }).join('')}</div>`;
 }
 
+// Fase 3: insignia del ROL táctico (Radio Vuelta) para el simulador.
+function _simTacticalBadge(g){
+  if(!g || !g.tacticalRole) return '';
+  const t=g.tactical||{}; const tip=[];
+  if(t.volDisp) tip.push(t.volDisp+' metas volantes'+(t.volWin?(' ('+t.volWin+' ganadas)'):''));
+  if(t.monDisp) tip.push(t.monDisp+' de montaña'+(t.monWin?(' ('+t.monWin+' ganados)'):''));
+  if(t.fugas)   tip.push(t.fugas+' fugas'+(t.fugaTimeMs?(' · '+_rvFmtMin(t.fugaTimeMs)+' escapado'):''));
+  return '<div class="sim-tac-badge" title="'+escapeAttr('Perfil táctico (Radio Vuelta): '+tip.join(' · '))+'">📻 '+escapeHtml(g.tacticalRole)+'</div>';
+}
 function _simRenderGrid(rows){
   const body = document.getElementById('simGridBody');
   const count = document.getElementById('simGridCount');
@@ -48013,15 +48035,18 @@ function _rvTacticalProfile(){
   const bump=(name, field, rid, disp)=>{ if(!name) return; const k=_rvTacKey(name); if(!k) return; let e=map.get(k); if(!e){ e={name:name, volDisp:0,volWin:0,monDisp:0,monWin:0,fugas:0,ataques:0,races:new Set()}; map.set(k,e); } e[field]=(e[field]||0)+1; if(rid) e.races.add(rid); if(disp) e.name=name; };
   (Array.isArray(_cachedHistory)?_cachedHistory:[]).forEach(r=>{
     const rv=r&&r.radiovuelta; if(!rv) return; const rid=r.id;
-    (rv.passes||[]).forEach(p=>{ (p.top||[]).filter(Boolean).forEach((n,idx)=>{ const nm=n&&n.name; if(!nm) return;
-      if(p.type==='volante'){ bump(nm,'volDisp',rid,1); if(idx===0) bump(nm,'volWin',rid); }
-      else if(p.type==='montana'){ bump(nm,'monDisp',rid,1); if(idx===0) bump(nm,'monWin',rid); } }); });
-    (rv.attacks||[]).forEach(a=>{ (a.names||[]).forEach(n=>{ if(n&&n.name) bump(n.name,'fugas',rid,1); }); });
+    (rv.passes||[]).forEach(p=>{ (p.top||[]).filter(Boolean).forEach((n,idx)=>{ const nm=n&&n.name; if(!nm) return; const pos=Math.min(idx+1,3);
+      if(p.type==='volante'){ bump(nm,'volDisp',rid,1); bump(nm,'volP'+pos,rid); if(idx===0) bump(nm,'volWin',rid); }
+      else if(p.type==='montana'){ bump(nm,'monDisp',rid,1); bump(nm,'monP'+pos,rid); if(idx===0) bump(nm,'monWin',rid); } }); });
+    (rv.attacks||[]).forEach(a=>{ const dur=(typeof a.dur==='number'&&a.dur>0)?a.dur:0; (a.names||[]).forEach(n=>{ if(n&&n.name){ bump(n.name,'fugas',rid,1); if(dur){ const e=map.get(_rvTacKey(n.name)); if(e) e.fugaTimeMs=(e.fugaTimeMs||0)+dur; } } }); });
     (rv.events||[]).forEach(e=>{ if(e && e.type==='ataque_mio' && e.name) bump(e.name,'ataques',rid,1); });
   });
   _rvTacCache=map; _rvTacToken=tok; return map;
 }
 function _rvTacticalFor(name){ return _rvTacticalProfile().get(_rvTacKey(name))||null; }
+// Rol táctico derivado (para el simulador). Umbral ≥2 para evitar ruido de un solo evento.
+function _rvTacticalRole(t){ if(!t) return ''; const r=[]; if((t.volDisp||0)>=2) r.push('🏁 Cazapuntos'); if((t.monDisp||0)>=2) r.push('⛰️ Montañero'); if((t.fugas||0)>=2) r.push('🚀 Atacante'); return r.join(' · '); }
+function _rvFmtMin(ms){ if(!ms||ms<0) return ''; const m=Math.round(ms/60000); return m>0?(m+' min'):'<1 min'; }
 // Línea de perfil táctico para la tarjeta del corredor.
 function _rvTacticalHtml(name){
   const t=_rvTacticalFor(name); if(!t) return '';
@@ -48048,9 +48073,9 @@ function _rvTacticalModal(){
   ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
   ov.innerHTML='<div class="rv-tac-modal"><div class="rv-tac-modal-h"><h3>🏆 Perfiles tácticos de la temporada</h3><button onclick="document.getElementById(\'_rvTacModal\').remove()">✕</button></div>'
     +'<div class="rv-tac-modal-b">'
-    +'<div class="rv-tac-col"><h4>🏁 Metas volantes</h4>'+list(byVol, x=>x.volDisp+' disp.'+(x.volWin?' · '+x.volWin+' 🥇':''), 'Sin datos aún')+'</div>'
-    +'<div class="rv-tac-col"><h4>⛰️ Premios de montaña</h4>'+list(byMon, x=>x.monDisp+' disp.'+(x.monWin?' · '+x.monWin+' 🥇':''), 'Sin datos aún')+'</div>'
-    +'<div class="rv-tac-col"><h4>🚀 Fugas</h4>'+list(byFuga, x=>x.fugas+' fuga'+(x.fugas===1?'':'s'), 'Sin datos aún')+'</div>'
+    +'<div class="rv-tac-col"><h4>🏁 Metas volantes</h4>'+list(byVol, x=>x.volDisp+' disp · '+(x.volP1||0)+'🥇 '+(x.volP2||0)+'🥈 '+(x.volP3||0)+'🥉', 'Sin datos aún')+'</div>'
+    +'<div class="rv-tac-col"><h4>⛰️ Premios de montaña</h4>'+list(byMon, x=>x.monDisp+' disp · '+(x.monP1||0)+'🥇 '+(x.monP2||0)+'🥈 '+(x.monP3||0)+'🥉', 'Sin datos aún')+'</div>'
+    +'<div class="rv-tac-col"><h4>🚀 Fugas</h4>'+list(byFuga, x=>x.fugas+' fuga'+(x.fugas===1?'':'s')+(x.fugaTimeMs?(' · '+_rvFmtMin(x.fugaTimeMs)+' escapado'):''), 'Sin datos aún')+'</div>'
     +'</div><div class="rv-tac-modal-f">Se construye con lo que registras en Radio Vuelta. Cuantas más pruebas anotes, mejor el perfil.</div></div>';
   document.body.appendChild(ov);
 }
@@ -48260,7 +48285,8 @@ function _rvRenderFuga(){
 function _rvCatchFuga(){
   const bk=_rvSt.breakaway; if(!bk) return;
   const names=(bk.bibs||[]).map(b=>{ const g=_rvBibMap&&_rvBibMap[b]; return g?{bib:b,name:g.name,team:g.team}:{bib:b,name:'Dorsal '+b,team:''}; });
-  _rvSt.attacks.unshift(_rvStamp({ bibs:bk.bibs, gap:bk.gap||'', names, at:Date.now() }));
+  const dur = bk.at ? (Date.now()-bk.at) : null;   // tiempo que estuvo escapada
+  _rvSt.attacks.unshift(_rvStamp({ bibs:bk.bibs, gap:bk.gap||'', names, dur, at:Date.now() }));
   _rvSt.breakaway=null; _rvSave(); _rvPersistSoon(); _rvRenderFuga(); _rvRenderAtaques(); _rvRenderDiario();
 }
 function _rvRenderAtaques(){
