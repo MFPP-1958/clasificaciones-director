@@ -174,7 +174,7 @@ async function scrapeCataluna(browser){
   const rows = [];
   const vistos = new Set();
   try{
-    for(let p = 1; p <= 40; p++){
+    for(let p = 0; p <= 40; p++){   // ¡empezar en 0! la página base (?page=0) trae las más próximas
       const url = `https://www.ciclisme.cat/calendari/tot?page=${p}`;
       await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 });
       await page.waitForTimeout(600);
