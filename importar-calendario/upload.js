@@ -44,8 +44,9 @@ async function leerTabla(){
   return out;
 }
 
-function calcularDiff(scrape, actual){
-  const futActual = actual.filter(r => r.fecha && r.fecha >= HOY);
+function calcularDiff(scrape, actual, fedFilter){
+  let futActual = actual.filter(r => r.fecha && r.fecha >= HOY);
+  if(fedFilter) futActual = futActual.filter(r => r.federacion === fedFilter);
   const mapAct = new Map(futActual.map(r => [clave(r), r]));
   const mapNew = new Map(scrape.map(r => [clave(r), r]));
   const anadidas = scrape.filter(r => !mapAct.has(clave(r)));
@@ -66,13 +67,18 @@ function pintaLista(titulo, arr, n=25){
 
 async function main(){
   const modo = process.argv.includes('--apply') ? 'apply' : 'diff';
-  const scrape = JSON.parse(fs.readFileSync(path.join(__dirname, 'salida.json'), 'utf8'));
-  console.log(`Raspadas: ${scrape.length} pruebas futuras (desde ${HOY}).`);
+  // --fed "C. Valenciana": actualizar SOLO esa federación (no toca las demás)
+  const fedIdx = process.argv.indexOf('--fed');
+  const fedFilter = (fedIdx>=0 && process.argv[fedIdx+1]) ? process.argv[fedIdx+1] : null;
+
+  let scrape = JSON.parse(fs.readFileSync(path.join(__dirname, 'salida.json'), 'utf8'));
+  if(fedFilter){ scrape = scrape.filter(r => r.federacion === fedFilter); }
+  console.log(`Raspadas: ${scrape.length} pruebas futuras (desde ${HOY})${fedFilter?` · SOLO ${fedFilter}`:''}.`);
   console.log('Leyendo la tabla actual de Supabase…');
   const actual = await leerTabla();
   console.log(`Tabla actual: ${actual.length} filas (${actual.filter(r=>r.fecha>=HOY).length} futuras).`);
 
-  const { anadidas, desaparecidas, incidencias } = calcularDiff(scrape, actual);
+  const { anadidas, desaparecidas, incidencias } = calcularDiff(scrape, actual, fedFilter);
   console.log('\n════════════════  CAMBIOS respecto a lo que hay en vivo  ════════════════');
   pintaLista('🟢 NUEVAS (no estaban)', anadidas);
   pintaLista('🔴 DESAPARECIDAS (estaban y ya no)', desaparecidas);
@@ -98,9 +104,12 @@ async function main(){
 
   const h = { apikey: KEY, Authorization: 'Bearer '+KEY, 'Content-Type': 'application/json' };
 
-  // 2) BORRAR las futuras (fecha >= hoy); las pasadas se conservan
-  console.log(`🗑️  Borrando futuras (fecha >= ${HOY})…`);
-  const del = await fetch(`${SUPA}/rest/v1/${TABLE}?fecha=gte.${HOY}`, { method: 'DELETE', headers: h });
+  // 2) BORRAR las futuras (fecha >= hoy); las pasadas se conservan.
+  //    Con --fed, SOLO las de esa federación (las demás no se tocan).
+  let delUrl = `${SUPA}/rest/v1/${TABLE}?fecha=gte.${HOY}`;
+  if(fedFilter) delUrl += `&federacion=eq.${encodeURIComponent(fedFilter)}`;
+  console.log(`🗑️  Borrando futuras (fecha >= ${HOY})${fedFilter?` de ${fedFilter}`:''}…`);
+  const del = await fetch(delUrl, { method: 'DELETE', headers: h });
   if(!del.ok){ console.error('❌ DELETE falló:', del.status, await del.text()); process.exit(1); }
 
   // 3) INSERTAR las raspadas (en lotes de 500) con actualizado = ahora
