@@ -26915,7 +26915,8 @@ function _renderInscritosEditableList(){
         <td style="padding:5px 8px;font-size:13px;font-weight:700;color:#0b2f6b">${escapeHtml(i.name||'')} ${enriched}${newR}</td>
         <td style="padding:5px 8px;font-size:11px;color:#6b7280">${escapeHtml(i.cat||'—')}</td>
         <td style="padding:5px 8px;text-align:center">${statusBadge}</td>
-        <td style="padding:5px 8px;text-align:right">
+        <td style="padding:5px 8px;text-align:right;white-space:nowrap">
+          <button onclick="_inscritoEdit(${i._idx})" title="Editar (nombre, dorsal, equipo, categoría)" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;padding:2px 8px;font-size:13px;font-weight:800;cursor:pointer;line-height:1;margin-right:4px">✏️</button>
           <button onclick="_inscritoRemove(${i._idx})" title="Quitar este inscrito" style="background:#fff;color:#b42318;border:1px solid #fecdd3;border-radius:6px;padding:2px 8px;font-size:13px;font-weight:800;cursor:pointer;line-height:1">×</button>
         </td>
       </tr>`;
@@ -27002,8 +27003,65 @@ async function _inscritosPersistRemoval(){
     if(typeof _finishStatsCacheKey!=='undefined'){ _finishStatsCacheKey=null; _finishStatsCache=null; }
     try{ _simCurrentData=null; }catch(_){}   // el simulador reconstruirá sin el eliminado
     _inscritosSaved=true;
-    if(typeof showToast==='function') showToast('Inscrito eliminado y actualizado en la prueba guardada.','ok',2800);
+    if(typeof showToast==='function') showToast(_inscritosPersistMsg||'Inscrito eliminado y actualizado en la prueba guardada.','ok',2800);
+    _inscritosPersistMsg='';
   }catch(_){}
+}
+let _inscritosPersistMsg='';
+
+// ── Editar un inscrito (nombre, dorsal, equipo, categoría) ────────────────
+function _inscritoEditClose(){ const m=document.getElementById('_insEditModal'); if(m) m.remove(); }
+function _inscritoEdit(idx){
+  if(!Number.isInteger(idx) || idx<0 || idx>=inscritos.length) return;
+  const r=inscritos[idx];
+  _inscritoEditClose();
+  // Categorías ya presentes en la lista → sugerencias del desplegable
+  const cats=[...new Set(inscritos.map(x=>(x.cat||'').trim()).filter(Boolean))].sort();
+  const opts=cats.map(c=>`<option value="${escapeAttr(c)}">`).join('');
+  const ov=document.createElement('div');
+  ov.id='_insEditModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
+  ov.addEventListener('click',e=>{ if(e.target===ov) _inscritoEditClose(); });
+  ov.innerHTML=`
+    <div style="background:#fff;border-radius:16px;max-width:460px;width:100%;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden">
+      <div style="background:#1d4ed8;color:#fff;padding:15px 18px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:16px;font-weight:900">✏️ Editar inscrito</div>
+        <button onclick="_inscritoEditClose()" style="background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:9px;width:32px;height:32px;font-size:17px;cursor:pointer;font-weight:800">✕</button>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+        <label style="font-size:12px;font-weight:800;color:#334155">Nombre (Apellidos, Nombre)
+          <input id="_insE_name" type="text" value="${escapeAttr(r.name||'')}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none"></label>
+        <div style="display:flex;gap:10px">
+          <label style="flex:1;font-size:12px;font-weight:800;color:#334155">Dorsal
+            <input id="_insE_bib" type="text" value="${escapeAttr(r.bib||'')}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none"></label>
+          <label style="flex:2;font-size:12px;font-weight:800;color:#334155">Categoría
+            <input id="_insE_cat" type="text" list="_insE_catList" value="${escapeAttr(r.cat||'')}" placeholder="Ej: CAD-1, CAD-2, Cadete" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none">
+            <datalist id="_insE_catList">${opts}</datalist></label>
+        </div>
+        <label style="font-size:12px;font-weight:800;color:#334155">Equipo
+          <input id="_insE_team" type="text" value="${escapeAttr(r.team||'')}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none"></label>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;background:#fafafa">
+        <button onclick="_inscritoEditClose()" style="background:transparent;color:#64748b;border:0;font-weight:700;font-size:13.5px;cursor:pointer;padding:9px 12px">Cancelar</button>
+        <button onclick="_inscritoEditSave(${idx})" style="background:#1d4ed8;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:13.5px;cursor:pointer;padding:9px 20px">Guardar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  setTimeout(()=>{ const i=document.getElementById('_insE_name'); if(i){ i.focus(); i.select(); } },40);
+}
+function _inscritoEditSave(idx){
+  if(!Number.isInteger(idx) || idx<0 || idx>=inscritos.length){ _inscritoEditClose(); return; }
+  const g=id=>((document.getElementById(id)||{}).value||'').trim();
+  const name=g('_insE_name'), bib=g('_insE_bib'), cat=g('_insE_cat'), team=g('_insE_team');
+  if(!name){ alert('El nombre no puede quedar vacío.'); return; }
+  const r=inscritos[idx];
+  r.name=name; r.bib=bib; r.cat=cat; r.team=team;
+  delete r._enriched; delete r._newRider;   // ya no procede el aviso auto (lo editaste tú)
+  _inscritoEditClose();
+  _updateInscritosUI();
+  _inscritosSaved=false;
+  _inscritosPersistMsg='✅ Inscrito actualizado'+((_sb)?' y guardado en la prueba.':'.');
+  _inscritosPersistRemoval();   // persiste la lista completa a la prueba guardada
 }
 
 // Modal con lista de inscritos y estado (Acabó / DNF)
