@@ -27010,14 +27010,29 @@ async function _inscritosPersistRemoval(){
 let _inscritosPersistMsg='';
 
 // ── Editar un inscrito (nombre, dorsal, equipo, categoría) ────────────────
+// Lista FIJA de categorías + las que añadas tú (se recuerdan) + las ya presentes.
+const _INS_CAT_FIJAS = ['Principiante','Alevín','Infantil 1','Infantil 2','CAD-1','CAD-2','Cadete','Cadete Fem.','Junior','Junior Fem.','Sub-23','Élite','Élite Fem.','Máster 30','Máster 40','Máster 50','Máster 60','Féminas','Cicloturista'];
+function _insCatCustom(){ try{ return JSON.parse(localStorage.getItem('ins_cat_custom')||'[]'); }catch(_){ return []; } }
+function _insCatAddCustom(cat){
+  cat=(cat||'').trim(); if(!cat) return;
+  const lc=cat.toLowerCase();
+  if(_INS_CAT_FIJAS.some(c=>c.toLowerCase()===lc)) return;
+  const cur=_insCatCustom(); if(cur.some(c=>c.toLowerCase()===lc)) return;
+  cur.push(cat); try{ localStorage.setItem('ins_cat_custom', JSON.stringify(cur)); }catch(_){}
+}
+function _insCatList(){
+  const present=(typeof inscritos!=='undefined'?inscritos:[]).map(x=>(x.cat||'').trim()).filter(Boolean);
+  const seen=new Set(), out=[];
+  [..._INS_CAT_FIJAS, ..._insCatCustom(), ...present].forEach(c=>{ const k=(c||'').toLowerCase(); if(!c||seen.has(k))return; seen.add(k); out.push(c); });
+  return out;
+}
 function _inscritoEditClose(){ const m=document.getElementById('_insEditModal'); if(m) m.remove(); }
 function _inscritoEdit(idx){
   if(!Number.isInteger(idx) || idx<0 || idx>=inscritos.length) return;
   const r=inscritos[idx];
   _inscritoEditClose();
-  // Categorías ya presentes en la lista → sugerencias del desplegable
-  const cats=[...new Set(inscritos.map(x=>(x.cat||'').trim()).filter(Boolean))].sort();
-  const opts=cats.map(c=>`<option value="${escapeAttr(c)}">`).join('');
+  // Desplegable: lista FIJA + tus categorías añadidas + las ya presentes
+  const opts=_insCatList().map(c=>`<option value="${escapeAttr(c)}">`).join('');
   const ov=document.createElement('div');
   ov.id='_insEditModal';
   ov.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,Segoe UI,Arial,sans-serif';
@@ -27036,7 +27051,8 @@ function _inscritoEdit(idx){
             <input id="_insE_bib" type="text" value="${escapeAttr(r.bib||'')}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none"></label>
           <label style="flex:2;font-size:12px;font-weight:800;color:#334155">Categoría
             <input id="_insE_cat" type="text" list="_insE_catList" value="${escapeAttr(r.cat||'')}" placeholder="Ej: CAD-1, CAD-2, Cadete" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none">
-            <datalist id="_insE_catList">${opts}</datalist></label>
+            <datalist id="_insE_catList">${opts}</datalist>
+            <span style="font-size:10.5px;font-weight:600;color:#94a3b8;display:block;margin-top:3px">Elige de la lista o escribe una nueva (se recordará)</span></label>
         </div>
         <label style="font-size:12px;font-weight:800;color:#334155">Equipo
           <input id="_insE_team" type="text" value="${escapeAttr(r.team||'')}" style="width:100%;box-sizing:border-box;margin-top:4px;padding:10px 12px;font-size:14px;border:2px solid #cbd5e1;border-radius:10px;outline:none"></label>
@@ -27054,6 +27070,7 @@ function _inscritoEditSave(idx){
   const g=id=>((document.getElementById(id)||{}).value||'').trim();
   const name=g('_insE_name'), bib=g('_insE_bib'), cat=g('_insE_cat'), team=g('_insE_team');
   if(!name){ alert('El nombre no puede quedar vacío.'); return; }
+  if(cat) _insCatAddCustom(cat);   // si es una categoría nueva, se recuerda para la próxima
   const r=inscritos[idx];
   r.name=name; r.bib=bib; r.cat=cat; r.team=team;
   delete r._enriched; delete r._newRider;   // ya no procede el aviso auto (lo editaste tú)
