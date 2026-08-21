@@ -91,6 +91,9 @@
     #calfed .cf-btn-of:hover{ background:#22456e; }
     #calfed .cf-btn-cerrar{ background:#eceae4; color:#444; border:none; padding:11px 16px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; }
     #calfed .cf-btn-cerrar:hover{ background:#e0ded7; }
+    /* Badge de coincidencias en la fila */
+    #calfed .cf-coinc-badge{ font:inherit; font-size:11px; font-weight:800; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:1px 8px; margin-left:6px; cursor:pointer; white-space:nowrap; vertical-align:middle; }
+    #calfed .cf-coinc-badge:hover{ background:#fde68a; }
     /* Coincidencias del mismo día en España */
     #calfed .cf-coinc{ padding:0 18px 6px; }
     #calfed .cf-coinc-head{ font-size:14px; font-weight:800; color:#0b2f6b; border-top:1px solid #eceae5; padding-top:12px; margin-top:4px; }
@@ -617,6 +620,8 @@
           return '<span class="tag '+cls+'">'+(CATLBL[c]||c)+'</span>';
         }).join("");
         var sexTag=r.sexo==="F"?'<span class="tag f">Fem</span>':(r.sexo==="MF"?'<span class="tag">M+F</span>':"");
+        var nCo=_cfCoincCount(r);   // nº de pruebas coincidentes el mismo día en España
+        var coBadge = nCo>0 ? ' <button type="button" class="cf-coinc-badge" title="'+nCo+' prueba(s) de la misma modalidad y categoría ese día en España. Pulsa para verlas.">🗓️ '+nCo+'</button>' : '';
         var dow=DIAS[(new Date((r.fecha||"")+"T00:00:00").getDay()+6)%7]||"";
         var tr=document.createElement("tr");
         var _cls=(r.fecha===hoy?"is-hoy":"");
@@ -624,7 +629,7 @@
         if(_cls) tr.className=_cls;
         ri++;
         tr.innerHTML='<td class="c-fecha"><div class="cf-datetile"><span class="d-dow">'+dow+'</span><span class="d-day">'+(d[2]||"")+'</span><span class="d-mon">'+(MESES[(+d[1]||1)-1]||"")+'</span></div></td>'+
-          '<td class="c-prueba"><div class="nm"><span class="nm-txt"></span>'+estBadge+'</div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
+          '<td class="c-prueba"><div class="nm"><span class="nm-txt"></span>'+estBadge+coBadge+'</div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
           '<td class="c-loc" data-lbl="Localidad"><div class="loc"></div><div class="prov"></div></td>'+
           '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
           '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
@@ -641,6 +646,7 @@
         tr.querySelector(".prov").textContent=r.provincia||"";
         tr.children[3].textContent=r.federacion||"";
         tr.querySelector(".cf-verficha").addEventListener("click",function(){ abrirFicha(r); });
+        var _cb=tr.querySelector(".cf-coinc-badge"); if(_cb){ _cb.addEventListener("click",function(ev){ ev.stopPropagation(); abrirFicha(r); }); }
         tr.querySelector(".cal-gcal").href=_gcalUrl(r);
         tr.querySelector(".cal-ics").addEventListener("click",function(e){ e.preventDefault(); _abrirICS(r); });
         tr.querySelector(".cal-ics").addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _abrirICS(r); } });
@@ -714,6 +720,12 @@
     var _cfCurrentFicha=null;
     function _cfCatSet(r){ var s={}; (r.categorias||"").split(",").forEach(function(c){ c=c.trim(); if(c){ s[c]=1; } }); return s; }
     function _cfCatsOverlap(a,b){ var A=_cfCatSet(a), B=_cfCatSet(b); var ak=Object.keys(A), bk=Object.keys(B); if(!ak.length){ return true; } if(!bk.length){ return true; } for(var i=0;i<ak.length;i++){ if(B[ak[i]]){ return true; } } return false; }
+    // Misma prueba (para excluirla y evitar contarla a sí misma, aunque sea otra copia)
+    function _cfSame(o,r){ if((o.fecha||"")!==(r.fecha||"")){ return false; } if((o.prueba||"")!==(r.prueba||"")){ return false; } if((o.federacion||"")!==(r.federacion||"")){ return false; } return true; }
+    // Índice fecha|modalidad → pruebas, para contar coincidencias rápido en cada fila.
+    var _cfDMIdx=null, _cfDMIdxN=-1;
+    function _cfBuildDMIdx(){ if(_cfDMIdx){ if(_cfDMIdxN===rows.length){ return _cfDMIdx; } } var idx={}; rows.forEach(function(o){ var k=(o.fecha||"")+"|"+(o.modalidad||""); if(!idx[k]){ idx[k]=[]; } idx[k].push(o); }); _cfDMIdx=idx; _cfDMIdxN=rows.length; return idx; }
+    function _cfCoincCount(r){ var idx=_cfBuildDMIdx(); var g=idx[(r.fecha||"")+"|"+(r.modalidad||"")]; if(!g){ return 0; } var n=0; for(var i=0;i<g.length;i++){ var o=g[i]; if(_cfSame(o,r)){ continue; } if(_cfCatsOverlap(o,r)){ n++; } } return n; }
     function _cfFedList(){ var seen={}, out=[]; rows.forEach(function(r){ var f=(r.federacion||"").trim(); if(f){ if(!seen[f]){ seen[f]=1; out.push(f); } } }); out.sort(function(a,b){return a.localeCompare(b,"es");}); return out; }
     function _cfMiComunidad(){ var v=""; try{ v=localStorage.getItem("cf_mi_comunidad")||""; }catch(e){} if(!v){ v=(els.fed?els.fed.value:"")||""; } return v; }
     function _cfSetMiComunidad(v){ try{ localStorage.setItem("cf_mi_comunidad", v||""); }catch(e){} if(_cfCurrentFicha){ _cfRenderCoincidencias(_cfCurrentFicha); } }
@@ -729,7 +741,7 @@
       var el=$("cf_m_coinc"); if(!el) return;
       var mine=_cfMiComunidad();
       var matches=rows.filter(function(o){
-        if(o===r){ return false; }
+        if(_cfSame(o,r)){ return false; }
         if((o.fecha||"")!==(r.fecha||"")){ return false; }
         if((o.modalidad||"")!==(r.modalidad||"")){ return false; }
         if(!_cfCatsOverlap(o,r)){ return false; }
