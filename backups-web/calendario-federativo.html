@@ -91,6 +91,24 @@
     #calfed .cf-btn-of:hover{ background:#22456e; }
     #calfed .cf-btn-cerrar{ background:#eceae4; color:#444; border:none; padding:11px 16px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; }
     #calfed .cf-btn-cerrar:hover{ background:#e0ded7; }
+    /* Coincidencias del mismo día en España */
+    #calfed .cf-coinc{ padding:0 18px 6px; }
+    #calfed .cf-coinc-head{ font-size:14px; font-weight:800; color:#0b2f6b; border-top:1px solid #eceae5; padding-top:12px; margin-top:4px; }
+    #calfed .cf-coinc-sub{ font-size:11.5px; font-weight:600; color:#8a8a8a; }
+    #calfed .cf-coinc-mine-sel{ font-size:12.5px; color:#5c5c5c; margin:8px 0; }
+    #calfed .cf-coinc-mine-sel select{ font:inherit; font-size:12.5px; padding:5px 8px; border:1px solid #d4d2cc; border-radius:6px; background:#fff; max-width:220px; }
+    #calfed .cf-coinc-alert{ background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:8px; padding:9px 11px; font-size:13px; margin:6px 0 8px; }
+    #calfed .cf-coinc-ok{ background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; border-radius:8px; padding:9px 11px; font-size:13px; margin:6px 0 8px; }
+    #calfed .cf-coinc-none{ color:#15803d; font-size:13px; padding:8px 0; }
+    #calfed .cf-coinc-rest-h{ font-size:12px; font-weight:800; color:#8a8a8a; text-transform:uppercase; letter-spacing:.4px; margin:12px 0 6px; }
+    #calfed .cf-coinc-fed{ font-size:12.5px; font-weight:800; color:#22456e; margin:8px 0 3px; }
+    #calfed .cf-coinc-item{ border-left:3px solid #dcdad3; padding:3px 0 3px 10px; margin:3px 0; }
+    #calfed .cf-coinc-nm{ font-size:13.5px; font-weight:600; color:#242424; }
+    #calfed .cf-coinc-meta{ font-size:12px; color:#8a8a8a; }
+    #calfed .cf-coinc-meta a{ color:var(--azul); }
+    #calfed .cf-coinc-est{ font-size:10.5px; font-weight:800; border-radius:5px; padding:1px 6px; }
+    #calfed .cf-coinc-est.apl{ background:#fef3c7; color:#92400e; }
+    #calfed .cf-coinc-est.anu{ background:#fee2e2; color:#991b1b; }
     /* Botones "Añadir al calendario" (Apple/Mac .ics y Google Calendar) */
     #calfed .cal-add{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
     #calfed .cal-btn{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:#3c3c3c; text-decoration:none; background:#fff; border:1px solid #d4d2cc; border-radius:7px; padding:4px 8px; cursor:pointer; white-space:nowrap; line-height:1; }
@@ -309,6 +327,7 @@
         <p class="cf-m-sub" id="cf_m_sub"></p>
       </div>
       <div class="cf-modal-body" id="cf_m_body"></div>
+      <div id="cf_m_coinc" class="cf-coinc"></div>
       <div class="cf-modal-foot">
         <a class="cf-btn-of" id="cf_m_oficial" target="_blank" rel="noopener"></a>
         <button type="button" class="cf-btn-cerrar" id="cf_m_cerrar">Cerrar</button>
@@ -691,6 +710,50 @@
         }
       }, true);
     }
+    // ── Coincidencias del MISMO DÍA en toda España (misma modalidad/categoría) ──
+    var _cfCurrentFicha=null;
+    function _cfCatSet(r){ var s={}; (r.categorias||"").split(",").forEach(function(c){ c=c.trim(); if(c){ s[c]=1; } }); return s; }
+    function _cfCatsOverlap(a,b){ var A=_cfCatSet(a), B=_cfCatSet(b); var ak=Object.keys(A), bk=Object.keys(B); if(!ak.length){ return true; } if(!bk.length){ return true; } for(var i=0;i<ak.length;i++){ if(B[ak[i]]){ return true; } } return false; }
+    function _cfFedList(){ var seen={}, out=[]; rows.forEach(function(r){ var f=(r.federacion||"").trim(); if(f){ if(!seen[f]){ seen[f]=1; out.push(f); } } }); out.sort(function(a,b){return a.localeCompare(b,"es");}); return out; }
+    function _cfMiComunidad(){ var v=""; try{ v=localStorage.getItem("cf_mi_comunidad")||""; }catch(e){} if(!v){ v=(els.fed?els.fed.value:"")||""; } return v; }
+    function _cfSetMiComunidad(v){ try{ localStorage.setItem("cf_mi_comunidad", v||""); }catch(e){} if(_cfCurrentFicha){ _cfRenderCoincidencias(_cfCurrentFicha); } }
+    function _cfCoincCard(o){
+      var loc=[o.localidad,o.provincia].filter(Boolean).join(", ");
+      var espec=(o.fuente||"").trim(); var url=espec||(FUENTES[o.federacion]||"");
+      var st=(o.estado||"activa").toLowerCase().trim();
+      var estTag = st==="aplazada"?' <span class="cf-coinc-est apl">aplazada</span>' : (st==="anulada"?' <span class="cf-coinc-est anu">anulada</span>' : "");
+      var link = url?(' &middot; <a href="'+_esc(url)+'" target="_blank" rel="noopener">ver ↗</a>'):"";
+      return '<div class="cf-coinc-item"><div class="cf-coinc-nm">'+_esc(o.prueba||"")+estTag+'</div><div class="cf-coinc-meta">'+_esc(o.federacion||"")+(loc?(" &middot; "+_esc(loc)):"")+link+'</div></div>';
+    }
+    function _cfRenderCoincidencias(r){
+      var el=$("cf_m_coinc"); if(!el) return;
+      var mine=_cfMiComunidad();
+      var matches=rows.filter(function(o){
+        if(o===r){ return false; }
+        if((o.fecha||"")!==(r.fecha||"")){ return false; }
+        if((o.modalidad||"")!==(r.modalidad||"")){ return false; }
+        if(!_cfCatsOverlap(o,r)){ return false; }
+        return true;
+      });
+      var feds=_cfFedList();
+      var selOpts='<option value="">(elige tu comunidad)</option>'+feds.map(function(f){ return '<option value="'+_esc(f)+'"'+(f===mine?" selected":"")+">"+_esc(f)+"</option>"; }).join("");
+      var head='<div class="cf-coinc-head">🗓️ El mismo d&iacute;a en Espa&ntilde;a <span class="cf-coinc-sub">(misma modalidad y categor&iacute;a)</span></div>'
+        +'<div class="cf-coinc-mine-sel">Mi comunidad: <select id="cf_mi_com" onchange="_cfSetMiComunidad(this.value)">'+selOpts+'</select></div>';
+      if(!matches.length){ el.innerHTML=head+'<div class="cf-coinc-none">No hay otras pruebas de esta modalidad ese d&iacute;a. ✓</div>'; return; }
+      var enMia=matches.filter(function(o){ return mine?((o.federacion||"")===mine):false; });
+      var resto=matches.filter(function(o){ return mine?((o.federacion||"")!==mine):true; });
+      var html=head;
+      if(mine){
+        if(enMia.length){ html+='<div class="cf-coinc-alert">⚠️ Ese d&iacute;a hay <b>'+enMia.length+'</b> prueba'+(enMia.length===1?"":"s")+' de esta modalidad en <b>'+_esc(mine)+'</b> (tu comunidad). Ojo con las restricciones para desplazarse.</div>'+enMia.map(_cfCoincCard).join(""); }
+        else { html+='<div class="cf-coinc-ok">✓ No hay prueba de esta modalidad en <b>'+_esc(mine)+'</b> ese d&iacute;a.</div>'; }
+      }
+      var byFed={};
+      resto.forEach(function(o){ var f=o.federacion||"(?)"; if(!byFed[f]){ byFed[f]=[]; } byFed[f].push(o); });
+      var fkeys=Object.keys(byFed).sort(function(a,b){return a.localeCompare(b,"es");});
+      html+='<div class="cf-coinc-rest-h">Resto de Espa&ntilde;a ('+resto.length+'):</div>';
+      fkeys.forEach(function(f){ html+='<div class="cf-coinc-fed">'+_esc(f)+' ('+byFed[f].length+')</div>'+byFed[f].map(_cfCoincCard).join(""); });
+      el.innerHTML=html;
+    }
     function abrirFicha(r){
       var ov=$("cf_modal"); if(!ov) return;
       $("cf_m_nombre").textContent = r.prueba || "Prueba";
@@ -703,6 +766,7 @@
       var of=$("cf_m_oficial");
       if(fuente){ of.href=fuente; of.style.display=""; of.textContent=(espec?"Ver esta prueba en la web de ":"Ver en la web oficial de ")+r.federacion+" ↗"; }
       else { of.style.display="none"; }
+      _cfCurrentFicha=r; _cfRenderCoincidencias(r);   // coincidencias del mismo día en España
       var body=$("cf_m_body");
       ov.classList.add("open"); ov.setAttribute("aria-hidden","false");
       document.body.style.overflow="hidden";
