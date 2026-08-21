@@ -697,9 +697,11 @@
       var d=(r.fecha||"").split("-");
       var fechaTxt = d.length>=3 ? (d[2]+" "+(MESES[(+d[1]||1)-1]||"")+" "+d[0]) : (r.fecha||"");
       $("cf_m_sub").textContent = [r.federacion, fechaTxt].filter(Boolean).join(" · ");
-      var fuente=FUENTES[r.federacion]||"";
+      // Enlace: la PRUEBA concreta (su "MÁS") si la tenemos guardada; si no, la web general.
+      var espec=(r.fuente||"").trim();
+      var fuente=espec||(FUENTES[r.federacion]||"");
       var of=$("cf_m_oficial");
-      if(fuente){ of.href=fuente; of.style.display=""; of.textContent="Ver en la web oficial de "+r.federacion+" ↗"; }
+      if(fuente){ of.href=fuente; of.style.display=""; of.textContent=(espec?"Ver esta prueba en la web de ":"Ver en la web oficial de ")+r.federacion+" ↗"; }
       else { of.style.display="none"; }
       var body=$("cf_m_body");
       ov.classList.add("open"); ov.setAttribute("aria-hidden","false");

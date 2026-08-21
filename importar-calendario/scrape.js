@@ -283,8 +283,8 @@ async function main(){
   const fut = all.filter(r => r.fecha && r.fecha >= hoy);
   // Completar las categorías recortadas (solo sobre las futuras, para no abrir de más)
   await enrichCategorias(fut);
-  // Limpiar campos temporales del enriquecimiento
-  fut.forEach(r => { delete r._rawCat; delete r._masUrl; });
+  // Guardar el enlace "MÁS" como fuente (enlace directo a la prueba) y limpiar temporales
+  fut.forEach(r => { r.fuente = r._masUrl || ''; delete r._rawCat; delete r._masUrl; });
   console.error(`\n  TOTAL: ${fut.length} pruebas futuras (descartadas ${all.length - fut.length} sin fecha/pasadas)`);
   process.stdout.write(JSON.stringify(fut, null, 2));
 }
