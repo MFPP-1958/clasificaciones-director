@@ -264,6 +264,7 @@
       </select>
     </div>
     <div class="fld"><label>Federaci&oacute;n</label><select id="cf_fed"><option value="">&mdash; Todas &mdash;</option></select></div>
+    <div class="fld"><label>Provincia</label><select id="cf_prov"><option value="">&mdash; Todas &mdash;</option></select></div>
     <div class="fld"><label>Buscar</label><input type="text" id="cf_txt" placeholder="prueba o localidad&hellip;"></div>
     <div class="fld"><label>Estado</label>
       <select id="cf_st">
@@ -346,7 +347,7 @@
     var DEF={cat:"cadete",sex:"M",mod:"Carretera",fed:"C. Valenciana",txt:""};
     var $=function(id){return document.getElementById(id);};
     var els={cat:$("cf_cat"),sex:$("cf_sex"),mod:$("cf_mod"),fed:$("cf_fed"),txt:$("cf_txt")};
-    var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), elVerPas=$("cf_verpasadas"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
+    var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), elVerPas=$("cf_verpasadas"), elProv=$("cf_prov"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
 
     function hoyISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
     Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
@@ -492,7 +493,8 @@
         { txt: els.cat.value ? _selTxt(els.cat) : "Todas las categor\u00edas", on: !!els.cat.value },
         { txt: els.sex.value ? _selTxt(els.sex) : "Ambos sexos",          on: !!els.sex.value },
         { txt: els.mod.value ? _selTxt(els.mod) : "Todas las modalidades", on: !!els.mod.value },
-        { txt: els.fed.value ? _selTxt(els.fed) : "Toda Espa\u00f1a",          on: !!els.fed.value }
+        { txt: els.fed.value ? _selTxt(els.fed) : "Toda Espa\u00f1a",          on: !!els.fed.value },
+        { txt: (elProv ? (elProv.value || "Todas las provincias") : "Todas las provincias"), on: !!(elProv ? elProv.value : "") }
       ];
       var html = '<span class="cf-chips-lbl">Mostrando:</span>';
       pills.forEach(function(p){
@@ -501,11 +503,36 @@
       box.innerHTML = html;
     }
 
+    // Rellena el desplegable de PROVINCIA con las que tienen prueba en la
+    // federación (y mes) seleccionados. Se refresca solo cuando cambia el
+    // contexto (federación/mes/fechas), no en cada tecleo.
+    var _cfProvSig="";
+    function _cfPopulateProvincias(){
+      if(!elProv) return;
+      var fed=els.fed.value, mes=(elMes?elMes.value:""), desde=elDes.value||"", verPas=(elVerPas?elVerPas.checked:false), hoyStr=hoyISO();
+      var provs={};
+      rows.forEach(function(r){
+        if(fed){ if(r.federacion!==fed) return; }
+        if(mes){ if((r.fecha||"").slice(5,7)!==mes) return; if(!verPas){ if((r.fecha||"")<hoyStr) return; } }
+        else if(desde){ if(r.fecha<desde) return; }
+        var p=(r.provincia||"").trim(); if(p){ provs[p]=(provs[p]||0)+1; }
+      });
+      var keys=Object.keys(provs).sort(function(a,b){return a.localeCompare(b,"es");});
+      var sig=fed+"|"+mes+"|"+verPas+"|"+desde+"|"+keys.join(",");
+      if(sig===_cfProvSig) return;   // contexto sin cambios → no tocar el desplegable
+      _cfProvSig=sig;
+      var prev=elProv.value;
+      elProv.innerHTML='<option value="">&mdash; Todas &mdash;</option>'+keys.map(function(p){return '<option value="'+_esc(p)+'">'+_esc(p)+" ("+provs[p]+")</option>";}).join("");
+      if(prev){ if(keys.indexOf(prev)>=0){ elProv.value=prev; } else { elProv.value=""; } }
+    }
+
     function apply(){
       var f={}; Object.keys(els).forEach(function(k){f[k]=els[k].value;});
       var q=(f.txt||"").trim().toLowerCase(), desde=elDes.value||"", stF=(elSt ? elSt.value : ""), mes=(elMes ? elMes.value : "");
       var hoyStr=hoyISO();
       var verPas=(elVerPas ? elVerPas.checked : false);   // ver también las pruebas ya pasadas del mes
+      _cfPopulateProvincias();                             // refresca provincias según federación+mes
+      var prov=(elProv ? elProv.value : "");
       // Al elegir un mes concreto se muestra ese mes (se ignora "Desde", que se desactiva).
       // La casilla "Ver pasadas" solo tiene sentido con un mes elegido.
       if(elDes) elDes.disabled=!!mes;
@@ -521,6 +548,7 @@
         if(f.sex){ if((r.sexo||"").indexOf(f.sex)<0) return false; }
         if(f.mod){ if(r.modalidad!==f.mod) return false; }
         if(f.fed){ if(r.federacion!==f.fed) return false; }
+        if(prov){ if((r.provincia||"")!==prov) return false; }
         if(mes){
           if((r.fecha||"").slice(5,7)!==mes) return false;
           if(!verPas){ if((r.fecha||"")<hoyStr) return false; }   // por defecto: solo de hoy en adelante
@@ -711,8 +739,9 @@
     if(elMes) elMes.addEventListener("change",apply);
     if(elSt) elSt.addEventListener("change",apply);
     if(elVerPas) elVerPas.addEventListener("change",apply);
+    if(elProv) elProv.addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;apply();});
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";apply();});
 
     cargar();
   })();
