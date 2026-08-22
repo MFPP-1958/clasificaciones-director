@@ -296,6 +296,8 @@
       </select>
     </div>
     <button class="btn" id="cf_reset">Restablecer</button>
+    <button class="btn" id="cf_setpref" title="Guarda los filtros actuales en este dispositivo: al volver a abrir el calendario se aplicar&aacute;n solos">&#9733; Fijar como predeterminado</button>
+    <button class="btn" id="cf_clearpref" style="display:none" title="Vuelve a los filtros por defecto de la web">&#10005; Quitar predeterminado</button>
   </div>
 
   <!-- Resumen de filtros activos: espejo de los desplegables de arriba (se
@@ -418,6 +420,40 @@
       }catch(_){ /* no rompe la pagina */ }
     }
 
+    // ── Filtros PREDETERMINADOS del usuario (se guardan en ESTE dispositivo) ──
+    // El usuario elige sus filtros y pulsa "Fijar como predeterminado": se
+    // guardan en localStorage y, al volver a abrir el calendario, se aplican
+    // solos (aunque luego pueda cambiarlos). El mes se ajusta al actual si el
+    // guardado ya ha pasado, para no abrir en un mes vac&iacute;o.
+    function _cfLoadPref(){ try{ return JSON.parse(localStorage.getItem("cf_pref")||"null"); }catch(e){ return null; } }
+    function _cfUpdatePrefBtn(){
+      var has=!!_cfLoadPref();
+      var c=$("cf_clearpref"); if(c){ c.style.display=has?"":"none"; }
+      var s=$("cf_setpref"); if(s){ s.innerHTML=has?"★ Actualizar predeterminado":"★ Fijar como predeterminado"; }
+    }
+    function _cfApplyPref(){
+      var p=_cfLoadPref(); if(!p){ return; }
+      function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(o){return o.value===v;})){ el.value=v; } }
+      setSel(els.cat,p.cat); setSel(els.sex,p.sex); setSel(els.mod,p.mod); setSel(els.fed,p.fed); setSel(elSt,p.st);
+      if(elMes){ var mv=p.mes||""; if(mv){ var cm=String(new Date().getMonth()+1).padStart(2,"0"); if(mv<cm){ mv=cm; } } setSel(elMes,mv); }
+      if(elVerPas){ elVerPas.checked=!!p.verpas; }
+      try{ _cfPopulateProvincias(); }catch(e){}
+      if(elProv){ if(p.prov){ if([].some.call(elProv.options,function(o){return o.value===p.prov;})){ elProv.value=p.prov; } } }
+    }
+    function _cfSavePref(){
+      var p={ cat:els.cat.value, sex:els.sex.value, mod:els.mod.value, fed:els.fed.value, prov:(elProv?elProv.value:""), st:(elSt?elSt.value:""), mes:(elMes?elMes.value:""), verpas:(elVerPas?elVerPas.checked:false) };
+      try{ localStorage.setItem("cf_pref", JSON.stringify(p)); }catch(e){}
+      _cfUpdatePrefBtn();
+      var b=$("cf_setpref"); if(b){ b.innerHTML="✓ Guardado"; setTimeout(function(){ _cfUpdatePrefBtn(); },1600); }
+    }
+    function _cfClearPref(){
+      try{ localStorage.removeItem("cf_pref"); }catch(e){}
+      _cfUpdatePrefBtn();
+      Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
+      elDes.value=hoyISO(); if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0"); if(elSt)elSt.value=""; if(elVerPas)elVerPas.checked=false; if(elProv)elProv.value="";
+      apply();
+    }
+
     function cargar(){
       if(!C.SUPABASE_URL || C.SUPABASE_URL.indexOf("TU-PROYECTO")>=0){
         $("cf_estado").textContent="Falta configurar SUPABASE_URL y SUPABASE_ANON_KEY en la parte de arriba del bloque.";
@@ -450,6 +486,8 @@
           // Federación por defecto: C. Valenciana (ahora que ya existen las opciones).
           // Si ese año no hubiera pruebas de la CV, se queda en "Todas".
           if([].some.call(els.fed.options,function(o){return o.value===DEF.fed;})) els.fed.value=DEF.fed;
+          _cfApplyPref();        // filtros predeterminados del usuario (si los guardó)
+          _cfUpdatePrefBtn();
           $("cf_estado").style.display="none";
           apply();
         })
@@ -820,6 +858,8 @@
     if(elProv) elProv.addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
     $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";apply();});
+    var _bsp=$("cf_setpref"); if(_bsp){ _bsp.addEventListener("click",_cfSavePref); }
+    var _bcp=$("cf_clearpref"); if(_bcp){ _bcp.addEventListener("click",_cfClearPref); }
 
     cargar();
   })();
