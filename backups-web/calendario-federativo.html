@@ -91,6 +91,22 @@
     #calfed .cf-btn-of:hover{ background:#22456e; }
     #calfed .cf-btn-cerrar{ background:#eceae4; color:#444; border:none; padding:11px 16px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; }
     #calfed .cf-btn-cerrar:hover{ background:#e0ded7; }
+    /* Favoritas: barra + estrella */
+    #calfed .cf-favbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#fffdf2; border:1px solid #fde68a; border-radius:8px; padding:9px 12px; margin:0 0 12px; }
+    #calfed .cf-favbar-n{ font-weight:800; color:#92400e; font-size:13.5px; }
+    #calfed .cf-favbar .btn{ font-size:12.5px; padding:6px 11px; }
+    #calfed .cf-favbar-gen{ background:#15803d; color:#fff; border-color:#15803d; font-weight:800; }
+    #calfed .cf-favbar .btn.on{ background:#b45309; color:#fff; border-color:#b45309; }
+    #calfed .cf-fav-star{ background:none; border:none; cursor:pointer; font-size:18px; line-height:1; padding:0 4px 0 0; color:#cbd5e1; }
+    #calfed .cf-fav-star.on{ color:#f59e0b; }
+    #calfed .cf-fav-star:hover{ transform:scale(1.15); }
+    /* Modal generar hoja/imagen */
+    #calfed .cf-gen-range{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
+    #calfed .cf-gen-range label{ font-size:12px; font-weight:700; color:#5c5c5c; }
+    #calfed .cf-gen-range input{ font:inherit; font-size:14px; padding:7px 9px; border:1px solid #d4d2cc; border-radius:7px; }
+    #calfed .cf-gen-info{ font-size:13px; color:#475569; margin:6px 0 4px; }
+    #calfed #cf_gen_out img{ width:100%; height:auto; border:1px solid #e5e7eb; border-radius:8px; margin-top:10px; }
+    #calfed .cf-gen-hint{ font-size:12px; color:#8a8a8a; margin-top:6px; }
     /* Badge de coincidencias en la fila */
     #calfed .cf-coinc-badge{ font:inherit; font-size:11px; font-weight:800; color:#92400e; background:#fef3c7; border:1px solid #fde68a; border-radius:999px; padding:1px 8px; margin-left:6px; cursor:pointer; white-space:nowrap; vertical-align:middle; }
     #calfed .cf-coinc-badge:hover{ background:#fde68a; }
@@ -306,6 +322,13 @@
 
   <div class="meta" id="cf_count"></div>
 
+  <div class="cf-favbar" id="cf_favbar" style="display:none">
+    <span class="cf-favbar-n" id="cf_fav_n"></span>
+    <button type="button" class="btn" id="cf_fav_only">Ver solo favoritas</button>
+    <button type="button" class="btn cf-favbar-gen" id="cf_fav_gen">&#128241; Hoja / imagen</button>
+    <button type="button" class="btn" id="cf_fav_clear" title="Quitar todas las favoritas">&#10005; Vaciar</button>
+  </div>
+
   <div class="tabla-wrap">
   <table>
     <thead><tr>
@@ -336,6 +359,30 @@
       <div class="cf-modal-foot">
         <a class="cf-btn-of" id="cf_m_oficial" target="_blank" rel="noopener"></a>
         <button type="button" class="cf-btn-cerrar" id="cf_m_cerrar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: generar hoja / imagen de las pruebas favoritas -->
+  <div class="cf-modal-ov" id="cf_gen_modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="cf-modal" style="max-width:540px">
+      <div class="cf-modal-cab">
+        <button type="button" class="cf-modal-x" id="cf_gen_x" aria-label="Cerrar">&#10005;</button>
+        <h3>&#11088; Mis pruebas &middot; hoja / imagen</h3>
+        <p class="cf-m-sub">Elige el periodo: se incluir&aacute;n tus favoritas de esas fechas.</p>
+      </div>
+      <div class="cf-modal-body">
+        <div class="cf-gen-range">
+          <label>Desde<br><input type="date" id="cf_gen_desde"></label>
+          <label>Hasta<br><input type="date" id="cf_gen_hasta"></label>
+        </div>
+        <div class="cf-gen-info" id="cf_gen_info"></div>
+        <div id="cf_gen_out"></div>
+      </div>
+      <div class="cf-modal-foot">
+        <button type="button" class="cf-btn-of" id="cf_gen_img">&#128241; Imagen (WhatsApp)</button>
+        <button type="button" class="cf-btn-of" id="cf_gen_print" style="background:#475569">&#128424; Imprimir / PDF</button>
+        <button type="button" class="cf-btn-cerrar" id="cf_gen_cerrar">Cerrar</button>
       </div>
     </div>
   </div>
@@ -452,6 +499,107 @@
       Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
       elDes.value=hoyISO(); if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0"); if(elSt)elSt.value=""; if(elVerPas)elVerPas.checked=false; if(elProv)elProv.value="";
       apply();
+    }
+
+    // ── FAVORITAS: marcar pruebas y generar hoja/imagen para el equipo ──────
+    var _cfOnlyFavs=false;
+    function _cfFavKey(r){ if(r.id!=null){ if(String(r.id)!==""){ return "id:"+r.id; } } return (r.fecha||"")+"|"+_normDup(r.prueba)+"|"+_normDup(r.federacion); }
+    function _cfFavLoad(){ try{ return JSON.parse(localStorage.getItem("cf_favs")||"[]"); }catch(e){ return []; } }
+    function _cfFavSet(){ var s={}; _cfFavLoad().forEach(function(k){ s[k]=1; }); return s; }
+    function _cfFavToggle(r){ var k=_cfFavKey(r); var a=_cfFavLoad(); var i=a.indexOf(k); if(i>=0){ a.splice(i,1); } else { a.push(k); } try{ localStorage.setItem("cf_favs", JSON.stringify(a)); }catch(e){} _cfFavUpdateBar(); }
+    function _cfFavAll(){ var s=_cfFavSet(); return rows.filter(function(r){ return !!s[_cfFavKey(r)]; }); }
+    function _cfFavUpdateBar(){
+      var n=_cfFavAll().length;
+      var bar=$("cf_favbar"); if(bar){ bar.style.display=n>0?"":"none"; }
+      var el=$("cf_fav_n"); if(el){ el.innerHTML="★ Mis pruebas: "+n; }
+      var b=$("cf_fav_only"); if(b){ if(_cfOnlyFavs){ b.classList.add("on"); b.textContent="Ver todas"; } else { b.classList.remove("on"); b.textContent="Ver solo favoritas"; } }
+    }
+    // Generar hoja / imagen
+    function _cfFmtDMY(iso){ var d=String(iso||"").split("-"); return d.length>=3?(d[2]+"/"+d[1]+"/"+d[0]):String(iso||""); }
+    function _cfCatsTxt(r){ return _decode((r.categorias||"").split(",").filter(Boolean).map(function(c){return CATLBL[c]||c;}).join(", ")); }
+    function _cfGenFavsInRange(){
+      var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
+      var favs=_cfFavAll().filter(function(r){ var f=(r.fecha||""); if(de){ if(f<de){ return false; } } if(ha){ if(f>ha){ return false; } } return true; });
+      favs.sort(function(a,b){ return (a.fecha||"").localeCompare(b.fecha||""); });
+      return favs;
+    }
+    function _cfGenUpdateInfo(){ var favs=_cfGenFavsInRange(); var el=$("cf_gen_info"); if(el){ el.innerHTML="<b>"+favs.length+"</b> prueba"+(favs.length===1?"":"s")+" en ese periodo."; } }
+    function _cfGenOpen(){
+      var all=_cfFavAll(); if(!all.length){ alert("Primero marca alguna prueba con la estrella ★."); return; }
+      var fechas=all.map(function(r){return r.fecha||"";}).filter(Boolean).sort();
+      if($("cf_gen_desde")){ $("cf_gen_desde").value=fechas[0]||hoyISO(); }
+      if($("cf_gen_hasta")){ $("cf_gen_hasta").value=fechas[fechas.length-1]||hoyISO(); }
+      $("cf_gen_out").innerHTML=""; _cfGenUpdateInfo();
+      var ov=$("cf_gen_modal"); ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden";
+    }
+    function _cfGenClose(){ var ov=$("cf_gen_modal"); ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; }
+    function _cfRoundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+    function _cfTrunc(g,text,maxW){ var s=String(text||""); if(g.measureText(s).width<=maxW){ return s; } while(s.length>1){ s=s.slice(0,-1); if(g.measureText(s+"…").width<=maxW){ return s+"…"; } } return s; }
+    function _cfGenBuildCanvas(favs){
+      var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
+      var W=1080, pad=48, headH=210, cardH=150, footH=90;
+      var H=headH + Math.max(favs.length,1)*cardH + footH;
+      var cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+      var g=cv.getContext("2d");
+      g.fillStyle="#f6f5f2"; g.fillRect(0,0,W,H);
+      g.fillStyle="#1e3a8a"; g.fillRect(0,0,W,headH);
+      g.fillStyle="#ffffff"; g.textBaseline="alphabetic"; g.textAlign="left";
+      g.font="800 46px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText("\uD83D\uDEB4  PRUEBAS PREVISTAS", pad, 84);
+      g.font="600 26px -apple-system,Segoe UI,Arial,sans-serif"; g.fillStyle="#c7d2fe";
+      g.fillText("del "+_cfFmtDMY(de)+" al "+_cfFmtDMY(ha)+"  \u00B7  "+favs.length+" prueba"+(favs.length===1?"":"s"), pad, 132);
+      g.font="500 22px -apple-system,Segoe UI,Arial,sans-serif"; g.fillStyle="#93c5fd";
+      g.fillText("Calendario ciclista \u00B7 mfppcycling.com", pad, 172);
+      var MES=["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+      favs.forEach(function(r,i){
+        var top=headH+i*cardH;
+        g.fillStyle=(i%2===0)?"#ffffff":"#f0efec"; g.fillRect(0,top,W,cardH);
+        g.strokeStyle="#e5e7eb"; g.beginPath(); g.moveTo(0,top+cardH); g.lineTo(W,top+cardH); g.stroke();
+        var d=(r.fecha||"").split("-");
+        g.fillStyle="#1e3a8a"; _cfRoundRect(g,pad,top+25,110,100,14); g.fill();
+        g.fillStyle="#ffffff"; g.textAlign="center";
+        g.font="800 46px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText(d[2]||"", pad+55, top+82);
+        g.font="700 22px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText(MES[(+d[1]||1)-1]||"", pad+55, top+112);
+        g.textAlign="left";
+        var x=pad+140, maxW=W-x-pad;
+        g.fillStyle="#0b2f6b"; g.font="800 32px -apple-system,Segoe UI,Arial,sans-serif";
+        g.fillText(_cfTrunc(g,(r.prueba||""),maxW), x, top+58);
+        g.fillStyle="#5c5c5c"; g.font="500 24px -apple-system,Segoe UI,Arial,sans-serif";
+        g.fillText(_cfTrunc(g,[r.localidad,r.provincia].filter(Boolean).join(", "),maxW), x, top+98);
+        g.fillStyle="#8a8a8a"; g.font="600 22px -apple-system,Segoe UI,Arial,sans-serif";
+        g.fillText(_cfTrunc(g,[r.modalidad,_cfCatsTxt(r)].filter(Boolean).join("  \u00B7  "),maxW), x, top+130);
+      });
+      g.fillStyle="#1e3a8a"; g.fillRect(0,H-footH,W,footH);
+      g.fillStyle="#ffffff"; g.textAlign="center"; g.font="700 26px -apple-system,Segoe UI,Arial,sans-serif";
+      g.fillText("Todas las pruebas en mfppcycling.com/calendario", W/2, H-footH/2+9); g.textAlign="left";
+      return cv;
+    }
+    function _cfGenImage(){
+      var favs=_cfGenFavsInRange(); if(!favs.length){ alert("No hay pruebas favoritas en ese periodo."); return; }
+      var cv=_cfGenBuildCanvas(favs); var out=$("cf_gen_out"); out.innerHTML="";
+      var img=document.createElement("img"); img.alt="Mis pruebas";
+      cv.toBlob(function(blob){
+        var url=URL.createObjectURL(blob); img.src=url; out.appendChild(img);
+        var file=null; try{ file=new File([blob],"mis-pruebas.png",{type:"image/png"}); }catch(e){}
+        var can = navigator.canShare ? (file?navigator.canShare({files:[file]}):false) : false;
+        var acc=document.createElement("div");
+        var btns='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+        if(can){ btns+='<button type="button" class="cf-btn-of" id="cf_gen_share">📤 Compartir</button>'; }
+        btns+='<a class="cf-btn-of" style="background:#475569" href="'+url+'" download="mis-pruebas.png">⬇️ Descargar</a></div>';
+        btns+='<div class="cf-gen-hint">En el móvil también puedes mantener pulsada la imagen para guardarla o enviarla por WhatsApp.</div>';
+        acc.innerHTML=btns; out.appendChild(acc);
+        var sb=document.getElementById("cf_gen_share");
+        if(sb){ sb.addEventListener("click",function(){ if(file){ navigator.share({files:[file], title:"Mis pruebas"}).catch(function(){}); } }); }
+      },"image/png");
+    }
+    function _cfGenPrint(){
+      var favs=_cfGenFavsInRange(); if(!favs.length){ alert("No hay pruebas favoritas en ese periodo."); return; }
+      var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
+      var MESL=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+      var filas=favs.map(function(r){ var d=(r.fecha||"").split("-"); var f=d.length>=3?(d[2]+" "+(MESL[(+d[1]||1)-1]||"")):r.fecha; var loc=[r.localidad,r.provincia].filter(Boolean).join(", "); var mc=[r.modalidad,_cfCatsTxt(r)].filter(Boolean).join(" · ");
+        return "<tr><td class='f'>"+_esc(f)+"</td><td><b>"+_esc(r.prueba||"")+"</b><br><span class='m'>"+_esc(loc)+" · "+_esc(mc)+"</span></td></tr>"; }).join("");
+      var html="<!doctype html><html><head><meta charset='utf-8'><title>Mis pruebas</title><style>body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1a1a1a;margin:26px}h1{font-size:22px;color:#1e3a8a;margin:0 0 2px}.sub{color:#6b7280;font-size:13px;margin:0 0 16px}table{width:100%;border-collapse:collapse}td{padding:9px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px}td.f{white-space:nowrap;font-weight:700;color:#1e3a8a;width:120px}.m{color:#6b7280;font-size:12.5px}.foot{margin-top:18px;color:#9ca3af;font-size:12px}</style></head><body><h1>Pruebas previstas</h1><p class='sub'>del "+_cfFmtDMY(de)+" al "+_cfFmtDMY(ha)+" · "+favs.length+" prueba"+(favs.length===1?"":"s")+"</p><table>"+filas+"</table><p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p></body></html>";
+      var w=window.open("","_blank"); if(!w){ alert("Permite las ventanas emergentes para imprimir."); return; }
+      w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },300);
     }
 
     function cargar(){
@@ -597,7 +745,9 @@
       // La casilla "Ver pasadas" solo tiene sentido con un mes elegido.
       if(elDes) elDes.disabled=!!mes;
       if(elVerPas){ elVerPas.disabled=!mes; var lbl=elVerPas.parentNode; if(lbl){ if(mes){ lbl.classList.remove("dis"); } else { lbl.classList.add("dis"); } } }
+      var _favA=_cfOnlyFavs?_cfFavSet():null;
       var out=rows.filter(function(r){
+        if(_favA){ if(!_favA[_cfFavKey(r)]){ return false; } }
         var st=(r.estado||"activa").toLowerCase().trim();
         // Filtro de ESTADO: "" = todo menos retiradas · activa · incidencia (aplazada/anulada) · all
         if(stF==="activa"){ if(st!=="activa") return false; }
@@ -627,10 +777,12 @@
         " &middot; <b>"+nf+"</b> federaci"+(nf===1?"&oacute;n":"ones")+
         " &middot; <b>"+nm+"</b> modalidad"+(nm===1?"":"es")+updTxt;
       try{ _syncChips(); }catch(_){}
+      try{ _cfFavUpdateBar(); }catch(_){}
     }
 
     function render(list){
       var tb=$("cf_tb"); tb.innerHTML="";
+      var _favSet=_cfFavSet();
       if(!list.length){ $("cf_estado").style.display="block"; $("cf_estado").textContent="Ninguna prueba con esos filtros."; return; }
       $("cf_estado").style.display="none";
       var hoy=hoyISO();
@@ -667,7 +819,7 @@
         if(_cls) tr.className=_cls;
         ri++;
         tr.innerHTML='<td class="c-fecha"><div class="cf-datetile"><span class="d-dow">'+dow+'</span><span class="d-day">'+(d[2]||"")+'</span><span class="d-mon">'+(MESES[(+d[1]||1)-1]||"")+'</span></div></td>'+
-          '<td class="c-prueba"><div class="nm"><span class="nm-txt"></span>'+estBadge+coBadge+'</div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
+          '<td class="c-prueba"><div class="nm"><button type="button" class="cf-fav-star'+(_favSet[_cfFavKey(r)]?' on':'')+'" title="Marcar para mi hoja de pruebas">'+(_favSet[_cfFavKey(r)]?'★':'☆')+'</button><span class="nm-txt"></span>'+estBadge+coBadge+'</div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
           '<td class="c-loc" data-lbl="Localidad"><div class="loc"></div><div class="prov"></div></td>'+
           '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
           '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
@@ -685,6 +837,7 @@
         tr.children[3].textContent=r.federacion||"";
         tr.querySelector(".cf-verficha").addEventListener("click",function(){ abrirFicha(r); });
         var _cb=tr.querySelector(".cf-coinc-badge"); if(_cb){ _cb.addEventListener("click",function(ev){ ev.stopPropagation(); abrirFicha(r); }); }
+        var _st=tr.querySelector(".cf-fav-star"); if(_st){ _st.addEventListener("click",function(ev){ ev.stopPropagation(); _cfFavToggle(r); var on=_st.classList.toggle("on"); _st.textContent=on?"★":"☆"; if(_cfOnlyFavs){ apply(); } }); }
         tr.querySelector(".cal-gcal").href=_gcalUrl(r);
         tr.querySelector(".cal-ics").addEventListener("click",function(e){ e.preventDefault(); _abrirICS(r); });
         tr.querySelector(".cal-ics").addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _abrirICS(r); } });
@@ -860,6 +1013,16 @@
     $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";apply();});
     var _bsp=$("cf_setpref"); if(_bsp){ _bsp.addEventListener("click",_cfSavePref); }
     var _bcp=$("cf_clearpref"); if(_bcp){ _bcp.addEventListener("click",_cfClearPref); }
+    var _fo=$("cf_fav_only"); if(_fo){ _fo.addEventListener("click",function(){ _cfOnlyFavs=!_cfOnlyFavs; _cfFavUpdateBar(); apply(); }); }
+    var _fc=$("cf_fav_clear"); if(_fc){ _fc.addEventListener("click",function(){ if(confirm("¿Quitar TODAS las pruebas marcadas?")){ try{ localStorage.removeItem("cf_favs"); }catch(e){} _cfOnlyFavs=false; _cfFavUpdateBar(); apply(); } }); }
+    var _fg=$("cf_fav_gen"); if(_fg){ _fg.addEventListener("click",_cfGenOpen); }
+    var _gx=$("cf_gen_x"); if(_gx){ _gx.addEventListener("click",_cfGenClose); }
+    var _gc=$("cf_gen_cerrar"); if(_gc){ _gc.addEventListener("click",_cfGenClose); }
+    var _gmo=$("cf_gen_modal"); if(_gmo){ _gmo.addEventListener("click",function(e){ if(e.target===_gmo){ _cfGenClose(); } }); }
+    var _gdd=$("cf_gen_desde"); if(_gdd){ _gdd.addEventListener("change",function(){ _cfGenUpdateInfo(); $("cf_gen_out").innerHTML=""; }); }
+    var _gdh=$("cf_gen_hasta"); if(_gdh){ _gdh.addEventListener("change",function(){ _cfGenUpdateInfo(); $("cf_gen_out").innerHTML=""; }); }
+    var _gi=$("cf_gen_img"); if(_gi){ _gi.addEventListener("click",_cfGenImage); }
+    var _gp=$("cf_gen_print"); if(_gp){ _gp.addEventListener("click",_cfGenPrint); }
 
     cargar();
   })();
