@@ -597,7 +597,13 @@
       var MESL=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
       var filas=favs.map(function(r){ var d=(r.fecha||"").split("-"); var f=d.length>=3?(d[2]+" "+(MESL[(+d[1]||1)-1]||"")):r.fecha; var loc=[r.localidad,r.provincia].filter(Boolean).join(", "); var mc=[r.modalidad,_cfCatsTxt(r)].filter(Boolean).join(" · ");
         return "<tr><td class='f'>"+_esc(f)+"</td><td><b>"+_esc(r.prueba||"")+"</b><br><span class='m'>"+_esc(loc)+" · "+_esc(mc)+"</span></td></tr>"; }).join("");
-      var html="<!doctype html><html><head><meta charset='utf-8'><title>Mis pruebas</title><style>body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1a1a1a;margin:26px}h1{font-size:22px;color:#1e3a8a;margin:0 0 2px}.sub{color:#6b7280;font-size:13px;margin:0 0 16px}table{width:100%;border-collapse:collapse}td{padding:9px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px}td.f{white-space:nowrap;font-weight:700;color:#1e3a8a;width:120px}.m{color:#6b7280;font-size:12.5px}.foot{margin-top:18px;color:#9ca3af;font-size:12px}</style></head><body><h1>Pruebas previstas</h1><p class='sub'>del "+_cfFmtDMY(de)+" al "+_cfFmtDMY(ha)+" · "+favs.length+" prueba"+(favs.length===1?"":"s")+"</p><table>"+filas+"</table><p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p></body></html>";
+      var css="body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1a1a1a;margin:26px}h1{font-size:22px;color:#1e3a8a;margin:0 0 2px}.sub{color:#6b7280;font-size:13px;margin:0 0 16px}table{width:100%;border-collapse:collapse}td{padding:9px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px}td.f{white-space:nowrap;font-weight:700;color:#1e3a8a;width:120px}.m{color:#6b7280;font-size:12.5px}.foot{margin-top:18px;color:#9ca3af;font-size:12px}";
+      // IMPORTANTE: montamos los tags de estructura (html/head/body/style) POR
+      // PARTES para que el optimizador de LiteSpeed/WordPress no los detecte
+      // dentro de este <script> e inyecte su lazy-load rompiendo el JS.
+      var O=function(n){return "<"+n+">";}, X=function(n){return "<"+"/"+n+">";};
+      var cuerpo="<h1>Pruebas previstas</h1><p class='sub'>del "+_cfFmtDMY(de)+" al "+_cfFmtDMY(ha)+" · "+favs.length+" prueba"+(favs.length===1?"":"s")+"</p><table>"+filas+"</table><p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p>";
+      var html="<!doc"+"type html>"+O("html")+O("head")+"<me"+"ta charset='utf-8'>"+O("title")+"Mis pruebas"+X("title")+O("style")+css+X("style")+X("head")+O("body")+cuerpo+X("body")+X("html");
       var w=window.open("","_blank"); if(!w){ alert("Permite las ventanas emergentes para imprimir."); return; }
       w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },300);
     }
