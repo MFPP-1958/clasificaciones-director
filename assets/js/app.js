@@ -9752,6 +9752,10 @@ function parseCSVLike(text){
     map.bib=find([/dorsal/,/^dor/,/^num/,/^n[ºo°]\.?$/,/^#$/],null);
     map.name=find([/^nombre$/,/nombre(?!.*equipo)/,/ciclista/,/corredor/,/name/],2);
     map.surname=find([/apellido/,/surname/,/last name/],null);
+    // "Apellidos, Nombre" en UNA sola columna: apellido y nombre apuntarían a la
+    // misma → tratarla como campo combinado (surname=null) y dejar que
+    // normalizeRiderName la parsee entera.
+    if(map.surname!=null && map.surname===map.name) map.surname=null;
     map.team=find([/club.*equipo/,/equipo/,/club/,/^team$/],4);
     // Regex ampliado: acepta espacio entre C. y A. (ej: "C. A. Participante")
     map.region=find([/c\.?\s*a\.?\s*participante/,/comunidad/,/autonom/,/^ca$/,/ccaa/,/c\.?c\.?aa/,/fed.*territ/,/territ/,/region/,/provincia/],null);
@@ -10525,7 +10529,22 @@ function _setNameFirst(v){
     : 'Modo "Nombre primero" desactivado.', v?'info':'ok', 3200);
 }
 
+// Envoltorio: limpia el resultado de comas duplicadas o sueltas venga de donde
+// venga (p.ej. una columna "Apellidos, Nombre" con la coma dentro producía
+// "Bosacoma,, Jordi"). Así el resultado SIEMPRE queda "Apellido, Nombre" limpio.
 function normalizeRiderName(rawName, nombre, apellido1, apellido2){
+  let r = _normalizeRiderNameRaw(rawName, nombre, apellido1, apellido2);
+  if(typeof r === 'string'){
+    r = r.replace(/\s*,\s*,\s*/g, ', ')  // ",," → ", "
+         .replace(/,\s*$/, '')            // coma final suelta
+         .replace(/^\s*,\s*/, '')         // coma inicial suelta
+         .replace(/\s{2,}/g, ' ')
+         .trim();
+  }
+  return r;
+}
+
+function _normalizeRiderNameRaw(rawName, nombre, apellido1, apellido2){
   // ── LIMPIEZA DEFENSIVA: eliminar sufijos de posición/categoría que a veces
   // se quedan pegados al nombre cuando el CSV o PDF mezcla columnas. Patrones:
   //   "Pastor, Mauro 1 De 30"   → "Pastor, Mauro"
