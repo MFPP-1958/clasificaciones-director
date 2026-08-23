@@ -3499,7 +3499,10 @@ function _storyFmtGap(sec,pos){
   return '+'+(h>0?(h+':'+String(m).padStart(2,'0')):String(m))+':'+String(s).padStart(2,'0')+_fracSuffix(sec);
 }
 function _storyName(raw){
-  const s=String(raw||'').trim(); let given='', sur='';
+  // Blindaje: limpia comas dobles o sueltas ("Bosacoma,, Jordi" → "Bosacoma,
+  // Jordi") por si el dato en memoria viene sin normalizar.
+  const s=String(raw||'').trim().replace(/\s*,\s*,\s*/g,', ').replace(/^\s*,\s*/,'').replace(/,\s*$/,'');
+  let given='', sur='';
   const c=s.match(/^([^,]+),\s*(.+)$/);
   if(c){ sur=c[1].trim(); given=c[2].trim(); }
   else { const p=s.split(/\s+/); given=p.shift()||''; sur=p.join(' '); }
