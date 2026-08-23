@@ -385,6 +385,10 @@
   <div class="paste-box">
     <h3 style="margin:0 0 8px">O pegar clasificación como texto</h3>
     <p class="help" style="margin:0 0 8px">Pega aquí una tabla copiada desde web, PDF, Excel o WhatsApp. Después pulsa "Procesar texto pegado".</p>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin:0 0 8px;font-size:12.5px;font-weight:700;color:#b45309;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:9px 11px;cursor:pointer">
+      <input type="checkbox" id="nameFirstClasif" onchange="_setNameFirst(this.checked)" style="width:16px;height:16px;margin-top:1px;cursor:pointer;accent-color:#d97706" />
+      <span>Los nombres vienen como <b>NOMBRE Apellido1 Apellido2</b> (listas de <b>Cataluña / País Vasco</b>). Marca esto <b>ANTES</b> de pegar para que coja el <b>primer apellido</b>.</span>
+    </label>
     <textarea id="pastedText" placeholder="Pega aquí la clasificación..."></textarea>
     <div class="paste-actions">
       <button class="btn light" onclick="processPastedText()">Procesar texto pegado</button>
@@ -543,6 +547,10 @@
         Sube la lista de <b>inscritos</b> (startlist) para detectar automáticamente quién terminó (Acabó) y quién no (DNF).
         Acepta PDF, CSV, XLS, XLSX o texto pegado. Necesita al menos <b>dorsal + nombre</b>.
       </p>
+      <label style="display:flex;align-items:flex-start;gap:8px;margin:0 0 10px;font-size:12.5px;font-weight:700;color:#b45309;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:9px 11px;cursor:pointer">
+        <input type="checkbox" id="nameFirstInsc" onchange="_setNameFirst(this.checked)" style="width:16px;height:16px;margin-top:1px;cursor:pointer;accent-color:#d97706" />
+        <span>Los nombres vienen como <b>NOMBRE Apellido1 Apellido2</b> (listas de <b>Cataluña / País Vasco</b>). Marca esto <b>ANTES</b> de subir/pegar para que coja el <b>primer apellido</b>.</span>
+      </label>
       <div class="upload upload-inscritos" id="dropZoneInscritos">
         <label class="btn light" for="fileInputInscritos">📂 Seleccionar archivo de inscritos</label>
         <input id="fileInputInscritos" type="file" accept=".pdf,.csv,.xls,.xlsx" style="display:none" />

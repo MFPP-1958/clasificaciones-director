@@ -10511,6 +10511,20 @@ function _chgOpenPrintReport(){
   w.document.close();
 }
 
+// ── Orden del nombre en las listas que se pegan/suben ────────────────────────
+// Algunas federaciones (Cataluña, País Vasco) dan las listas como
+// "NOMBRE APELLIDO1 APELLIDO2" en vez del habitual "APELLIDOS NOMBRE". El
+// director marca una casilla y activamos este modo para que normalizeRiderName
+// coja el PRIMER apellido correcto. No se guarda entre sesiones (empieza
+// apagado en cada recarga) para evitar dejarlo activado sin querer.
+function _setNameFirst(v){
+  window._rpNameFirst = !!v;
+  ['nameFirstClasif','nameFirstInsc'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=!!v; });
+  if(typeof showToast==='function') showToast(v
+    ? '🔤 Modo "Nombre primero" ACTIVADO — para listas de Cataluña / País Vasco. Ahora pega o sube la lista.'
+    : 'Modo "Nombre primero" desactivado.', v?'info':'ok', 3200);
+}
+
 function normalizeRiderName(rawName, nombre, apellido1, apellido2){
   // ── LIMPIEZA DEFENSIVA: eliminar sufijos de posición/categoría que a veces
   // se quedan pegados al nombre cuando el CSV o PDF mezcla columnas. Patrones:
@@ -10555,7 +10569,14 @@ function normalizeRiderName(rawName, nombre, apellido1, apellido2){
   if(words.length<2)return _titleCase(raw);
   const isAllCaps=raw===raw.toUpperCase()&&/[A-ZÁÉÍÓÚÑ]/.test(raw);
   if(isAllCaps){
-    // "SANCHEZ TORAL IVAN" → primer apellido = words[0], nombre = last word
+    // Por defecto asumimos "APELLIDO1 APELLIDO2 NOMBRE" (formato de la mayoría
+    // de federaciones): primer apellido = words[0], nombre = última palabra.
+    // Pero si el director marca "el nombre va primero" (listas de Cataluña /
+    // País Vasco, que vienen "NOMBRE APELLIDO1 APELLIDO2"), el nombre está el
+    // primero → primer apellido = words[1], nombre = words[0]. Así NO se pierde
+    // el primer apellido (antes "JORDI BOSACOMA FELIU" → "Jordi, Feliu"; ahora
+    // → "Bosacoma, Jordi").
+    if(window._rpNameFirst) return `${_titleCase(words[1])}, ${_titleCase(words[0])}`;
     return `${_titleCase(words[0])}, ${_titleCase(words[words.length-1])}`;
   }
   // "GREUS I SORIANO Marc" → APELLIDOS EN MAYÚSCULAS + nombre en minúsculas al final
@@ -26103,6 +26124,11 @@ function parseInscritosCSVLike(text){
     map.bib = find([/dorsal/,/^dor\b/,/num/],null);
     map.name = find([/^nombre$/,/^nom$/,/nombre(?!.*equipo)/,/ciclista|corredor/,/apellido.*nombre/],1);
     map.surname = find([/^apellido/,/surname/],null);
+    // Cabeceras como "Apellidos, Nombre" hacen que apellido Y nombre apunten a
+    // la MISMA columna → se duplicaba el texto y se rompía el nombre. Si es la
+    // misma columna, es un campo combinado (una sola columna): tratarla como
+    // nombre completo (surname=null) para que normalizeRiderName la parsee bien.
+    if(map.surname!=null && map.surname===map.name) map.surname=null;
     map.team = find([/club.*equipo/,/equipo/,/club/,/^team$/],2);
     map.cat = find([/^categoria$/,/^cat$/,/category/],null);
   }
