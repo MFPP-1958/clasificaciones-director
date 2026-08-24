@@ -321,6 +321,46 @@
     #calfed .cf-nov-fedupd{ display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:4px 0; border-bottom:1px dotted #eceae5; }
     #calfed .cf-nov-fedupd .f{ color:#242424; font-weight:600; }
     #calfed .cf-nov-fedupd .d{ color:#8a8a8a; white-space:nowrap; }
+
+    /* ===== Fase 4 · Conmutador de vista + Calendario mensual ===== */
+    #calfed .cf-vtoggle{ display:inline-flex; border:1px solid #d4d2cc; border-radius:8px; overflow:hidden; }
+    #calfed .cf-vbtn{ font:inherit; font-size:12.5px; font-weight:700; padding:6px 12px; background:#fff; border:0; color:#6b6b6b; cursor:pointer; }
+    #calfed .cf-vbtn + .cf-vbtn{ border-left:1px solid #e4e1d9; }
+    #calfed .cf-vbtn.on{ background:var(--azul); color:#fff; }
+    #calfed .cf-cal{ margin-top:8px; }
+    #calfed .cf-cal-head{ display:flex; align-items:center; justify-content:center; gap:12px; margin:4px 0 10px; flex-wrap:wrap; }
+    #calfed .cf-cal-title{ font-size:17px; font-weight:800; color:var(--tinta); text-transform:capitalize; min-width:150px; text-align:center; }
+    #calfed .cf-cal-nav{ font:inherit; font-size:16px; font-weight:800; width:34px; height:34px; border:1px solid #d4d2cc; border-radius:8px; background:#fff; color:var(--azul); cursor:pointer; line-height:1; }
+    #calfed .cf-cal-nav:hover{ background:#f0efec; }
+    #calfed .cf-cal-hoy{ font:inherit; font-size:12px; font-weight:700; padding:7px 12px; border:1px solid #d4d2cc; border-radius:8px; background:#fff; color:#444; cursor:pointer; }
+    #calfed .cf-cal-hoy:hover{ background:#f0efec; }
+    #calfed .cf-cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+    #calfed .cf-cal-dow{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:#8a8577; text-align:center; padding:3px 0; }
+    #calfed .cf-cal-cell{ min-height:98px; border:1px solid #e7e5df; border-radius:8px; padding:5px 5px 6px; background:#fff; }
+    #calfed .cf-cal-cell.pad{ background:#faf9f7; border-style:dashed; min-height:0; }
+    #calfed .cf-cal-cell.today{ box-shadow:inset 0 0 0 1.5px #7cc0ec; border-color:var(--cian); }
+    #calfed .cf-cal-dn{ font-size:12.5px; font-weight:800; color:#55524b; }
+    #calfed .cf-cal-cell.today .cf-cal-dn{ color:var(--cian); }
+    #calfed .cf-cal-dn.wknd{ color:#b45309; }
+    #calfed .cf-cal-ev{ display:block; width:100%; text-align:left; font:inherit; font-size:10.5px; font-weight:600; line-height:1.25; color:#22456e; background:#eef2f8; border:0; border-left:3px solid var(--azul); border-radius:4px; padding:2px 5px; margin-top:3px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #calfed .cf-cal-ev:hover{ background:#e2e9f5; }
+    #calfed .cf-cal-ev.apl{ border-left-color:#f59e0b; color:#92400e; background:#fef7e6; }
+    #calfed .cf-cal-ev.anu{ border-left-color:#ef4444; color:#991b1b; background:#fdecec; }
+    #calfed .cf-cal-more{ font:inherit; font-size:10px; font-weight:700; color:#8a8a8a; margin-top:3px; background:none; border:0; padding:1px 2px; cursor:pointer; }
+    #calfed .cf-cal-more:hover{ color:var(--azul); }
+    #calfed .cf-cal-dots{ display:none; }   /* solo en móvil */
+    @media (max-width:640px){
+      #calfed .cf-cal-grid{ gap:3px; }
+      #calfed .cf-cal-cell{ min-height:52px; padding:3px 3px 4px; }
+      #calfed .cf-cal-dow{ font-size:9.5px; }
+      #calfed .cf-cal-dn{ font-size:11px; }
+      #calfed .cf-cal-ev, #calfed .cf-cal-more{ display:none; }   /* no caben nombres en móvil */
+      #calfed .cf-cal-dots{ display:flex; flex-wrap:wrap; gap:2px; margin-top:3px; }
+      #calfed .cf-cal-dot{ width:6px; height:6px; border-radius:50%; background:var(--azul); }
+      #calfed .cf-cal-dot.apl{ background:#f59e0b; }
+      #calfed .cf-cal-dot.anu{ background:#ef4444; }
+      #calfed .cf-cal-cell.has{ cursor:pointer; }
+    }
   </style>
 
   <h2>Calendario federativo de ciclismo</h2>
@@ -412,6 +452,10 @@
 
   <div class="cf-metabar">
     <div class="meta" id="cf_count"></div>
+    <div class="cf-vtoggle" role="group" aria-label="Cambiar vista">
+      <button type="button" class="cf-vbtn on" id="cf_vlista">&#128203; Lista</button>
+      <button type="button" class="cf-vbtn" id="cf_vmes">&#128197; Mes</button>
+    </div>
     <button type="button" class="btn cf-novbtn" id="cf_novbtn">&#128276; Novedades</button>
   </div>
 
@@ -437,6 +481,7 @@
     <tbody id="cf_tb"></tbody>
   </table>
   </div>
+  <div class="cf-cal" id="cf_cal" style="display:none"></div>
   <div class="estado" id="cf_estado">Cargando pruebas&hellip;</div>
 
   <!-- Modal de ficha de la prueba (info que tenemos + enlace a la web oficial) -->
@@ -467,6 +512,19 @@
       </div>
       <div class="cf-modal-body" id="cf_nov_body"></div>
       <div class="cf-modal-foot"><button type="button" class="cf-btn-cerrar" id="cf_nov_cerrar">Cerrar</button></div>
+    </div>
+  </div>
+
+  <!-- Modal: pruebas de un DÍA (calendario mensual) -->
+  <div class="cf-modal-ov" id="cf_day_modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="cf-modal" style="max-width:520px">
+      <div class="cf-modal-cab">
+        <button type="button" class="cf-modal-x" id="cf_day_x" aria-label="Cerrar">&#10005;</button>
+        <h3 id="cf_day_title"></h3>
+        <p class="cf-m-sub" id="cf_day_sub"></p>
+      </div>
+      <div class="cf-modal-body" id="cf_day_body"></div>
+      <div class="cf-modal-foot"><button type="button" class="cf-btn-cerrar" id="cf_day_cerrar">Cerrar</button></div>
     </div>
   </div>
 
@@ -528,6 +586,8 @@
     var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), elVerPas=$("cf_verpasadas"), elProv=$("cf_prov"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
     // Atajos que no son un desplegable: próximos 7 días, fin de semana, inscripción abierta.
     var _cfQ={dias7:false, finde:false, inscr:false};
+    // Vista: "lista" (tabla) o "mes" (calendario mensual). _cfCalYM = "YYYY-MM" mostrado.
+    var _cfVista="lista", _cfCalYM="", _cfCalDayMap={};
 
     function hoyISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
     // Día de la semana 0=Lun … 6=Dom (UTC, para no depender de la zona horaria).
@@ -907,13 +967,21 @@
       });
       out=_dedupe(out);   // quitar duplicados por tildes/mayúsculas antes de pintar
       out.sort(function(a,b){var A=(a[sortKey]||"")+"",B=(b[sortKey]||"")+"";var c=A.localeCompare(B,"es",{numeric:true});return sortAsc?c:-c;});
-      render(out);
-      var nf=new Set(out.map(function(r){return r.federacion;})).size;
-      var nm=new Set(out.map(function(r){return r.modalidad;}).filter(Boolean)).size;
-      var updTxt=ultAct?(" &middot; actualizado el <b>"+_fechaCorta(ultAct)+"</b>"):"";
-      $("cf_count").innerHTML="<b>"+out.length+"</b> prueba"+(out.length===1?"":"s")+
-        " &middot; <b>"+nf+"</b> federaci"+(nf===1?"&oacute;n":"ones")+
-        " &middot; <b>"+nm+"</b> modalidad"+(nm===1?"":"es")+updTxt;
+      if(_cfVista==="mes"){
+        var tw=document.querySelector("#calfed .tabla-wrap"); if(tw){ tw.style.display="none"; }
+        var cc=$("cf_cal"); if(cc){ cc.style.display=""; }
+        _cfRenderCal();   // pinta la rejilla del mes y su propio contador
+      } else {
+        var tw2=document.querySelector("#calfed .tabla-wrap"); if(tw2){ tw2.style.display=""; }
+        var cc2=$("cf_cal"); if(cc2){ cc2.style.display="none"; }
+        render(out);
+        var nf=new Set(out.map(function(r){return r.federacion;})).size;
+        var nm=new Set(out.map(function(r){return r.modalidad;}).filter(Boolean)).size;
+        var updTxt=ultAct?(" &middot; actualizado el <b>"+_fechaCorta(ultAct)+"</b>"):"";
+        $("cf_count").innerHTML="<b>"+out.length+"</b> prueba"+(out.length===1?"":"s")+
+          " &middot; <b>"+nf+"</b> federaci"+(nf===1?"&oacute;n":"ones")+
+          " &middot; <b>"+nm+"</b> modalidad"+(nm===1?"":"es")+updTxt;
+      }
       try{ _syncChips(); }catch(_){}
       try{ _cfRenderQuick(); }catch(_){}
       try{ _cfFavUpdateBar(); }catch(_){}
@@ -1230,6 +1298,129 @@
     }
     function _cfNovClose(){ var ov=$("cf_nov_modal"); if(!ov) return; ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; }
 
+    // ── VISTA CALENDARIO MENSUAL ──────────────────────────────────────────
+    // Filtros SIN la parte de fecha (mismos criterios que apply, para el mes visible).
+    function _cfCalMatch(r){
+      var st=(r.estado||"activa").toLowerCase().trim();
+      var stF=(elSt?elSt.value:"");
+      if(stF==="activa"){ if(st!=="activa") return false; }
+      else if(stF==="incidencia"){ if(!(st==="aplazada"||st==="anulada")) return false; }
+      else if(stF!=="all"){ if(st==="retirada") return false; }
+      var cats=(r.categorias||"").split(",");
+      if(els.cat.value){ if(cats.indexOf(els.cat.value)<0) return false; }
+      if(els.sex.value){ if((r.sexo||"").indexOf(els.sex.value)<0) return false; }
+      if(els.mod.value){ if(r.modalidad!==els.mod.value) return false; }
+      if(els.fed.value){ if(r.federacion!==els.fed.value) return false; }
+      var prov=(elProv?elProv.value:""); if(prov){ if((r.provincia||"")!==prov) return false; }
+      if(_cfQ.finde){ if(_cfDow(r.fecha)<5) return false; }
+      if(_cfQ.inscr){ if(!((r.fuente||"").trim())) return false; }
+      if(_cfOnlyFavs){ if(!_cfFavSet()[_cfFavKey(r)]) return false; }
+      var q=(els.txt.value||"").trim().toLowerCase();
+      if(q){ if(((r.prueba||"")+" "+(r.localidad||"")+" "+(r.provincia||"")).toLowerCase().indexOf(q)<0) return false; }
+      return true;
+    }
+    function _cfRenderCal(){
+      var cont=$("cf_cal"); if(!cont) return;
+      if(!_cfCalYM){ var _mmv=elMes?elMes.value:""; _cfCalYM=_mmv?(hoyISO().slice(0,4)+"-"+_mmv):hoyISO().slice(0,7); }
+      var y=+_cfCalYM.slice(0,4), mo=+_cfCalYM.slice(5,7);
+      var evs=rows.filter(function(r){ if((r.fecha||"").slice(0,7)!==_cfCalYM) return false; return _cfCalMatch(r); });
+      evs=_dedupe(evs);
+      var byDay={}; evs.forEach(function(r){ var dd=(r.fecha||"").slice(8,10); (byDay[dd]=byDay[dd]||[]).push(r); });
+      _cfCalDayMap={};
+      var title=(MESLARGO[mo-1]||"")+" "+y;
+      var html='<div class="cf-cal-head">'
+        +'<button type="button" class="cf-cal-nav" id="cf_cal_prev" aria-label="Mes anterior">&#8249;</button>'
+        +'<span class="cf-cal-title">'+_esc(title.toLowerCase())+'</span>'
+        +'<button type="button" class="cf-cal-nav" id="cf_cal_next" aria-label="Mes siguiente">&#8250;</button>'
+        +'<button type="button" class="cf-cal-hoy" id="cf_cal_hoy">Hoy</button></div>';
+      html+='<div class="cf-cal-grid">';
+      DIAS.forEach(function(d){ html+='<div class="cf-cal-dow">'+d+'</div>'; });
+      var firstDow=_cfDow(_cfCalYM+"-01");
+      var pi; for(pi=0; pi<firstDow; pi++){ html+='<div class="cf-cal-cell pad"></div>'; }
+      var ndays=new Date(Date.UTC(y,mo,0)).getUTCDate();
+      var hoy=hoyISO();
+      var d;
+      for(d=1; d<=ndays; d++){
+        var dd=String(d).padStart(2,"0"); var ymd=_cfCalYM+"-"+dd;
+        var list=byDay[dd]||[];
+        if(list.length){ _cfCalDayMap[ymd]=list; }
+        var wknd=_cfDow(ymd)>=5?" wknd":"";
+        var isHoy=(ymd===hoy)?" today":"";
+        var hasCls=list.length?" has":"";
+        html+='<div class="cf-cal-cell'+isHoy+hasCls+'" data-ymd="'+ymd+'"><div class="cf-cal-dn'+wknd+'">'+d+'</div>';
+        var shown=list.slice(0,3), k;
+        for(k=0;k<shown.length;k++){
+          var r=shown[k]; var stc=(r.estado||"").toLowerCase().trim();
+          var cls=stc==="aplazada"?" apl":(stc==="anulada"?" anu":"");
+          html+='<button type="button" class="cf-cal-ev'+cls+'" data-ymd="'+ymd+'" data-i="'+k+'" title="'+_esc(r.prueba||"")+'">'+_esc(r.prueba||"")+'</button>';
+        }
+        if(list.length>3){ html+='<button type="button" class="cf-cal-more" data-ymd="'+ymd+'">+'+(list.length-3)+' más</button>'; }
+        if(list.length){
+          html+='<div class="cf-cal-dots">';
+          var dl=list.slice(0,6), z;
+          for(z=0;z<dl.length;z++){ var s2=(dl[z].estado||"").toLowerCase().trim(); var dc=s2==="aplazada"?" apl":(s2==="anulada"?" anu":""); html+='<span class="cf-cal-dot'+dc+'"></span>'; }
+          html+='</div>';
+        }
+        html+='</div>';
+      }
+      html+='</div>';
+      cont.innerHTML=html;
+      $("cf_count").innerHTML="<b>"+evs.length+"</b> prueba"+(evs.length===1?"":"s")+" en "+_esc(title.toLowerCase());
+      $("cf_estado").style.display="none";
+      var bp=$("cf_cal_prev"); if(bp){ bp.addEventListener("click",function(){ _cfCalShift(-1); }); }
+      var bn=$("cf_cal_next"); if(bn){ bn.addEventListener("click",function(){ _cfCalShift(1); }); }
+      var bh=$("cf_cal_hoy"); if(bh){ bh.addEventListener("click",function(){ _cfCalYM=hoyISO().slice(0,7); _cfRenderCal(); }); }
+    }
+    function _cfCalShift(n){
+      var y=+_cfCalYM.slice(0,4), mo=+_cfCalYM.slice(5,7)-1;
+      var dt=new Date(Date.UTC(y,mo+n,1));
+      _cfCalYM=dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0");
+      _cfRenderCal();
+    }
+    function _cfSetVista(v){
+      _cfVista=v;
+      var bl=$("cf_vlista"), bm=$("cf_vmes");
+      if(bl){ if(v==="lista"){ bl.classList.add("on"); } else { bl.classList.remove("on"); } }
+      if(bm){ if(v==="mes"){ bm.classList.add("on"); } else { bm.classList.remove("on"); } }
+      if(v==="mes"){ if(!_cfCalYM){ var _mmv=elMes?elMes.value:""; _cfCalYM=_mmv?(hoyISO().slice(0,4)+"-"+_mmv):hoyISO().slice(0,7); } }
+      apply();
+    }
+    // Modal de un DÍA concreto (móvil / "+N más")
+    var _cfDayList=[];
+    function _cfCalDayOpen(ymd){
+      var list=_cfCalDayMap[ymd]||[]; if(!list.length) return;
+      var ov=$("cf_day_modal"), body=$("cf_day_body"); if(!ov||!body) return;
+      _cfDayList=list.slice();
+      var p=ymd.split("-"); var fx=p.length>=3?(p[2]+" "+(MESLARGO[(+p[1]||1)-1]||"")+" "+p[0]):ymd;
+      $("cf_day_title").textContent=fx;
+      $("cf_day_sub").textContent=list.length+" prueba"+(list.length===1?"":"s");
+      body.innerHTML=list.map(function(r,i){
+        var st=(r.estado||"activa").toLowerCase().trim();
+        var badge=st==="aplazada"?'<span class="cf-nov-badge apl">Aplazada</span>':(st==="anulada"?'<span class="cf-nov-badge anu">Anulada</span>':"");
+        return '<div class="cf-nov-item" data-i="'+i+'"><div class="cf-nov-nm">'+_esc(r.prueba||"")+badge+' <span class="cf-nov-fed">'+_esc(r.federacion||"")+(r.localidad?(" &middot; "+_esc(r.localidad)):"")+'</span></div></div>';
+      }).join("");
+      ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden";
+    }
+    function _cfCalDayClose(){ var ov=$("cf_day_modal"); if(!ov) return; ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; }
+
+    if($("cf_vlista")) $("cf_vlista").addEventListener("click",function(){ _cfSetVista("lista"); });
+    if($("cf_vmes")) $("cf_vmes").addEventListener("click",function(){ _cfSetVista("mes"); });
+    var _cal=$("cf_cal");
+    if(_cal){ _cal.addEventListener("click",function(e){
+      var t=e.target;
+      while(t){ if(t.nodeType===1){
+        var cn=(''+(t.className||""));
+        if(cn.indexOf("cf-cal-ev")>=0){ var ymd=t.getAttribute("data-ymd"); var i=+t.getAttribute("data-i"); var l=_cfCalDayMap[ymd]; if(l){ if(l[i]){ abrirFicha(l[i]); } } return; }
+        if(cn.indexOf("cf-cal-more")>=0){ _cfCalDayOpen(t.getAttribute("data-ymd")); return; }
+        if(cn.indexOf("cf-cal-cell")>=0){ var ym=t.getAttribute("data-ymd"); if(ym){ if(_cfCalDayMap[ym]){ _cfCalDayOpen(ym); } } return; }
+      } t=t.parentNode; }
+    }); }
+    if($("cf_day_x")) $("cf_day_x").addEventListener("click",_cfCalDayClose);
+    if($("cf_day_cerrar")) $("cf_day_cerrar").addEventListener("click",_cfCalDayClose);
+    if($("cf_day_modal")) $("cf_day_modal").addEventListener("click",function(e){ if(e.target===this) _cfCalDayClose(); });
+    var _db=$("cf_day_body");
+    if(_db){ _db.addEventListener("click",function(e){ var t=e.target; while(t){ var cn=(''+(t.className||"")); if(cn.indexOf("cf-nov-item")>=0){ var i=+t.getAttribute("data-i"); if(_cfDayList[i]){ _cfCalDayClose(); abrirFicha(_cfDayList[i]); } return; } t=t.parentNode; } }); }
+
     if($("cf_modal_x")) $("cf_modal_x").addEventListener("click",cerrarFicha);
     if($("cf_m_cerrar")) $("cf_m_cerrar").addEventListener("click",cerrarFicha);
     if($("cf_modal")) $("cf_modal").addEventListener("click",function(e){ if(e.target===this) cerrarFicha(); });
@@ -1238,7 +1429,7 @@
     if($("cf_nov_cerrar")) $("cf_nov_cerrar").addEventListener("click",_cfNovClose);
     if($("cf_nov_modal")) $("cf_nov_modal").addEventListener("click",function(e){ if(e.target===this) _cfNovClose(); });
     var _nb=$("cf_nov_body"); if(_nb){ _nb.addEventListener("click",function(e){ var t=e.target; while(t){ var cn=(''+(t.className||"")); if(cn.indexOf("cf-nov-item")>=0){ var i=+t.getAttribute("data-i"); if(_cfNovMap[i]){ _cfNovClose(); abrirFicha(_cfNovMap[i]); } return; } t=t.parentNode; } }); }
-    document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ cerrarFicha(); _cfNovClose(); } });
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ cerrarFicha(); _cfNovClose(); _cfCalDayClose(); } });
 
     Array.prototype.forEach.call(document.querySelectorAll('#calfed th[data-k]'),function(th){
       th.addEventListener("click",function(){var k=th.dataset.k; if(k===sortKey)sortAsc=!sortAsc; else{sortKey=k;sortAsc=true;} apply();});
