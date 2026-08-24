@@ -521,7 +521,10 @@
       var p=_cfLoadPref(); if(!p){ return; }
       function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(o){return o.value===v;})){ el.value=v; } }
       setSel(els.cat,p.cat); setSel(els.sex,p.sex); setSel(els.mod,p.mod); setSel(els.fed,p.fed); setSel(elSt,p.st);
-      if(elMes){ var mv=p.mes||""; if(mv){ var cm=String(new Date().getMonth()+1).padStart(2,"0"); if(mv<cm){ mv=cm; } } setSel(elMes,mv); }
+      // El MES NO se restaura del predeterminado: por decisión del director, el
+      // calendario SIEMPRE abre en el mes en el que estamos (aunque el usuario
+      // guardara otro mes como predeterminado). Los demás filtros sí se guardan.
+      if(elMes){ elMes.value=String(new Date().getMonth()+1).padStart(2,"0"); }
       if(elVerPas){ elVerPas.checked=!!p.verpas; }
       try{ _cfPopulateProvincias(); }catch(e){}
       if(elProv){ if(p.prov){ if([].some.call(elProv.options,function(o){return o.value===p.prov;})){ elProv.value=p.prov; } } }
