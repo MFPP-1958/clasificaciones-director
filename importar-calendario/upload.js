@@ -127,7 +127,9 @@ async function main(){
       federacion: r.federacion, prueba: r.prueba, fecha: r.fecha,
       localidad: r.localidad, provincia: r.provincia, modalidad: r.modalidad,
       categorias: r.categorias, sexo: r.sexo, observaciones: r.observaciones,
-      estado: r.estado, fuente: r.fuente || '', actualizado: ahora
+      estado: r.estado, fuente: r.fuente || '',
+      club: r.club || '', clase: r.clase || '', hora: r.hora || '',
+      actualizado: ahora
     });
   }
   if(dup) console.log(`  (descartados ${dup} duplicados internos por federación+prueba+fecha)`);

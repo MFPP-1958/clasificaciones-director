@@ -267,6 +267,7 @@
 
     /* ===== Tarjeta MÓVIL compacta (más pruebas por pantalla; detalle al pulsar) ===== */
     #calfed .cf-mcat{ display:none; }   /* el botón "Categorías" solo aparece en móvil */
+    #calfed .cf-mmeta{ display:none; }  /* la meta compacta solo aparece en móvil */
     /* Botones "Añadir al calendario" dentro del modal de detalles */
     #calfed .cf-m-cal{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 18px 0; }
     #calfed .cf-m-cal-lbl{ font-size:12px; font-weight:700; color:#8a8a8a; }
@@ -284,11 +285,9 @@
       #calfed td.c-prueba{ margin:0; }
       #calfed td.c-prueba .nm{ font-size:15px; font-weight:700; line-height:1.25; }
       /* Meta en UNA línea: localidad · provincia · federación */
-      #calfed td.c-loc{ display:inline; margin:0; }
-      #calfed td.c-loc .loc{ display:inline; font-size:12.5px; color:#5c5c5c; font-weight:600; }
-      #calfed td.c-loc .prov{ display:none; }   /* la provincia queda para el detalle */
-      #calfed td.c-fed{ display:inline; font-size:12.5px; color:#9a9a9a; }
-      #calfed td.c-fed:not(:empty)::before{ content:"\00A0\00B7\00A0"; color:#c9c9c9; display:inline; }
+      /* La meta va en .cf-mmeta ("Localidad · Organiza: club"); ocultamos las celdas sueltas */
+      #calfed td.c-loc, #calfed td.c-fed{ display:none; }
+      #calfed .cf-mmeta{ display:block; font-size:12.5px; color:#8a8a8a; margin-top:3px; line-height:1.35; }
       /* Categorías/modalidad ocultas hasta pulsar "Categorías" */
       #calfed td.c-cat, #calfed td.c-mod{ display:none; margin-top:7px; }
       #calfed tr.cf-open td.c-cat{ display:block; }
@@ -952,7 +951,7 @@
         if(_cls) tr.className=_cls;
         ri++;
         tr.innerHTML='<td class="c-fecha"><div class="cf-datetile"><span class="d-dow">'+dow+'</span><span class="d-day">'+(d[2]||"")+'</span><span class="d-mon">'+(MESES[(+d[1]||1)-1]||"")+'</span></div></td>'+
-          '<td class="c-prueba"><div class="nm"><button type="button" class="cf-fav-star'+(_favSet[_cfFavKey(r)]?' on':'')+'" title="Marcar para mi hoja de pruebas">'+(_favSet[_cfFavKey(r)]?'★':'☆')+'</button><span class="nm-txt"></span>'+estBadge+coBadge+'</div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
+          '<td class="c-prueba"><div class="nm"><button type="button" class="cf-fav-star'+(_favSet[_cfFavKey(r)]?' on':'')+'" title="Marcar para mi hoja de pruebas">'+(_favSet[_cfFavKey(r)]?'★':'☆')+'</button><span class="nm-txt"></span>'+estBadge+coBadge+'</div><div class="cf-mmeta"></div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
           '<td class="c-loc" data-lbl="Localidad"><div class="loc"></div><div class="prov"></div></td>'+
           '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
           '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
@@ -968,6 +967,9 @@
         tr.querySelector(".loc").textContent=r.localidad||"";
         tr.querySelector(".prov").textContent=r.provincia||"";
         tr.children[3].textContent=r.federacion||"";
+        // Meta compacta para MÓVIL: "Localidad · Organiza: club" (si no hay club, la federación).
+        var _mm=tr.querySelector(".cf-mmeta");
+        if(_mm){ _mm.textContent=[r.localidad, (r.club?("Organiza: "+r.club):r.federacion)].filter(Boolean).join(" · "); }
         tr.querySelector(".cf-verficha").addEventListener("click",function(){ abrirFicha(r); });
         var _mc=tr.querySelector(".cf-mcat"); if(_mc){ _mc.addEventListener("click",function(ev){ ev.stopPropagation(); var op=tr.classList.toggle("cf-open"); _mc.innerHTML=op?"&#127991;&#65039; Ocultar":"&#127991;&#65039; Categor&iacute;as"; }); }
         var _cb=tr.querySelector(".cf-coinc-badge"); if(_cb){ _cb.addEventListener("click",function(ev){ ev.stopPropagation(); abrirFicha(r); }); }
@@ -994,10 +996,14 @@
       function row(k,v){ return v ? ('<div class="cf-row"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>') : ""; }
       var html = row("Estado", estHtml)
                + row("Localidad", _esc(loc))
+               + row("Organiza", _esc(r.club||""))
+               + row("Hora salida", _esc(r.hora||""))
                + row("Categor&iacute;as", _esc(cats))
                + row("Sexo", _esc(sexo))
                + row("Modalidad", _esc(r.modalidad||""))
-               + row("Observaciones", _esc(r.observaciones||""));
+               + row("Clase", _esc(r.clase||""))
+               + row("Observaciones", _esc(r.observaciones||""))
+               + row("Actualizado", _esc(r.actualizado?_fechaCorta(r.actualizado):""));
       return html || '<p style="color:#8a8a8a;padding:10px 0">Sin datos adicionales.</p>';
     }
     // Clave de casado (DEBE coincidir con la del admin al publicar): fecha|nombre_normalizado

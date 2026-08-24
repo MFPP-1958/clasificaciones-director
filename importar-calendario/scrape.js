@@ -151,6 +151,9 @@ async function scrapeSmartweb(browser, fed, url){
         modalidad: normModalidad(r.modalidad) || 'Carretera',
         categorias: parseCategorias(r.categorias).join(','),
         sexo: parseSexo(r.categorias),
+        club: _norm(r.club),              // organizador / club (celda 6 de la tabla)
+        clase: _norm(r.clase),            // clase/nivel de la prueba (celda 3): "6.2", "10.4"…
+        hora: '',                          // (se rellena en enrichCategorias desde la ficha, si está)
         observaciones: _norm(r.observaciones),
         estado: parseEstado(r.rowText, r.rowClass),
         _rawCat: r.categorias || '',      // texto de la tabla (puede venir recortado con "…")
@@ -205,6 +208,7 @@ async function scrapeCataluna(browser){
           modalidad: normModalidad(r.moda[0]||'') || 'Carretera',
           categorias: parseCategorias(especialitat).join(','),
           sexo: parseSexo(especialitat),
+          club: '', clase: '', hora: '',                        // ciclisme.cat no da estos campos
           observaciones: _norm(r.cursa.slice(1).join(' · ')),   // Copa/Campionat en 2ª línea
           estado: parseEstado(r.cursa.join(' '), '')
         });
@@ -222,42 +226,51 @@ async function scrapeCataluna(browser){
 // Para las recortadas, abrimos su ficha (enlace "MÁS", HTML servido, sin JS)
 // y sacamos TODAS las categorías. Así el filtro por categoría es fiable.
 function _estaRecortada(txt){ return /(\.\.\.|…)\s*$/.test(String(txt||'')); }
-async function _fetchFullCats(url){
+// Abre la ficha (HTML servido, sin JS) y saca las categorías COMPLETAS y la
+// HORA de salida. Devuelve { cats, hora }.
+async function _fetchFicha(url){
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 AppleWebKit/537.36 Chrome/120.0 Safari/537.36' },
     signal: AbortSignal.timeout(20000)
   });
-  if(!res.ok) return '';
+  if(!res.ok) return { cats: '', hora: '' };
   const html = await res.text();
   const text = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
-  const m = text.match(/Categor[ií]as?\s*:?\s*(.+?)\s*(?:Lugar\b|Fecha\b|Hora\b|Organizador\b|INFORMACI[OÓ]N DE LA INSCRIP)/i);
-  return m ? m[1].trim() : '';
+  const mc = text.match(/Categor[ií]as?\s*:?\s*(.+?)\s*(?:Lugar\b|Fecha\b|Hora\b|Organizador\b|INFORMACI[OÓ]N DE LA INSCRIP)/i);
+  // "Hora Salida: 10:30" (a veces "Hora de salida"). Evitamos la hora de recogida de dorsales.
+  const mh = text.match(/Hora\s*(?:de\s*)?Salida\s*:?\s*(\d{1,2}[:.]\d{2})/i);
+  return { cats: mc ? mc[1].trim() : '', hora: mh ? mh[1].replace('.', ':') : '' };
 }
 async function enrichCategorias(rows){
-  const targets = rows.filter(r => _estaRecortada(r._rawCat) && r._masUrl);
+  // Abrimos la ficha de TODA prueba con enlace "MÁS": completa categorías
+  // recortadas Y captura la hora de salida.
+  const targets = rows.filter(r => r._masUrl);
   if(!targets.length) return;
-  console.error(`  Enriqueciendo categorías de ${targets.length} pruebas recortadas (abriendo su ficha)…`);
-  let i = 0, done = 0, changed = 0;
+  console.error(`  Abriendo ficha de ${targets.length} pruebas (categorías completas + hora)…`);
+  let i = 0, done = 0, changed = 0, conHora = 0;
   async function worker(){
     while(i < targets.length){
       const r = targets[i++];
       try{
-        const full = await _fetchFullCats(r._masUrl);
-        const cats = parseCategorias(full);
-        if(cats.length){
-          const before = r.categorias;
-          r.categorias = cats.join(',');
-          r.sexo = parseSexo(full);
-          if(r.categorias !== before) changed++;
+        const fic = await _fetchFicha(r._masUrl);
+        if(_estaRecortada(r._rawCat) && fic.cats){
+          const cats = parseCategorias(fic.cats);
+          if(cats.length){
+            const before = r.categorias;
+            r.categorias = cats.join(',');
+            r.sexo = parseSexo(fic.cats);
+            if(r.categorias !== before) changed++;
+          }
         }
-      }catch(e){ /* si falla, se queda con lo recortado */ }
+        if(fic.hora){ r.hora = fic.hora; conHora++; }
+      }catch(e){ /* si falla, se queda con lo que había */ }
       done++;
       if(done % 50 === 0) console.error(`    …${done}/${targets.length}`);
     }
   }
   const N = Math.min(8, targets.length);
   await Promise.all(Array.from({ length: N }, worker));
-  console.error(`  ✓ categorías completadas · ${changed} pruebas ampliadas`);
+  console.error(`  ✓ fichas abiertas · ${changed} categorías ampliadas · ${conHora} con hora`);
 }
 
 async function main(){
