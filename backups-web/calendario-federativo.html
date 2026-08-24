@@ -54,6 +54,7 @@
     #calfed .tag.cad{ background:#e0ebf7; color:#29517d; }
     #calfed .tag.jun{ background:#e4f0e2; color:#35603a; }
     #calfed .tag.f{ background:#f7e6ef; color:#86416a; }
+    #calfed .tag.mod{ background:#e8e6f2; color:#4b3f8a; font-weight:600; }
     #calfed a.src{ color:var(--azul); text-decoration:none; font-size:12px; white-space:nowrap; }
     #calfed a.src:hover{ text-decoration:underline; }
     #calfed .estado{ padding:40px 12px; text-align:center; color:#8a8a8a; font-size:13.5px; }
@@ -276,7 +277,7 @@
   <button type="button" class="btn" id="cf_togglefiltros" aria-expanded="true"></button>
 
   <div class="controls">
-    <div class="fld"><label>Desde</label><input type="date" id="cf_desde"></div>
+    <div class="fld"><label>Ver desde el d&iacute;a</label><input type="date" id="cf_desde" title="Muestra las pruebas de esa fecha en adelante"></div>
     <div class="fld"><label>Mes</label>
       <select id="cf_mes">
         <option value="">&mdash; Todos los meses &mdash;</option>
@@ -295,7 +296,7 @@
       </select>
     </div>
     <div class="fld"><label>Del mes</label>
-      <label class="cf-check" title="Al elegir un mes se muestran solo las pruebas de hoy en adelante. M&aacute;rcalo para ver tambi&eacute;n las que ya han pasado."><input type="checkbox" id="cf_verpasadas"> Ver pasadas</label>
+      <label class="cf-check" title="Al elegir un mes se muestran solo las pruebas de hoy en adelante. M&aacute;rcalo para ver tambi&eacute;n las que ya han pasado."><input type="checkbox" id="cf_verpasadas"> Incluir pasadas</label>
     </div>
     <div class="fld"><label>Categor&iacute;a</label>
       <select id="cf_cat">
@@ -370,8 +371,8 @@
       <th data-k="federacion">Federaci&oacute;n</th>
       <th class="hide-sm">Categor&iacute;as</th>
       <th data-k="modalidad" class="hide-sm">Modalidad</th>
-      <th class="hide-sm">Fuente</th>
-      <th class="c-add-h">A&ntilde;adir</th>
+      <th class="hide-sm">Detalles</th>
+      <th class="c-add-h">A&ntilde;adir al calendario</th>
     </tr></thead>
     <tbody id="cf_tb"></tbody>
   </table>
@@ -664,15 +665,25 @@
       _pagina(0)
         .then(function(data){
           rows=data||[];
+          // Contadores por opción (nº de pruebas PRÓXIMAS, de hoy en adelante, sin
+          // retiradas). Se muestran junto a cada opción: "Andalucía (23)".
+          var _hoyC=hoyISO();
+          var _fut=rows.filter(function(r){ var st=(r.estado||"activa").toLowerCase().trim(); if(st==="retirada"){ return false; } return (r.fecha||"")>=_hoyC; });
+          function _cuenta(keyFn){ var m={}; _fut.forEach(function(r){ keyFn(r).forEach(function(k){ if(k){ m[k]=(m[k]||0)+1; } }); }); return m; }
+          var fedCount=_cuenta(function(r){ return [r.federacion]; });
+          var modCount=_cuenta(function(r){ return [r.modalidad]; });
+          var catCount=_cuenta(function(r){ return (r.categorias||"").split(","); });
           var feds=Array.from(new Set(rows.map(function(r){return r.federacion;}))).sort(function(a,b){return a.localeCompare(b,"es");});
-          feds.forEach(function(f){var o=document.createElement("option");o.value=f;o.textContent=f;els.fed.appendChild(o);});
+          feds.forEach(function(f){var o=document.createElement("option");o.value=f;o.textContent=f+(fedCount[f]?" ("+fedCount[f]+")":"");els.fed.appendChild(o);});
           // Modalidades DINÁMICAS desde los datos reales: así aparecen Cicloturismo,
           // Trial… automáticamente y el filtro nunca se desincroniza de la base.
           var mods=Array.from(new Set(rows.map(function(r){return r.modalidad;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,"es");});
           els.mod.innerHTML="";
-          mods.forEach(function(m){var o=document.createElement("option");o.value=m;o.textContent=m;els.mod.appendChild(o);});
+          mods.forEach(function(m){var o=document.createElement("option");o.value=m;o.textContent=m+(modCount[m]?" ("+modCount[m]+")":"");els.mod.appendChild(o);});
           var oTodasMod=document.createElement("option");oTodasMod.value="";oTodasMod.textContent="— Todas —";els.mod.appendChild(oTodasMod);
           els.mod.value=DEF.mod;   // "" → Todas
+          // Categorías (opciones fijas del HTML): añadir su contador por valor.
+          Array.prototype.forEach.call(els.cat.options,function(o){ if(o.value){ o.textContent=o.textContent.replace(/\s*\(\d+\)\s*$/,"")+(catCount[o.value]?" ("+catCount[o.value]+")":""); } });
           // Última actualización del dataset (para la cabecera).
           var ua=rows.map(function(r){return r.actualizado||"";}).filter(Boolean).sort();
           ultAct=ua.length?ua[ua.length-1]:"";
@@ -734,7 +745,7 @@
 
     // Botones-espejo: reflejan lo que hay seleccionado en los desplegables de
     // arriba (no se pulsan). Azul = filtro activo; gris = "todas / ambos".
-    function _selTxt(sel){ var o = sel ? sel.options[sel.selectedIndex] : null; return o ? o.text : ""; }
+    function _selTxt(sel){ var o = sel ? sel.options[sel.selectedIndex] : null; var t = o ? o.text : ""; return t.replace(/\s*\(\d+\)\s*$/,""); }
     function _mesLbl(){
       if(elMes){ if(elMes.value){ return _selTxt(elMes); } }
       return "Desde " + _fechaCorta(elDes.value || hoyISO());
@@ -904,10 +915,10 @@
           '<td class="c-loc" data-lbl="Localidad"><div class="loc"></div><div class="prov"></div></td>'+
           '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
           '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
-          '<td class="hide-sm c-mod" data-lbl="Modalidad">'+(r.modalidad||"")+'</td>'+
-          '<td class="hide-sm c-src"><button type="button" class="src cf-verficha">&#128269; Ver ficha</button></td>'+
-          '<td class="c-add"><div class="cal-add">'+
-            '<a class="cal-btn cal-ics" role="button" tabindex="0" title="A&ntilde;adir al Calendario de Mac/iPhone">'+APPLE_SVG+'<span>Mac</span></a>'+
+          '<td class="hide-sm c-mod" data-lbl="Modalidad">'+(r.modalidad?'<span class="tag mod">'+r.modalidad+'</span>':"")+'</td>'+
+          '<td class="hide-sm c-src"><button type="button" class="src cf-verficha">&#128269; Ver detalles</button></td>'+
+          '<td class="c-add" data-lbl="A&ntilde;adir al calendario"><div class="cal-add">'+
+            '<a class="cal-btn cal-ics" role="button" tabindex="0" title="A&ntilde;adir al Calendario de Apple (Mac/iPhone)">'+APPLE_SVG+'<span>Apple</span></a>'+
             '<a class="cal-btn cal-gcal" target="_blank" rel="noopener" title="A&ntilde;adir a Google Calendar">'+GCAL_SVG+'<span>Google</span></a>'+
           '</div></td>';
         tr.querySelector(".nm-txt").textContent=r.prueba||"";
@@ -1091,7 +1102,7 @@
     if(elVerPas) elVerPas.addEventListener("change",apply);
     if(elProv) elProv.addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;apply();});
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
     // Atajos rápidos (delegación de eventos sobre el contenedor).
     var _qbox=$("cf_quick");
     if(_qbox){ _qbox.addEventListener("click",function(e){ var t=e.target; while(t){ if(t.getAttribute){ var q=t.getAttribute("data-q"); if(q){ _cfQuickAction(q); return; } } t=t.parentNode; } }); }
