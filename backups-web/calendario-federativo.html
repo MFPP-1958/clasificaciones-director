@@ -369,6 +369,11 @@
     #calfed .cf-panel-foot{ padding:14px 16px; border-top:1px solid #eceae5; }
     #calfed .cf-panel-ver{ width:100%; font:inherit; font-size:15px; font-weight:800; padding:13px; border:0; border-radius:10px; background:var(--azul); color:#fff; cursor:pointer; }
     #calfed .cf-panel-ver:hover{ background:var(--azul-dark); }
+    #calfed .cf-hint{ font-weight:500; text-transform:none; letter-spacing:0; color:#9a9a9a; font-size:10.5px; }
+    #calfed .cf-catbox{ display:flex; flex-direction:column; gap:1px; border:1px solid #d4d2cc; border-radius:8px; padding:5px 10px; background:#fff; }
+    #calfed .cf-catchk{ display:flex; align-items:center; gap:8px; font-size:14px; color:#3c3c3c; cursor:pointer; padding:6px 2px; text-transform:none; letter-spacing:0; font-weight:500; }
+    #calfed .cf-catchk input{ width:17px; height:17px; cursor:pointer; margin:0; accent-color:var(--azul); }
+    #calfed .cf-catn{ color:#9a9a9a; font-weight:600; }
     @media (max-width:640px){
       #calfed .cf-panel{ top:auto; bottom:0; right:0; left:0; width:100%; max-width:100%; height:86vh; border-radius:16px 16px 0 0; transform:translateY(105%); }
       #calfed .cf-panel.open{ transform:translateY(0); }
@@ -472,16 +477,15 @@
           <label>Desde</label><input type="date" id="cf_desde">
           <label style="margin-top:8px">Hasta</label><input type="date" id="cf_hasta">
         </div>
-        <div class="fld"><label>Categor&iacute;a</label>
-          <select id="cf_cat">
-            <option value="cadete">Cadete</option>
-            <option value="junior">Junior / juvenil</option>
-            <option value="sub23">Sub-23</option>
-            <option value="elite">&Eacute;lite</option>
-            <option value="master">M&aacute;ster</option>
-            <option value="escuelas">Escuelas</option>
-            <option value="">&mdash; Todas &mdash;</option>
-          </select>
+        <div class="fld"><label>Categor&iacute;as <span class="cf-hint">(puedes elegir varias)</span></label>
+          <div class="cf-catbox" id="cf_catbox">
+            <label class="cf-catchk"><input type="checkbox" class="cf-catc" value="escuelas"> Escuelas</label>
+            <label class="cf-catchk"><input type="checkbox" class="cf-catc" value="cadete"> Cadete</label>
+            <label class="cf-catchk"><input type="checkbox" class="cf-catc" value="junior"> Junior / juvenil</label>
+            <label class="cf-catchk"><input type="checkbox" class="cf-catc" value="sub23"> Sub-23</label>
+            <label class="cf-catchk"><input type="checkbox" class="cf-catc" value="elite">&Eacute;lite</label>
+            <label class="cf-catchk"><input type="checkbox" class="cf-catc" value="master">M&aacute;ster</label>
+          </div>
         </div>
         <div class="fld"><label>Sexo</label>
           <select id="cf_sex">
@@ -660,9 +664,14 @@
     var CATLBL={cadete:"Cadete",junior:"Junior",sub23:"Sub-23",elite:"&Eacute;lite",master:"M&aacute;ster",escuelas:"Escuelas"};
     // Por defecto: MES ACTUAL + Cadete + Masculino + Carretera + C. Valenciana
     // (es lo que más se consulta; quien quiera otra cosa cambia el filtro).
-    var DEF={cat:"cadete",sex:"M",mod:"Carretera",fed:"C. Valenciana",txt:""};
+    var DEF={sex:"M",mod:"Carretera",fed:"C. Valenciana",txt:""};
+    var _CF_DEFCATS=["cadete"];   // categorías por defecto (multiselección)
     var $=function(id){return document.getElementById(id);};
-    var els={cat:$("cf_cat"),sex:$("cf_sex"),mod:$("cf_mod"),fed:$("cf_fed"),txt:$("cf_txt")};
+    var els={sex:$("cf_sex"),mod:$("cf_mod"),fed:$("cf_fed"),txt:$("cf_txt")};
+    // Categorías: multiselección con casillas (#cf_catbox).
+    function _cfCats(){ var out=[]; Array.prototype.forEach.call(document.querySelectorAll("#calfed .cf-catc"),function(c){ if(c.checked){ out.push(c.value); } }); return out; }
+    function _cfSetCats(arr){ var s={}; (arr||[]).forEach(function(v){ s[v]=1; }); Array.prototype.forEach.call(document.querySelectorAll("#calfed .cf-catc"),function(c){ c.checked=!!s[c.value]; }); }
+    function _cfToggleCat(v,on){ Array.prototype.forEach.call(document.querySelectorAll("#calfed .cf-catc"),function(c){ if(c.value===v){ c.checked=!!on; } }); }
     var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), elVerPas=$("cf_verpasadas"), elProv=$("cf_prov"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
     // Atajos que no son un desplegable: próximos 7 días, fin de semana, inscripción abierta.
     var _cfQ={dias7:false, finde:false, inscr:false};
@@ -724,6 +733,7 @@
       return M[per]||"Próximas";
     }
     Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
+    _cfSetCats(_CF_DEFCATS);
     elDes.value=hoyISO();
     if(elMes) elMes.value=String(new Date().getMonth()+1).padStart(2,"0");   // por defecto: mes actual
 
@@ -784,13 +794,14 @@
     function _cfApplyPref(){
       var p=_cfLoadPref(); if(!p){ return; }
       function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(o){return o.value===v;})){ el.value=v; } }
-      setSel(els.cat,p.cat); setSel(els.sex,p.sex); setSel(els.mod,p.mod); setSel(els.fed,p.fed); setSel(elSt,p.st);
+      if(p.cats){ _cfSetCats(p.cats); } else if(p.cat){ _cfSetCats([p.cat]); }
+      setSel(els.sex,p.sex); setSel(els.mod,p.mod); setSel(els.fed,p.fed); setSel(elSt,p.st);
       if(p.per){ setSel($("cf_periodo"),p.per); if(p.per==="custom"){ if($("cf_desde")){ $("cf_desde").value=p.de||""; } if($("cf_hasta")){ $("cf_hasta").value=p.ha||""; } var cd=$("cf_custom_dates"); if(cd){ cd.style.display=""; } } }
       try{ _cfPopulateProvincias(); }catch(e){}
       if(elProv){ if(p.prov){ if([].some.call(elProv.options,function(o){return o.value===p.prov;})){ elProv.value=p.prov; } } }
     }
     function _cfSavePref(){
-      var p={ cat:els.cat.value, sex:els.sex.value, mod:els.mod.value, fed:els.fed.value, prov:(elProv?elProv.value:""), st:(elSt?elSt.value:""), per:_cfPeriodo(), de:($("cf_desde")?$("cf_desde").value:""), ha:($("cf_hasta")?$("cf_hasta").value:"") };
+      var p={ cats:_cfCats(), sex:els.sex.value, mod:els.mod.value, fed:els.fed.value, prov:(elProv?elProv.value:""), st:(elSt?elSt.value:""), per:_cfPeriodo(), de:($("cf_desde")?$("cf_desde").value:""), ha:($("cf_hasta")?$("cf_hasta").value:"") };
       try{ localStorage.setItem("cf_pref", JSON.stringify(p)); }catch(e){}
       _cfUpdatePrefBtn();
       var b=$("cf_setpref"); if(b){ b.innerHTML="✓ Guardado"; setTimeout(function(){ _cfUpdatePrefBtn(); },1600); }
@@ -799,6 +810,7 @@
       try{ localStorage.removeItem("cf_pref"); }catch(e){}
       _cfUpdatePrefBtn();
       Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
+      _cfSetCats(_CF_DEFCATS);
       var pe=$("cf_periodo"); if(pe)pe.value="mes"; var cd=$("cf_custom_dates"); if(cd)cd.style.display="none";
       if($("cf_desde"))$("cf_desde").value=""; if($("cf_hasta"))$("cf_hasta").value="";
       if(elSt)elSt.value=""; if(elProv)elProv.value="";
@@ -990,7 +1002,7 @@
           var oTodasMod=document.createElement("option");oTodasMod.value="";oTodasMod.textContent="— Todas —";els.mod.appendChild(oTodasMod);
           els.mod.value=DEF.mod;   // "" → Todas
           // Categorías (opciones fijas del HTML): añadir su contador por valor.
-          Array.prototype.forEach.call(els.cat.options,function(o){ if(o.value){ o.textContent=o.textContent.replace(/\s*\(\d+\)\s*$/,"")+(catCount[o.value]?" ("+catCount[o.value]+")":""); } });
+          Array.prototype.forEach.call(document.querySelectorAll("#calfed .cf-catchk"),function(lbl){ var inp=lbl.querySelector(".cf-catc"); if(!inp){ return; } var n=catCount[inp.value]||0; var sp=lbl.querySelector(".cf-catn"); if(!sp){ sp=document.createElement("span"); sp.className="cf-catn"; lbl.appendChild(sp); } sp.textContent=n?(" ("+n+")"):""; });
           // Última actualización del dataset (para la cabecera).
           var ua=rows.map(function(r){return r.actualizado||"";}).filter(Boolean).sort();
           ultAct=ua.length?ua[ua.length-1]:"";
@@ -1079,7 +1091,7 @@
     // Mensaje vacío concreto según los filtros activos.
     function _cfEmptyMsg(){
       var parts=[];
-      if(els.cat.value){ parts.push(_selTxt(els.cat).toLowerCase()); }
+      var _sc=_cfCats(); if(_sc.length){ parts.push(_sc.map(function(c){return _decode(CATLBL[c]||c).toLowerCase();}).join(", ")); }
       if(els.sex.value){ parts.push(els.sex.value==="F"?"femeninas":"masculinas"); }
       if(els.mod.value){ parts.push("de "+_selTxt(els.mod).toLowerCase()); }
       var cuando="("+_cfPeriodLabel().toLowerCase()+")";
@@ -1105,7 +1117,7 @@
       var qv=(els.txt.value||"").trim(); if(qv){ A.push({k:"txt", panel:false, txt:"\uD83D\uDD0D "+qv}); }
       if(_cfPeriodo()!=="prox"){ A.push({k:"periodo", panel:true, txt:_cfPeriodLabel()}); }
       if(_cfOnlyFavs){ A.push({k:"favs", panel:false, txt:"\u2605 Favoritas"}); }
-      if(els.cat.value){ A.push({k:"cat", panel:true, txt:_selTxt(els.cat)}); }
+      _cfCats().forEach(function(c){ A.push({k:"cat:"+c, panel:true, txt:_decode(CATLBL[c]||c)}); });
       if(els.sex.value){ A.push({k:"sex", panel:true, txt:_selTxt(els.sex)}); }
       if(els.mod.value){ A.push({k:"mod", panel:true, txt:_selTxt(els.mod)}); }
       if(els.fed.value){ A.push({k:"fed", panel:true, txt:_selTxt(els.fed)+(limOn?" + vecinas":"")}); }
@@ -1122,7 +1134,7 @@
     function _cfClearFilter(k){
       if(k==="txt"){ els.txt.value=""; }
       else if(k==="favs"){ _cfOnlyFavs=false; }
-      else if(k==="cat"){ els.cat.value=""; }
+      else if(k.indexOf("cat:")===0){ _cfToggleCat(k.slice(4),false); }
       else if(k==="sex"){ els.sex.value=""; }
       else if(k==="mod"){ els.mod.value=""; }
       else if(k==="fed"){ els.fed.value=""; var l=$("cf_limit"); if(l){ l.checked=false; } if(elProv){ elProv.value=""; } }
@@ -1133,7 +1145,7 @@
       apply();
     }
     function _cfClearAll(){
-      els.cat.value=""; els.sex.value=""; els.mod.value=""; els.fed.value=""; els.txt.value="";
+      _cfSetCats([]); els.sex.value=""; els.mod.value=""; els.fed.value=""; els.txt.value="";
       if(elProv){ elProv.value=""; } if(elSt){ elSt.value=""; }
       var pe=$("cf_periodo"); if(pe){ pe.value="prox"; } var cd=$("cf_custom_dates"); if(cd){ cd.style.display="none"; }
       var l=$("cf_limit"); if(l){ l.checked=false; }
@@ -1168,7 +1180,8 @@
     }
     function _cfApplyURL(o){
       function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(x){return x.value===v;})){ el.value=v; } }
-      setSel(els.cat,o.cat); setSel(els.sex,o.sex); setSel(els.mod,o.mod); setSel(els.fed,o.fed);
+      if(o.cat!=null){ _cfSetCats(o.cat?o.cat.split(","):[]); }
+      setSel(els.sex,o.sex); setSel(els.mod,o.mod); setSel(els.fed,o.fed);
       setSel(elSt,o.st);
       if(o.per){ setSel($("cf_periodo"),o.per); }
       if(o.de){ if($("cf_desde")){ $("cf_desde").value=o.de; } }
@@ -1185,7 +1198,7 @@
       try{
         var A=String.fromCharCode(38), pr=[];
         function add(k,v){ if(v){ pr.push(k+"="+encodeURIComponent(v)); } }
-        add("cat",els.cat.value); add("sex",els.sex.value); add("mod",els.mod.value); add("fed",els.fed.value);
+        add("cat",_cfCats().join(",")); add("sex",els.sex.value); add("mod",els.mod.value); add("fed",els.fed.value);
         add("prov",elProv?elProv.value:""); add("st",elSt?elSt.value:""); add("q",(els.txt.value||"").trim());
         var per=_cfPeriodo(); if(per!=="prox"){ pr.push("per="+per); if(per==="custom"){ add("de",$("cf_desde")?$("cf_desde").value:""); add("ha",$("cf_hasta")?$("cf_hasta").value:""); } }
         if(_cfQ.inscr){ pr.push("fi=1"); }
@@ -1226,6 +1239,7 @@
       var prov=(elProv ? elProv.value : "");
       var _favA=_cfOnlyFavs?_cfFavSet():null;
       var _pr=_cfPeriodRange();   // {from,to} según el Periodo elegido
+      var _selCats=_cfCats();     // categorías marcadas (multiselección)
       var out=rows.filter(function(r){
         if(_favA){ if(!_favA[_cfFavKey(r)]){ return false; } }
         if(_cfQ.inscr){ if(!((r.fuente||"").trim())){ return false; } }  // solo con ficha oficial
@@ -1234,7 +1248,7 @@
         else if(stF==="incidencia"){ if(!(st==="aplazada" || st==="anulada")) return false; }
         else if(stF!=="all"){ if(st==="retirada") return false; }
         var cats=(r.categorias||"").split(",");
-        if(f.cat){ if(cats.indexOf(f.cat)<0) return false; }
+        if(_selCats.length){ var _ok=false; for(var _ci=0;_ci<_selCats.length;_ci++){ if(cats.indexOf(_selCats[_ci])>=0){ _ok=true; break; } } if(!_ok) return false; }
         if(f.sex){ if((r.sexo||"").indexOf(f.sex)<0) return false; }
         if(f.mod){ if(r.modalidad!==f.mod) return false; }
         if(f.fed){ if(!_cfFedAllowed(r.federacion,f.fed)) return false; }
@@ -1277,16 +1291,6 @@
       var st={ dias7:(per==="7"), finde:(per==="finde"), micom:micOn, favs:_cfOnlyFavs };
       var btns=document.querySelectorAll("#calfed .cf-acc");
       Array.prototype.forEach.call(btns,function(b){ var a=b.getAttribute("data-acc"); if(st[a]){ b.classList.add("on"); } else { b.classList.remove("on"); } });
-    }
-    function _cfQuickAction(q){
-      if(q==="toda"){ els.fed.value=""; if(elProv){ elProv.value=""; } }
-      else if(q==="micom"){ var m=_cfMiComunidad(); if(!m){ m="C. Valenciana"; } if([].some.call(els.fed.options,function(o){return o.value===m;})){ els.fed.value=m; } if(elProv){ elProv.value=""; } }
-      else if(q==="escuelas"){ els.cat.value=(els.cat.value==="escuelas")?"":"escuelas"; }
-      else if(q==="feminas"){ els.sex.value=(els.sex.value==="F")?"":"F"; }
-      else if(q==="dias7"){ _cfQ.dias7=!_cfQ.dias7; if(_cfQ.dias7){ if(elMes){ elMes.value=""; } elDes.value=hoyISO(); } }
-      else if(q==="finde"){ _cfQ.finde=!_cfQ.finde; }
-      else if(q==="inscr"){ _cfQ.inscr=!_cfQ.inscr; }
-      apply();
     }
 
     function render(list){
@@ -1576,7 +1580,7 @@
       else if(stF==="incidencia"){ if(!(st==="aplazada"||st==="anulada")) return false; }
       else if(stF!=="all"){ if(st==="retirada") return false; }
       var cats=(r.categorias||"").split(",");
-      if(els.cat.value){ if(cats.indexOf(els.cat.value)<0) return false; }
+      var _sc=_cfCats(); if(_sc.length){ var _ok=false; for(var _i=0;_i<_sc.length;_i++){ if(cats.indexOf(_sc[_i])>=0){ _ok=true; break; } } if(!_ok) return false; }
       if(els.sex.value){ if((r.sexo||"").indexOf(els.sex.value)<0) return false; }
       if(els.mod.value){ if(r.modalidad!==els.mod.value) return false; }
       if(els.fed.value){ if(!_cfFedAllowed(r.federacion,els.fed.value)) return false; }
@@ -1713,7 +1717,9 @@
     if(elProv) elProv.addEventListener("change",apply);
     if($("cf_limit")) $("cf_limit").addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});var pe=$("cf_periodo");if(pe)pe.value="mes";var cd=$("cf_custom_dates");if(cd)cd.style.display="none";if($("cf_desde"))$("cf_desde").value="";if($("cf_hasta"))$("cf_hasta").value="";if(elSt)elSt.value="";if(elProv)elProv.value="";if($("cf_limit"))$("cf_limit").checked=false;if($("cf_inscr"))$("cf_inscr").checked=false;_cfQ.inscr=false;_cfOnlyFavs=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});_cfSetCats(_CF_DEFCATS);var pe=$("cf_periodo");if(pe)pe.value="mes";var cd=$("cf_custom_dates");if(cd)cd.style.display="none";if($("cf_desde"))$("cf_desde").value="";if($("cf_hasta"))$("cf_hasta").value="";if(elSt)elSt.value="";if(elProv)elProv.value="";if($("cf_limit"))$("cf_limit").checked=false;if($("cf_inscr"))$("cf_inscr").checked=false;_cfQ.inscr=false;_cfOnlyFavs=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
+    // Casillas de categoría (multiselección).
+    if($("cf_catbox")) $("cf_catbox").addEventListener("change",apply);
     // Accesos rápidos de la barra superior.
     Array.prototype.forEach.call(document.querySelectorAll("#calfed .cf-acc"),function(b){ b.addEventListener("click",function(){ _cfAccess(b.getAttribute("data-acc")); }); });
     // Casilla "Solo con ficha oficial".
