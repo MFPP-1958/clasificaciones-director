@@ -149,7 +149,7 @@
     /* ---- MOVIL: cada prueba como ficha, con todos los datos ---- */
     @media (max-width:640px){
       #calfed .controls{ padding:10px; gap:8px; }
-      #calfed .fld{ flex:1 1 44%; }
+      #calfed .fld{ flex:1 1 100%; }
       #calfed select,#calfed input[type=text],#calfed input[type=date]{ width:100%; min-width:0; font-size:16px; }
       #calfed .btn{ flex:1 1 100%; }
       #calfed .tabla-wrap{ overflow:visible; }
@@ -243,11 +243,37 @@
       #calfed tbody tr.is-hoy td{ background:#e6f3fe; }
       #calfed tbody tr.is-hoy:hover td{ background:#d7ebfc; }
     }
+
+    /* ===== Fase 1 · Atajos + filtros plegables (móvil) + aviso predeterminado ===== */
+    #calfed .cf-quick{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin:12px 0 2px; }
+    #calfed .cf-quick-lbl{ font-size:11.5px; font-weight:700; color:#8a8577; text-transform:uppercase; letter-spacing:.4px; margin-right:2px; }
+    #calfed .cf-qchip{ font:inherit; font-size:12.5px; font-weight:650; border-radius:999px; padding:7px 13px; line-height:1; cursor:pointer; background:#fff; border:1px solid #d4d2cc; color:#3c3c3c; }
+    #calfed .cf-qchip:hover{ background:#f0efec; border-color:#b9b6ae; }
+    #calfed .cf-qchip.on{ background:var(--azul); border-color:var(--azul); color:#fff; }
+    #calfed .cf-qchip:focus-visible{ outline:2px solid var(--azul); outline-offset:1px; }
+    /* Botón de plegar filtros: solo en móvil */
+    #calfed #cf_togglefiltros{ display:none; width:100%; margin:10px 0 0; font-weight:700; }
+    /* Aviso "estás viendo tus filtros guardados" */
+    #calfed .cf-prefnote{ display:none; align-items:center; gap:8px; font-size:12.5px; color:#92400e; background:#fffdf2; border:1px solid #fde68a; border-radius:8px; padding:8px 11px; margin:10px 0 0; }
+    #calfed .cf-prefnote .cf-prefnote-x{ font:inherit; font-size:12px; font-weight:700; color:#92400e; background:#fff; border:1px solid #fcd34d; border-radius:6px; padding:3px 9px; cursor:pointer; }
+    #calfed .cf-prefnote .cf-prefnote-x:hover{ background:#fef3c7; }
+    @media (max-width:640px){
+      #calfed #cf_togglefiltros{ display:block; }
+      #calfed .controls.cf-collapsed{ display:none; }
+      #calfed .cf-quick{ gap:6px; }
+      #calfed .cf-qchip{ font-size:13px; padding:8px 13px; }
+    }
   </style>
 
   <h2>Calendario federativo de ciclismo</h2>
   <p class="sub">Pruebas de las federaciones auton&oacute;micas de Espa&ntilde;a</p>
   <p class="nota">Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, as&iacute; que puede haber cambios de &uacute;ltima hora: antes de desplazarte, confirma los detalles en la web oficial de la federaci&oacute;n (tienes el enlace en la columna &laquo;Fuente&raquo;).</p>
+
+  <!-- Atajos rápidos (siempre visibles; muy útiles en móvil) -->
+  <div class="cf-quick" id="cf_quick"></div>
+
+  <!-- Botón para plegar/desplegar los filtros (solo se ve en móvil) -->
+  <button type="button" class="btn" id="cf_togglefiltros" aria-expanded="true"></button>
 
   <div class="controls">
     <div class="fld"><label>Desde</label><input type="date" id="cf_desde"></div>
@@ -314,6 +340,12 @@
     <button class="btn" id="cf_reset">Restablecer</button>
     <button class="btn" id="cf_setpref" title="Guarda los filtros actuales en este dispositivo: al volver a abrir el calendario se aplicar&aacute;n solos">&#9733; Fijar como predeterminado</button>
     <button class="btn" id="cf_clearpref" style="display:none" title="Vuelve a los filtros por defecto de la web">&#10005; Quitar predeterminado</button>
+  </div>
+
+  <!-- Aviso: hay filtros guardados aplicándose (se muestra por JS si existen). -->
+  <div class="cf-prefnote" id="cf_prefnote">
+    <span>&#11088; Est&aacute;s viendo <b>tus filtros guardados</b>.</span>
+    <button type="button" class="cf-prefnote-x" id="cf_prefnote_x">Ver todo</button>
   </div>
 
   <!-- Resumen de filtros activos: espejo de los desplegables de arriba (se
@@ -419,8 +451,13 @@
     var $=function(id){return document.getElementById(id);};
     var els={cat:$("cf_cat"),sex:$("cf_sex"),mod:$("cf_mod"),fed:$("cf_fed"),txt:$("cf_txt")};
     var elDes=$("cf_desde"), elMes=$("cf_mes"), elSt=$("cf_st"), elVerPas=$("cf_verpasadas"), elProv=$("cf_prov"), rows=[], sortKey="fecha", sortAsc=true, ultAct="";
+    // Atajos que no son un desplegable: próximos 7 días, fin de semana, inscripción abierta.
+    var _cfQ={dias7:false, finde:false, inscr:false};
 
     function hoyISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+    // Día de la semana 0=Lun … 6=Dom (UTC, para no depender de la zona horaria).
+    function _cfDow(iso){ var p=String(iso||"").split("-"); if(p.length<3){ return -1; } var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); return (d.getUTCDay()+6)%7; }
+    function _cfMasDias(iso,n){ var p=String(iso||"").split("-"); if(p.length<3){ return iso; } var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); d.setUTCDate(d.getUTCDate()+n); return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0"); }
     Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
     elDes.value=hoyISO();
     if(elMes) elMes.value=String(new Date().getMonth()+1).padStart(2,"0");   // por defecto: mes actual
@@ -477,6 +514,7 @@
       var has=!!_cfLoadPref();
       var c=$("cf_clearpref"); if(c){ c.style.display=has?"":"none"; }
       var s=$("cf_setpref"); if(s){ s.innerHTML=has?"★ Actualizar predeterminado":"★ Fijar como predeterminado"; }
+      var note=$("cf_prefnote"); if(note){ note.style.display=has?"flex":"none"; }
     }
     function _cfApplyPref(){
       var p=_cfLoadPref(); if(!p){ return; }
@@ -498,6 +536,7 @@
       _cfUpdatePrefBtn();
       Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
       elDes.value=hoyISO(); if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0"); if(elSt)elSt.value=""; if(elVerPas)elVerPas.checked=false; if(elProv)elProv.value="";
+      _cfQ.dias7=false; _cfQ.finde=false; _cfQ.inscr=false;
       apply();
     }
 
@@ -752,8 +791,13 @@
       if(elDes) elDes.disabled=!!mes;
       if(elVerPas){ elVerPas.disabled=!mes; var lbl=elVerPas.parentNode; if(lbl){ if(mes){ lbl.classList.remove("dis"); } else { lbl.classList.add("dis"); } } }
       var _favA=_cfOnlyFavs?_cfFavSet():null;
+      var _max7=_cfQ.dias7?_cfMasDias(hoyStr,7):"";   // límite superior para "Próximos 7 días"
       var out=rows.filter(function(r){
         if(_favA){ if(!_favA[_cfFavKey(r)]){ return false; } }
+        // Atajos especiales (además de los desplegables):
+        if(_cfQ.dias7){ if((r.fecha||"")<hoyStr){ return false; } if(_max7){ if((r.fecha||"")>_max7){ return false; } } }
+        if(_cfQ.finde){ if(_cfDow(r.fecha)<5){ return false; } }         // 5=Sáb, 6=Dom
+        if(_cfQ.inscr){ if(!((r.fuente||"").trim())){ return false; } }  // solo con inscripción/página abierta
         var st=(r.estado||"activa").toLowerCase().trim();
         // Filtro de ESTADO: "" = todo menos retiradas · activa · incidencia (aplazada/anulada) · all
         if(stF==="activa"){ if(st!=="activa") return false; }
@@ -783,7 +827,38 @@
         " &middot; <b>"+nf+"</b> federaci"+(nf===1?"&oacute;n":"ones")+
         " &middot; <b>"+nm+"</b> modalidad"+(nm===1?"":"es")+updTxt;
       try{ _syncChips(); }catch(_){}
+      try{ _cfRenderQuick(); }catch(_){}
       try{ _cfFavUpdateBar(); }catch(_){}
+    }
+
+    // ── Atajos rápidos: chips que fijan un filtro o activan un modo especial ──
+    function _cfRenderQuick(){
+      var box=$("cf_quick"); if(!box){ return; }
+      var mic=_cfMiComunidad();
+      var fedV=els.fed.value;
+      var micOn=fedV?(fedV===mic):false;
+      var chips=[
+        { q:"toda",     txt:"\uD83C\uDF0D Toda Espa\u00f1a",          on:(!fedV) },
+        { q:"micom",    txt:"\uD83C\uDFE0 Mi comunidad",             on:micOn },
+        { q:"dias7",    txt:"\uD83D\uDCC5 Pr\u00f3ximos 7 d\u00edas", on:_cfQ.dias7 },
+        { q:"finde",    txt:"\uD83D\uDCC6 Fin de semana",            on:_cfQ.finde },
+        { q:"escuelas", txt:"\uD83C\uDF92 Escuelas",                 on:(els.cat.value==="escuelas") },
+        { q:"feminas",  txt:"\u2640\uFE0F F\u00e9minas",            on:(els.sex.value==="F") },
+        { q:"inscr",    txt:"\uD83D\uDCDD Inscripci\u00f3n abierta", on:_cfQ.inscr }
+      ]
+      var html='<span class="cf-quick-lbl">Atajos:</span>';
+      chips.forEach(function(c){ html+='<button type="button" class="cf-qchip'+(c.on?" on":"")+'" data-q="'+c.q+'">'+c.txt+'</button>'; });
+      box.innerHTML=html;
+    }
+    function _cfQuickAction(q){
+      if(q==="toda"){ els.fed.value=""; if(elProv){ elProv.value=""; } }
+      else if(q==="micom"){ var m=_cfMiComunidad(); if(!m){ m="C. Valenciana"; } if([].some.call(els.fed.options,function(o){return o.value===m;})){ els.fed.value=m; } if(elProv){ elProv.value=""; } }
+      else if(q==="escuelas"){ els.cat.value=(els.cat.value==="escuelas")?"":"escuelas"; }
+      else if(q==="feminas"){ els.sex.value=(els.sex.value==="F")?"":"F"; }
+      else if(q==="dias7"){ _cfQ.dias7=!_cfQ.dias7; if(_cfQ.dias7){ if(elMes){ elMes.value=""; } elDes.value=hoyISO(); } }
+      else if(q==="finde"){ _cfQ.finde=!_cfQ.finde; }
+      else if(q==="inscr"){ _cfQ.inscr=!_cfQ.inscr; }
+      apply();
     }
 
     function render(list){
@@ -1016,7 +1091,21 @@
     if(elVerPas) elVerPas.addEventListener("change",apply);
     if(elProv) elProv.addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";apply();});
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;apply();});
+    // Atajos rápidos (delegación de eventos sobre el contenedor).
+    var _qbox=$("cf_quick");
+    if(_qbox){ _qbox.addEventListener("click",function(e){ var t=e.target; while(t){ if(t.getAttribute){ var q=t.getAttribute("data-q"); if(q){ _cfQuickAction(q); return; } } t=t.parentNode; } }); }
+    // Aviso de predeterminado: "Ver todo" quita el predeterminado y vuelve a lo básico.
+    var _pnx=$("cf_prefnote_x"); if(_pnx){ _pnx.addEventListener("click",_cfClearPref); }
+    // Plegar/desplegar filtros (solo tiene efecto visible en móvil).
+    var _tgl=$("cf_togglefiltros");
+    function _cfSetFiltros(open){
+      var c=document.querySelector("#calfed .controls"); if(!c){ return; }
+      if(open){ c.classList.remove("cf-collapsed"); } else { c.classList.add("cf-collapsed"); }
+      if(_tgl){ _tgl.innerHTML=open?"\u2699\uFE0F Ocultar filtros \u25B4":"\u2699\uFE0F Filtros \u25BE"; _tgl.setAttribute("aria-expanded",open?"true":"false"); }
+    }
+    if(_tgl){ _tgl.addEventListener("click",function(){ var c=document.querySelector("#calfed .controls"); var isOpen=c?!c.classList.contains("cf-collapsed"):true; _cfSetFiltros(!isOpen); }); }
+    try{ if(window.matchMedia){ _cfSetFiltros(!window.matchMedia("(max-width:640px)").matches); } else { _cfSetFiltros(true); } }catch(_){ _cfSetFiltros(true); }
     var _bsp=$("cf_setpref"); if(_bsp){ _bsp.addEventListener("click",_cfSavePref); }
     var _bcp=$("cf_clearpref"); if(_bcp){ _bcp.addEventListener("click",_cfClearPref); }
     var _fo=$("cf_fav_only"); if(_fo){ _fo.addEventListener("click",function(){ _cfOnlyFavs=!_cfOnlyFavs; _cfFavUpdateBar(); apply(); }); }
