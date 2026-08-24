@@ -457,26 +457,20 @@
     <div class="cf-panel-head"><span>&#9881;&#65039; Filtros</span><button type="button" class="cf-panel-x" id="cf_panel_x" aria-label="Cerrar">&#10005;</button></div>
     <div class="cf-panel-body">
       <div class="controls">
-        <div class="fld"><label>Ver desde el d&iacute;a</label><input type="date" id="cf_desde" title="Muestra las pruebas de esa fecha en adelante"></div>
-        <div class="fld"><label>Mes</label>
-          <select id="cf_mes">
-            <option value="">&mdash; Todos los meses &mdash;</option>
-            <option value="01">Enero</option>
-            <option value="02">Febrero</option>
-            <option value="03">Marzo</option>
-            <option value="04">Abril</option>
-            <option value="05">Mayo</option>
-            <option value="06">Junio</option>
-            <option value="07">Julio</option>
-            <option value="08">Agosto</option>
-            <option value="09">Septiembre</option>
-            <option value="10">Octubre</option>
-            <option value="11">Noviembre</option>
-            <option value="12">Diciembre</option>
+        <div class="fld"><label>Periodo</label>
+          <select id="cf_periodo">
+            <option value="prox">Pr&oacute;ximas (desde hoy)</option>
+            <option value="7">Pr&oacute;ximos 7 d&iacute;as</option>
+            <option value="finde">Este fin de semana</option>
+            <option value="mes" selected>Este mes</option>
+            <option value="30">Pr&oacute;ximos 30 d&iacute;as</option>
+            <option value="temp">Toda la temporada</option>
+            <option value="custom">Fechas concretas&hellip;</option>
           </select>
         </div>
-        <div class="fld"><label>Del mes</label>
-          <label class="cf-check" title="Al elegir un mes se muestran solo las pruebas de hoy en adelante. M&aacute;rcalo para ver tambi&eacute;n las que ya han pasado."><input type="checkbox" id="cf_verpasadas"> Incluir pasadas</label>
+        <div class="fld" id="cf_custom_dates" style="display:none">
+          <label>Desde</label><input type="date" id="cf_desde">
+          <label style="margin-top:8px">Hasta</label><input type="date" id="cf_hasta">
         </div>
         <div class="fld"><label>Categor&iacute;a</label>
           <select id="cf_cat">
@@ -710,6 +704,25 @@
     // Día de la semana 0=Lun … 6=Dom (UTC, para no depender de la zona horaria).
     function _cfDow(iso){ var p=String(iso||"").split("-"); if(p.length<3){ return -1; } var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); return (d.getUTCDay()+6)%7; }
     function _cfMasDias(iso,n){ var p=String(iso||"").split("-"); if(p.length<3){ return iso; } var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); d.setUTCDate(d.getUTCDate()+n); return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0"); }
+    function _cfMonthLastISO(iso){ var p=String(iso||"").split("-"); var d=new Date(Date.UTC(+p[0],+p[1],0)); return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0"); }
+    // Periodo (control único de fechas): valor y rango {from,to}.
+    function _cfPeriodo(){ var e=$("cf_periodo"); return e?e.value:"prox"; }
+    function _cfPeriodRange(){
+      var hoy=hoyISO(), per=_cfPeriodo();
+      if(per==="7"){ return {from:hoy,to:_cfMasDias(hoy,7)}; }
+      if(per==="30"){ return {from:hoy,to:_cfMasDias(hoy,30)}; }
+      if(per==="mes"){ return {from:hoy,to:_cfMonthLastISO(hoy)}; }
+      if(per==="finde"){ var dw=_cfDow(hoy); var from=(dw<=5)?_cfMasDias(hoy,5-dw):hoy; var to=_cfMasDias(hoy,6-dw); return {from:from,to:to}; }
+      if(per==="temp"){ return {from:"",to:""}; }
+      if(per==="custom"){ return {from:($("cf_desde")?$("cf_desde").value:""), to:($("cf_hasta")?$("cf_hasta").value:"")}; }
+      return {from:hoy,to:""};   // prox
+    }
+    function _cfPeriodLabel(){
+      var per=_cfPeriodo();
+      var M={prox:"Próximas",7:"Próximos 7 días",finde:"Este fin de semana",mes:"Este mes",30:"Próximos 30 días",temp:"Toda la temporada"};
+      if(per==="custom"){ var de=($("cf_desde")?$("cf_desde").value:""), ha=($("cf_hasta")?$("cf_hasta").value:""); if(de){ if(ha){ return "Del "+_fechaCorta(de)+" al "+_fechaCorta(ha); } return "Desde "+_fechaCorta(de); } if(ha){ return "Hasta "+_fechaCorta(ha); } return "Fechas concretas"; }
+      return M[per]||"Próximas";
+    }
     Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
     elDes.value=hoyISO();
     if(elMes) elMes.value=String(new Date().getMonth()+1).padStart(2,"0");   // por defecto: mes actual
@@ -772,16 +785,12 @@
       var p=_cfLoadPref(); if(!p){ return; }
       function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(o){return o.value===v;})){ el.value=v; } }
       setSel(els.cat,p.cat); setSel(els.sex,p.sex); setSel(els.mod,p.mod); setSel(els.fed,p.fed); setSel(elSt,p.st);
-      // El MES NO se restaura del predeterminado: por decisión del director, el
-      // calendario SIEMPRE abre en el mes en el que estamos (aunque el usuario
-      // guardara otro mes como predeterminado). Los demás filtros sí se guardan.
-      if(elMes){ elMes.value=String(new Date().getMonth()+1).padStart(2,"0"); }
-      if(elVerPas){ elVerPas.checked=!!p.verpas; }
+      if(p.per){ setSel($("cf_periodo"),p.per); if(p.per==="custom"){ if($("cf_desde")){ $("cf_desde").value=p.de||""; } if($("cf_hasta")){ $("cf_hasta").value=p.ha||""; } var cd=$("cf_custom_dates"); if(cd){ cd.style.display=""; } } }
       try{ _cfPopulateProvincias(); }catch(e){}
       if(elProv){ if(p.prov){ if([].some.call(elProv.options,function(o){return o.value===p.prov;})){ elProv.value=p.prov; } } }
     }
     function _cfSavePref(){
-      var p={ cat:els.cat.value, sex:els.sex.value, mod:els.mod.value, fed:els.fed.value, prov:(elProv?elProv.value:""), st:(elSt?elSt.value:""), mes:(elMes?elMes.value:""), verpas:(elVerPas?elVerPas.checked:false) };
+      var p={ cat:els.cat.value, sex:els.sex.value, mod:els.mod.value, fed:els.fed.value, prov:(elProv?elProv.value:""), st:(elSt?elSt.value:""), per:_cfPeriodo(), de:($("cf_desde")?$("cf_desde").value:""), ha:($("cf_hasta")?$("cf_hasta").value:"") };
       try{ localStorage.setItem("cf_pref", JSON.stringify(p)); }catch(e){}
       _cfUpdatePrefBtn();
       var b=$("cf_setpref"); if(b){ b.innerHTML="✓ Guardado"; setTimeout(function(){ _cfUpdatePrefBtn(); },1600); }
@@ -790,8 +799,10 @@
       try{ localStorage.removeItem("cf_pref"); }catch(e){}
       _cfUpdatePrefBtn();
       Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
-      elDes.value=hoyISO(); if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0"); if(elSt)elSt.value=""; if(elVerPas)elVerPas.checked=false; if(elProv)elProv.value="";
-      _cfQ.dias7=false; _cfQ.finde=false; _cfQ.inscr=false;
+      var pe=$("cf_periodo"); if(pe)pe.value="mes"; var cd=$("cf_custom_dates"); if(cd)cd.style.display="none";
+      if($("cf_desde"))$("cf_desde").value=""; if($("cf_hasta"))$("cf_hasta").value="";
+      if(elSt)elSt.value=""; if(elProv)elProv.value="";
+      _cfQ.inscr=false; if($("cf_inscr"))$("cf_inscr").checked=false;
       if($("cf_limit")){ $("cf_limit").checked=false; }
       apply();
     }
@@ -1011,10 +1022,11 @@
       pg(0).then(function(pastRows){ rows=rows.concat(pastRows||[]); _cfPastLoaded=true; _cfPastLoading=false; if(cb){ cb(); } })
            .catch(function(){ _cfPastLoading=false; if(cb){ cb(); } });
     }
-    // ¿Los filtros de fecha actuales requieren datos pasados?
+    // ¿El periodo elegido requiere datos pasados?
     function _cfNeedPast(){
-      if(elVerPas){ if(elVerPas.checked){ return true; } }
-      if(elMes){ if(elMes.value){ var cm=String(new Date().getMonth()+1).padStart(2,"0"); if(elMes.value<cm){ return true; } } }
+      var per=_cfPeriodo();
+      if(per==="temp"){ return true; }
+      if(per==="custom"){ var de=$("cf_desde")?$("cf_desde").value:""; if(!de){ return true; } if(de<hoyISO()){ return true; } }
       return false;
     }
     // Cambio en los controles de fecha: si hace falta lo pasado, cárgalo primero.
@@ -1070,8 +1082,7 @@
       if(els.cat.value){ parts.push(_selTxt(els.cat).toLowerCase()); }
       if(els.sex.value){ parts.push(els.sex.value==="F"?"femeninas":"masculinas"); }
       if(els.mod.value){ parts.push("de "+_selTxt(els.mod).toLowerCase()); }
-      var mm=elMes?elMes.value:"";
-      var cuando=mm?("en "+_selTxt(elMes).toLowerCase()):"próximas";
+      var cuando="("+_cfPeriodLabel().toLowerCase()+")";
       var donde=els.fed.value?(" en "+_selTxt(els.fed)):"";
       return ("No hay carreras "+(parts.length?(parts.join(" ")+" "):"")+cuando+donde).replace(/\s+/g," ").trim()+".";
     }
@@ -1092,8 +1103,7 @@
       var lim=$("cf_limit"); var limOn=lim?lim.checked:false;
       var A=[];
       var qv=(els.txt.value||"").trim(); if(qv){ A.push({k:"txt", panel:false, txt:"\uD83D\uDD0D "+qv}); }
-      if(_cfQ.dias7){ A.push({k:"dias7", panel:false, txt:"Pr\u00F3ximos 7 d\u00edas"}); }
-      if(_cfQ.finde){ A.push({k:"finde", panel:false, txt:"Este finde"}); }
+      if(_cfPeriodo()!=="prox"){ A.push({k:"periodo", panel:true, txt:_cfPeriodLabel()}); }
       if(_cfOnlyFavs){ A.push({k:"favs", panel:false, txt:"\u2605 Favoritas"}); }
       if(els.cat.value){ A.push({k:"cat", panel:true, txt:_selTxt(els.cat)}); }
       if(els.sex.value){ A.push({k:"sex", panel:true, txt:_selTxt(els.sex)}); }
@@ -1101,8 +1111,6 @@
       if(els.fed.value){ A.push({k:"fed", panel:true, txt:_selTxt(els.fed)+(limOn?" + vecinas":"")}); }
       if(elProv){ if(elProv.value){ A.push({k:"prov", panel:true, txt:elProv.value}); } }
       if(elSt){ if(elSt.value){ A.push({k:"st", panel:true, txt:_selTxt(elSt)}); } }
-      if(elMes){ if(elMes.value){ A.push({k:"mes", panel:true, txt:_selTxt(elMes)}); } }
-      if(elVerPas){ if(elVerPas.checked){ A.push({k:"verpas", panel:true, txt:"Incluye pasadas"}); } }
       if(_cfQ.inscr){ A.push({k:"inscr", panel:true, txt:"Con ficha oficial"}); }
       var html="";
       A.forEach(function(a){ html+='<span class="cf-achip">'+_esc(a.txt)+'<button type="button" class="x" data-clear="'+a.k+'" aria-label="Quitar filtro">\u2715</button></span>'; });
@@ -1113,8 +1121,6 @@
     }
     function _cfClearFilter(k){
       if(k==="txt"){ els.txt.value=""; }
-      else if(k==="dias7"){ _cfQ.dias7=false; }
-      else if(k==="finde"){ _cfQ.finde=false; }
       else if(k==="favs"){ _cfOnlyFavs=false; }
       else if(k==="cat"){ els.cat.value=""; }
       else if(k==="sex"){ els.sex.value=""; }
@@ -1122,26 +1128,31 @@
       else if(k==="fed"){ els.fed.value=""; var l=$("cf_limit"); if(l){ l.checked=false; } if(elProv){ elProv.value=""; } }
       else if(k==="prov"){ if(elProv){ elProv.value=""; } }
       else if(k==="st"){ if(elSt){ elSt.value=""; } }
-      else if(k==="mes"){ if(elMes){ elMes.value=""; } }
-      else if(k==="verpas"){ if(elVerPas){ elVerPas.checked=false; } }
+      else if(k==="periodo"){ var pe=$("cf_periodo"); if(pe){ pe.value="prox"; } var cd=$("cf_custom_dates"); if(cd){ cd.style.display="none"; } }
       else if(k==="inscr"){ _cfQ.inscr=false; var ci=$("cf_inscr"); if(ci){ ci.checked=false; } }
       apply();
     }
     function _cfClearAll(){
       els.cat.value=""; els.sex.value=""; els.mod.value=""; els.fed.value=""; els.txt.value="";
-      if(elProv){ elProv.value=""; } if(elSt){ elSt.value=""; } if(elMes){ elMes.value=""; } if(elVerPas){ elVerPas.checked=false; }
+      if(elProv){ elProv.value=""; } if(elSt){ elSt.value=""; }
+      var pe=$("cf_periodo"); if(pe){ pe.value="prox"; } var cd=$("cf_custom_dates"); if(cd){ cd.style.display="none"; }
       var l=$("cf_limit"); if(l){ l.checked=false; }
-      _cfQ.dias7=false; _cfQ.finde=false; _cfQ.inscr=false; var ci=$("cf_inscr"); if(ci){ ci.checked=false; } _cfOnlyFavs=false;
+      _cfQ.inscr=false; var ci=$("cf_inscr"); if(ci){ ci.checked=false; } _cfOnlyFavs=false;
       apply();
     }
     // Panel de filtros (off-canvas)
     function _cfPanelOpen(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.add("open"); } if(pn){ pn.classList.add("open"); pn.setAttribute("aria-hidden","false"); } document.body.style.overflow="hidden"; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","true"); } }
     function _cfPanelClose(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.remove("open"); } if(pn){ pn.classList.remove("open"); pn.setAttribute("aria-hidden","true"); } document.body.style.overflow=""; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","false"); } }
+    // Cambi\u00F3 el Periodo: muestra/oculta las fechas concretas y recarga si hace falta lo pasado.
+    function _cfPeriodoChanged(){
+      var cd=$("cf_custom_dates"); if(cd){ cd.style.display=(_cfPeriodo()==="custom")?"":"none"; }
+      _cfDateChanged();
+    }
     // Accesos r\u00E1pidos de la barra superior
     function _cfAccess(acc){
-      if(acc==="dias7"){ _cfQ.dias7=!_cfQ.dias7; if(_cfQ.dias7){ if(elMes){ elMes.value=""; } elDes.value=hoyISO(); } }
-      else if(acc==="finde"){ _cfQ.finde=!_cfQ.finde; }
-      else if(acc==="micom"){ var m=_cfMiComunidad(); if(!m){ m="C. Valenciana"; } if([].some.call(els.fed.options,function(o){return o.value===m;})){ els.fed.value=(els.fed.value===m?"":m); } if(elProv){ elProv.value=""; } }
+      if(acc==="dias7"){ var pe=$("cf_periodo"); if(pe){ pe.value=(pe.value==="7"?"prox":"7"); } _cfPeriodoChanged(); return; }
+      if(acc==="finde"){ var pf=$("cf_periodo"); if(pf){ pf.value=(pf.value==="finde"?"prox":"finde"); } _cfPeriodoChanged(); return; }
+      if(acc==="micom"){ var m=_cfMiComunidad(); if(!m){ m="C. Valenciana"; } if([].some.call(els.fed.options,function(o){return o.value===m;})){ els.fed.value=(els.fed.value===m?"":m); } if(elProv){ elProv.value=""; } }
       else if(acc==="favs"){ _cfOnlyFavs=!_cfOnlyFavs; }
       apply();
     }
@@ -1158,12 +1169,15 @@
     function _cfApplyURL(o){
       function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(x){return x.value===v;})){ el.value=v; } }
       setSel(els.cat,o.cat); setSel(els.sex,o.sex); setSel(els.mod,o.mod); setSel(els.fed,o.fed);
-      setSel(elSt,o.st); setSel(elMes,o.mes);
+      setSel(elSt,o.st);
+      if(o.per){ setSel($("cf_periodo"),o.per); }
+      if(o.de){ if($("cf_desde")){ $("cf_desde").value=o.de; } }
+      if(o.ha){ if($("cf_hasta")){ $("cf_hasta").value=o.ha; } }
+      var cd=$("cf_custom_dates"); if(cd){ cd.style.display=(_cfPeriodo()==="custom")?"":"none"; }
       if(o.q!=null){ els.txt.value=o.q; }
-      _cfQ.dias7=(o.d7==="1"); _cfQ.finde=(o.fs==="1"); _cfQ.inscr=(o.fi==="1"); _cfOnlyFavs=(o.fav==="1");
+      _cfQ.inscr=(o.fi==="1"); _cfOnlyFavs=(o.fav==="1");
       var l=$("cf_limit"); if(l){ l.checked=(o.lim==="1"); }
       var ci=$("cf_inscr"); if(ci){ ci.checked=_cfQ.inscr; }
-      if(elVerPas){ elVerPas.checked=(o.vp==="1"); }
       try{ _cfPopulateProvincias(); }catch(e){}
       setSel(elProv,o.prov);
     }
@@ -1172,8 +1186,9 @@
         var A=String.fromCharCode(38), pr=[];
         function add(k,v){ if(v){ pr.push(k+"="+encodeURIComponent(v)); } }
         add("cat",els.cat.value); add("sex",els.sex.value); add("mod",els.mod.value); add("fed",els.fed.value);
-        add("prov",elProv?elProv.value:""); add("st",elSt?elSt.value:""); add("mes",elMes?elMes.value:""); add("q",(els.txt.value||"").trim());
-        if(_cfQ.dias7){ pr.push("d7=1"); } if(_cfQ.finde){ pr.push("fs=1"); } if(_cfQ.inscr){ pr.push("fi=1"); }
+        add("prov",elProv?elProv.value:""); add("st",elSt?elSt.value:""); add("q",(els.txt.value||"").trim());
+        var per=_cfPeriodo(); if(per!=="prox"){ pr.push("per="+per); if(per==="custom"){ add("de",$("cf_desde")?$("cf_desde").value:""); add("ha",$("cf_hasta")?$("cf_hasta").value:""); } }
+        if(_cfQ.inscr){ pr.push("fi=1"); }
         if(_cfOnlyFavs){ pr.push("fav=1"); }
         var l=$("cf_limit"); if(l){ if(l.checked){ pr.push("lim=1"); } }
         if(elVerPas){ if(elVerPas.checked){ pr.push("vp=1"); } }
@@ -1187,16 +1202,16 @@
     var _cfProvSig="";
     function _cfPopulateProvincias(){
       if(!elProv) return;
-      var fed=els.fed.value, mes=(elMes?elMes.value:""), desde=elDes.value||"", verPas=(elVerPas?elVerPas.checked:false), hoyStr=hoyISO();
+      var fed=els.fed.value, pr=_cfPeriodRange();
       var provs={};
       rows.forEach(function(r){
         if(fed){ if(r.federacion!==fed) return; }
-        if(mes){ if((r.fecha||"").slice(5,7)!==mes) return; if(!verPas){ if((r.fecha||"")<hoyStr) return; } }
-        else if(desde){ if(r.fecha<desde) return; }
+        if(pr.from){ if((r.fecha||"")<pr.from) return; }
+        if(pr.to){ if((r.fecha||"")>pr.to) return; }
         var p=(r.provincia||"").trim(); if(p){ provs[p]=(provs[p]||0)+1; }
       });
       var keys=Object.keys(provs).sort(function(a,b){return a.localeCompare(b,"es");});
-      var sig=fed+"|"+mes+"|"+verPas+"|"+desde+"|"+keys.join(",");
+      var sig=fed+"|"+pr.from+"|"+pr.to+"|"+keys.join(",");
       if(sig===_cfProvSig) return;   // contexto sin cambios → no tocar el desplegable
       _cfProvSig=sig;
       var prev=elProv.value;
@@ -1206,25 +1221,15 @@
 
     function apply(){
       var f={}; Object.keys(els).forEach(function(k){f[k]=els[k].value;});
-      var q=(f.txt||"").trim().toLowerCase(), desde=elDes.value||"", stF=(elSt ? elSt.value : ""), mes=(elMes ? elMes.value : "");
-      var hoyStr=hoyISO();
-      var verPas=(elVerPas ? elVerPas.checked : false);   // ver también las pruebas ya pasadas del mes
-      _cfPopulateProvincias();                             // refresca provincias según federación+mes
+      var q=(f.txt||"").trim().toLowerCase(), stF=(elSt ? elSt.value : "");
+      _cfPopulateProvincias();                             // refresca provincias según el contexto
       var prov=(elProv ? elProv.value : "");
-      // Al elegir un mes concreto se muestra ese mes (se ignora "Desde", que se desactiva).
-      // La casilla "Ver pasadas" solo tiene sentido con un mes elegido.
-      if(elDes) elDes.disabled=!!mes;
-      if(elVerPas){ elVerPas.disabled=!mes; var lbl=elVerPas.parentNode; if(lbl){ if(mes){ lbl.classList.remove("dis"); } else { lbl.classList.add("dis"); } } }
       var _favA=_cfOnlyFavs?_cfFavSet():null;
-      var _max7=_cfQ.dias7?_cfMasDias(hoyStr,7):"";   // límite superior para "Próximos 7 días"
+      var _pr=_cfPeriodRange();   // {from,to} según el Periodo elegido
       var out=rows.filter(function(r){
         if(_favA){ if(!_favA[_cfFavKey(r)]){ return false; } }
-        // Atajos especiales (además de los desplegables):
-        if(_cfQ.dias7){ if((r.fecha||"")<hoyStr){ return false; } if(_max7){ if((r.fecha||"")>_max7){ return false; } } }
-        if(_cfQ.finde){ if(_cfDow(r.fecha)<5){ return false; } }         // 5=Sáb, 6=Dom
-        if(_cfQ.inscr){ if(!((r.fuente||"").trim())){ return false; } }  // solo con inscripción/página abierta
+        if(_cfQ.inscr){ if(!((r.fuente||"").trim())){ return false; } }  // solo con ficha oficial
         var st=(r.estado||"activa").toLowerCase().trim();
-        // Filtro de ESTADO: "" = todo menos retiradas · activa · incidencia (aplazada/anulada) · all
         if(stF==="activa"){ if(st!=="activa") return false; }
         else if(stF==="incidencia"){ if(!(st==="aplazada" || st==="anulada")) return false; }
         else if(stF!=="all"){ if(st==="retirada") return false; }
@@ -1234,11 +1239,8 @@
         if(f.mod){ if(r.modalidad!==f.mod) return false; }
         if(f.fed){ if(!_cfFedAllowed(r.federacion,f.fed)) return false; }
         if(prov){ if((r.provincia||"")!==prov) return false; }
-        if(mes){
-          if((r.fecha||"").slice(5,7)!==mes) return false;
-          if(!verPas){ if((r.fecha||"")<hoyStr) return false; }   // por defecto: solo de hoy en adelante
-        }
-        else if(desde){ if(r.fecha<desde) return false; }
+        if(_pr.from){ if((r.fecha||"")<_pr.from) return false; }
+        if(_pr.to){ if((r.fecha||"")>_pr.to) return false; }
         if(q){ if(_cfHaystack(r).indexOf(_cfSearchNorm(q))<0) return false; }
         return true;
       });
@@ -1271,7 +1273,8 @@
     function _cfRenderQuick(){
       var mic=_cfMiComunidad();
       var micOn=els.fed.value?(els.fed.value===mic):false;
-      var st={ dias7:_cfQ.dias7, finde:_cfQ.finde, micom:micOn, favs:_cfOnlyFavs };
+      var per=_cfPeriodo();
+      var st={ dias7:(per==="7"), finde:(per==="finde"), micom:micOn, favs:_cfOnlyFavs };
       var btns=document.querySelectorAll("#calfed .cf-acc");
       Array.prototype.forEach.call(btns,function(b){ var a=b.getAttribute("data-acc"); if(st[a]){ b.classList.add("on"); } else { b.classList.remove("on"); } });
     }
@@ -1703,14 +1706,14 @@
       th.addEventListener("click",function(){var k=th.dataset.k; if(k===sortKey)sortAsc=!sortAsc; else{sortKey=k;sortAsc=true;} apply();});
     });
     Object.keys(els).forEach(function(k){els[k].addEventListener("input",apply);});
-    elDes.addEventListener("input",apply);
-    if(elMes) elMes.addEventListener("change",_cfDateChanged);
+    if($("cf_periodo")) $("cf_periodo").addEventListener("change",_cfPeriodoChanged);
+    if($("cf_desde")) $("cf_desde").addEventListener("change",_cfDateChanged);
+    if($("cf_hasta")) $("cf_hasta").addEventListener("change",_cfDateChanged);
     if(elSt) elSt.addEventListener("change",apply);
-    if(elVerPas) elVerPas.addEventListener("change",_cfDateChanged);
     if(elProv) elProv.addEventListener("change",apply);
     if($("cf_limit")) $("cf_limit").addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";if($("cf_limit"))$("cf_limit").checked=false;if($("cf_inscr"))$("cf_inscr").checked=false;_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;_cfOnlyFavs=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});var pe=$("cf_periodo");if(pe)pe.value="mes";var cd=$("cf_custom_dates");if(cd)cd.style.display="none";if($("cf_desde"))$("cf_desde").value="";if($("cf_hasta"))$("cf_hasta").value="";if(elSt)elSt.value="";if(elProv)elProv.value="";if($("cf_limit"))$("cf_limit").checked=false;if($("cf_inscr"))$("cf_inscr").checked=false;_cfQ.inscr=false;_cfOnlyFavs=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
     // Accesos rápidos de la barra superior.
     Array.prototype.forEach.call(document.querySelectorAll("#calfed .cf-acc"),function(b){ b.addEventListener("click",function(){ _cfAccess(b.getAttribute("data-acc")); }); });
     // Casilla "Solo con ficha oficial".
