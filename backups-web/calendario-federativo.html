@@ -291,16 +291,10 @@
       /* La meta va en .cf-mmeta ("Localidad · Organiza: club"); ocultamos las celdas sueltas */
       #calfed td.c-loc, #calfed td.c-fed{ display:none; }
       #calfed .cf-mmeta{ display:block; font-size:12.5px; color:#8a8a8a; margin-top:3px; line-height:1.35; }
-      /* Categorías/modalidad ocultas hasta pulsar "Categorías" */
-      #calfed td.c-cat, #calfed td.c-mod{ display:none; margin-top:7px; }
-      #calfed tr.cf-open td.c-cat{ display:block; }
-      #calfed tr.cf-open td.c-mod{ display:block; margin-top:4px; }
-      /* Botones compactos */
-      #calfed td.c-src{ display:flex; gap:8px; margin-top:9px; padding:0; border:0; }
-      #calfed .cf-mcat{ display:inline-flex; align-items:center; }
-      #calfed .c-src .src{ background:#eef1f5; border:1px solid #d9dce2; border-radius:8px; padding:7px 13px; font-size:12.5px; font-weight:700; color:#3c3c3c; text-decoration:none; }
-      #calfed .c-src .cf-verficha{ background:#1287c7; border-color:#1287c7; color:#fff; }
-      /* Los botones de calendario NO van en la tarjeta (están dentro de "Ver detalles") */
+      /* Categorías visibles como chips; modalidad y botón fuera (toda la tarjeta abre la ficha) */
+      #calfed td.c-cat{ display:block; margin-top:6px; }
+      #calfed td.c-mod{ display:none; }
+      #calfed td.c-src{ display:none; }
       #calfed td.c-add{ display:none; }
     }
 
@@ -324,6 +318,24 @@
     #calfed .cf-nov-fedupd{ display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:4px 0; border-bottom:1px dotted #eceae5; }
     #calfed .cf-nov-fedupd .f{ color:#242424; font-weight:600; }
     #calfed .cf-nov-fedupd .d{ color:#8a8a8a; white-space:nowrap; }
+
+    /* ===== Tanda 1 · Legibilidad y zonas táctiles ===== */
+    #calfed .fld label{ font-size:11.5px; }
+    #calfed .btn{ font-size:13.5px; padding:8px 14px; }
+    #calfed th{ font-size:11.5px; }
+    #calfed td{ font-size:14px; }
+    #calfed .meta{ font-size:13.5px; }
+    #calfed a.src, #calfed button.src{ font-size:13.5px; }
+    #calfed .cf-check{ font-size:13px; }
+    #calfed .cf-vbtn{ font-size:13px; padding:8px 14px; }
+    #calfed .tag{ font-size:11.5px; }
+    @media (min-width:641px){
+      #calfed select, #calfed input[type=text], #calfed input[type=date]{ font-size:14px; padding:8px 10px; }
+    }
+    @media (max-width:640px){
+      #calfed .btn{ padding:11px 14px; }   /* zonas táctiles más grandes en móvil */
+      #calfed td.c-prueba .nm{ font-size:16px; }
+    }
 
     /* ===== Fase 4 · Conmutador de vista + Calendario mensual ===== */
     #calfed .cf-vtoggle{ display:inline-flex; border:1px solid #d4d2cc; border-radius:8px; overflow:hidden; }
@@ -352,6 +364,12 @@
     #calfed .cf-cal-more{ font:inherit; font-size:10px; font-weight:700; color:#8a8a8a; margin-top:3px; background:none; border:0; padding:1px 2px; cursor:pointer; }
     #calfed .cf-cal-more:hover{ color:var(--azul); }
     #calfed .cf-cal-dots{ display:none; }   /* solo en móvil */
+    #calfed .cf-cal-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--azul); }
+    #calfed .cf-cal-dot.apl{ background:#f59e0b; }
+    #calfed .cf-cal-dot.anu{ background:#ef4444; }
+    #calfed .cf-cal-leg{ display:flex; flex-wrap:wrap; gap:16px; justify-content:center; margin:0 0 10px; font-size:12.5px; color:#6b6b6b; }
+    #calfed .cf-cal-lg{ display:inline-flex; align-items:center; gap:6px; }
+    #calfed .cf-cal-cnt{ display:none; }
     @media (max-width:640px){
       #calfed .cf-cal-grid{ gap:3px; }
       #calfed .cf-cal-cell{ min-height:52px; padding:3px 3px 4px; }
@@ -359,6 +377,8 @@
       #calfed .cf-cal-dn{ font-size:11px; }
       #calfed .cf-cal-ev, #calfed .cf-cal-more{ display:none; }   /* no caben nombres en móvil */
       #calfed .cf-cal-dots{ display:flex; flex-wrap:wrap; gap:2px; margin-top:3px; }
+      #calfed .cf-cal-cnt{ display:block; font-size:9px; font-weight:700; color:#8a8a8a; margin-top:2px; }
+      #calfed .cf-cal-leg{ gap:12px; font-size:11.5px; }
       #calfed .cf-cal-dot{ width:6px; height:6px; border-radius:50%; background:var(--azul); }
       #calfed .cf-cal-dot.apl{ background:#f59e0b; }
       #calfed .cf-cal-dot.anu{ background:#ef4444; }
@@ -366,7 +386,6 @@
     }
   </style>
 
-  <h2>Calendario federativo de ciclismo</h2>
   <p class="sub">Pruebas de las federaciones auton&oacute;micas de Espa&ntilde;a</p>
   <p class="nota">Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, as&iacute; que puede haber cambios de &uacute;ltima hora: antes de desplazarte, confirma los detalles en la web oficial de la federaci&oacute;n (tienes el enlace en la columna &laquo;Fuente&raquo;).</p>
 
@@ -435,10 +454,10 @@
     <div class="fld"><label>Buscar</label><input type="text" id="cf_txt" placeholder="prueba o localidad&hellip;"></div>
     <div class="fld"><label>Estado</label>
       <select id="cf_st">
-        <option value="">Todas (sin retiradas)</option>
+        <option value="">Todas (activas + incidencias)</option>
         <option value="activa">Solo activas</option>
-        <option value="incidencia">Aplazadas / anuladas</option>
-        <option value="all">Todas (incl. retiradas)</option>
+        <option value="incidencia">Aplazadas o anuladas</option>
+        <option value="all">Todas (incluye retiradas)</option>
       </select>
     </div>
     <button class="btn" id="cf_reset">Restablecer</button>
@@ -484,7 +503,6 @@
       <th class="hide-sm">Categor&iacute;as</th>
       <th data-k="modalidad" class="hide-sm">Modalidad</th>
       <th class="hide-sm">Detalles</th>
-      <th class="c-add-h">A&ntilde;adir al calendario</th>
     </tr></thead>
     <tbody id="cf_tb"></tbody>
   </table>
@@ -596,6 +614,8 @@
     var _cfQ={dias7:false, finde:false, inscr:false};
     // Vista: "lista" (tabla) o "mes" (calendario mensual). _cfCalYM = "YYYY-MM" mostrado.
     var _cfVista="lista", _cfCalYM="", _cfCalDayMap={};
+    // Carga ligera: primero solo futuras; las pasadas, bajo demanda.
+    var _cfBaseUrl="", _cfPastLoaded=false, _cfPastLoading=false;
     // Comunidades limítrofes (para "incluir vecinas"). Baleares/Canarias sin frontera.
     var _CF_VECINAS={
       "Andalucía":["Extremadura","Castilla-La Mancha","Murcia"],
@@ -863,16 +883,18 @@
         $("cf_estado").textContent="Falta configurar SUPABASE_URL y SUPABASE_ANON_KEY en la parte de arriba del bloque.";
         return;
       }
-      var url=C.SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/pruebas_federativas?select=*\u0026order=fecha.asc";
-      var _sep=String.fromCharCode(38), _PAG=1000, _acc=[];   // 38 = '&' (ASCII; WordPress no lo recodifica)
-      // Supabase devuelve como maximo 1000 filas por peticion: paginamos con
-      // offset hasta traerlas TODAS (antes se perdian las pruebas mas tardias).
-      function _pagina(off){
-        return fetch(url+_sep+"limit="+_PAG+_sep+"offset="+off,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:"Bearer "+C.SUPABASE_ANON_KEY}})
+      var _sep=String.fromCharCode(38), _PAG=1000;   // 38 = '&' (ASCII; WordPress no lo recodifica)
+      // Solo los campos que usa el calendario (no "*") -> menos peso por fila.
+      var _CAMPOS="federacion,prueba,fecha,localidad,provincia,modalidad,categorias,sexo,estado,observaciones,fuente,club,clase,hora,actualizado,visto";
+      _cfBaseUrl=C.SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/pruebas_federativas?select="+_CAMPOS+"\u0026order=fecha.asc";
+      // Supabase corta a 1000 filas/peticion: paginamos con offset. De ENTRADA solo
+      // traemos las FUTURAS (fecha>=hoy); las pasadas se piden bajo demanda.
+      function _pagina(baseU, off, acc){
+        return fetch(baseU+_sep+"limit="+_PAG+_sep+"offset="+off,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:"Bearer "+C.SUPABASE_ANON_KEY}})
           .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
-          .then(function(chunk){ chunk=chunk||[]; _acc=_acc.concat(chunk); return chunk.length===_PAG?_pagina(off+_PAG):_acc; });
+          .then(function(chunk){ chunk=chunk||[]; acc=acc.concat(chunk); return chunk.length===_PAG?_pagina(baseU,off+_PAG,acc):acc; });
       }
-      _pagina(0)
+      _pagina(_cfBaseUrl+_sep+"fecha=gte."+hoyISO(), 0, [])
         .then(function(data){
           rows=data||[];
           // Contadores por opción (nº de pruebas PRÓXIMAS, de hoy en adelante, sin
@@ -908,6 +930,30 @@
         })
         .catch(function(e){ $("cf_estado").textContent="No se pudieron cargar las pruebas: "+e.message; });
     }
+
+    // Carga las pruebas PASADAS (fecha<hoy) bajo demanda y las une a las futuras.
+    function _cfLoadPast(cb){
+      if(_cfPastLoaded){ if(cb){ cb(); } return; }
+      if(_cfPastLoading){ return; }
+      if(!_cfBaseUrl){ if(cb){ cb(); } return; }
+      _cfPastLoading=true;
+      var _sep=String.fromCharCode(38), _PAG=1000, acc=[];
+      function pg(off){
+        return fetch(_cfBaseUrl+_sep+"fecha=lt."+hoyISO()+_sep+"limit="+_PAG+_sep+"offset="+off,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:"Bearer "+C.SUPABASE_ANON_KEY}})
+          .then(function(r){ return r.ok?r.json():[]; })
+          .then(function(c){ c=c||[]; acc=acc.concat(c); return c.length===_PAG?pg(off+_PAG):acc; });
+      }
+      pg(0).then(function(pastRows){ rows=rows.concat(pastRows||[]); _cfPastLoaded=true; _cfPastLoading=false; if(cb){ cb(); } })
+           .catch(function(){ _cfPastLoading=false; if(cb){ cb(); } });
+    }
+    // ¿Los filtros de fecha actuales requieren datos pasados?
+    function _cfNeedPast(){
+      if(elVerPas){ if(elVerPas.checked){ return true; } }
+      if(elMes){ if(elMes.value){ var cm=String(new Date().getMonth()+1).padStart(2,"0"); if(elMes.value<cm){ return true; } } }
+      return false;
+    }
+    // Cambio en los controles de fecha: si hace falta lo pasado, cárgalo primero.
+    function _cfDateChanged(){ if(_cfNeedPast()){ if(!_cfPastLoaded){ _cfLoadPast(apply); return; } } apply(); }
 
     // ── Deduplicado al pintar (no toca la base de datos) ──
     // Muchas federaciones traen la misma prueba dos veces por diferencias de
@@ -953,6 +999,20 @@
       return arr.filter(function(r){ return fuera.indexOf(r)<0; });
     }
     function _fechaCorta(s){ var p=String(s||"").slice(0,10).split("-"); return p.length===3?(p[2]+"/"+p[1]+"/"+p[0]):String(s||""); }
+    // Mensaje vacío concreto según los filtros activos.
+    function _cfEmptyMsg(){
+      var parts=[];
+      if(els.cat.value){ parts.push(_selTxt(els.cat).toLowerCase()); }
+      if(els.sex.value){ parts.push(els.sex.value==="F"?"femeninas":"masculinas"); }
+      if(els.mod.value){ parts.push("de "+_selTxt(els.mod).toLowerCase()); }
+      var mm=elMes?elMes.value:"";
+      var cuando=mm?("en "+_selTxt(elMes).toLowerCase()):"próximas";
+      var donde=els.fed.value?(" en "+_selTxt(els.fed)):"";
+      return ("No hay carreras "+(parts.length?(parts.join(" ")+" "):"")+cuando+donde).replace(/\s+/g," ").trim()+".";
+    }
+    // Búsqueda: minúsculas SIN tildes, y sobre TODOS los campos útiles.
+    function _cfSearchNorm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }
+    function _cfHaystack(r){ return _cfSearchNorm([r.prueba,r.localidad,r.provincia,r.federacion,r.club,r.modalidad,(r.categorias||"").replace(/,/g," ")].filter(Boolean).join(" ")); }
 
     // Botones-espejo: reflejan lo que hay seleccionado en los desplegables de
     // arriba (no se pulsan). Azul = filtro activo; gris = "todas / ambos".
@@ -1036,7 +1096,7 @@
           if(!verPas){ if((r.fecha||"")<hoyStr) return false; }   // por defecto: solo de hoy en adelante
         }
         else if(desde){ if(r.fecha<desde) return false; }
-        if(q){ if(((r.prueba||"")+" "+(r.localidad||"")+" "+(r.provincia||"")).toLowerCase().indexOf(q)<0) return false; }
+        if(q){ if(_cfHaystack(r).indexOf(_cfSearchNorm(q))<0) return false; }
         return true;
       });
       out=_dedupe(out);   // quitar duplicados por tildes/mayúsculas antes de pintar
@@ -1075,7 +1135,7 @@
         { q:"finde",    txt:"\uD83D\uDCC6 Fin de semana",            on:_cfQ.finde },
         { q:"escuelas", txt:"\uD83C\uDF92 Escuelas",                 on:(els.cat.value==="escuelas") },
         { q:"feminas",  txt:"\u2640\uFE0F F\u00e9minas",            on:(els.sex.value==="F") },
-        { q:"inscr",    txt:"\uD83D\uDCDD Inscripci\u00f3n abierta", on:_cfQ.inscr }
+        { q:"inscr",    txt:"\uD83D\uDCDD Con ficha oficial",    on:_cfQ.inscr }
       ]
       var html='<span class="cf-quick-lbl">Atajos:</span>';
       chips.forEach(function(c){ html+='<button type="button" class="cf-qchip'+(c.on?" on":"")+'" data-q="'+c.q+'">'+c.txt+'</button>'; });
@@ -1096,7 +1156,7 @@
       var tb=$("cf_tb"); tb.innerHTML="";
       var _favSet=_cfFavSet();
       var _favChg=_cfFavChanges();
-      if(!list.length){ $("cf_estado").style.display="block"; $("cf_estado").textContent="Ninguna prueba con esos filtros."; return; }
+      if(!list.length){ $("cf_estado").style.display="block"; $("cf_estado").textContent=_cfEmptyMsg(); return; }
       $("cf_estado").style.display="none";
       var hoy=hoyISO();
       var agrupaMes=(sortKey==="fecha");   // agrupamos por mes solo al ordenar por fecha (orden por defecto)
@@ -1110,7 +1170,7 @@
           if(mk!==mesActual){
             mesActual=mk;
             var hr=document.createElement("tr"); hr.className="cf-mes-row";
-            hr.innerHTML='<td class="cf-mes" colspan="8"><span class="cf-mes-lbl">'+(MESLARGO[(+d[1]||1)-1]||"")+' '+(d[0]||"")+'</span><span class="cf-mes-n">'+cuentaMes[mk]+' prueba'+(cuentaMes[mk]===1?'':'s')+'</span></td>';
+            hr.innerHTML='<td class="cf-mes" colspan="7"><span class="cf-mes-lbl">'+(MESLARGO[(+d[1]||1)-1]||"")+' '+(d[0]||"")+'</span><span class="cf-mes-n">'+cuentaMes[mk]+' prueba'+(cuentaMes[mk]===1?'':'s')+'</span></td>';
             frag.appendChild(hr);
           }
         }
@@ -1139,11 +1199,7 @@
           '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
           '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
           '<td class="hide-sm c-mod" data-lbl="Modalidad">'+(r.modalidad?'<span class="tag mod">'+r.modalidad+'</span>':"")+'</td>'+
-          '<td class="hide-sm c-src"><button type="button" class="src cf-mcat">&#127991;&#65039; Categor&iacute;as</button><button type="button" class="src cf-verficha">&#128269; Ver detalles</button></td>'+
-          '<td class="c-add" data-lbl="A&ntilde;adir al calendario"><div class="cal-add">'+
-            '<a class="cal-btn cal-ics" role="button" tabindex="0" title="A&ntilde;adir al Calendario de Apple (Mac/iPhone)">'+APPLE_SVG+'<span>Apple</span></a>'+
-            '<a class="cal-btn cal-gcal" target="_blank" rel="noopener" title="A&ntilde;adir a Google Calendar">'+GCAL_SVG+'<span>Google</span></a>'+
-          '</div></td>';
+          '<td class="hide-sm c-src"><button type="button" class="src cf-verficha">&#128269; Ver detalles</button></td>';
         tr.querySelector(".nm-txt").textContent=r.prueba||"";
         if(st==="anulada") tr.querySelector(".nm-txt").classList.add("est-tachado");
         if(r.observaciones) tr.querySelector(".obs").textContent=r.observaciones;
@@ -1153,13 +1209,12 @@
         // Meta compacta para MÓVIL: "Localidad · Organiza: club" (si no hay club, la federación).
         var _mm=tr.querySelector(".cf-mmeta");
         if(_mm){ _mm.textContent=[r.localidad, (r.club?("Organiza: "+r.club):r.federacion)].filter(Boolean).join(" · "); }
-        tr.querySelector(".cf-verficha").addEventListener("click",function(){ abrirFicha(r); });
-        var _mc=tr.querySelector(".cf-mcat"); if(_mc){ _mc.addEventListener("click",function(ev){ ev.stopPropagation(); var op=tr.classList.toggle("cf-open"); _mc.innerHTML=op?"&#127991;&#65039; Ocultar":"&#127991;&#65039; Categor&iacute;as"; }); }
+        // Toda la fila/tarjeta abre la ficha (la estrella y el badge tienen su propia acción).
+        tr.style.cursor="pointer";
+        tr.addEventListener("click",function(){ abrirFicha(r); });
+        tr.querySelector(".cf-verficha").addEventListener("click",function(ev){ ev.stopPropagation(); abrirFicha(r); });
         var _cb=tr.querySelector(".cf-coinc-badge"); if(_cb){ _cb.addEventListener("click",function(ev){ ev.stopPropagation(); abrirFicha(r); }); }
         var _st=tr.querySelector(".cf-fav-star"); if(_st){ _st.addEventListener("click",function(ev){ ev.stopPropagation(); _cfFavToggle(r); var on=_st.classList.toggle("on"); _st.textContent=on?"★":"☆"; if(_cfOnlyFavs){ apply(); } }); }
-        tr.querySelector(".cal-gcal").href=_gcalUrl(r);
-        tr.querySelector(".cal-ics").addEventListener("click",function(e){ e.preventDefault(); _abrirICS(r); });
-        tr.querySelector(".cal-ics").addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _abrirICS(r); } });
         frag.appendChild(tr);
       });
       tb.appendChild(frag);
@@ -1393,7 +1448,7 @@
       if(_cfQ.inscr){ if(!((r.fuente||"").trim())) return false; }
       if(_cfOnlyFavs){ if(!_cfFavSet()[_cfFavKey(r)]) return false; }
       var q=(els.txt.value||"").trim().toLowerCase();
-      if(q){ if(((r.prueba||"")+" "+(r.localidad||"")+" "+(r.provincia||"")).toLowerCase().indexOf(q)<0) return false; }
+      if(q){ if(_cfHaystack(r).indexOf(_cfSearchNorm(q))<0) return false; }
       return true;
     }
     function _cfRenderCal(){
@@ -1410,6 +1465,7 @@
         +'<span class="cf-cal-title">'+_esc(title.toLowerCase())+'</span>'
         +'<button type="button" class="cf-cal-nav" id="cf_cal_next" aria-label="Mes siguiente">&#8250;</button>'
         +'<button type="button" class="cf-cal-hoy" id="cf_cal_hoy">Hoy</button></div>';
+      html+='<div class="cf-cal-leg"><span class="cf-cal-lg"><span class="cf-cal-dot"></span>Activa</span><span class="cf-cal-lg"><span class="cf-cal-dot apl"></span>Aplazada</span><span class="cf-cal-lg"><span class="cf-cal-dot anu"></span>Anulada</span></div>';
       html+='<div class="cf-cal-grid">';
       DIAS.forEach(function(d){ html+='<div class="cf-cal-dow">'+d+'</div>'; });
       var firstDow=_cfDow(_cfCalYM+"-01");
@@ -1436,7 +1492,7 @@
           html+='<div class="cf-cal-dots">';
           var dl=list.slice(0,6), z;
           for(z=0;z<dl.length;z++){ var s2=(dl[z].estado||"").toLowerCase().trim(); var dc=s2==="aplazada"?" apl":(s2==="anulada"?" anu":""); html+='<span class="cf-cal-dot'+dc+'"></span>'; }
-          html+='</div>';
+          html+='</div><div class="cf-cal-cnt">'+list.length+(list.length===1?" prueba":" pruebas")+'</div>';
         }
         html+='</div>';
       }
@@ -1452,6 +1508,7 @@
       var y=+_cfCalYM.slice(0,4), mo=+_cfCalYM.slice(5,7)-1;
       var dt=new Date(Date.UTC(y,mo+n,1));
       _cfCalYM=dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0");
+      if(_cfCalYM<hoyISO().slice(0,7)){ if(!_cfPastLoaded){ _cfLoadPast(_cfRenderCal); return; } }
       _cfRenderCal();
     }
     function _cfSetVista(v){
@@ -1513,9 +1570,9 @@
     });
     Object.keys(els).forEach(function(k){els[k].addEventListener("input",apply);});
     elDes.addEventListener("input",apply);
-    if(elMes) elMes.addEventListener("change",apply);
+    if(elMes) elMes.addEventListener("change",_cfDateChanged);
     if(elSt) elSt.addEventListener("change",apply);
-    if(elVerPas) elVerPas.addEventListener("change",apply);
+    if(elVerPas) elVerPas.addEventListener("change",_cfDateChanged);
     if(elProv) elProv.addEventListener("change",apply);
     if($("cf_limit")) $("cf_limit").addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
