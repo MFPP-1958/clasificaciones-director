@@ -337,6 +337,47 @@
       #calfed td.c-prueba .nm{ font-size:16px; }
     }
 
+    /* ===== Tanda 2a · Cabecera nueva + panel de filtros ===== */
+    #calfed .cf-top{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:8px 0 10px; }
+    #calfed .cf-search{ flex:1 1 260px; min-width:0; font:inherit; font-size:16px; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; background:#fff; }
+    #calfed .cf-search:focus{ outline:2px solid var(--azul); outline-offset:1px; }
+    #calfed .cf-access{ display:flex; flex-wrap:wrap; gap:7px; }
+    #calfed .cf-acc{ font:inherit; font-size:13px; font-weight:700; border-radius:999px; padding:9px 14px; cursor:pointer; background:#fff; border:1.5px solid #d4d2cc; color:#3c3c3c; }
+    #calfed .cf-acc:hover{ background:#f0efec; }
+    #calfed .cf-acc.on{ background:var(--azul); border-color:var(--azul); color:#fff; }
+    #calfed .cf-filtros-btn{ font:inherit; font-size:14px; font-weight:800; border-radius:10px; padding:11px 16px; cursor:pointer; background:var(--azul); border:1.5px solid var(--azul); color:#fff; white-space:nowrap; }
+    #calfed .cf-filtros-btn:hover{ background:var(--azul-dark); }
+    #calfed .cf-filtros-n{ display:inline-block; min-width:20px; text-align:center; background:#fde68a; color:#92400e; border-radius:999px; font-size:12px; font-weight:800; padding:1px 7px; margin-left:4px; }
+    #calfed .cf-active{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin:0 0 10px; }
+    #calfed .cf-active:empty{ margin:0; }
+    #calfed .cf-achip{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:650; border-radius:999px; padding:5px 6px 5px 12px; background:#e8eff9; border:1px solid #c7dbf3; color:#22456e; }
+    #calfed .cf-achip .x{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border:0; border-radius:50%; background:rgba(34,69,110,.12); color:#22456e; font-size:12px; font-weight:800; cursor:pointer; line-height:1; }
+    #calfed .cf-achip .x:hover{ background:#22456e; color:#fff; }
+    #calfed .cf-active-clear{ font:inherit; font-size:12px; font-weight:700; color:#8a8a8a; background:none; border:0; cursor:pointer; text-decoration:underline; }
+    #calfed .cf-panel-ov{ position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:999998; display:none; }
+    #calfed .cf-panel-ov.open{ display:block; }
+    #calfed .cf-panel{ position:fixed; top:0; right:0; height:100%; width:380px; max-width:92vw; background:#fff; z-index:999999; box-shadow:-12px 0 40px rgba(0,0,0,.2); transform:translateX(105%); transition:transform .22s ease; display:flex; flex-direction:column; }
+    #calfed .cf-panel.open{ transform:translateX(0); }
+    #calfed .cf-panel-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px; background:var(--azul); color:#fff; font-size:16px; font-weight:800; }
+    #calfed .cf-panel-x{ width:32px; height:32px; border:0; border-radius:8px; background:rgba(255,255,255,.2); color:#fff; font-size:15px; cursor:pointer; }
+    #calfed .cf-panel-body{ flex:1; overflow:auto; padding:14px 16px; }
+    #calfed .cf-panel .controls{ display:block; background:none; border:0; padding:0; }
+    #calfed .cf-panel .fld{ margin-bottom:12px; }
+    #calfed .cf-panel .fld label{ display:block; }
+    #calfed .cf-panel select, #calfed .cf-panel input[type=text], #calfed .cf-panel input[type=date]{ width:100%; font-size:16px; padding:10px 12px; }
+    #calfed .cf-panel-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+    #calfed .cf-panel-foot{ padding:14px 16px; border-top:1px solid #eceae5; }
+    #calfed .cf-panel-ver{ width:100%; font:inherit; font-size:15px; font-weight:800; padding:13px; border:0; border-radius:10px; background:var(--azul); color:#fff; cursor:pointer; }
+    #calfed .cf-panel-ver:hover{ background:var(--azul-dark); }
+    @media (max-width:640px){
+      #calfed .cf-panel{ top:auto; bottom:0; right:0; left:0; width:100%; max-width:100%; height:86vh; border-radius:16px 16px 0 0; transform:translateY(105%); }
+      #calfed .cf-panel.open{ transform:translateY(0); }
+      #calfed .cf-search{ flex:1 1 100%; }
+      #calfed .cf-access{ width:100%; }
+      #calfed .cf-acc{ flex:1 1 45%; text-align:center; }
+      #calfed .cf-filtros-btn{ width:100%; }
+    }
+
     /* ===== Fase 4 · Conmutador de vista + Calendario mensual ===== */
     #calfed .cf-vtoggle{ display:inline-flex; border:1px solid #d4d2cc; border-radius:8px; overflow:hidden; }
     #calfed .cf-vbtn{ font:inherit; font-size:12.5px; font-weight:700; padding:6px 12px; background:#fff; border:0; color:#6b6b6b; cursor:pointer; }
@@ -389,91 +430,110 @@
   <p class="sub">Pruebas de las federaciones auton&oacute;micas de Espa&ntilde;a</p>
   <p class="nota">Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, as&iacute; que puede haber cambios de &uacute;ltima hora: antes de desplazarte, confirma los detalles en la web oficial de la federaci&oacute;n (tienes el enlace en la columna &laquo;Fuente&raquo;).</p>
 
-  <!-- Atajos rápidos (siempre visibles; muy útiles en móvil) -->
-  <div class="cf-quick" id="cf_quick"></div>
-
-  <!-- Botón para plegar/desplegar los filtros (solo se ve en móvil) -->
-  <button type="button" class="btn" id="cf_togglefiltros" aria-expanded="true"></button>
-
-  <div class="controls">
-    <div class="fld"><label>Ver desde el d&iacute;a</label><input type="date" id="cf_desde" title="Muestra las pruebas de esa fecha en adelante"></div>
-    <div class="fld"><label>Mes</label>
-      <select id="cf_mes">
-        <option value="">&mdash; Todos los meses &mdash;</option>
-        <option value="01">Enero</option>
-        <option value="02">Febrero</option>
-        <option value="03">Marzo</option>
-        <option value="04">Abril</option>
-        <option value="05">Mayo</option>
-        <option value="06">Junio</option>
-        <option value="07">Julio</option>
-        <option value="08">Agosto</option>
-        <option value="09">Septiembre</option>
-        <option value="10">Octubre</option>
-        <option value="11">Noviembre</option>
-        <option value="12">Diciembre</option>
-      </select>
+  <!-- Barra superior: búsqueda grande + accesos rápidos + botón Filtros -->
+  <div class="cf-top">
+    <input type="text" id="cf_txt" class="cf-search" placeholder="Busca una carrera, localidad o club&hellip;" aria-label="Buscar carrera">
+    <div class="cf-access">
+      <button type="button" class="cf-acc" data-acc="dias7">&#128197; Pr&oacute;ximos 7 d&iacute;as</button>
+      <button type="button" class="cf-acc" data-acc="finde">&#128198; Este finde</button>
+      <button type="button" class="cf-acc" data-acc="micom">&#127968; Mi comunidad</button>
+      <button type="button" class="cf-acc" data-acc="favs">&#9733; Mis favoritas</button>
     </div>
-    <div class="fld"><label>Del mes</label>
-      <label class="cf-check" title="Al elegir un mes se muestran solo las pruebas de hoy en adelante. M&aacute;rcalo para ver tambi&eacute;n las que ya han pasado."><input type="checkbox" id="cf_verpasadas"> Incluir pasadas</label>
-    </div>
-    <div class="fld"><label>Categor&iacute;a</label>
-      <select id="cf_cat">
-        <option value="cadete">Cadete</option>
-        <option value="junior">Junior / juvenil</option>
-        <option value="sub23">Sub-23</option>
-        <option value="elite">&Eacute;lite</option>
-        <option value="master">M&aacute;ster</option>
-        <option value="escuelas">Escuelas</option>
-        <option value="">&mdash; Todas &mdash;</option>
-      </select>
-    </div>
-    <div class="fld"><label>Sexo</label>
-      <select id="cf_sex">
-        <option value="M">Masculino</option>
-        <option value="F">Femenino</option>
-        <option value="">&mdash; Ambos &mdash;</option>
-      </select>
-    </div>
-    <div class="fld"><label>Modalidad</label>
-      <select id="cf_mod">
-        <option value="Carretera">Carretera</option>
-        <option value="BTT">BTT</option>
-        <option value="Ciclocross">Ciclocross</option>
-        <option value="Pista">Pista</option>
-        <option value="BMX">BMX</option>
-        <option value="Gravel">Gravel</option>
-        <option value="">&mdash; Todas &mdash;</option>
-      </select>
-    </div>
-    <div class="fld"><label>Federaci&oacute;n</label><select id="cf_fed"><option value="">&mdash; Todas &mdash;</option></select></div>
-    <div class="fld"><label>Vecinas</label>
-      <label class="cf-check" title="Incluir tambi&eacute;n las pruebas de las comunidades que hacen frontera con la federaci&oacute;n elegida"><input type="checkbox" id="cf_limit"> Incluir lim&iacute;trofes</label>
-    </div>
-    <div class="fld"><label>Provincia</label><select id="cf_prov"><option value="">&mdash; Todas &mdash;</option></select></div>
-    <div class="fld"><label>Buscar</label><input type="text" id="cf_txt" placeholder="prueba o localidad&hellip;"></div>
-    <div class="fld"><label>Estado</label>
-      <select id="cf_st">
-        <option value="">Todas (activas + incidencias)</option>
-        <option value="activa">Solo activas</option>
-        <option value="incidencia">Aplazadas o anuladas</option>
-        <option value="all">Todas (incluye retiradas)</option>
-      </select>
-    </div>
-    <button class="btn" id="cf_reset">Restablecer</button>
-    <button class="btn" id="cf_setpref" title="Guarda los filtros actuales en este dispositivo: al volver a abrir el calendario se aplicar&aacute;n solos">&#9733; Fijar como predeterminado</button>
-    <button class="btn" id="cf_clearpref" style="display:none" title="Vuelve a los filtros por defecto de la web">&#10005; Quitar predeterminado</button>
+    <button type="button" class="cf-filtros-btn" id="cf_filtros_btn" aria-expanded="false">&#9881;&#65039; Filtros <span class="cf-filtros-n" id="cf_filtros_n" style="display:none">0</span></button>
   </div>
 
-  <!-- Aviso: hay filtros guardados aplicándose (se muestra por JS si existen). -->
+  <!-- Filtros activos (cada uno eliminable con ✕) -->
+  <div class="cf-active" id="cf_active"></div>
+
+  <!-- Aviso: hay filtros guardados aplicándose (por JS si existen). -->
   <div class="cf-prefnote" id="cf_prefnote">
     <span>&#11088; Est&aacute;s viendo <b>tus filtros guardados</b>.</span>
     <button type="button" class="cf-prefnote-x" id="cf_prefnote_x">Ver todo</button>
   </div>
 
-  <!-- Resumen de filtros activos: espejo de los desplegables de arriba (se
-       rellena por JS en renderChips(); no es clicable). -->
-  <div class="cf-chips" id="cf_chips"></div>
+  <!-- Panel de filtros (lateral en PC, cajón inferior en móvil) -->
+  <div class="cf-panel-ov" id="cf_panel_ov"></div>
+  <aside class="cf-panel" id="cf_panel" aria-hidden="true" aria-label="Filtros">
+    <div class="cf-panel-head"><span>&#9881;&#65039; Filtros</span><button type="button" class="cf-panel-x" id="cf_panel_x" aria-label="Cerrar">&#10005;</button></div>
+    <div class="cf-panel-body">
+      <div class="controls">
+        <div class="fld"><label>Ver desde el d&iacute;a</label><input type="date" id="cf_desde" title="Muestra las pruebas de esa fecha en adelante"></div>
+        <div class="fld"><label>Mes</label>
+          <select id="cf_mes">
+            <option value="">&mdash; Todos los meses &mdash;</option>
+            <option value="01">Enero</option>
+            <option value="02">Febrero</option>
+            <option value="03">Marzo</option>
+            <option value="04">Abril</option>
+            <option value="05">Mayo</option>
+            <option value="06">Junio</option>
+            <option value="07">Julio</option>
+            <option value="08">Agosto</option>
+            <option value="09">Septiembre</option>
+            <option value="10">Octubre</option>
+            <option value="11">Noviembre</option>
+            <option value="12">Diciembre</option>
+          </select>
+        </div>
+        <div class="fld"><label>Del mes</label>
+          <label class="cf-check" title="Al elegir un mes se muestran solo las pruebas de hoy en adelante. M&aacute;rcalo para ver tambi&eacute;n las que ya han pasado."><input type="checkbox" id="cf_verpasadas"> Incluir pasadas</label>
+        </div>
+        <div class="fld"><label>Categor&iacute;a</label>
+          <select id="cf_cat">
+            <option value="cadete">Cadete</option>
+            <option value="junior">Junior / juvenil</option>
+            <option value="sub23">Sub-23</option>
+            <option value="elite">&Eacute;lite</option>
+            <option value="master">M&aacute;ster</option>
+            <option value="escuelas">Escuelas</option>
+            <option value="">&mdash; Todas &mdash;</option>
+          </select>
+        </div>
+        <div class="fld"><label>Sexo</label>
+          <select id="cf_sex">
+            <option value="M">Masculino</option>
+            <option value="F">Femenino</option>
+            <option value="">&mdash; Ambos &mdash;</option>
+          </select>
+        </div>
+        <div class="fld"><label>Modalidad</label>
+          <select id="cf_mod">
+            <option value="Carretera">Carretera</option>
+            <option value="BTT">BTT</option>
+            <option value="Ciclocross">Ciclocross</option>
+            <option value="Pista">Pista</option>
+            <option value="BMX">BMX</option>
+            <option value="Gravel">Gravel</option>
+            <option value="">&mdash; Todas &mdash;</option>
+          </select>
+        </div>
+        <div class="fld"><label>Federaci&oacute;n</label><select id="cf_fed"><option value="">&mdash; Todas &mdash;</option></select></div>
+        <div class="fld"><label>Vecinas</label>
+          <label class="cf-check" title="Incluir tambi&eacute;n las pruebas de las comunidades que hacen frontera con la federaci&oacute;n elegida"><input type="checkbox" id="cf_limit"> Incluir lim&iacute;trofes</label>
+        </div>
+        <div class="fld"><label>Provincia</label><select id="cf_prov"><option value="">&mdash; Todas &mdash;</option></select></div>
+        <div class="fld"><label>Estado</label>
+          <select id="cf_st">
+            <option value="">Todas (activas + incidencias)</option>
+            <option value="activa">Solo activas</option>
+            <option value="incidencia">Aplazadas o anuladas</option>
+            <option value="all">Todas (incluye retiradas)</option>
+          </select>
+        </div>
+        <div class="fld"><label>Inscripci&oacute;n</label>
+          <label class="cf-check" title="Mostrar solo las pruebas que ya tienen ficha/p&aacute;gina oficial de inscripci&oacute;n"><input type="checkbox" id="cf_inscr"> Solo con ficha oficial</label>
+        </div>
+        <div class="cf-panel-actions">
+          <button class="btn" id="cf_reset">Restablecer</button>
+          <button class="btn" id="cf_setpref" title="Guarda los filtros actuales en este dispositivo: al volver a abrir el calendario se aplicar&aacute;n solos">&#9733; Fijar como predeterminado</button>
+          <button class="btn" id="cf_clearpref" style="display:none" title="Vuelve a los filtros por defecto de la web">&#10005; Quitar predeterminado</button>
+        </div>
+      </div>
+    </div>
+    <div class="cf-panel-foot">
+      <button type="button" class="cf-panel-ver" id="cf_panel_ver">Ver resultados</button>
+    </div>
+  </aside>
 
   <div class="cf-metabar">
     <div class="meta" id="cf_count"></div>
@@ -1021,21 +1081,64 @@
       if(elMes){ if(elMes.value){ return _selTxt(elMes); } }
       return "Desde " + _fechaCorta(elDes.value || hoyISO());
     }
+    // Filtros ACTIVOS como chips eliminables (con \u2715) + contador de "Filtros (N)".
     function _syncChips(){
-      var box = $("cf_chips"); if(!box) return;
-      var pills = [
-        { txt: "\uD83D\uDCC5 " + _mesLbl(), on: true },
-        { txt: els.cat.value ? _selTxt(els.cat) : "Todas las categor\u00edas", on: !!els.cat.value },
-        { txt: els.sex.value ? _selTxt(els.sex) : "Ambos sexos",          on: !!els.sex.value },
-        { txt: els.mod.value ? _selTxt(els.mod) : "Todas las modalidades", on: !!els.mod.value },
-        { txt: els.fed.value ? (_selTxt(els.fed) + ($("cf_limit")?($("cf_limit").checked?" + vecinas":""):"")) : "Toda Espa\u00f1a",          on: !!els.fed.value },
-        { txt: (elProv ? (elProv.value || "Todas las provincias") : "Todas las provincias"), on: !!(elProv ? elProv.value : "") }
-      ];
-      var html = '<span class="cf-chips-lbl">Mostrando:</span>';
-      pills.forEach(function(p){
-        html += '<span class="cf-chip ' + (p.on ? "on" : "off") + '">' + _esc(p.txt) + '</span>';
-      });
-      box.innerHTML = html;
+      var box=$("cf_active"); if(!box){ return; }
+      var lim=$("cf_limit"); var limOn=lim?lim.checked:false;
+      var A=[];
+      var qv=(els.txt.value||"").trim(); if(qv){ A.push({k:"txt", panel:false, txt:"\uD83D\uDD0D "+qv}); }
+      if(_cfQ.dias7){ A.push({k:"dias7", panel:false, txt:"Pr\u00F3ximos 7 d\u00edas"}); }
+      if(_cfQ.finde){ A.push({k:"finde", panel:false, txt:"Este finde"}); }
+      if(_cfOnlyFavs){ A.push({k:"favs", panel:false, txt:"\u2605 Favoritas"}); }
+      if(els.cat.value){ A.push({k:"cat", panel:true, txt:_selTxt(els.cat)}); }
+      if(els.sex.value){ A.push({k:"sex", panel:true, txt:_selTxt(els.sex)}); }
+      if(els.mod.value){ A.push({k:"mod", panel:true, txt:_selTxt(els.mod)}); }
+      if(els.fed.value){ A.push({k:"fed", panel:true, txt:_selTxt(els.fed)+(limOn?" + vecinas":"")}); }
+      if(elProv){ if(elProv.value){ A.push({k:"prov", panel:true, txt:elProv.value}); } }
+      if(elSt){ if(elSt.value){ A.push({k:"st", panel:true, txt:_selTxt(elSt)}); } }
+      if(elMes){ if(elMes.value){ A.push({k:"mes", panel:true, txt:_selTxt(elMes)}); } }
+      if(elVerPas){ if(elVerPas.checked){ A.push({k:"verpas", panel:true, txt:"Incluye pasadas"}); } }
+      if(_cfQ.inscr){ A.push({k:"inscr", panel:true, txt:"Con ficha oficial"}); }
+      var html="";
+      A.forEach(function(a){ html+='<span class="cf-achip">'+_esc(a.txt)+'<button type="button" class="x" data-clear="'+a.k+'" aria-label="Quitar filtro">\u2715</button></span>'; });
+      if(A.length>1){ html+='<button type="button" class="cf-active-clear" id="cf_clearall">Limpiar todo</button>'; }
+      box.innerHTML=html;
+      var n=0; A.forEach(function(a){ if(a.panel){ n++; } });
+      var nb=$("cf_filtros_n"); if(nb){ if(n>0){ nb.style.display=""; nb.textContent=n; } else { nb.style.display="none"; } }
+    }
+    function _cfClearFilter(k){
+      if(k==="txt"){ els.txt.value=""; }
+      else if(k==="dias7"){ _cfQ.dias7=false; }
+      else if(k==="finde"){ _cfQ.finde=false; }
+      else if(k==="favs"){ _cfOnlyFavs=false; }
+      else if(k==="cat"){ els.cat.value=""; }
+      else if(k==="sex"){ els.sex.value=""; }
+      else if(k==="mod"){ els.mod.value=""; }
+      else if(k==="fed"){ els.fed.value=""; var l=$("cf_limit"); if(l){ l.checked=false; } if(elProv){ elProv.value=""; } }
+      else if(k==="prov"){ if(elProv){ elProv.value=""; } }
+      else if(k==="st"){ if(elSt){ elSt.value=""; } }
+      else if(k==="mes"){ if(elMes){ elMes.value=""; } }
+      else if(k==="verpas"){ if(elVerPas){ elVerPas.checked=false; } }
+      else if(k==="inscr"){ _cfQ.inscr=false; var ci=$("cf_inscr"); if(ci){ ci.checked=false; } }
+      apply();
+    }
+    function _cfClearAll(){
+      els.cat.value=""; els.sex.value=""; els.mod.value=""; els.fed.value=""; els.txt.value="";
+      if(elProv){ elProv.value=""; } if(elSt){ elSt.value=""; } if(elMes){ elMes.value=""; } if(elVerPas){ elVerPas.checked=false; }
+      var l=$("cf_limit"); if(l){ l.checked=false; }
+      _cfQ.dias7=false; _cfQ.finde=false; _cfQ.inscr=false; var ci=$("cf_inscr"); if(ci){ ci.checked=false; } _cfOnlyFavs=false;
+      apply();
+    }
+    // Panel de filtros (off-canvas)
+    function _cfPanelOpen(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.add("open"); } if(pn){ pn.classList.add("open"); pn.setAttribute("aria-hidden","false"); } document.body.style.overflow="hidden"; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","true"); } }
+    function _cfPanelClose(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.remove("open"); } if(pn){ pn.classList.remove("open"); pn.setAttribute("aria-hidden","true"); } document.body.style.overflow=""; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","false"); } }
+    // Accesos r\u00E1pidos de la barra superior
+    function _cfAccess(acc){
+      if(acc==="dias7"){ _cfQ.dias7=!_cfQ.dias7; if(_cfQ.dias7){ if(elMes){ elMes.value=""; } elDes.value=hoyISO(); } }
+      else if(acc==="finde"){ _cfQ.finde=!_cfQ.finde; }
+      else if(acc==="micom"){ var m=_cfMiComunidad(); if(!m){ m="C. Valenciana"; } if([].some.call(els.fed.options,function(o){return o.value===m;})){ els.fed.value=(els.fed.value===m?"":m); } if(elProv){ elProv.value=""; } }
+      else if(acc==="favs"){ _cfOnlyFavs=!_cfOnlyFavs; }
+      apply();
     }
 
     // Rellena el desplegable de PROVINCIA con las que tienen prueba en la
@@ -1123,23 +1226,13 @@
     }
 
     // ── Atajos rápidos: chips que fijan un filtro o activan un modo especial ──
+    // Marca los ACCESOS de la barra superior según su estado.
     function _cfRenderQuick(){
-      var box=$("cf_quick"); if(!box){ return; }
       var mic=_cfMiComunidad();
-      var fedV=els.fed.value;
-      var micOn=fedV?(fedV===mic):false;
-      var chips=[
-        { q:"toda",     txt:"\uD83C\uDF0D Toda Espa\u00f1a",          on:(!fedV) },
-        { q:"micom",    txt:"\uD83C\uDFE0 Mi comunidad",             on:micOn },
-        { q:"dias7",    txt:"\uD83D\uDCC5 Pr\u00f3ximos 7 d\u00edas", on:_cfQ.dias7 },
-        { q:"finde",    txt:"\uD83D\uDCC6 Fin de semana",            on:_cfQ.finde },
-        { q:"escuelas", txt:"\uD83C\uDF92 Escuelas",                 on:(els.cat.value==="escuelas") },
-        { q:"feminas",  txt:"\u2640\uFE0F F\u00e9minas",            on:(els.sex.value==="F") },
-        { q:"inscr",    txt:"\uD83D\uDCDD Con ficha oficial",    on:_cfQ.inscr }
-      ]
-      var html='<span class="cf-quick-lbl">Atajos:</span>';
-      chips.forEach(function(c){ html+='<button type="button" class="cf-qchip'+(c.on?" on":"")+'" data-q="'+c.q+'">'+c.txt+'</button>'; });
-      box.innerHTML=html;
+      var micOn=els.fed.value?(els.fed.value===mic):false;
+      var st={ dias7:_cfQ.dias7, finde:_cfQ.finde, micom:micOn, favs:_cfOnlyFavs };
+      var btns=document.querySelectorAll("#calfed .cf-acc");
+      Array.prototype.forEach.call(btns,function(b){ var a=b.getAttribute("data-acc"); if(st[a]){ b.classList.add("on"); } else { b.classList.remove("on"); } });
     }
     function _cfQuickAction(q){
       if(q==="toda"){ els.fed.value=""; if(elProv){ elProv.value=""; } }
@@ -1563,7 +1656,7 @@
     if($("cf_nov_cerrar")) $("cf_nov_cerrar").addEventListener("click",_cfNovClose);
     if($("cf_nov_modal")) $("cf_nov_modal").addEventListener("click",function(e){ if(e.target===this) _cfNovClose(); });
     var _nb=$("cf_nov_body"); if(_nb){ _nb.addEventListener("click",function(e){ var t=e.target; while(t){ var cn=(''+(t.className||"")); if(cn.indexOf("cf-nov-item")>=0){ var i=+t.getAttribute("data-i"); if(_cfNovMap[i]){ _cfNovClose(); abrirFicha(_cfNovMap[i]); } return; } t=t.parentNode; } }); }
-    document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ cerrarFicha(); _cfNovClose(); _cfCalDayClose(); } });
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ cerrarFicha(); _cfNovClose(); _cfCalDayClose(); _cfPanelClose(); } });
 
     Array.prototype.forEach.call(document.querySelectorAll('#calfed th[data-k]'),function(th){
       th.addEventListener("click",function(){var k=th.dataset.k; if(k===sortKey)sortAsc=!sortAsc; else{sortKey=k;sortAsc=true;} apply();});
@@ -1576,21 +1669,21 @@
     if(elProv) elProv.addEventListener("change",apply);
     if($("cf_limit")) $("cf_limit").addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";if($("cf_limit"))$("cf_limit").checked=false;_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
-    // Atajos rápidos (delegación de eventos sobre el contenedor).
-    var _qbox=$("cf_quick");
-    if(_qbox){ _qbox.addEventListener("click",function(e){ var t=e.target; while(t){ if(t.getAttribute){ var q=t.getAttribute("data-q"); if(q){ _cfQuickAction(q); return; } } t=t.parentNode; } }); }
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";if($("cf_limit"))$("cf_limit").checked=false;if($("cf_inscr"))$("cf_inscr").checked=false;_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;_cfOnlyFavs=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
+    // Accesos rápidos de la barra superior.
+    Array.prototype.forEach.call(document.querySelectorAll("#calfed .cf-acc"),function(b){ b.addEventListener("click",function(){ _cfAccess(b.getAttribute("data-acc")); }); });
+    // Casilla "Solo con ficha oficial".
+    if($("cf_inscr")) $("cf_inscr").addEventListener("change",function(){ _cfQ.inscr=$("cf_inscr").checked; apply(); });
+    // Chips de filtros activos: ✕ quita ese filtro; "Limpiar todo" los quita todos.
+    var _act=$("cf_active");
+    if(_act){ _act.addEventListener("click",function(e){ var t=e.target; while(t){ if(t.nodeType===1){ if(t.id==="cf_clearall"){ _cfClearAll(); return; } var ck=t.getAttribute("data-clear"); if(ck){ _cfClearFilter(ck); return; } } t=t.parentNode; } }); }
     // Aviso de predeterminado: "Ver todo" quita el predeterminado y vuelve a lo básico.
     var _pnx=$("cf_prefnote_x"); if(_pnx){ _pnx.addEventListener("click",_cfClearPref); }
-    // Plegar/desplegar filtros (solo tiene efecto visible en móvil).
-    var _tgl=$("cf_togglefiltros");
-    function _cfSetFiltros(open){
-      var c=document.querySelector("#calfed .controls"); if(!c){ return; }
-      if(open){ c.classList.remove("cf-collapsed"); } else { c.classList.add("cf-collapsed"); }
-      if(_tgl){ _tgl.innerHTML=open?"\u2699\uFE0F Ocultar filtros \u25B4":"\u2699\uFE0F Filtros \u25BE"; _tgl.setAttribute("aria-expanded",open?"true":"false"); }
-    }
-    if(_tgl){ _tgl.addEventListener("click",function(){ var c=document.querySelector("#calfed .controls"); var isOpen=c?!c.classList.contains("cf-collapsed"):true; _cfSetFiltros(!isOpen); }); }
-    try{ if(window.matchMedia){ _cfSetFiltros(!window.matchMedia("(max-width:640px)").matches); } else { _cfSetFiltros(true); } }catch(_){ _cfSetFiltros(true); }
+    // Panel de filtros (abrir/cerrar).
+    if($("cf_filtros_btn")) $("cf_filtros_btn").addEventListener("click",_cfPanelOpen);
+    if($("cf_panel_x")) $("cf_panel_x").addEventListener("click",_cfPanelClose);
+    if($("cf_panel_ov")) $("cf_panel_ov").addEventListener("click",_cfPanelClose);
+    if($("cf_panel_ver")) $("cf_panel_ver").addEventListener("click",_cfPanelClose);
     var _bsp=$("cf_setpref"); if(_bsp){ _bsp.addEventListener("click",_cfSavePref); }
     var _bcp=$("cf_clearpref"); if(_bcp){ _bcp.addEventListener("click",_cfClearPref); }
     var _fo=$("cf_fav_only"); if(_fo){ _fo.addEventListener("click",function(){ _cfOnlyFavs=!_cfOnlyFavs; _cfFavUpdateBar(); apply(); }); }
