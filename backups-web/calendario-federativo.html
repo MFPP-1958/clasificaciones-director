@@ -676,6 +676,10 @@
     var _cfVista="lista", _cfCalYM="", _cfCalDayMap={};
     // Carga ligera: primero solo futuras; las pasadas, bajo demanda.
     var _cfBaseUrl="", _cfPastLoaded=false, _cfPastLoading=false;
+    // Capturamos la URL AL INSTANTE (antes del fetch async): algunos plugins de
+    // WordPress limpian los parámetros al cargar, y los necesitamos para los
+    // enlaces compartibles.
+    var _cfInitSearch=(function(){ try{ return location.search||""; }catch(_){ return ""; } })();
     // Comunidades limítrofes (para "incluir vecinas"). Baleares/Canarias sin frontera.
     var _CF_VECINAS={
       "Andalucía":["Extremadura","Castilla-La Mancha","Murcia"],
@@ -984,9 +988,10 @@
           if([].some.call(els.fed.options,function(o){return o.value===DEF.fed;})) els.fed.value=DEF.fed;
           _cfApplyPref();        // filtros predeterminados del usuario (si los guardó)
           _cfUpdatePrefBtn();
+          var _url=_cfReadURL(); if(_url){ try{ _cfApplyURL(_url); }catch(e){} }   // los filtros de la URL mandan (enlaces compartibles)
           try{ _cfFavBaseline(); }catch(_){}   // instantánea de las favoritas para vigilar cambios
           $("cf_estado").style.display="none";
-          apply();
+          if(_cfNeedPast()){ _cfLoadPast(apply); } else { apply(); }
         })
         .catch(function(e){ $("cf_estado").textContent="No se pudieron cargar las pruebas: "+e.message; });
     }
@@ -1141,6 +1146,41 @@
       apply();
     }
 
+    // ── Enlaces compartibles: los filtros viajan en la URL ────────────────
+    function _cfReadURL(){
+      try{
+        var q=_cfInitSearch; if(!q){ return null; } if(q.length<2){ return null; }
+        var A=String.fromCharCode(38);   // '&' por código: WordPress recodifica el '&' literal del JS
+        var o={}; q.slice(1).split(A).forEach(function(p){ var i=p.indexOf("="); if(i>0){ o[p.slice(0,i)]=decodeURIComponent(p.slice(i+1).replace(/\+/g," ")); } else if(p){ o[p]="1"; } });
+        return o;
+      }catch(_){ return null; }
+    }
+    function _cfApplyURL(o){
+      function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(x){return x.value===v;})){ el.value=v; } }
+      setSel(els.cat,o.cat); setSel(els.sex,o.sex); setSel(els.mod,o.mod); setSel(els.fed,o.fed);
+      setSel(elSt,o.st); setSel(elMes,o.mes);
+      if(o.q!=null){ els.txt.value=o.q; }
+      _cfQ.dias7=(o.d7==="1"); _cfQ.finde=(o.fs==="1"); _cfQ.inscr=(o.fi==="1"); _cfOnlyFavs=(o.fav==="1");
+      var l=$("cf_limit"); if(l){ l.checked=(o.lim==="1"); }
+      var ci=$("cf_inscr"); if(ci){ ci.checked=_cfQ.inscr; }
+      if(elVerPas){ elVerPas.checked=(o.vp==="1"); }
+      try{ _cfPopulateProvincias(); }catch(e){}
+      setSel(elProv,o.prov);
+    }
+    function _cfWriteURL(){
+      try{
+        var A=String.fromCharCode(38), pr=[];
+        function add(k,v){ if(v){ pr.push(k+"="+encodeURIComponent(v)); } }
+        add("cat",els.cat.value); add("sex",els.sex.value); add("mod",els.mod.value); add("fed",els.fed.value);
+        add("prov",elProv?elProv.value:""); add("st",elSt?elSt.value:""); add("mes",elMes?elMes.value:""); add("q",(els.txt.value||"").trim());
+        if(_cfQ.dias7){ pr.push("d7=1"); } if(_cfQ.finde){ pr.push("fs=1"); } if(_cfQ.inscr){ pr.push("fi=1"); }
+        if(_cfOnlyFavs){ pr.push("fav=1"); }
+        var l=$("cf_limit"); if(l){ if(l.checked){ pr.push("lim=1"); } }
+        if(elVerPas){ if(elVerPas.checked){ pr.push("vp=1"); } }
+        history.replaceState(null,"",location.pathname+(pr.length?("?"+pr.join(A)):""));
+      }catch(_){}
+    }
+
     // Rellena el desplegable de PROVINCIA con las que tienen prueba en la
     // federación (y mes) seleccionados. Se refresca solo cuando cambia el
     // contexto (federación/mes/fechas), no en cada tecleo.
@@ -1223,6 +1263,7 @@
       try{ _cfRenderQuick(); }catch(_){}
       try{ _cfFavUpdateBar(); }catch(_){}
       try{ _cfNovRefreshBtn(); }catch(_){}
+      try{ _cfWriteURL(); }catch(_){}
     }
 
     // ── Atajos rápidos: chips que fijan un filtro o activan un modo especial ──
