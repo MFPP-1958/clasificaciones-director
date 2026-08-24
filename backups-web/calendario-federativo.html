@@ -264,6 +264,43 @@
       #calfed .cf-quick{ gap:6px; }
       #calfed .cf-qchip{ font-size:13px; padding:8px 13px; }
     }
+
+    /* ===== Tarjeta MÓVIL compacta (más pruebas por pantalla; detalle al pulsar) ===== */
+    #calfed .cf-mcat{ display:none; }   /* el botón "Categorías" solo aparece en móvil */
+    /* Botones "Añadir al calendario" dentro del modal de detalles */
+    #calfed .cf-m-cal{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 18px 0; }
+    #calfed .cf-m-cal-lbl{ font-size:12px; font-weight:700; color:#8a8a8a; }
+    @media (max-width:640px){
+      /* Tarjeta: fecha arriba-izquierda, nombre, meta en una línea, botones */
+      #calfed tr{ position:relative; padding:11px 13px 11px 62px; border:1px solid #e6e4df; border-radius:12px; box-shadow:0 1px 3px rgba(20,30,50,.05); margin-bottom:8px; }
+      #calfed td[data-lbl]::before{ display:none; }   /* fuera las etiquetas MAYÚSCULAS (ocupaban altura) */
+      /* Fecha minimal, sin recuadro azul */
+      #calfed td.c-fecha{ position:absolute; left:12px; top:12px; width:44px; padding:0; margin:0; background:none; display:block; }
+      #calfed .cf-datetile{ flex-direction:column; align-items:flex-start; gap:0; background:none; box-shadow:none; padding:0; min-width:0; }
+      #calfed .cf-datetile .d-dow{ display:none; }
+      #calfed .cf-datetile .d-day{ font-size:24px; font-weight:800; color:#1a2433; margin:0; }
+      #calfed .cf-datetile .d-mon{ font-size:11px; font-weight:800; letter-spacing:.5px; color:#e0821b; text-transform:uppercase; margin:0; }
+      /* Nombre */
+      #calfed td.c-prueba{ margin:0; }
+      #calfed td.c-prueba .nm{ font-size:15px; font-weight:700; line-height:1.25; }
+      /* Meta en UNA línea: localidad · provincia · federación */
+      #calfed td.c-loc{ display:inline; margin:0; }
+      #calfed td.c-loc .loc{ display:inline; font-size:12.5px; color:#5c5c5c; font-weight:600; }
+      #calfed td.c-loc .prov{ display:none; }   /* la provincia queda para el detalle */
+      #calfed td.c-fed{ display:inline; font-size:12.5px; color:#9a9a9a; }
+      #calfed td.c-fed:not(:empty)::before{ content:"\00A0\00B7\00A0"; color:#c9c9c9; display:inline; }
+      /* Categorías/modalidad ocultas hasta pulsar "Categorías" */
+      #calfed td.c-cat, #calfed td.c-mod{ display:none; margin-top:7px; }
+      #calfed tr.cf-open td.c-cat{ display:block; }
+      #calfed tr.cf-open td.c-mod{ display:block; margin-top:4px; }
+      /* Botones compactos */
+      #calfed td.c-src{ display:flex; gap:8px; margin-top:9px; padding:0; border:0; }
+      #calfed .cf-mcat{ display:inline-flex; align-items:center; }
+      #calfed .c-src .src{ background:#eef1f5; border:1px solid #d9dce2; border-radius:8px; padding:7px 13px; font-size:12.5px; font-weight:700; color:#3c3c3c; text-decoration:none; }
+      #calfed .c-src .cf-verficha{ background:#1287c7; border-color:#1287c7; color:#fff; }
+      /* Los botones de calendario NO van en la tarjeta (están dentro de "Ver detalles") */
+      #calfed td.c-add{ display:none; }
+    }
   </style>
 
   <h2>Calendario federativo de ciclismo</h2>
@@ -389,6 +426,7 @@
       </div>
       <div class="cf-modal-body" id="cf_m_body"></div>
       <div id="cf_m_coinc" class="cf-coinc"></div>
+      <div id="cf_m_cal" class="cf-m-cal"></div>
       <div class="cf-modal-foot">
         <a class="cf-btn-of" id="cf_m_oficial" target="_blank" rel="noopener"></a>
         <button type="button" class="cf-btn-cerrar" id="cf_m_cerrar">Cerrar</button>
@@ -919,7 +957,7 @@
           '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
           '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
           '<td class="hide-sm c-mod" data-lbl="Modalidad">'+(r.modalidad?'<span class="tag mod">'+r.modalidad+'</span>':"")+'</td>'+
-          '<td class="hide-sm c-src"><button type="button" class="src cf-verficha">&#128269; Ver detalles</button></td>'+
+          '<td class="hide-sm c-src"><button type="button" class="src cf-mcat">&#127991;&#65039; Categor&iacute;as</button><button type="button" class="src cf-verficha">&#128269; Ver detalles</button></td>'+
           '<td class="c-add" data-lbl="A&ntilde;adir al calendario"><div class="cal-add">'+
             '<a class="cal-btn cal-ics" role="button" tabindex="0" title="A&ntilde;adir al Calendario de Apple (Mac/iPhone)">'+APPLE_SVG+'<span>Apple</span></a>'+
             '<a class="cal-btn cal-gcal" target="_blank" rel="noopener" title="A&ntilde;adir a Google Calendar">'+GCAL_SVG+'<span>Google</span></a>'+
@@ -931,6 +969,7 @@
         tr.querySelector(".prov").textContent=r.provincia||"";
         tr.children[3].textContent=r.federacion||"";
         tr.querySelector(".cf-verficha").addEventListener("click",function(){ abrirFicha(r); });
+        var _mc=tr.querySelector(".cf-mcat"); if(_mc){ _mc.addEventListener("click",function(ev){ ev.stopPropagation(); var op=tr.classList.toggle("cf-open"); _mc.innerHTML=op?"&#127991;&#65039; Ocultar":"&#127991;&#65039; Categor&iacute;as"; }); }
         var _cb=tr.querySelector(".cf-coinc-badge"); if(_cb){ _cb.addEventListener("click",function(ev){ ev.stopPropagation(); abrirFicha(r); }); }
         var _st=tr.querySelector(".cf-fav-star"); if(_st){ _st.addEventListener("click",function(ev){ ev.stopPropagation(); _cfFavToggle(r); var on=_st.classList.toggle("on"); _st.textContent=on?"★":"☆"; if(_cfOnlyFavs){ apply(); } }); }
         tr.querySelector(".cal-gcal").href=_gcalUrl(r);
@@ -1064,6 +1103,16 @@
       var of=$("cf_m_oficial");
       if(fuente){ of.href=fuente; of.style.display=""; of.textContent=(espec?"Ver esta prueba en la web de ":"Ver en la web oficial de ")+r.federacion+" ↗"; }
       else { of.style.display="none"; }
+      // Botones "Añadir al calendario" dentro del modal (en móvil ya no van en la
+      // tarjeta compacta; aquí siguen disponibles).
+      var calBox=$("cf_m_cal");
+      if(calBox){
+        calBox.innerHTML='<span class="cf-m-cal-lbl">A&ntilde;adir al calendario:</span>'+
+          '<a class="cal-btn cal-ics" role="button" tabindex="0" title="A&ntilde;adir al Calendario de Apple (Mac/iPhone)">'+APPLE_SVG+'<span>Apple</span></a>'+
+          '<a class="cal-btn cal-gcal" target="_blank" rel="noopener" title="A&ntilde;adir a Google Calendar">'+GCAL_SVG+'<span>Google</span></a>';
+        var _gc=calBox.querySelector(".cal-gcal"); if(_gc){ _gc.href=_gcalUrl(r); }
+        var _ic=calBox.querySelector(".cal-ics"); if(_ic){ _ic.addEventListener("click",function(e){ e.preventDefault(); _abrirICS(r); }); _ic.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _abrirICS(r); } }); }
+      }
       _cfCurrentFicha=r; _cfRenderCoincidencias(r);   // coincidencias del mismo día en España
       var body=$("cf_m_body");
       ov.classList.add("open"); ov.setAttribute("aria-hidden","false");
