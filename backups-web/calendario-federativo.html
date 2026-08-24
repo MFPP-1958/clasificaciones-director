@@ -98,6 +98,9 @@
     #calfed .cf-favbar .btn{ font-size:12.5px; padding:6px 11px; }
     #calfed .cf-favbar-gen{ background:#15803d; color:#fff; border-color:#15803d; font-weight:800; }
     #calfed .cf-favbar .btn.on{ background:#b45309; color:#fff; border-color:#b45309; }
+    #calfed .cf-fav-chg{ font-size:12.5px; font-weight:800; color:#b45309; }
+    #calfed .cf-fav-seen{ background:#fff7ed; border-color:#fdba74; color:#b45309; font-weight:700; }
+    #calfed .cf-chg-badge{ display:inline-block; font-size:10px; font-weight:800; color:#b45309; background:#fff7ed; border:1px solid #fdba74; border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:middle; cursor:help; white-space:nowrap; }
     #calfed .cf-fav-star{ background:none; border:none; cursor:pointer; font-size:18px; line-height:1; padding:0 4px 0 0; color:#cbd5e1; }
     #calfed .cf-fav-star.on{ color:#f59e0b; }
     #calfed .cf-fav-star:hover{ transform:scale(1.15); }
@@ -425,6 +428,9 @@
       </select>
     </div>
     <div class="fld"><label>Federaci&oacute;n</label><select id="cf_fed"><option value="">&mdash; Todas &mdash;</option></select></div>
+    <div class="fld"><label>Vecinas</label>
+      <label class="cf-check" title="Incluir tambi&eacute;n las pruebas de las comunidades que hacen frontera con la federaci&oacute;n elegida"><input type="checkbox" id="cf_limit"> Incluir lim&iacute;trofes</label>
+    </div>
     <div class="fld"><label>Provincia</label><select id="cf_prov"><option value="">&mdash; Todas &mdash;</option></select></div>
     <div class="fld"><label>Buscar</label><input type="text" id="cf_txt" placeholder="prueba o localidad&hellip;"></div>
     <div class="fld"><label>Estado</label>
@@ -461,7 +467,9 @@
 
   <div class="cf-favbar" id="cf_favbar" style="display:none">
     <span class="cf-favbar-n" id="cf_fav_n"></span>
+    <span class="cf-fav-chg" id="cf_fav_chg" style="display:none"></span>
     <button type="button" class="btn" id="cf_fav_only">Ver solo favoritas</button>
+    <button type="button" class="btn cf-fav-seen" id="cf_fav_seen" style="display:none" title="Marcar los cambios como vistos">&#10003; Visto</button>
     <button type="button" class="btn cf-favbar-gen" id="cf_fav_gen">&#128241; Hoja / imagen</button>
     <button type="button" class="btn" id="cf_fav_clear" title="Quitar todas las favoritas">&#10005; Vaciar</button>
   </div>
@@ -588,6 +596,31 @@
     var _cfQ={dias7:false, finde:false, inscr:false};
     // Vista: "lista" (tabla) o "mes" (calendario mensual). _cfCalYM = "YYYY-MM" mostrado.
     var _cfVista="lista", _cfCalYM="", _cfCalDayMap={};
+    // Comunidades limítrofes (para "incluir vecinas"). Baleares/Canarias sin frontera.
+    var _CF_VECINAS={
+      "Andalucía":["Extremadura","Castilla-La Mancha","Murcia"],
+      "Aragón":["Cataluña","C. Valenciana","Castilla-La Mancha","Castilla y León","La Rioja","Navarra"],
+      "Asturias":["Galicia","Castilla y León","Cantabria"],
+      "Baleares":[], "Canarias":[],
+      "Cantabria":["Asturias","Castilla y León","Euskadi"],
+      "Castilla-La Mancha":["Madrid","Castilla y León","Aragón","C. Valenciana","Murcia","Andalucía","Extremadura"],
+      "Castilla y León":["Galicia","Asturias","Cantabria","Euskadi","La Rioja","Aragón","Madrid","Castilla-La Mancha","Extremadura"],
+      "Cataluña":["Aragón","C. Valenciana"],
+      "Madrid":["Castilla y León","Castilla-La Mancha"],
+      "C. Valenciana":["Cataluña","Aragón","Castilla-La Mancha","Murcia"],
+      "Euskadi":["Cantabria","Castilla y León","La Rioja","Navarra"],
+      "Extremadura":["Castilla y León","Castilla-La Mancha","Andalucía"],
+      "Galicia":["Asturias","Castilla y León"],
+      "La Rioja":["Euskadi","Navarra","Aragón","Castilla y León"],
+      "Murcia":["C. Valenciana","Castilla-La Mancha","Andalucía"],
+      "Navarra":["Euskadi","La Rioja","Aragón"]
+    };
+    function _cfFedAllowed(rf, sel){
+      if(rf===sel){ return true; }
+      var lim=$("cf_limit"); if(!lim){ return false; } if(!lim.checked){ return false; }
+      var v=_CF_VECINAS[sel]; if(!v){ return false; }
+      return v.indexOf(rf)>=0;
+    }
 
     function hoyISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
     // Día de la semana 0=Lun … 6=Dom (UTC, para no depender de la zona horaria).
@@ -675,21 +708,61 @@
       Object.keys(els).forEach(function(k){els[k].value=DEF[k];});
       elDes.value=hoyISO(); if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0"); if(elSt)elSt.value=""; if(elVerPas)elVerPas.checked=false; if(elProv)elProv.value="";
       _cfQ.dias7=false; _cfQ.finde=false; _cfQ.inscr=false;
+      if($("cf_limit")){ $("cf_limit").checked=false; }
       apply();
     }
 
     // ── FAVORITAS: marcar pruebas y generar hoja/imagen para el equipo ──────
     var _cfOnlyFavs=false;
-    function _cfFavKey(r){ if(r.id!=null){ if(String(r.id)!==""){ return "id:"+r.id; } } return (r.fecha||"")+"|"+_normDup(r.prueba)+"|"+_normDup(r.federacion); }
+    // Clave ESTABLE: nombre + federación (SIN id ni fecha). Así la favorita
+    // sobrevive a las actualizaciones del calendario (el id se regenera al
+    // reinsertar) y a los cambios de fecha (que queremos DETECTAR, no perder).
+    function _cfFavKey(r){ return _normDup(r.prueba)+"|"+_normDup(r.federacion); }
     function _cfFavLoad(){ try{ return JSON.parse(localStorage.getItem("cf_favs")||"[]"); }catch(e){ return []; } }
     function _cfFavSet(){ var s={}; _cfFavLoad().forEach(function(k){ s[k]=1; }); return s; }
-    function _cfFavToggle(r){ var k=_cfFavKey(r); var a=_cfFavLoad(); var i=a.indexOf(k); if(i>=0){ a.splice(i,1); } else { a.push(k); } try{ localStorage.setItem("cf_favs", JSON.stringify(a)); }catch(e){} _cfFavUpdateBar(); }
+    // Instantáneas (fecha/estado) del momento de marcar, para avisar de cambios.
+    function _cfSnapLoad(){ try{ return JSON.parse(localStorage.getItem("cf_fav_snap")||"{}"); }catch(e){ return {}; } }
+    function _cfSnapSave(m){ try{ localStorage.setItem("cf_fav_snap", JSON.stringify(m)); }catch(e){} }
+    function _cfFavToggle(r){
+      var k=_cfFavKey(r); var a=_cfFavLoad(); var i=a.indexOf(k); var snap=_cfSnapLoad();
+      if(i>=0){ a.splice(i,1); delete snap[k]; } else { a.push(k); snap[k]={fecha:(r.fecha||""),estado:(r.estado||"activa")}; }
+      try{ localStorage.setItem("cf_favs", JSON.stringify(a)); }catch(e){}
+      _cfSnapSave(snap); _cfFavUpdateBar();
+    }
     function _cfFavAll(){ var s=_cfFavSet(); return rows.filter(function(r){ return !!s[_cfFavKey(r)]; }); }
+    // Crea instantánea de las favoritas que aún no la tengan (para empezar a
+    // vigilarlas desde ahora, incluidas las marcadas antes de esta mejora).
+    function _cfFavBaseline(){
+      var s=_cfFavSet(), snap=_cfSnapLoad(), changed=false;
+      rows.forEach(function(r){ var k=_cfFavKey(r); if(s[k]){ if(!snap[k]){ snap[k]={fecha:(r.fecha||""),estado:(r.estado||"activa")}; changed=true; } } });
+      if(changed){ _cfSnapSave(snap); }
+    }
+    // Devuelve mapa clave→texto del cambio para las favoritas que cambiaron.
+    function _cfFavChanges(){
+      var s=_cfFavSet(), snap=_cfSnapLoad(), out={};
+      rows.forEach(function(r){
+        var k=_cfFavKey(r); if(!s[k]) return; var sn=snap[k]; if(!sn) return;
+        var stNow=(r.estado||"activa").toLowerCase().trim(), stOld=(sn.estado||"activa").toLowerCase().trim();
+        var msgs=[];
+        if((r.fecha||"")!==(sn.fecha||"")){ msgs.push("cambió de fecha (antes "+_fechaCorta(sn.fecha)+")"); }
+        if(stNow!==stOld){ if(stNow==="aplazada"){ msgs.push("ahora APLAZADA"); } else if(stNow==="anulada"){ msgs.push("ahora ANULADA"); } else if(stNow==="activa"){ msgs.push("vuelve a estar activa"); } }
+        if(msgs.length){ out[k]=msgs.join(" · "); }
+      });
+      return out;
+    }
+    function _cfFavSeen(){ // marcar cambios como vistos: actualiza las instantáneas al estado actual
+      var s=_cfFavSet(), snap=_cfSnapLoad();
+      rows.forEach(function(r){ var k=_cfFavKey(r); if(s[k]){ snap[k]={fecha:(r.fecha||""),estado:(r.estado||"activa")}; } });
+      _cfSnapSave(snap); _cfFavUpdateBar(); apply();
+    }
     function _cfFavUpdateBar(){
       var n=_cfFavAll().length;
       var bar=$("cf_favbar"); if(bar){ bar.style.display=n>0?"":"none"; }
       var el=$("cf_fav_n"); if(el){ el.innerHTML="★ Mis pruebas: "+n; }
       var b=$("cf_fav_only"); if(b){ if(_cfOnlyFavs){ b.classList.add("on"); b.textContent="Ver todas"; } else { b.classList.remove("on"); b.textContent="Ver solo favoritas"; } }
+      var nc=0, chg=_cfFavChanges(); for(var kk in chg){ if(chg.hasOwnProperty(kk)){ nc++; } }
+      var cel=$("cf_fav_chg"); if(cel){ cel.style.display=nc>0?"":"none"; cel.innerHTML="\u26A0\uFE0F "+nc+" con cambios"; }
+      var cbt=$("cf_fav_seen"); if(cbt){ cbt.style.display=nc>0?"":"none"; }
     }
     // Generar hoja / imagen
     function _cfFmtDMY(iso){ var d=String(iso||"").split("-"); return d.length>=3?(d[2]+"/"+d[1]+"/"+d[0]):String(iso||""); }
@@ -829,6 +902,7 @@
           if([].some.call(els.fed.options,function(o){return o.value===DEF.fed;})) els.fed.value=DEF.fed;
           _cfApplyPref();        // filtros predeterminados del usuario (si los guardó)
           _cfUpdatePrefBtn();
+          try{ _cfFavBaseline(); }catch(_){}   // instantánea de las favoritas para vigilar cambios
           $("cf_estado").style.display="none";
           apply();
         })
@@ -894,7 +968,7 @@
         { txt: els.cat.value ? _selTxt(els.cat) : "Todas las categor\u00edas", on: !!els.cat.value },
         { txt: els.sex.value ? _selTxt(els.sex) : "Ambos sexos",          on: !!els.sex.value },
         { txt: els.mod.value ? _selTxt(els.mod) : "Todas las modalidades", on: !!els.mod.value },
-        { txt: els.fed.value ? _selTxt(els.fed) : "Toda Espa\u00f1a",          on: !!els.fed.value },
+        { txt: els.fed.value ? (_selTxt(els.fed) + ($("cf_limit")?($("cf_limit").checked?" + vecinas":""):"")) : "Toda Espa\u00f1a",          on: !!els.fed.value },
         { txt: (elProv ? (elProv.value || "Todas las provincias") : "Todas las provincias"), on: !!(elProv ? elProv.value : "") }
       ];
       var html = '<span class="cf-chips-lbl">Mostrando:</span>';
@@ -955,7 +1029,7 @@
         if(f.cat){ if(cats.indexOf(f.cat)<0) return false; }
         if(f.sex){ if((r.sexo||"").indexOf(f.sex)<0) return false; }
         if(f.mod){ if(r.modalidad!==f.mod) return false; }
-        if(f.fed){ if(r.federacion!==f.fed) return false; }
+        if(f.fed){ if(!_cfFedAllowed(r.federacion,f.fed)) return false; }
         if(prov){ if((r.provincia||"")!==prov) return false; }
         if(mes){
           if((r.fecha||"").slice(5,7)!==mes) return false;
@@ -1021,6 +1095,7 @@
     function render(list){
       var tb=$("cf_tb"); tb.innerHTML="";
       var _favSet=_cfFavSet();
+      var _favChg=_cfFavChanges();
       if(!list.length){ $("cf_estado").style.display="block"; $("cf_estado").textContent="Ninguna prueba con esos filtros."; return; }
       $("cf_estado").style.display="none";
       var hoy=hoyISO();
@@ -1050,6 +1125,8 @@
         var sexTag=r.sexo==="F"?'<span class="tag f">Fem</span>':(r.sexo==="MF"?'<span class="tag">M+F</span>':"");
         var nCo=_cfCoincCount(r);   // nº de pruebas coincidentes el mismo día en España
         var coBadge = nCo>0 ? ' <button type="button" class="cf-coinc-badge" title="'+nCo+' prueba(s) de la misma modalidad y categoría ese día en España. Pulsa para verlas.">🗓️ '+nCo+'</button>' : '';
+        var _chgTxt=_favChg[_cfFavKey(r)];
+        var chgBadge = _chgTxt ? ' <span class="cf-chg-badge" title="'+_esc(_chgTxt)+'">\uD83D\uDD14 cambió</span>' : '';
         var dow=DIAS[(new Date((r.fecha||"")+"T00:00:00").getDay()+6)%7]||"";
         var tr=document.createElement("tr");
         var _cls=(r.fecha===hoy?"is-hoy":"");
@@ -1057,7 +1134,7 @@
         if(_cls) tr.className=_cls;
         ri++;
         tr.innerHTML='<td class="c-fecha"><div class="cf-datetile"><span class="d-dow">'+dow+'</span><span class="d-day">'+(d[2]||"")+'</span><span class="d-mon">'+(MESES[(+d[1]||1)-1]||"")+'</span></div></td>'+
-          '<td class="c-prueba"><div class="nm"><button type="button" class="cf-fav-star'+(_favSet[_cfFavKey(r)]?' on':'')+'" title="Marcar para mi hoja de pruebas">'+(_favSet[_cfFavKey(r)]?'★':'☆')+'</button><span class="nm-txt"></span>'+estBadge+coBadge+'</div><div class="cf-mmeta"></div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
+          '<td class="c-prueba"><div class="nm"><button type="button" class="cf-fav-star'+(_favSet[_cfFavKey(r)]?' on':'')+'" title="Marcar para mi hoja de pruebas">'+(_favSet[_cfFavKey(r)]?'★':'☆')+'</button><span class="nm-txt"></span>'+estBadge+coBadge+chgBadge+'</div><div class="cf-mmeta"></div>'+(r.observaciones?'<div class="obs"></div>':"")+'</td>'+
           '<td class="c-loc" data-lbl="Localidad"><div class="loc"></div><div class="prov"></div></td>'+
           '<td class="c-fed" data-lbl="Federaci&oacute;n"></td>'+
           '<td class="hide-sm c-cat" data-lbl="Categor&iacute;as">'+cats+sexTag+'</td>'+
@@ -1310,7 +1387,7 @@
       if(els.cat.value){ if(cats.indexOf(els.cat.value)<0) return false; }
       if(els.sex.value){ if((r.sexo||"").indexOf(els.sex.value)<0) return false; }
       if(els.mod.value){ if(r.modalidad!==els.mod.value) return false; }
-      if(els.fed.value){ if(r.federacion!==els.fed.value) return false; }
+      if(els.fed.value){ if(!_cfFedAllowed(r.federacion,els.fed.value)) return false; }
       var prov=(elProv?elProv.value:""); if(prov){ if((r.provincia||"")!==prov) return false; }
       if(_cfQ.finde){ if(_cfDow(r.fecha)<5) return false; }
       if(_cfQ.inscr){ if(!((r.fuente||"").trim())) return false; }
@@ -1440,8 +1517,9 @@
     if(elSt) elSt.addEventListener("change",apply);
     if(elVerPas) elVerPas.addEventListener("change",apply);
     if(elProv) elProv.addEventListener("change",apply);
+    if($("cf_limit")) $("cf_limit").addEventListener("change",apply);
     // (Los botones-espejo se dibujan en _syncChips desde apply(); no se pulsan.)
-    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
+    $("cf_reset").addEventListener("click",function(){Object.keys(els).forEach(function(k){els[k].value=DEF[k];});elDes.value=hoyISO();if(elMes)elMes.value=String(new Date().getMonth()+1).padStart(2,"0");if(elSt)elSt.value="";if(elVerPas)elVerPas.checked=false;if(elProv)elProv.value="";if($("cf_limit"))$("cf_limit").checked=false;_cfQ.dias7=false;_cfQ.finde=false;_cfQ.inscr=false;apply();var _rb=$("cf_reset");if(_rb){_rb.textContent="\u2713 Restablecido";setTimeout(function(){_rb.textContent="Restablecer";},1400);}});
     // Atajos rápidos (delegación de eventos sobre el contenedor).
     var _qbox=$("cf_quick");
     if(_qbox){ _qbox.addEventListener("click",function(e){ var t=e.target; while(t){ if(t.getAttribute){ var q=t.getAttribute("data-q"); if(q){ _cfQuickAction(q); return; } } t=t.parentNode; } }); }
@@ -1459,7 +1537,8 @@
     var _bsp=$("cf_setpref"); if(_bsp){ _bsp.addEventListener("click",_cfSavePref); }
     var _bcp=$("cf_clearpref"); if(_bcp){ _bcp.addEventListener("click",_cfClearPref); }
     var _fo=$("cf_fav_only"); if(_fo){ _fo.addEventListener("click",function(){ _cfOnlyFavs=!_cfOnlyFavs; _cfFavUpdateBar(); apply(); }); }
-    var _fc=$("cf_fav_clear"); if(_fc){ _fc.addEventListener("click",function(){ if(confirm("¿Quitar TODAS las pruebas marcadas?")){ try{ localStorage.removeItem("cf_favs"); }catch(e){} _cfOnlyFavs=false; _cfFavUpdateBar(); apply(); } }); }
+    var _fc=$("cf_fav_clear"); if(_fc){ _fc.addEventListener("click",function(){ if(confirm("¿Quitar TODAS las pruebas marcadas?")){ try{ localStorage.removeItem("cf_favs"); localStorage.removeItem("cf_fav_snap"); }catch(e){} _cfOnlyFavs=false; _cfFavUpdateBar(); apply(); } }); }
+    var _fsn=$("cf_fav_seen"); if(_fsn){ _fsn.addEventListener("click",_cfFavSeen); }
     var _fg=$("cf_fav_gen"); if(_fg){ _fg.addEventListener("click",_cfGenOpen); }
     var _gx=$("cf_gen_x"); if(_gx){ _gx.addEventListener("click",_cfGenClose); }
     var _gc=$("cf_gen_cerrar"); if(_gc){ _gc.addEventListener("click",_cfGenClose); }
