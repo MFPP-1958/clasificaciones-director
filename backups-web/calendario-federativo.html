@@ -300,6 +300,27 @@
       /* Los botones de calendario NO van en la tarjeta (están dentro de "Ver detalles") */
       #calfed td.c-add{ display:none; }
     }
+
+    /* ===== Fase 3b · Panel de Novedades ===== */
+    #calfed .cf-metabar{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    #calfed .cf-metabar .meta{ margin:12px 2px 8px; }
+    #calfed .cf-novbtn{ font-weight:700; white-space:nowrap; }
+    #calfed .cf-novbtn.has{ background:#fff7ed; border-color:#fdba74; color:#b45309; }
+    #calfed .cf-nov-h{ font-size:14px; font-weight:800; color:#0b2f6b; margin:14px 0 6px; display:flex; align-items:center; gap:7px; }
+    #calfed .cf-nov-h:first-child{ margin-top:2px; }
+    #calfed .cf-nov-h .n{ font-size:12px; font-weight:800; background:#eef2f8; color:#475569; border-radius:999px; padding:1px 8px; }
+    #calfed .cf-nov-empty{ font-size:13px; color:#8a8a8a; padding:2px 0 6px; }
+    #calfed .cf-nov-item{ display:flex; gap:10px; align-items:baseline; padding:7px 0; border-bottom:1px solid #f0eee9; cursor:pointer; }
+    #calfed .cf-nov-item:hover{ background:#f7f9fc; }
+    #calfed .cf-nov-fecha{ flex:0 0 54px; font-size:12px; font-weight:800; color:#22456e; }
+    #calfed .cf-nov-nm{ flex:1; min-width:0; font-size:13.5px; font-weight:600; color:#242424; }
+    #calfed .cf-nov-fed{ font-size:11.5px; color:#8a8a8a; font-weight:500; }
+    #calfed .cf-nov-badge{ font-size:10px; font-weight:800; border-radius:5px; padding:1px 6px; margin-left:5px; white-space:nowrap; }
+    #calfed .cf-nov-badge.apl{ background:#fef3c7; color:#92400e; }
+    #calfed .cf-nov-badge.anu{ background:#fee2e2; color:#991b1b; }
+    #calfed .cf-nov-fedupd{ display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:4px 0; border-bottom:1px dotted #eceae5; }
+    #calfed .cf-nov-fedupd .f{ color:#242424; font-weight:600; }
+    #calfed .cf-nov-fedupd .d{ color:#8a8a8a; white-space:nowrap; }
   </style>
 
   <h2>Calendario federativo de ciclismo</h2>
@@ -389,7 +410,10 @@
        rellena por JS en renderChips(); no es clicable). -->
   <div class="cf-chips" id="cf_chips"></div>
 
-  <div class="meta" id="cf_count"></div>
+  <div class="cf-metabar">
+    <div class="meta" id="cf_count"></div>
+    <button type="button" class="btn cf-novbtn" id="cf_novbtn">&#128276; Novedades</button>
+  </div>
 
   <div class="cf-favbar" id="cf_favbar" style="display:none">
     <span class="cf-favbar-n" id="cf_fav_n"></span>
@@ -430,6 +454,19 @@
         <a class="cf-btn-of" id="cf_m_oficial" target="_blank" rel="noopener"></a>
         <button type="button" class="cf-btn-cerrar" id="cf_m_cerrar">Cerrar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: NOVEDADES (nuevas · aplazadas/anuladas · actualización por federación) -->
+  <div class="cf-modal-ov" id="cf_nov_modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="cf-modal">
+      <div class="cf-modal-cab">
+        <button type="button" class="cf-modal-x" id="cf_nov_x" aria-label="Cerrar">&#10005;</button>
+        <h3>&#128276; Novedades del calendario</h3>
+        <p class="cf-m-sub">Nuevas incorporaciones, cambios de estado y &uacute;ltima actualizaci&oacute;n.</p>
+      </div>
+      <div class="cf-modal-body" id="cf_nov_body"></div>
+      <div class="cf-modal-foot"><button type="button" class="cf-btn-cerrar" id="cf_nov_cerrar">Cerrar</button></div>
     </div>
   </div>
 
@@ -880,6 +917,7 @@
       try{ _syncChips(); }catch(_){}
       try{ _cfRenderQuick(); }catch(_){}
       try{ _cfFavUpdateBar(); }catch(_){}
+      try{ _cfNovRefreshBtn(); }catch(_){}
     }
 
     // ── Atajos rápidos: chips que fijan un filtro o activan un modo especial ──
@@ -1145,10 +1183,62 @@
       ov.classList.remove("open"); ov.setAttribute("aria-hidden","true");
       document.body.style.overflow="";
     }
+
+    // ── Panel de NOVEDADES (nuevas · aplazadas/anuladas · actualización por fed) ──
+    var _cfNovMap=[];
+    function _cfNovLists(){
+      var hoy=hoyISO(), desde=_cfMasDias(hoy,-21);
+      var nuevas=[], inci=[], fedUpd={};
+      rows.forEach(function(r){
+        var a=r.actualizado||""; if(a){ var f=r.federacion||"(?)"; if(!fedUpd[f]){ fedUpd[f]=a; } else if(a>fedUpd[f]){ fedUpd[f]=a; } }
+        if((r.fecha||"")<hoy) return;
+        var st=(r.estado||"activa").toLowerCase().trim();
+        if(st==="retirada") return;
+        if(st==="aplazada"){ inci.push(r); } else if(st==="anulada"){ inci.push(r); }
+        if(r.visto){ if(r.visto!=="2000-01-01"){ if(r.visto>=desde){ nuevas.push(r); } } }
+      });
+      var byF=function(a,b){ return (a.fecha||"").localeCompare(b.fecha||""); };
+      nuevas.sort(byF); inci.sort(byF);
+      return { nuevas:nuevas, inci:inci, fedUpd:fedUpd };
+    }
+    function _cfNovRefreshBtn(){
+      var b=$("cf_novbtn"); if(!b) return;
+      var L=_cfNovLists(); var n=L.nuevas.length+L.inci.length;
+      b.innerHTML="\uD83D\uDD14 Novedades"+(n>0?(" ("+n+")"):"");
+      if(n>0){ b.classList.add("has"); } else { b.classList.remove("has"); }
+    }
+    function _cfNovItem(r,i){
+      var d=(r.fecha||"").split("-"); var fx=d.length>=3?(d[2]+"/"+d[1]):(r.fecha||"");
+      var st=(r.estado||"activa").toLowerCase().trim();
+      var badge = st==="aplazada" ? '<span class="cf-nov-badge apl">Aplazada</span>' : (st==="anulada" ? '<span class="cf-nov-badge anu">Anulada</span>' : "");
+      return '<div class="cf-nov-item" data-i="'+i+'"><div class="cf-nov-fecha">'+fx+'</div><div class="cf-nov-nm">'+_esc(r.prueba||"")+badge+' <span class="cf-nov-fed">'+_esc(r.federacion||"")+(r.localidad?(" &middot; "+_esc(r.localidad)):"")+'</span></div></div>';
+    }
+    function _cfNovOpen(){
+      var ov=$("cf_nov_modal"), body=$("cf_nov_body"); if(!ov||!body) return;
+      var L=_cfNovLists(); _cfNovMap=[];
+      var html='<div class="cf-nov-h">\uD83C\uDD95 Nuevas <span class="n">'+L.nuevas.length+'</span></div>';
+      if(L.nuevas.length){ html+=L.nuevas.map(function(r){ var i=_cfNovMap.push(r)-1; return _cfNovItem(r,i); }).join(""); }
+      else { html+='<div class="cf-nov-empty">No hay pruebas nuevas en las &uacute;ltimas 3 semanas.</div>'; }
+      html+='<div class="cf-nov-h">\u26A0\uFE0F Aplazadas / anuladas <span class="n">'+L.inci.length+'</span></div>';
+      if(L.inci.length){ html+=L.inci.map(function(r){ var i=_cfNovMap.push(r)-1; return _cfNovItem(r,i); }).join(""); }
+      else { html+='<div class="cf-nov-empty">Ninguna prueba pr&oacute;xima aplazada o anulada.</div>'; }
+      html+='<div class="cf-nov-h">\uD83D\uDD52 &Uacute;ltima actualizaci&oacute;n por federaci&oacute;n</div>';
+      var feds=Object.keys(L.fedUpd).sort(function(a,b){return a.localeCompare(b,"es");});
+      html+=feds.map(function(f){ return '<div class="cf-nov-fedupd"><span class="f">'+_esc(f)+'</span><span class="d">'+_fechaCorta(L.fedUpd[f])+'</span></div>'; }).join("");
+      body.innerHTML=html;
+      ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden";
+    }
+    function _cfNovClose(){ var ov=$("cf_nov_modal"); if(!ov) return; ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; }
+
     if($("cf_modal_x")) $("cf_modal_x").addEventListener("click",cerrarFicha);
     if($("cf_m_cerrar")) $("cf_m_cerrar").addEventListener("click",cerrarFicha);
     if($("cf_modal")) $("cf_modal").addEventListener("click",function(e){ if(e.target===this) cerrarFicha(); });
-    document.addEventListener("keydown",function(e){ if(e.key==="Escape") cerrarFicha(); });
+    if($("cf_novbtn")) $("cf_novbtn").addEventListener("click",_cfNovOpen);
+    if($("cf_nov_x")) $("cf_nov_x").addEventListener("click",_cfNovClose);
+    if($("cf_nov_cerrar")) $("cf_nov_cerrar").addEventListener("click",_cfNovClose);
+    if($("cf_nov_modal")) $("cf_nov_modal").addEventListener("click",function(e){ if(e.target===this) _cfNovClose(); });
+    var _nb=$("cf_nov_body"); if(_nb){ _nb.addEventListener("click",function(e){ var t=e.target; while(t){ var cn=(''+(t.className||"")); if(cn.indexOf("cf-nov-item")>=0){ var i=+t.getAttribute("data-i"); if(_cfNovMap[i]){ _cfNovClose(); abrirFicha(_cfNovMap[i]); } return; } t=t.parentNode; } }); }
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ cerrarFicha(); _cfNovClose(); } });
 
     Array.prototype.forEach.call(document.querySelectorAll('#calfed th[data-k]'),function(th){
       th.addEventListener("click",function(){var k=th.dataset.k; if(k===sortKey)sortAsc=!sortAsc; else{sortKey=k;sortAsc=true;} apply();});

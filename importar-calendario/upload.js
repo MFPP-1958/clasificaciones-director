@@ -114,6 +114,17 @@ async function main(){
 
   // 3) INSERTAR las raspadas (en lotes de 500) con actualizado = ahora
   const ahora = new Date().toISOString();
+  // "visto" = fecha (YYYY-MM-DD) de la PRIMERA vez que vimos esta prueba, para el
+  // panel de Novedades. Se conserva de la tabla actual; las que ya existían pero
+  // aún no tenían visto se marcan como antiguas ('2000-01-01'); solo las
+  // realmente NUEVAS (no estaban) reciben la fecha de hoy.
+  const existVisto = new Map();   // clave exacta → visto previo
+  const existKey = new Set();     // claves que ya existían (aunque sin visto)
+  actual.filter(r => r.fecha && r.fecha >= HOY).forEach(r => {
+    const k = r.federacion + '|' + r.prueba + '|' + r.fecha;
+    existKey.add(k);
+    if(r.visto) existVisto.set(k, r.visto);
+  });
   // Deduplicar por la clave ÚNICA de la tabla (federacion, prueba, fecha):
   // el raspado puede traer la misma prueba repetida y violaría la constraint.
   const vistas = new Set();
@@ -123,13 +134,14 @@ async function main(){
     const k = r.federacion + '|' + r.prueba + '|' + r.fecha;
     if(vistas.has(k)){ dup++; continue; }
     vistas.add(k);
+    const visto = existVisto.get(k) || (existKey.has(k) ? '2000-01-01' : HOY);
     filas.push({
       federacion: r.federacion, prueba: r.prueba, fecha: r.fecha,
       localidad: r.localidad, provincia: r.provincia, modalidad: r.modalidad,
       categorias: r.categorias, sexo: r.sexo, observaciones: r.observaciones,
       estado: r.estado, fuente: r.fuente || '',
       club: r.club || '', clase: r.clase || '', hora: r.hora || '',
-      actualizado: ahora
+      visto: visto, actualizado: ahora
     });
   }
   if(dup) console.log(`  (descartados ${dup} duplicados internos por federación+prueba+fecha)`);
