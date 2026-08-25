@@ -93,7 +93,12 @@ console.log(`✅ Build completado → dist/index.html (css=${cssHash}, js=${jsHa
 // omite SIN romper el despliegue: el widget y el resto no dependen de esto.
 try {
   require('./build-seo').generarSEO(path.join(__dirname, 'dist'))
-    .then(n => console.log(`✅ SEO → dist/ranking/resultados/ (${n} carreras)`))
+    .then(n => {
+      console.log(`✅ SEO ranking → dist/ranking/resultados/ (${n} carreras)`);
+      // El SEO del calendario corre DESPUÉS (reescribe robots.txt con los 2 sitemaps).
+      return require('./build-seo-calendario').generarCalendarioSEO(path.join(__dirname, 'dist'));
+    })
+    .then(r => console.log(`✅ SEO calendario → dist/calendario/ (${r.eventos} eventos · ${r.comunidades} comunidades · ${r.urls} URLs)`))
     .catch(e => console.warn('⚠️  SEO omitido (no crítico):', e.message));
 } catch (e) {
   console.warn('⚠️  SEO no disponible (no crítico):', e.message);
