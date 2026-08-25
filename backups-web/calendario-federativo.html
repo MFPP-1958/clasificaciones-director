@@ -24,7 +24,7 @@
   </script>
 
   <style>
-    #calfed { --azul:#2b5486; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; color:#1a1a1a; box-sizing:border-box; width:100vw; max-width:100vw; margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw); padding:0 clamp(16px,3vw,48px); }
+    #calfed { --azul:#1E6F9A; --amarillo:#F3B11A; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; color:#1f2933; box-sizing:border-box; width:100vw; max-width:100vw; margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw); padding:0 clamp(16px,3vw,48px); }
     #calfed *{ box-sizing:border-box; }
     #calfed h2{ font-size:20px; margin:0 0 2px; font-weight:650; }
     #calfed .sub{ font-size:13px; color:#6b6b6b; margin:0 0 10px; }
@@ -89,7 +89,7 @@
     #calfed .cf-ficha-fccv iframe{ max-width:100%; }
     #calfed .cf-ficha-fccv .close, #calfed .cf-ficha-fccv [data-dismiss="modal"]{ display:none; }  /* botón cerrar propio de la FCCV (ya tenemos la X) */
     #calfed .cf-btn-of{ flex:1 1 200px; text-align:center; background:var(--azul); color:#fff; text-decoration:none; padding:11px 14px; border-radius:9px; font-weight:700; font-size:14px; }
-    #calfed .cf-btn-of:hover{ background:#22456e; }
+    #calfed .cf-btn-of:hover{ background:#11334A; }
     #calfed .cf-btn-cerrar{ background:#eceae4; color:#444; border:none; padding:11px 16px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; }
     #calfed .cf-btn-cerrar:hover{ background:#e0ded7; }
     /* Favoritas: barra + estrella */
@@ -102,7 +102,7 @@
     #calfed .cf-fav-seen{ background:#fff7ed; border-color:#fdba74; color:#b45309; font-weight:700; }
     #calfed .cf-chg-badge{ display:inline-block; font-size:10px; font-weight:800; color:#b45309; background:#fff7ed; border:1px solid #fdba74; border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:middle; cursor:help; white-space:nowrap; }
     #calfed .cf-fav-star{ background:none; border:none; cursor:pointer; font-size:18px; line-height:1; padding:0 4px 0 0; color:#cbd5e1; }
-    #calfed .cf-fav-star.on{ color:#f59e0b; }
+    #calfed .cf-fav-star.on{ color:#F3B11A; }
     #calfed .cf-fav-star:hover{ transform:scale(1.15); }
     /* Modal generar hoja/imagen */
     #calfed .cf-gen-range{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
@@ -116,7 +116,7 @@
     #calfed .cf-coinc-badge:hover{ background:#fde68a; }
     /* Coincidencias del mismo día en España */
     #calfed .cf-coinc{ padding:0 18px 6px; }
-    #calfed .cf-coinc-head{ font-size:14px; font-weight:800; color:#0b2f6b; border-top:1px solid #eceae5; padding-top:12px; margin-top:4px; }
+    #calfed .cf-coinc-head{ font-size:14px; font-weight:800; color:#11334A; border-top:1px solid #eceae5; padding-top:12px; margin-top:4px; }
     #calfed .cf-coinc-sub{ font-size:11.5px; font-weight:600; color:#8a8a8a; }
     #calfed .cf-coinc-mine-sel{ font-size:12.5px; color:#5c5c5c; margin:8px 0; }
     #calfed .cf-coinc-mine-sel select{ font:inherit; font-size:12.5px; padding:5px 8px; border:1px solid #d4d2cc; border-radius:6px; background:#fff; max-width:220px; }
@@ -124,7 +124,7 @@
     #calfed .cf-coinc-ok{ background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; border-radius:8px; padding:9px 11px; font-size:13px; margin:6px 0 8px; }
     #calfed .cf-coinc-none{ color:#15803d; font-size:13px; padding:8px 0; }
     #calfed .cf-coinc-rest-h{ font-size:12px; font-weight:800; color:#8a8a8a; text-transform:uppercase; letter-spacing:.4px; margin:12px 0 6px; }
-    #calfed .cf-coinc-fed{ font-size:12.5px; font-weight:800; color:#22456e; margin:8px 0 3px; }
+    #calfed .cf-coinc-fed{ font-size:12.5px; font-weight:800; color:#11334A; margin:8px 0 3px; }
     #calfed .cf-coinc-item{ border-left:3px solid #dcdad3; padding:3px 0 3px 10px; margin:3px 0; }
     #calfed .cf-coinc-nm{ font-size:13.5px; font-weight:600; color:#242424; }
     #calfed .cf-coinc-meta{ font-size:12px; color:#8a8a8a; }
@@ -180,7 +180,7 @@
     }
 
     /* ================= v2 · MEJORAS VISUALES (jerarquía, meses, chips) ================= */
-    #calfed{ --azul-dark:#22456e; --cian:#1287c7; --tinta:#1a2433; --suave:#6b7280; --linea:#e7e5df; }
+    #calfed{ --azul-dark:#11334A; --cian:#55A9D8; --tinta:#11334A; --suave:#4B5563; --linea:#e5e7eb; }
     #calfed h2{ font-size:24px; font-weight:800; letter-spacing:-.01em; color:var(--tinta); margin-bottom:3px; }
     #calfed .sub{ font-size:13.5px; color:var(--suave); }
     #calfed .meta{ font-size:13px; color:var(--suave); }
@@ -210,7 +210,7 @@
     /* Jerarquía: nombre de prueba con más peso; secundarios más tenues */
     #calfed td.c-prueba .nm{ font-size:15px; font-weight:700; color:var(--tinta); line-height:1.3; }
     #calfed td.c-prueba .obs{ color:#8a8a8a; }
-    #calfed .c-loc .loc{ font-weight:600; color:#2f3846; }
+    #calfed .c-loc .loc{ font-weight:600; color:#11334A; }
     #calfed td.c-fed{ font-size:12.5px; color:#55524b; }
     #calfed td{ vertical-align:middle; }
     #calfed tr:hover td{ background:#f4f7fb; }
@@ -282,7 +282,7 @@
       #calfed td.c-fecha{ position:absolute; left:12px; top:12px; width:44px; padding:0; margin:0; background:none; display:block; }
       #calfed .cf-datetile{ flex-direction:column; align-items:flex-start; gap:0; background:none; box-shadow:none; padding:0; min-width:0; }
       #calfed .cf-datetile .d-dow{ display:none; }
-      #calfed .cf-datetile .d-day{ font-size:24px; font-weight:800; color:#1a2433; margin:0; }
+      #calfed .cf-datetile .d-day{ font-size:24px; font-weight:800; color:#11334A; margin:0; }
       #calfed .cf-datetile .d-mon{ font-size:11px; font-weight:800; letter-spacing:.5px; color:#e0821b; text-transform:uppercase; margin:0; }
       /* Nombre */
       #calfed td.c-prueba{ margin:0; }
@@ -303,13 +303,13 @@
     #calfed .cf-metabar .meta{ margin:12px 2px 8px; }
     #calfed .cf-novbtn{ font-weight:700; white-space:nowrap; }
     #calfed .cf-novbtn.has{ background:#fff7ed; border-color:#fdba74; color:#b45309; }
-    #calfed .cf-nov-h{ font-size:14px; font-weight:800; color:#0b2f6b; margin:14px 0 6px; display:flex; align-items:center; gap:7px; }
+    #calfed .cf-nov-h{ font-size:14px; font-weight:800; color:#11334A; margin:14px 0 6px; display:flex; align-items:center; gap:7px; }
     #calfed .cf-nov-h:first-child{ margin-top:2px; }
     #calfed .cf-nov-h .n{ font-size:12px; font-weight:800; background:#eef2f8; color:#475569; border-radius:999px; padding:1px 8px; }
     #calfed .cf-nov-empty{ font-size:13px; color:#8a8a8a; padding:2px 0 6px; }
     #calfed .cf-nov-item{ display:flex; gap:10px; align-items:baseline; padding:7px 0; border-bottom:1px solid #f0eee9; cursor:pointer; }
     #calfed .cf-nov-item:hover{ background:#f7f9fc; }
-    #calfed .cf-nov-fecha{ flex:0 0 54px; font-size:12px; font-weight:800; color:#22456e; }
+    #calfed .cf-nov-fecha{ flex:0 0 54px; font-size:12px; font-weight:800; color:#11334A; }
     #calfed .cf-nov-nm{ flex:1; min-width:0; font-size:13.5px; font-weight:600; color:#242424; }
     #calfed .cf-nov-fed{ font-size:11.5px; color:#8a8a8a; font-weight:500; }
     #calfed .cf-nov-badge{ font-size:10px; font-weight:800; border-radius:5px; padding:1px 6px; margin-left:5px; white-space:nowrap; }
@@ -350,9 +350,9 @@
     #calfed .cf-filtros-n{ display:inline-block; min-width:20px; text-align:center; background:#fde68a; color:#92400e; border-radius:999px; font-size:12px; font-weight:800; padding:1px 7px; margin-left:4px; }
     #calfed .cf-active{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin:0 0 10px; }
     #calfed .cf-active:empty{ margin:0; }
-    #calfed .cf-achip{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:650; border-radius:999px; padding:5px 6px 5px 12px; background:#e8eff9; border:1px solid #c7dbf3; color:#22456e; }
-    #calfed .cf-achip .x{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border:0; border-radius:50%; background:rgba(34,69,110,.12); color:#22456e; font-size:12px; font-weight:800; cursor:pointer; line-height:1; }
-    #calfed .cf-achip .x:hover{ background:#22456e; color:#fff; }
+    #calfed .cf-achip{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:650; border-radius:999px; padding:5px 6px 5px 12px; background:#e8eff9; border:1px solid #c7dbf3; color:#11334A; }
+    #calfed .cf-achip .x{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border:0; border-radius:50%; background:rgba(34,69,110,.12); color:#11334A; font-size:12px; font-weight:800; cursor:pointer; line-height:1; }
+    #calfed .cf-achip .x:hover{ background:#11334A; color:#fff; }
     #calfed .cf-active-clear{ font:inherit; font-size:12px; font-weight:700; color:#8a8a8a; background:none; border:0; cursor:pointer; text-decoration:underline; }
     #calfed .cf-panel-ov{ position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:999998; display:none; }
     #calfed .cf-panel-ov.open{ display:block; }
@@ -403,7 +403,7 @@
     #calfed .cf-cal-dn{ font-size:12.5px; font-weight:800; color:#55524b; }
     #calfed .cf-cal-cell.today .cf-cal-dn{ color:var(--cian); }
     #calfed .cf-cal-dn.wknd{ color:#b45309; }
-    #calfed .cf-cal-ev{ display:block; width:100%; text-align:left; font:inherit; font-size:10.5px; font-weight:600; line-height:1.25; color:#22456e; background:#eef2f8; border:0; border-left:3px solid var(--azul); border-radius:4px; padding:2px 5px; margin-top:3px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #calfed .cf-cal-ev{ display:block; width:100%; text-align:left; font:inherit; font-size:10.5px; font-weight:600; line-height:1.25; color:#11334A; background:#eef2f8; border:0; border-left:3px solid var(--azul); border-radius:4px; padding:2px 5px; margin-top:3px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #calfed .cf-cal-ev:hover{ background:#e2e9f5; }
     #calfed .cf-cal-ev.apl{ border-left-color:#f59e0b; color:#92400e; background:#fef7e6; }
     #calfed .cf-cal-ev.anu{ border-left-color:#ef4444; color:#991b1b; background:#fdecec; }
@@ -918,7 +918,7 @@
         g.font="700 22px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText(MES[(+d[1]||1)-1]||"", pad+55, top+112);
         g.textAlign="left";
         var x=pad+140, maxW=W-x-pad;
-        g.fillStyle="#0b2f6b"; g.font="800 32px -apple-system,Segoe UI,Arial,sans-serif";
+        g.fillStyle="#11334A"; g.font="800 32px -apple-system,Segoe UI,Arial,sans-serif";
         g.fillText(_cfTrunc(g,(r.prueba||""),maxW), x, top+58);
         g.fillStyle="#5c5c5c"; g.font="500 24px -apple-system,Segoe UI,Arial,sans-serif";
         g.fillText(_cfTrunc(g,[r.localidad,r.provincia].filter(Boolean).join(", "),maxW), x, top+98);
