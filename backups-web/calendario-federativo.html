@@ -367,6 +367,11 @@
     #calfed .cf-panel .fld{ margin-bottom:12px; }
     #calfed .cf-panel .fld label{ display:block; }
     #calfed .cf-panel select, #calfed .cf-panel input[type=text], #calfed .cf-panel input[type=date]{ width:100%; font-size:16px; padding:10px 12px; }
+    #calfed .cf-cals{ border:1px solid var(--linea); border-radius:10px; padding:10px 12px; margin-bottom:14px; background:#f4f8fb; }
+    #calfed .cf-cals > label{ display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--suave); font-weight:700; margin-bottom:6px; }
+    #calfed .cf-cals select{ width:100%; }
+    #calfed .cf-cals-btns{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    #calfed .cf-cals-btns .btn{ flex:1 1 auto; font-size:12.5px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
     #calfed .cf-panel-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
     #calfed .cf-panel-foot{ padding:14px 16px; border-top:1px solid #eceae5; }
     #calfed .cf-panel-ver{ width:100%; font:inherit; font-size:15px; font-weight:800; padding:13px; border:0; border-radius:10px; background:var(--azul); color:#fff; cursor:pointer; }
@@ -463,6 +468,15 @@
   <aside class="cf-panel" id="cf_panel" aria-hidden="true" aria-label="Filtros">
     <div class="cf-panel-head"><span><span class="cf-ico" data-ic="funnel"></span> Filtros</span><button type="button" class="cf-panel-x" id="cf_panel_x" aria-label="Cerrar">&#10005;</button></div>
     <div class="cf-panel-body">
+      <div class="cf-cals" id="cf_cals">
+        <label>Mis calendarios</label>
+        <select id="cf_cals_sel"><option value="">&mdash; Elegir uno guardado &mdash;</option></select>
+        <div class="cf-cals-btns">
+          <button type="button" class="btn" id="cf_cals_save"><span class="cf-ico" data-ic="save"></span> Guardar filtros actuales</button>
+          <button type="button" class="btn" id="cf_cals_def" style="display:none"><span class="cf-ico" data-ic="star"></span> Marcar predeterminado</button>
+          <button type="button" class="btn" id="cf_cals_del" style="display:none"><span class="cf-ico" data-ic="trash"></span> Borrar</button>
+        </div>
+      </div>
       <div class="controls">
         <div class="fld"><label>Periodo</label>
           <select id="cf_periodo">
@@ -524,9 +538,7 @@
           <label class="cf-check" title="Mostrar solo las pruebas que ya tienen ficha/p&aacute;gina oficial de inscripci&oacute;n"><input type="checkbox" id="cf_inscr"> Solo con ficha oficial</label>
         </div>
         <div class="cf-panel-actions">
-          <button class="btn" id="cf_reset">Restablecer</button>
-          <button class="btn" id="cf_setpref" title="Guarda los filtros actuales en este dispositivo: al volver a abrir el calendario se aplicar&aacute;n solos">&#9733; Fijar como predeterminado</button>
-          <button class="btn" id="cf_clearpref" style="display:none" title="Vuelve a los filtros por defecto de la web">&#10005; Quitar predeterminado</button>
+          <button class="btn" id="cf_reset">Restablecer filtros</button>
         </div>
       </div>
     </div>
@@ -676,7 +688,9 @@
       spark:_ICP+'<path d="M12 3l1.9 4.6L18.5 9l-4.6 1.4L12 15l-1.9-4.6L5.5 9l4.6-1.4z"/></svg>',
       weekend:_ICP+'<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 9.5h18"/><path d="M14.5 14h3M14.5 17h3"/></svg>',
       img:_ICP+'<rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="8.5" cy="10" r="1.7"/><path d="M21 16l-5-5-9 8"/></svg>',
-      share:_ICP+'<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3.5v12M8 7.5l4-4 4 4"/></svg>'
+      share:_ICP+'<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 3.5v12M8 7.5l4-4 4 4"/></svg>',
+      save:_ICP+'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h6.5"/><rect x="8" y="13" width="8" height="7"/></svg>',
+      trash:_ICP+'<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6.5 7l1 13h9l1-13"/></svg>'
     };
     function _ic(n){ return ICONS[n]||""; }
     var MESES=["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
@@ -838,6 +852,60 @@
       _cfQ.inscr=false; if($("cf_inscr"))$("cf_inscr").checked=false;
       if($("cf_limit")){ $("cf_limit").checked=false; }
       apply();
+    }
+
+    // ── MIS CALENDARIOS (varios filtros guardados con nombre) ────────────────
+    function _cfCalsLoad(){ try{ return JSON.parse(localStorage.getItem("cf_cals")||"[]"); }catch(e){ return []; } }
+    function _cfCalsSave(a){ try{ localStorage.setItem("cf_cals", JSON.stringify(a)); }catch(e){} }
+    function _cfCaptureFilters(){
+      return { cats:_cfCats(), sex:els.sex.value, mod:els.mod.value, fed:els.fed.value, prov:(elProv?elProv.value:""), st:(elSt?elSt.value:""), per:_cfPeriodo(), de:($("cf_desde")?$("cf_desde").value:""), ha:($("cf_hasta")?$("cf_hasta").value:""), lim:($("cf_limit")?$("cf_limit").checked:false), inscr:_cfQ.inscr };
+    }
+    function _cfApplyFilters(fF){
+      function setSel(el,v){ if(!el){ return; } if(v==null){ return; } if([].some.call(el.options,function(o){return o.value===v;})){ el.value=v; } }
+      _cfSetCats(fF.cats||[]);
+      setSel(els.sex,fF.sex); setSel(els.mod,fF.mod); setSel(els.fed,fF.fed); setSel(elSt,fF.st);
+      setSel($("cf_periodo"),fF.per||"mes");
+      if($("cf_desde")){ $("cf_desde").value=fF.de||""; } if($("cf_hasta")){ $("cf_hasta").value=fF.ha||""; }
+      var cd=$("cf_custom_dates"); if(cd){ cd.style.display=(fF.per==="custom")?"":"none"; }
+      if($("cf_limit")){ $("cf_limit").checked=!!fF.lim; }
+      _cfQ.inscr=!!fF.inscr; if($("cf_inscr")){ $("cf_inscr").checked=!!fF.inscr; }
+      try{ _cfPopulateProvincias(); }catch(e){}
+      setSel(elProv,fF.prov);
+    }
+    // Migración: si había un predeterminado antiguo (cf_pref) y no hay calendarios, lo convierte.
+    function _cfCalsMigrate(){
+      var a=_cfCalsLoad(); if(a.length){ return; }
+      var old=null; try{ old=_cfLoadPref(); }catch(e){}
+      if(old){ a=[{ id:"c"+Date.now(), name:"Mi calendario", def:true, f:{ cats:(old.cats||(old.cat?[old.cat]:[])), sex:old.sex, mod:old.mod, fed:old.fed, prov:old.prov, st:old.st, per:old.per||"mes", de:old.de, ha:old.ha, lim:false, inscr:false } }]; _cfCalsSave(a); }
+    }
+    function _cfCalsRender(){
+      var sel=$("cf_cals_sel"); if(!sel){ return; } var a=_cfCalsLoad(); var prev=sel.value;
+      sel.innerHTML='<option value="">&mdash; Elegir uno guardado &mdash;</option>'+a.map(function(c){ return '<option value="'+c.id+'">'+_esc(c.name)+(c.def?"  ★":"")+'</option>'; }).join("");
+      if(prev){ if([].some.call(sel.options,function(o){return o.value===prev;})){ sel.value=prev; } }
+      var box=$("cf_cals"); if(box){ box.style.display=a.length?"":""; }   // siempre visible (para guardar)
+      _cfCalsBtns();
+    }
+    function _cfCalsBtns(){
+      var sel=$("cf_cals_sel"); var has=sel?!!sel.value:false;
+      var d=$("cf_cals_def"), t=$("cf_cals_del");
+      if(d){ d.style.display=has?"":"none"; }
+      if(t){ t.style.display=has?"":"none"; }
+    }
+    function _cfCalsApply(id){ if(!id){ return; } var a=_cfCalsLoad(), c=null; a.forEach(function(x){ if(x.id===id){ c=x; } }); if(c){ _cfApplyFilters(c.f); apply(); } _cfCalsBtns(); }
+    function _cfCalsApplyDefault(){ var a=_cfCalsLoad(), d=null; a.forEach(function(c){ if(c.def){ d=c; } }); if(d){ _cfApplyFilters(d.f); var sel=$("cf_cals_sel"); if(sel){ sel.value=d.id; } _cfCalsBtns(); } }
+    function _cfCalsSaveCurrent(){
+      var name=prompt("Nombre para este calendario (p. ej. \"Cadetes CV\", \"Féminas\"):"); if(!name){ return; } name=name.trim(); if(!name){ return; }
+      var a=_cfCalsLoad(); var id="c"+Date.now(); a.push({ id:id, name:name, def:(a.length===0), f:_cfCaptureFilters() }); _cfCalsSave(a); _cfCalsRender();
+      var sel=$("cf_cals_sel"); if(sel){ sel.value=id; } _cfCalsBtns();
+    }
+    function _cfCalsDelete(){
+      var sel=$("cf_cals_sel"); if(!sel||!sel.value){ return; } var a=_cfCalsLoad(), c=null; a.forEach(function(x){ if(x.id===sel.value){ c=x; } });
+      if(!c){ return; } if(!confirm("¿Borrar el calendario \""+c.name+"\"?")){ return; }
+      a=a.filter(function(x){ return x.id!==sel.value; }); _cfCalsSave(a); _cfCalsRender();
+    }
+    function _cfCalsSetDefault(){
+      var sel=$("cf_cals_sel"); if(!sel||!sel.value){ return; } var a=_cfCalsLoad();
+      a.forEach(function(x){ x.def=(x.id===sel.value); }); _cfCalsSave(a); _cfCalsRender();
     }
 
     // ── FAVORITAS: marcar pruebas y generar hoja/imagen para el equipo ──────
@@ -1030,8 +1098,7 @@
           // Federación por defecto: C. Valenciana (ahora que ya existen las opciones).
           // Si ese año no hubiera pruebas de la CV, se queda en "Todas".
           if([].some.call(els.fed.options,function(o){return o.value===DEF.fed;})) els.fed.value=DEF.fed;
-          _cfApplyPref();        // filtros predeterminados del usuario (si los guardó)
-          _cfUpdatePrefBtn();
+          _cfCalsMigrate(); _cfCalsRender(); _cfCalsApplyDefault();   // Mis calendarios (varios guardados)
           var _url=_cfReadURL(); if(_url){ try{ _cfApplyURL(_url); }catch(e){} }   // los filtros de la URL mandan (enlaces compartibles)
           try{ _cfFavBaseline(); }catch(_){}   // instantánea de las favoritas para vigilar cambios
           $("cf_estado").style.display="none";
@@ -1757,8 +1824,11 @@
     if($("cf_panel_x")) $("cf_panel_x").addEventListener("click",_cfPanelClose);
     if($("cf_panel_ov")) $("cf_panel_ov").addEventListener("click",_cfPanelClose);
     if($("cf_panel_ver")) $("cf_panel_ver").addEventListener("click",_cfPanelClose);
-    var _bsp=$("cf_setpref"); if(_bsp){ _bsp.addEventListener("click",_cfSavePref); }
-    var _bcp=$("cf_clearpref"); if(_bcp){ _bcp.addEventListener("click",_cfClearPref); }
+    // Mis calendarios (varios guardados)
+    if($("cf_cals_sel")) $("cf_cals_sel").addEventListener("change",function(){ _cfCalsApply($("cf_cals_sel").value); });
+    if($("cf_cals_save")) $("cf_cals_save").addEventListener("click",_cfCalsSaveCurrent);
+    if($("cf_cals_def")) $("cf_cals_def").addEventListener("click",_cfCalsSetDefault);
+    if($("cf_cals_del")) $("cf_cals_del").addEventListener("click",_cfCalsDelete);
     var _fo=$("cf_fav_only"); if(_fo){ _fo.addEventListener("click",function(){ _cfOnlyFavs=!_cfOnlyFavs; _cfFavUpdateBar(); apply(); }); }
     var _fc=$("cf_fav_clear"); if(_fc){ _fc.addEventListener("click",function(){ if(confirm("¿Quitar TODAS las pruebas marcadas?")){ try{ localStorage.removeItem("cf_favs"); localStorage.removeItem("cf_fav_snap"); }catch(e){} _cfOnlyFavs=false; _cfFavUpdateBar(); apply(); } }); }
     var _fsn=$("cf_fav_seen"); if(_fsn){ _fsn.addEventListener("click",_cfFavSeen); }
