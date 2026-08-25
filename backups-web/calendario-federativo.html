@@ -339,6 +339,12 @@
 
     /* ===== Tanda 2a · Cabecera nueva + panel de filtros ===== */
     #calfed .cf-ic{ width:1.05em; height:1.05em; vertical-align:-0.16em; flex:none; }
+    #calfed th[data-k]{ outline-offset:-2px; }
+    #calfed th[data-k]:focus-visible{ outline:2px solid var(--azul); }
+    #calfed .cf-sortar{ color:var(--azul); font-size:10px; }
+    #calfed th[aria-sort="none"]{ opacity:1; }
+    /* Foco visible general (accesibilidad) */
+    #calfed a:focus-visible, #calfed button:focus-visible, #calfed select:focus-visible, #calfed input:focus-visible, #calfed [tabindex]:focus-visible{ outline:2px solid var(--azul); outline-offset:1px; }
     #calfed .cf-acc, #calfed .cf-filtros-btn, #calfed .cf-vbtn, #calfed .cf-novbtn, #calfed .cf-verficha, #calfed .cf-nov-h, #calfed .cf-panel-head span:first-child{ display:inline-flex; align-items:center; gap:6px; }
     #calfed .cf-top{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:8px 0 10px; }
     #calfed .cf-search{ flex:1 1 260px; min-width:0; font:inherit; font-size:16px; padding:12px 14px; border:1.5px solid #cbd5e1; border-radius:10px; background:#fff; }
@@ -548,7 +554,7 @@
   </aside>
 
   <div class="cf-metabar">
-    <div class="meta" id="cf_count"></div>
+    <div class="meta" id="cf_count" role="status" aria-live="polite"></div>
     <div class="cf-vtoggle" role="group" aria-label="Cambiar vista">
       <button type="button" class="cf-vbtn on" id="cf_vlista"><span class="cf-ico" data-ic="list"></span> Lista</button>
       <button type="button" class="cf-vbtn" id="cf_vmes"><span class="cf-ico" data-ic="grid"></span> Mes</button>
@@ -1241,8 +1247,8 @@
       apply();
     }
     // Panel de filtros (off-canvas)
-    function _cfPanelOpen(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.add("open"); } if(pn){ pn.classList.add("open"); pn.setAttribute("aria-hidden","false"); } document.body.style.overflow="hidden"; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","true"); } }
-    function _cfPanelClose(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.remove("open"); } if(pn){ pn.classList.remove("open"); pn.setAttribute("aria-hidden","true"); } document.body.style.overflow=""; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","false"); } }
+    function _cfPanelOpen(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.add("open"); } if(pn){ pn.classList.add("open"); pn.setAttribute("aria-hidden","false"); } document.body.style.overflow="hidden"; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","true"); } _cfFocusInto($("cf_panel")); }
+    function _cfPanelClose(){ var ov=$("cf_panel_ov"), pn=$("cf_panel"); if(ov){ ov.classList.remove("open"); } if(pn){ pn.classList.remove("open"); pn.setAttribute("aria-hidden","true"); } document.body.style.overflow=""; var fb=$("cf_filtros_btn"); if(fb){ fb.setAttribute("aria-expanded","false"); } _cfFocusBack(); }
     // Cambi\u00F3 el Periodo: muestra/oculta las fechas concretas y recarga si hace falta lo pasado.
     function _cfPeriodoChanged(){
       var cd=$("cf_custom_dates"); if(cd){ cd.style.display=(_cfPeriodo()==="custom")?"":"none"; }
@@ -1589,7 +1595,7 @@
       _cfCurrentFicha=r; _cfRenderCoincidencias(r);   // coincidencias del mismo día en España
       var body=$("cf_m_body");
       ov.classList.add("open"); ov.setAttribute("aria-hidden","false");
-      document.body.style.overflow="hidden";
+      document.body.style.overflow="hidden"; _cfFocusInto(ov);
       // Comunidad Valenciana: intentar la ficha COMPLETA de la FCCV (guardada en Supabase)
       if((r.federacion||"")==="C. Valenciana" && C.SUPABASE_URL){
         body.innerHTML='<p class="cf-loading">Cargando ficha oficial de la FCCV&hellip;</p>';
@@ -1610,7 +1616,7 @@
     function cerrarFicha(){
       var ov=$("cf_modal"); if(!ov) return;
       ov.classList.remove("open"); ov.setAttribute("aria-hidden","true");
-      document.body.style.overflow="";
+      document.body.style.overflow=""; _cfFocusBack();
     }
 
     // ── Panel de NOVEDADES (nuevas · aplazadas/anuladas · actualización por fed) ──
@@ -1655,9 +1661,9 @@
       var feds=Object.keys(L.fedUpd).sort(function(a,b){return a.localeCompare(b,"es");});
       html+=feds.map(function(f){ return '<div class="cf-nov-fedupd"><span class="f">'+_esc(f)+'</span><span class="d">'+_fechaCorta(L.fedUpd[f])+'</span></div>'; }).join("");
       body.innerHTML=html;
-      ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden";
+      ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden"; _cfFocusInto(ov);
     }
-    function _cfNovClose(){ var ov=$("cf_nov_modal"); if(!ov) return; ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; }
+    function _cfNovClose(){ var ov=$("cf_nov_modal"); if(!ov) return; ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; _cfFocusBack(); }
 
     // ── VISTA CALENDARIO MENSUAL ──────────────────────────────────────────
     // Filtros SIN la parte de fecha (mismos criterios que apply, para el mes visible).
@@ -1762,9 +1768,9 @@
         var badge=st==="aplazada"?'<span class="cf-nov-badge apl">Aplazada</span>':(st==="anulada"?'<span class="cf-nov-badge anu">Anulada</span>':"");
         return '<div class="cf-nov-item" data-i="'+i+'"><div class="cf-nov-nm">'+_esc(r.prueba||"")+badge+' <span class="cf-nov-fed">'+_esc(r.federacion||"")+(r.localidad?(" &middot; "+_esc(r.localidad)):"")+'</span></div></div>';
       }).join("");
-      ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden";
+      ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden"; _cfFocusInto(ov);
     }
-    function _cfCalDayClose(){ var ov=$("cf_day_modal"); if(!ov) return; ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; }
+    function _cfCalDayClose(){ var ov=$("cf_day_modal"); if(!ov) return; ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; _cfFocusBack(); }
 
     if($("cf_vlista")) $("cf_vlista").addEventListener("click",function(){ _cfSetVista("lista"); });
     if($("cf_vmes")) $("cf_vmes").addEventListener("click",function(){ _cfSetVista("mes"); });
@@ -1793,10 +1799,37 @@
     if($("cf_nov_modal")) $("cf_nov_modal").addEventListener("click",function(e){ if(e.target===this) _cfNovClose(); });
     var _nb=$("cf_nov_body"); if(_nb){ _nb.addEventListener("click",function(e){ var t=e.target; while(t){ var cn=(''+(t.className||"")); if(cn.indexOf("cf-nov-item")>=0){ var i=+t.getAttribute("data-i"); if(_cfNovMap[i]){ _cfNovClose(); abrirFicha(_cfNovMap[i]); } return; } t=t.parentNode; } }); }
     document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ cerrarFicha(); _cfNovClose(); _cfCalDayClose(); _cfPanelClose(); } });
-
-    Array.prototype.forEach.call(document.querySelectorAll('#calfed th[data-k]'),function(th){
-      th.addEventListener("click",function(){var k=th.dataset.k; if(k===sortKey)sortAsc=!sortAsc; else{sortKey=k;sortAsc=true;} apply();});
+    // Accesibilidad: atrapar el foco (Tab) dentro de la ventana/panel abiertos.
+    function _cfTopModal(){ var m=document.querySelectorAll("#calfed .cf-modal-ov.open, #calfed .cf-panel.open"); return m.length?m[m.length-1]:null; }
+    function _cfFocusables(m){ return [].filter.call(m.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'),function(el){ return el.offsetParent!==null; }); }
+    document.addEventListener("keydown",function(e){
+      if(e.key!=="Tab"){ return; }
+      var m=_cfTopModal(); if(!m){ return; }
+      var f=_cfFocusables(m); if(!f.length){ return; }
+      var first=f[0], last=f[f.length-1];
+      if(e.shiftKey){ if(document.activeElement===first){ e.preventDefault(); last.focus(); } }
+      else { if(document.activeElement===last){ e.preventDefault(); first.focus(); } }
     });
+    // Al abrir una ventana, llevar el foco dentro; al cerrar, devolverlo.
+    var _cfPrevFocus=null;
+    function _cfFocusInto(m){ try{ _cfPrevFocus=document.activeElement; }catch(_){ _cfPrevFocus=null; } setTimeout(function(){ try{ var f=_cfFocusables(m); if(f.length){ f[0].focus(); } }catch(_){} },40); }
+    function _cfFocusBack(){ try{ if(_cfPrevFocus){ if(_cfPrevFocus.focus){ _cfPrevFocus.focus(); } } }catch(_){} }
+
+    function _cfSortBy(k){ if(k===sortKey){ sortAsc=!sortAsc; } else { sortKey=k; sortAsc=true; } _cfUpdateSortUI(); apply(); }
+    function _cfUpdateSortUI(){
+      Array.prototype.forEach.call(document.querySelectorAll('#calfed th[data-k]'),function(th){
+        var k=th.getAttribute("data-k"); var ar=th.querySelector(".cf-sortar");
+        if(!ar){ ar=document.createElement("span"); ar.className="cf-sortar"; th.appendChild(ar); }
+        if(k===sortKey){ th.setAttribute("aria-sort",sortAsc?"ascending":"descending"); ar.textContent=sortAsc?" ▲":" ▼"; }
+        else { th.setAttribute("aria-sort","none"); ar.textContent=""; }
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('#calfed th[data-k]'),function(th){
+      th.setAttribute("role","button"); th.setAttribute("tabindex","0"); th.setAttribute("title","Ordenar por esta columna");
+      th.addEventListener("click",function(){ _cfSortBy(th.getAttribute("data-k")); });
+      th.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _cfSortBy(th.getAttribute("data-k")); } });
+    });
+    _cfUpdateSortUI();
     Object.keys(els).forEach(function(k){els[k].addEventListener("input",apply);});
     if($("cf_periodo")) $("cf_periodo").addEventListener("change",_cfPeriodoChanged);
     if($("cf_desde")) $("cf_desde").addEventListener("change",_cfDateChanged);
