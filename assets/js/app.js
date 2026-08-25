@@ -19704,6 +19704,41 @@ function downloadBlob(content,name,type){let blob=new Blob([content],{type});let
 // ════════════════════════════════════════════════════════════════════════════
 const _DB_BACKUP_TABLES = ['races','race_results','team_rankings','team_sheets','rider_efforts_fccv'];
 
+// Publicar en Google: dispara un rebuild de Netlify que regenera las páginas
+// SEO estáticas (ranking + calendario). La URL secreta del build hook NO vive
+// aquí (repo público) sino en una función de servidor que además comprueba que
+// tienes sesión iniciada. Ver netlify/functions/rebuild-seo.js
+async function _rebuildSEO(){
+  if(typeof _sb==='undefined' || !_sb){ alert('Supabase no disponible. Conéctate antes de publicar.'); return; }
+  const btn = document.getElementById('seoRebuildBtn');
+  const orig = btn ? btn.textContent : '';
+  // Sesión → token
+  let token = '';
+  try{ const r = await _sb.auth.getSession(); token = (r && r.data && r.data.session) ? r.data.session.access_token : ''; }catch(_){}
+  if(!token){ alert('Inicia sesión (arriba a la derecha) antes de publicar en Google.'); return; }
+  if(!confirm('¿Publicar en Google los últimos cambios del ranking?\n\nSe regeneran las páginas de resultados para buscadores. Tarda unos 2-3 minutos en verse.')) return;
+  if(btn){ btn.disabled=true; btn.style.opacity='.6'; btn.textContent='⏳ Publicando…'; }
+  try{
+    const resp = await fetch('/.netlify/functions/rebuild-seo', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer '+token, 'Content-Type':'application/json' },
+      body:'{}'
+    });
+    let j = {}; try{ j = await resp.json(); }catch(_){}
+    if(resp.ok && j && j.ok){
+      if(btn){ btn.textContent='✓ Publicando en Google…'; }
+      alert('✅ ¡Listo! Google actualizará las páginas del ranking en unos 2-3 minutos.\n\nNo hace falta que hagas nada más.');
+    }else{
+      const msg = (j && j.error) ? j.error : ('Error '+resp.status);
+      alert('⚠️ No se pudo publicar: '+msg+'\n\n(El ranking que ve la gente sigue actualizado igualmente.)');
+    }
+  }catch(e){
+    alert('⚠️ No se pudo contactar con el servidor: '+(e && e.message ? e.message : e)+'\n\n(El ranking que ve la gente sigue actualizado igualmente.)');
+  }finally{
+    if(btn){ btn.disabled=false; btn.style.opacity='1'; setTimeout(()=>{ btn.textContent=orig||'🔎 Publicar en Google'; }, 4000); }
+  }
+}
+
 async function _dbExportBackup(){
   if(typeof _sb==='undefined' || !_sb){ alert('Supabase no disponible. Conéctate antes de exportar.'); return; }
   const btn = document.getElementById('dbExportBtn');

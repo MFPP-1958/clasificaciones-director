@@ -5,6 +5,11 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Funciones de servidor (Netlify Functions). Usadas por el botón "Publicar en
+# Google" del panel para disparar un rebuild sin exponer la URL del build hook.
+[functions]
+  directory = "netlify/functions"
+
 # ─── Cache-Control por defecto: NUNCA cachear ─────────────────────────────
 # Aplicamos no-cache global. Las reglas específicas para assets versionados
 # (más abajo) anularán esto para CSS/JS que llevan ?v=hash y pueden cachearse
