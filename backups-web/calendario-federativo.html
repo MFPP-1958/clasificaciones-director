@@ -1100,6 +1100,8 @@
       },"image/png");
     }
     function _cfGenPrint(){
+      // En vista "Mes" (lista filtrada) imprimimos un CALENDARIO en rejilla, no la lista.
+      if(_cfVista==="mes"){ if(_cfGenMode==="list"){ _cfGenPrintCalendar(); return; } }
       var favs=_cfGenRows(); if(!favs.length){ alert(_cfGenMode==="list"?"No hay pruebas en la lista actual.":"No hay pruebas favoritas en ese periodo."); return; }
       var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
       var MESL=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
@@ -1125,6 +1127,57 @@
         +"<div class='wrap'><table>"+filas+"</table></div>"
         +"<p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p>";
       var html="<!doc"+"type html>"+O("html")+O("head")+"<me"+"ta charset='utf-8'>"+O("title")+_esc(_cfGenTitleDoc())+X("title")+O("style")+css+X("style")+X("head")+O("body")+cuerpo+X("body")+X("html");
+      var w=window.open("","_blank"); if(!w){ alert("Permite las ventanas emergentes para imprimir."); return; }
+      w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },300);
+    }
+    // Impresión en formato CALENDARIO (rejilla del mes) — A4 horizontal, con
+    // cabecera de marca + logo y leyenda de estados. Se usa desde la vista Mes.
+    function _cfGenPrintCalendar(){
+      if(!_cfCalYM){ var _mmv=elMes?elMes.value:""; _cfCalYM=_mmv?(hoyISO().slice(0,4)+"-"+_mmv):hoyISO().slice(0,7); }
+      var y=+_cfCalYM.slice(0,4), mo=+_cfCalYM.slice(5,7);
+      var evs=rows.filter(function(r){ if((r.fecha||"").slice(0,7)!==_cfCalYM){ return false; } return _cfCalMatch(r); });
+      evs=_dedupe(evs);
+      var mname=MESLARGO[mo-1]||""; mname=mname.charAt(0)+mname.slice(1).toLowerCase();
+      var mtitle=mname+" "+y;
+      if(!evs.length){ if(!confirm("No hay pruebas en "+mtitle+" con los filtros actuales.\n\n¿Imprimir igualmente el calendario del mes (vacío)?")){ return; } }
+      var byDay={}; evs.forEach(function(r){ var dd=(r.fecha||"").slice(8,10); (byDay[dd]=byDay[dd]||[]).push(r); });
+      var firstDow=_cfDow(_cfCalYM+"-01");
+      var ndays=new Date(Date.UTC(y,mo,0)).getUTCDate();
+      var cells=[], pi, d, k;
+      for(pi=0;pi<firstDow;pi++){ cells.push("<td class='cell pad'></td>"); }
+      for(d=1;d<=ndays;d++){
+        var dd=String(d).padStart(2,"0"); var ymd=_cfCalYM+"-"+dd;
+        var list=byDay[dd]||[];
+        var wknd=_cfDow(ymd)>=5?" wknd":"";
+        var ev="";
+        for(k=0;k<list.length;k++){ var r=list[k]; var st=(r.estado||"").toLowerCase().trim(); var cls=st==="aplazada"?" apl":(st==="anulada"?" anu":""); ev+="<div class='ev"+cls+"'>"+_esc(r.prueba||"")+"</div>"; }
+        cells.push("<td class='cell'><div class='dn"+wknd+"'>"+d+"</div>"+ev+"</td>");
+      }
+      while(cells.length%7!==0){ cells.push("<td class='cell pad'></td>"); }
+      var filas="", ci;
+      for(ci=0;ci<cells.length;ci+=7){ filas+="<tr>"+cells.slice(ci,ci+7).join("")+"</tr>"; }
+      var dowHead="<tr>"+DIAS.map(function(x){ return "<th>"+x+"</th>"; }).join("")+"</tr>";
+      var sub=_cfGenListSub()+" · "+evs.length+" prueba"+(evs.length===1?"":"s");
+      var css="@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}"
+        +"body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1f2933;margin:0}"
+        +".hd{background:#11334A;color:#fff;padding:14px 20px;border-bottom:5px solid #F3B11A;display:flex;align-items:center;gap:18px}"
+        +".hd img{height:38px}.hd .tt h1{font-size:20px;margin:0;font-weight:800}.hd .tt .sub{color:#7FC4EC;font-size:12px;margin:3px 0 0}"
+        +".leg{display:flex;gap:18px;justify-content:center;padding:8px;font-size:11px;color:#555}"
+        +".leg i{display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;margin-right:5px}"
+        +".leg .act{background:#1E6F9A}.leg .apl{background:#f59e0b}.leg .anu{background:#ef4444}"
+        +"table.cal{width:100%;border-collapse:collapse;table-layout:fixed}"
+        +"table.cal th{background:#eef2f8;color:#11334A;font-size:11px;padding:4px;border:1px solid #e0ded8}"
+        +"td.cell{border:1px solid #e0ded8;height:2.4cm;vertical-align:top;padding:3px 4px;overflow:hidden}td.pad{background:#faf9f7}"
+        +".dn{font-size:11px;font-weight:800;color:#55524b}.dn.wknd{color:#b45309}"
+        +".ev{font-size:8px;line-height:1.15;color:#11334A;background:#eef2f8;border-left:3px solid #1E6F9A;border-radius:3px;padding:1px 3px;margin-top:2px;word-break:break-word}"
+        +".ev.apl{border-left-color:#f59e0b;color:#92400e;background:#fef7e6}.ev.anu{border-left-color:#ef4444;color:#991b1b;background:#fdecec}"
+        +"@media print{.hd,.leg i,table.cal th,.ev{-webkit-print-color-adjust:exact;print-color-adjust:exact}}";
+      var O=function(n){return "<"+n+">";}, X=function(n){return "<"+"/"+n+">";};
+      var logoTag=_CFLOGO?("<im"+"g src='"+_CFLOGO+"' alt='MFPP Cycling'>"):"";
+      var cuerpo="<div class='hd'>"+logoTag+"<div class='tt'><h1>"+_esc(mtitle)+"</h1><p class='sub'>"+_esc(sub)+"</p></div></div>"
+        +"<div class='leg'><span><i class='act'></i>Activa</span><span><i class='apl'></i>Aplazada</span><span><i class='anu'></i>Anulada</span></div>"
+        +"<table class='cal'><thead>"+dowHead+"</thead><tbody>"+filas+"</tbody></table>";
+      var html="<!doc"+"type html>"+O("html")+O("head")+"<me"+"ta charset='utf-8'>"+O("title")+_esc(mtitle)+X("title")+O("style")+css+X("style")+X("head")+O("body")+cuerpo+X("body")+X("html");
       var w=window.open("","_blank"); if(!w){ alert("Permite las ventanas emergentes para imprimir."); return; }
       w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },300);
     }
