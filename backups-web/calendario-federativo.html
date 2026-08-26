@@ -650,7 +650,7 @@
         <div id="cf_gen_out"></div>
       </div>
       <div class="cf-modal-foot">
-        <button type="button" class="cf-btn-of" id="cf_gen_img">&#128241; Imagen (WhatsApp)</button>
+        <button type="button" class="cf-btn-of" id="cf_gen_img">&#128247; Crear imagen</button>
         <button type="button" class="cf-btn-of" id="cf_gen_print" style="background:#475569">&#128424; Imprimir / PDF</button>
         <button type="button" class="cf-btn-cerrar" id="cf_gen_cerrar">Cerrar</button>
       </div>
@@ -972,6 +972,8 @@
     function _cfCatsTxt(r){ return _decode((r.categorias||"").split(",").filter(Boolean).map(function(c){return CATLBL[c]||c;}).join(", ")); }
     var _cfLastList=[];      // última lista filtrada visible (para "Imprimir / imagen de esta lista")
     var _cfGenMode="favs";   // modo del generador: "favs" (favoritas) | "list" (lista filtrada)
+    var _CFLOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALgAAABECAMAAAAFvQ+XAAABv1BMVEVHcEz///8An+MAn+P///8An+P///////////////////////////////8An+P///////////////////8An+MAn+P///////////8An+P///8An+P///8An+P///////////8An+P///////8An+MAn+MAn+MAn+P///////////////8An+P///////////9ryvP///+t3vj////////////////g8v654vqs3fjJ6Pvs9/79/v+s3fje8f0jvO93zfQwvu9ZxvIPue6I0vWQ1Pav3vmq3fj///+24fnM6fv8/v/////////q9v7u+P6s3fj///////8Btu3////e8f30+v/3/P/////////////e8f3///////////////+Y1/fD5vr8/v/////////r9v6h2vcArOn////0+//E5vrZ7/0Gt+1RxPFGwvH///////////8An+P///8ApebK6PuE0PUBtu0Aqujz+v9Qw/Hm9P6N0/bU7fzj8/41v/AAq+hqyvPY7v3x+f6h2vd1zfSz4PmW1vcAsOup3PgLuO7F5vtZxvIove+j2vgAtezJ6Pvu+P5wy/SU1fYAsevIAtOnAAAAcnRSTlMAEIAQEfBVgEDAiPAgYOCQd+DMMDCgUHCgQO5g0FDdsCIgu5nQwHCQqmYzRLDELj3APLwfdGJb8+jI6+Xyr0zQiMSgdPjJ83lY5+f3l4Hoc4+Obb9KmP7InNTe5EyLq55Zdc/xyJfi8tn7jKaDWS+SbqbsRlyYAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAtGVYSWZJSSoACAAAAAYAEgEDAAEAAAABAAAAGgEFAAEAAABWAAAAGwEFAAEAAABeAAAAKAEDAAEAAAACAAAAEwIDAAEAAAABAAAAaYcEAAEAAABmAAAAAAAAAEgAAAABAAAASAAAAAEAAAAGAACQBwAEAAAAMDIxMAGRBwAEAAAAAQIDAACgBwAEAAAAMDEwMAGgAwABAAAA//8AAAKgBAABAAAAuAAAAAOgBAABAAAARAAAAAAAAADTs0elAAAK/klEQVR4nM1aB3vbOBKlqEKqUBJFNatblmzLdpLt12+v99577/0I18Rxsqnbrt8Pvhk0AiApy7FzyXy7DpoGDw8P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";
+    var _cfLogoImg=new Image(); try{ _cfLogoImg.src=_CFLOGO; }catch(e){ _cfLogoImg=null; }
     // Descripción de los filtros activos, en texto plano (subtítulo de la hoja/imagen)
     function _cfGenListSub(){
       var P=[]; var lim=$("cf_limit"); var limOn=lim?lim.checked:false;
@@ -980,8 +982,8 @@
       if(els.sex.value){ P.push(_selTxt(els.sex)); }
       if(els.mod.value){ P.push(_selTxt(els.mod)); }
       if(els.fed.value){ P.push(_selTxt(els.fed)+(limOn?" + vecinas":"")); }
-      if(elProv && elProv.value){ P.push(elProv.value); }
-      if(elSt && elSt.value){ P.push(_selTxt(elSt)); }
+      if(elProv){ if(elProv.value){ P.push(elProv.value); } }
+      if(elSt){ if(elSt.value){ P.push(_selTxt(elSt)); } }
       if(_cfQ.inscr){ P.push("Con ficha oficial"); }
       var q=(els.txt.value||"").trim(); if(q){ P.push("\u201C"+q+"\u201D"); }
       return P.length? P.join("  \u00B7  ") : "Todas las pruebas";
@@ -1031,26 +1033,31 @@
     function _cfRoundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
     function _cfTrunc(g,text,maxW){ var s=String(text||""); if(g.measureText(s).width<=maxW){ return s; } while(s.length>1){ s=s.slice(0,-1); if(g.measureText(s+"…").width<=maxW){ return s+"…"; } } return s; }
     function _cfGenBuildCanvas(favs){
-      var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
-      var W=1080, pad=48, headH=210, cardH=150, footH=90;
+      var W=1080, pad=48, headH=248, cardH=150, footH=96;
       var H=headH + Math.max(favs.length,1)*cardH + footH;
       var cv=document.createElement("canvas"); cv.width=W; cv.height=H;
       var g=cv.getContext("2d");
       g.fillStyle="#f6f5f2"; g.fillRect(0,0,W,H);
-      g.fillStyle="#1e3a8a"; g.fillRect(0,0,W,headH);
-      g.fillStyle="#ffffff"; g.textBaseline="alphabetic"; g.textAlign="left";
-      g.font="800 46px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText("\uD83D\uDEB4  "+_cfGenTitle(), pad, 84);
-      g.font="600 26px -apple-system,Segoe UI,Arial,sans-serif"; g.fillStyle="#c7d2fe";
-      g.fillText(_cfTrunc(g,_cfGenSubLine(favs),W-pad*2), pad, 132);
-      g.font="500 22px -apple-system,Segoe UI,Arial,sans-serif"; g.fillStyle="#93c5fd";
-      g.fillText("Calendario ciclista \u00B7 mfppcycling.com", pad, 172);
+      // Cabecera con los colores de marca MFPP (azul oscuro)
+      g.fillStyle="#11334A"; g.fillRect(0,0,W,headH);
+      // Logotipo (blanco) arriba a la izquierda, si ya se carg\u00F3
+      if(_cfLogoImg){ if(_cfLogoImg.complete){ if(_cfLogoImg.naturalWidth>0){
+        var lw=176, lh=Math.round(lw*_cfLogoImg.naturalHeight/_cfLogoImg.naturalWidth);
+        g.drawImage(_cfLogoImg, pad, 30, lw, lh);
+      } } }
+      g.textBaseline="alphabetic"; g.textAlign="left";
+      g.fillStyle="#ffffff"; g.font="800 44px -apple-system,Segoe UI,Arial,sans-serif";
+      g.fillText(_cfTrunc(g,_cfGenTitle(),W-pad*2), pad, 162);
+      g.fillStyle="#7FC4EC"; g.font="600 25px -apple-system,Segoe UI,Arial,sans-serif";
+      g.fillText(_cfTrunc(g,_cfGenSubLine(favs),W-pad*2), pad, 204);
+      g.fillStyle="#F3B11A"; g.fillRect(0,headH-6,W,6);   // l\u00EDnea amarilla de marca
       var MES=["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
       favs.forEach(function(r,i){
         var top=headH+i*cardH;
         g.fillStyle=(i%2===0)?"#ffffff":"#f0efec"; g.fillRect(0,top,W,cardH);
         g.strokeStyle="#e5e7eb"; g.beginPath(); g.moveTo(0,top+cardH); g.lineTo(W,top+cardH); g.stroke();
         var d=(r.fecha||"").split("-");
-        g.fillStyle="#1e3a8a"; _cfRoundRect(g,pad,top+25,110,100,14); g.fill();
+        g.fillStyle="#1E6F9A"; _cfRoundRect(g,pad,top+25,110,100,14); g.fill();
         g.fillStyle="#ffffff"; g.textAlign="center";
         g.font="800 46px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText(d[2]||"", pad+55, top+82);
         g.font="700 22px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText(MES[(+d[1]||1)-1]||"", pad+55, top+112);
@@ -1063,7 +1070,7 @@
         g.fillStyle="#8a8a8a"; g.font="600 22px -apple-system,Segoe UI,Arial,sans-serif";
         g.fillText(_cfTrunc(g,[r.modalidad,_cfCatsTxt(r)].filter(Boolean).join("  \u00B7  "),maxW), x, top+130);
       });
-      g.fillStyle="#1e3a8a"; g.fillRect(0,H-footH,W,footH);
+      g.fillStyle="#11334A"; g.fillRect(0,H-footH,W,footH);
       g.fillStyle="#ffffff"; g.textAlign="center"; g.font="700 26px -apple-system,Segoe UI,Arial,sans-serif";
       g.fillText("Todas las pruebas en mfppcycling.com/calendario", W/2, H-footH/2+9); g.textAlign="left";
       return cv;
@@ -1083,6 +1090,7 @@
         btns+='<a class="cf-btn-of" style="background:#475569" href="'+url+'" download="'+_fn+'">⬇️ Descargar</a></div>';
         btns+='<div class="cf-gen-hint">En el móvil también puedes mantener pulsada la imagen para guardarla o enviarla por WhatsApp.</div>';
         acc.innerHTML=btns; out.appendChild(acc);
+        try{ img.scrollIntoView({block:"nearest"}); }catch(e){}
         var sb=document.getElementById("cf_gen_share");
         if(sb){ sb.addEventListener("click",function(){ if(file){ navigator.share({files:[file], title:(_cfGenMode==="list"?"Pruebas del calendario":"Mis pruebas")}).catch(function(){}); } }); }
       },"image/png");
@@ -1093,13 +1101,26 @@
       var MESL=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
       var filas=favs.map(function(r){ var d=(r.fecha||"").split("-"); var f=d.length>=3?(d[2]+" "+(MESL[(+d[1]||1)-1]||"")):r.fecha; var loc=[r.localidad,r.provincia].filter(Boolean).join(", "); var mc=[r.modalidad,_cfCatsTxt(r)].filter(Boolean).join(" · ");
         return "<tr><td class='f'>"+_esc(f)+"</td><td><b>"+_esc(r.prueba||"")+"</b><br><span class='m'>"+_esc(loc)+" · "+_esc(mc)+"</span></td></tr>"; }).join("");
-      var css="body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1a1a1a;margin:26px}h1{font-size:22px;color:#1e3a8a;margin:0 0 2px}.sub{color:#6b7280;font-size:13px;margin:0 0 16px}table{width:100%;border-collapse:collapse}td{padding:9px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px}td.f{white-space:nowrap;font-weight:700;color:#1e3a8a;width:120px}.m{color:#6b7280;font-size:12.5px}.foot{margin-top:18px;color:#9ca3af;font-size:12px}";
+      var css="*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1f2933;margin:0;padding:0}"
+        +".hd{background:#11334A;color:#fff;padding:22px 30px;border-bottom:6px solid #F3B11A}"
+        +".hd img{height:46px;display:block;margin:0 0 12px}"
+        +".hd h1{font-size:23px;margin:0 0 3px;font-weight:800;letter-spacing:.3px}"
+        +".hd .sub{color:#7FC4EC;font-size:13.5px;margin:0}"
+        +".wrap{padding:20px 30px}table{width:100%;border-collapse:collapse}"
+        +"td{padding:10px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:14px}"
+        +"tr:nth-child(even) td{background:#f6f8fa}"
+        +"td.f{white-space:nowrap;font-weight:800;color:#1E6F9A;width:118px}.m{color:#6b7280;font-size:12.5px}"
+        +".foot{padding:14px 30px;color:#9ca3af;font-size:12px;border-top:1px solid #eee}"
+        +"@media print{.hd,tr:nth-child(even) td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}";
       // IMPORTANTE: montamos los tags de estructura (html/head/body/style) POR
       // PARTES para que el optimizador de LiteSpeed/WordPress no los detecte
       // dentro de este <script> e inyecte su lazy-load rompiendo el JS.
       var O=function(n){return "<"+n+">";}, X=function(n){return "<"+"/"+n+">";};
-      var cuerpo="<h1>"+_esc(_cfGenTitleDoc())+"</h1><p class='sub'>"+_esc(_cfGenSubLine(favs))+"</p><table>"+filas+"</table><p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p>";
-      var html="<!doc"+"type html>"+O("html")+O("head")+"<me"+"ta charset='utf-8'>"+O("title")+"Mis pruebas"+X("title")+O("style")+css+X("style")+X("head")+O("body")+cuerpo+X("body")+X("html");
+      var logoTag=_CFLOGO?("<im"+"g src='"+_CFLOGO+"' alt='MFPP Cycling'>"):"";
+      var cuerpo="<div class='hd'>"+logoTag+"<h1>"+_esc(_cfGenTitleDoc())+"</h1><p class='sub'>"+_esc(_cfGenSubLine(favs))+"</p></div>"
+        +"<div class='wrap'><table>"+filas+"</table></div>"
+        +"<p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p>";
+      var html="<!doc"+"type html>"+O("html")+O("head")+"<me"+"ta charset='utf-8'>"+O("title")+_esc(_cfGenTitleDoc())+X("title")+O("style")+css+X("style")+X("head")+O("body")+cuerpo+X("body")+X("html");
       var w=window.open("","_blank"); if(!w){ alert("Permite las ventanas emergentes para imprimir."); return; }
       w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },300);
     }
@@ -1556,7 +1577,7 @@
       if(!cont) return;
       cont.addEventListener("click", function(e){
         var t=e.target, a=null;
-        while(t && t!==cont){ if(t.tagName==="A" && (t.getAttribute("data-cfhref")||t.getAttribute("href"))){ a=t; break; } t=t.parentNode; }
+        while(t){ if(t===cont){ break; } if(t.tagName==="A"){ if(t.getAttribute("data-cfhref")||t.getAttribute("href")){ a=t; break; } } t=t.parentNode; }
         if(a){
           var dest=a.getAttribute("data-cfhref")||a.getAttribute("href");
           e.preventDefault(); e.stopPropagation();
@@ -1642,7 +1663,7 @@
       ov.classList.add("open"); ov.setAttribute("aria-hidden","false");
       document.body.style.overflow="hidden"; _cfFocusInto(ov);
       // Comunidad Valenciana: intentar la ficha COMPLETA de la FCCV (guardada en Supabase)
-      if((r.federacion||"")==="C. Valenciana" && C.SUPABASE_URL){
+      if(((r.federacion||"")==="C. Valenciana") ? !!C.SUPABASE_URL : false){
         body.innerHTML='<p class="cf-loading">Cargando ficha oficial de la FCCV&hellip;</p>';
         var AMP=String.fromCharCode(38);   // '&' vía código para que WordPress no lo re-codifique
         var clave=(r.fecha||"")+"|"+_normFicha(r.prueba);
@@ -1650,8 +1671,9 @@
         fetch(url,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:"Bearer "+C.SUPABASE_ANON_KEY}})
           .then(function(res){ return res.ok?res.json():[]; })
           .then(function(arr){
-            if(arr && arr.length && arr[0] && arr[0].html){ _pintarFicha(body, arr[0].html); }
-            else { body.innerHTML=_fichaBasica(r); }
+            var _ok=false;
+            if(arr){ if(arr.length){ if(arr[0]){ if(arr[0].html){ _pintarFicha(body, arr[0].html); _ok=true; } } } }
+            if(!_ok){ body.innerHTML=_fichaBasica(r); }
           })
           .catch(function(){ body.innerHTML=_fichaBasica(r); });
       } else {
