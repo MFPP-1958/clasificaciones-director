@@ -20,7 +20,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_R7anMfu6xfwlr7Ew3kMUbg_N1mqNRJb';
 const BASE = 'https://ranking.mfppcycling.com';   // subdominio SEO (Netlify)
 const WEB = 'https://mfppcycling.com';            // web principal (widget)
 const CAL = WEB + '/calendario/';                 // calendario interactivo
-const LOGO = WEB + '/wp-content/uploads/2024/01/logo.png';
+const LOGO = WEB + '/wp-content/uploads/2023/05/Recurso-3.png';  // misma imagen que build-seo.js (la anterior 2024/01/logo.png daba 404)
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
