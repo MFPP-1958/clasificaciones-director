@@ -560,6 +560,7 @@
       <button type="button" class="cf-vbtn" id="cf_vmes"><span class="cf-ico" data-ic="grid"></span> Mes</button>
     </div>
     <button type="button" class="btn cf-novbtn" id="cf_novbtn"><span class="cf-ico" data-ic="bell"></span> Novedades</button>
+    <button type="button" class="btn cf-printbtn" id="cf_printbtn" title="Imprimir o generar una imagen de las pruebas que est&aacute;s viendo ahora con los filtros puestos"><span class="cf-ico" data-ic="img"></span> Imprimir / imagen</button>
   </div>
 
   <div class="cf-favbar" id="cf_favbar" style="display:none">
@@ -969,15 +970,47 @@
     // Generar hoja / imagen
     function _cfFmtDMY(iso){ var d=String(iso||"").split("-"); return d.length>=3?(d[2]+"/"+d[1]+"/"+d[0]):String(iso||""); }
     function _cfCatsTxt(r){ return _decode((r.categorias||"").split(",").filter(Boolean).map(function(c){return CATLBL[c]||c;}).join(", ")); }
+    var _cfLastList=[];      // última lista filtrada visible (para "Imprimir / imagen de esta lista")
+    var _cfGenMode="favs";   // modo del generador: "favs" (favoritas) | "list" (lista filtrada)
+    // Descripción de los filtros activos, en texto plano (subtítulo de la hoja/imagen)
+    function _cfGenListSub(){
+      var P=[]; var lim=$("cf_limit"); var limOn=lim?lim.checked:false;
+      if(_cfPeriodo()!=="prox"){ P.push(_cfPeriodLabel()); }
+      _cfCats().forEach(function(c){ P.push(_decode(CATLBL[c]||c)); });
+      if(els.sex.value){ P.push(_selTxt(els.sex)); }
+      if(els.mod.value){ P.push(_selTxt(els.mod)); }
+      if(els.fed.value){ P.push(_selTxt(els.fed)+(limOn?" + vecinas":"")); }
+      if(elProv && elProv.value){ P.push(elProv.value); }
+      if(elSt && elSt.value){ P.push(_selTxt(elSt)); }
+      if(_cfQ.inscr){ P.push("Con ficha oficial"); }
+      var q=(els.txt.value||"").trim(); if(q){ P.push("\u201C"+q+"\u201D"); }
+      return P.length? P.join("  \u00B7  ") : "Todas las pruebas";
+    }
+    // Filas que entran en la hoja/imagen según el modo (favoritas o lista filtrada)
+    function _cfGenRows(){
+      if(_cfGenMode==="list"){ var l=_cfLastList.slice(); l.sort(function(a,b){ return (a.fecha||"").localeCompare(b.fecha||""); }); return l; }
+      return _cfGenFavsInRange();
+    }
+    function _cfGenTitle(){ return _cfGenMode==="list" ? "PRUEBAS DEL CALENDARIO" : "PRUEBAS PREVISTAS"; }
+    function _cfGenTitleDoc(){ return _cfGenMode==="list" ? "Pruebas del calendario" : "Pruebas previstas"; }
+    function _cfGenSubLine(list){
+      if(_cfGenMode==="list"){ return _cfGenListSub()+"  \u00B7  "+list.length+" prueba"+(list.length===1?"":"s"); }
+      var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
+      return "del "+_cfFmtDMY(de)+" al "+_cfFmtDMY(ha)+"  \u00B7  "+list.length+" prueba"+(list.length===1?"":"s");
+    }
     function _cfGenFavsInRange(){
       var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
       var favs=_cfFavAll().filter(function(r){ var f=(r.fecha||""); if(de){ if(f<de){ return false; } } if(ha){ if(f>ha){ return false; } } return true; });
       favs.sort(function(a,b){ return (a.fecha||"").localeCompare(b.fecha||""); });
       return favs;
     }
-    function _cfGenUpdateInfo(){ var favs=_cfGenFavsInRange(); var el=$("cf_gen_info"); if(el){ el.innerHTML="<b>"+favs.length+"</b> prueba"+(favs.length===1?"":"s")+" en ese periodo."; } }
+    function _cfGenUpdateInfo(){ var list=_cfGenRows(); var el=$("cf_gen_info"); if(el){ el.innerHTML="<b>"+list.length+"</b> prueba"+(list.length===1?"":"s")+(_cfGenMode==="list"?"":" en ese periodo")+"."; } }
     function _cfGenOpen(){
       var all=_cfFavAll(); if(!all.length){ alert("Primero marca alguna prueba con la estrella ★."); return; }
+      _cfGenMode="favs";
+      var dr=document.querySelector("#cf_gen_modal .cf-gen-range"); if(dr){ dr.style.display=""; }
+      var gh=document.querySelector("#cf_gen_modal .cf-modal-cab h3"); if(gh){ gh.innerHTML="\u2B50 Mis pruebas \u00B7 hoja / imagen"; }
+      var gs=document.querySelector("#cf_gen_modal .cf-modal-cab .cf-m-sub"); if(gs){ gs.innerHTML="Elige el periodo: se incluir\u00E1n tus favoritas de esas fechas."; }
       var fechas=all.map(function(r){return r.fecha||"";}).filter(Boolean).sort();
       if($("cf_gen_desde")){ $("cf_gen_desde").value=fechas[0]||hoyISO(); }
       if($("cf_gen_hasta")){ $("cf_gen_hasta").value=fechas[fechas.length-1]||hoyISO(); }
@@ -985,6 +1018,16 @@
       var ov=$("cf_gen_modal"); ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden";
     }
     function _cfGenClose(){ var ov=$("cf_gen_modal"); ov.classList.remove("open"); ov.setAttribute("aria-hidden","true"); document.body.style.overflow=""; }
+    // Abrir el generador en modo "lista filtrada": imprime/imagen de lo que se ve ahora
+    function _cfGenListOpen(){
+      if(!_cfLastList || !_cfLastList.length){ alert("No hay pruebas que mostrar con los filtros actuales."); return; }
+      _cfGenMode="list";
+      var dr=document.querySelector("#cf_gen_modal .cf-gen-range"); if(dr){ dr.style.display="none"; }
+      var gh=document.querySelector("#cf_gen_modal .cf-modal-cab h3"); if(gh){ gh.innerHTML="\uD83D\uDDA8\uFE0F Imprimir / imagen de esta lista"; }
+      var gs=document.querySelector("#cf_gen_modal .cf-modal-cab .cf-m-sub"); if(gs){ gs.innerHTML="Se incluir\u00E1n las <b>"+_cfLastList.length+"</b> pruebas que ves ahora, con los filtros puestos."; }
+      $("cf_gen_out").innerHTML=""; _cfGenUpdateInfo();
+      var ov=$("cf_gen_modal"); ov.classList.add("open"); ov.setAttribute("aria-hidden","false"); document.body.style.overflow="hidden";
+    }
     function _cfRoundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
     function _cfTrunc(g,text,maxW){ var s=String(text||""); if(g.measureText(s).width<=maxW){ return s; } while(s.length>1){ s=s.slice(0,-1); if(g.measureText(s+"…").width<=maxW){ return s+"…"; } } return s; }
     function _cfGenBuildCanvas(favs){
@@ -996,9 +1039,9 @@
       g.fillStyle="#f6f5f2"; g.fillRect(0,0,W,H);
       g.fillStyle="#1e3a8a"; g.fillRect(0,0,W,headH);
       g.fillStyle="#ffffff"; g.textBaseline="alphabetic"; g.textAlign="left";
-      g.font="800 46px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText("\uD83D\uDEB4  PRUEBAS PREVISTAS", pad, 84);
+      g.font="800 46px -apple-system,Segoe UI,Arial,sans-serif"; g.fillText("\uD83D\uDEB4  "+_cfGenTitle(), pad, 84);
       g.font="600 26px -apple-system,Segoe UI,Arial,sans-serif"; g.fillStyle="#c7d2fe";
-      g.fillText("del "+_cfFmtDMY(de)+" al "+_cfFmtDMY(ha)+"  \u00B7  "+favs.length+" prueba"+(favs.length===1?"":"s"), pad, 132);
+      g.fillText(_cfTrunc(g,_cfGenSubLine(favs),W-pad*2), pad, 132);
       g.font="500 22px -apple-system,Segoe UI,Arial,sans-serif"; g.fillStyle="#93c5fd";
       g.fillText("Calendario ciclista \u00B7 mfppcycling.com", pad, 172);
       var MES=["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
@@ -1026,25 +1069,26 @@
       return cv;
     }
     function _cfGenImage(){
-      var favs=_cfGenFavsInRange(); if(!favs.length){ alert("No hay pruebas favoritas en ese periodo."); return; }
+      var favs=_cfGenRows(); if(!favs.length){ alert(_cfGenMode==="list"?"No hay pruebas en la lista actual.":"No hay pruebas favoritas en ese periodo."); return; }
       var cv=_cfGenBuildCanvas(favs); var out=$("cf_gen_out"); out.innerHTML="";
-      var img=document.createElement("img"); img.alt="Mis pruebas";
+      var _fn=(_cfGenMode==="list")?"calendario-pruebas.png":"mis-pruebas.png";
+      var img=document.createElement("img"); img.alt="Pruebas del calendario";
       cv.toBlob(function(blob){
         var url=URL.createObjectURL(blob); img.src=url; out.appendChild(img);
-        var file=null; try{ file=new File([blob],"mis-pruebas.png",{type:"image/png"}); }catch(e){}
+        var file=null; try{ file=new File([blob],_fn,{type:"image/png"}); }catch(e){}
         var can = navigator.canShare ? (file?navigator.canShare({files:[file]}):false) : false;
         var acc=document.createElement("div");
         var btns='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
         if(can){ btns+='<button type="button" class="cf-btn-of" id="cf_gen_share">'+_ic("share")+' Compartir</button>'; }
-        btns+='<a class="cf-btn-of" style="background:#475569" href="'+url+'" download="mis-pruebas.png">⬇️ Descargar</a></div>';
+        btns+='<a class="cf-btn-of" style="background:#475569" href="'+url+'" download="'+_fn+'">⬇️ Descargar</a></div>';
         btns+='<div class="cf-gen-hint">En el móvil también puedes mantener pulsada la imagen para guardarla o enviarla por WhatsApp.</div>';
         acc.innerHTML=btns; out.appendChild(acc);
         var sb=document.getElementById("cf_gen_share");
-        if(sb){ sb.addEventListener("click",function(){ if(file){ navigator.share({files:[file], title:"Mis pruebas"}).catch(function(){}); } }); }
+        if(sb){ sb.addEventListener("click",function(){ if(file){ navigator.share({files:[file], title:(_cfGenMode==="list"?"Pruebas del calendario":"Mis pruebas")}).catch(function(){}); } }); }
       },"image/png");
     }
     function _cfGenPrint(){
-      var favs=_cfGenFavsInRange(); if(!favs.length){ alert("No hay pruebas favoritas en ese periodo."); return; }
+      var favs=_cfGenRows(); if(!favs.length){ alert(_cfGenMode==="list"?"No hay pruebas en la lista actual.":"No hay pruebas favoritas en ese periodo."); return; }
       var de=$("cf_gen_desde").value||"", ha=$("cf_gen_hasta").value||"";
       var MESL=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
       var filas=favs.map(function(r){ var d=(r.fecha||"").split("-"); var f=d.length>=3?(d[2]+" "+(MESL[(+d[1]||1)-1]||"")):r.fecha; var loc=[r.localidad,r.provincia].filter(Boolean).join(", "); var mc=[r.modalidad,_cfCatsTxt(r)].filter(Boolean).join(" · ");
@@ -1054,7 +1098,7 @@
       // PARTES para que el optimizador de LiteSpeed/WordPress no los detecte
       // dentro de este <script> e inyecte su lazy-load rompiendo el JS.
       var O=function(n){return "<"+n+">";}, X=function(n){return "<"+"/"+n+">";};
-      var cuerpo="<h1>Pruebas previstas</h1><p class='sub'>del "+_cfFmtDMY(de)+" al "+_cfFmtDMY(ha)+" · "+favs.length+" prueba"+(favs.length===1?"":"s")+"</p><table>"+filas+"</table><p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p>";
+      var cuerpo="<h1>"+_esc(_cfGenTitleDoc())+"</h1><p class='sub'>"+_esc(_cfGenSubLine(favs))+"</p><table>"+filas+"</table><p class='foot'>Calendario ciclista · mfppcycling.com/calendario</p>";
       var html="<!doc"+"type html>"+O("html")+O("head")+"<me"+"ta charset='utf-8'>"+O("title")+"Mis pruebas"+X("title")+O("style")+css+X("style")+X("head")+O("body")+cuerpo+X("body")+X("html");
       var w=window.open("","_blank"); if(!w){ alert("Permite las ventanas emergentes para imprimir."); return; }
       w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },300);
@@ -1354,6 +1398,7 @@
       });
       out=_dedupe(out);   // quitar duplicados por tildes/mayúsculas antes de pintar
       out.sort(function(a,b){var A=(a[sortKey]||"")+"",B=(b[sortKey]||"")+"";var c=A.localeCompare(B,"es",{numeric:true});return sortAsc?c:-c;});
+      _cfLastList=out.slice();   // guardar la lista filtrada actual (para "Imprimir / imagen de esta lista")
       if(_cfVista==="mes"){
         var tw=document.querySelector("#calfed .tabla-wrap"); if(tw){ tw.style.display="none"; }
         var cc=$("cf_cal"); if(cc){ cc.style.display=""; }
@@ -1866,6 +1911,7 @@
     var _fc=$("cf_fav_clear"); if(_fc){ _fc.addEventListener("click",function(){ if(confirm("¿Quitar TODAS las pruebas marcadas?")){ try{ localStorage.removeItem("cf_favs"); localStorage.removeItem("cf_fav_snap"); }catch(e){} _cfOnlyFavs=false; _cfFavUpdateBar(); apply(); } }); }
     var _fsn=$("cf_fav_seen"); if(_fsn){ _fsn.addEventListener("click",_cfFavSeen); }
     var _fg=$("cf_fav_gen"); if(_fg){ _fg.addEventListener("click",_cfGenOpen); }
+    var _pbtn=$("cf_printbtn"); if(_pbtn){ _pbtn.addEventListener("click",_cfGenListOpen); }
     var _gx=$("cf_gen_x"); if(_gx){ _gx.addEventListener("click",_cfGenClose); }
     var _gc=$("cf_gen_cerrar"); if(_gc){ _gc.addEventListener("click",_cfGenClose); }
     var _gmo=$("cf_gen_modal"); if(_gmo){ _gmo.addEventListener("click",function(e){ if(e.target===_gmo){ _cfGenClose(); } }); }
