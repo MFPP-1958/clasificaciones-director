@@ -53,6 +53,7 @@ function _cargaTab(n){
   try{ if(typeof _cargaDraftSave==='function') _cargaDraftSave(); }catch(_){}
   document.querySelectorAll('#view-carga .carga-step').forEach(el=>{ el.style.display = (el.dataset.step===n)?'':'none'; });
   document.querySelectorAll('#cargaTabs .carga-tab').forEach(b=>{ b.classList.toggle('active', b.dataset.step===n); });
+  if(n==='5'){ try{ _partiInit(); }catch(_){} }
   // Al entrar a Inscritos, alinear "Importar SOLO la categoría" con el filtro global
   // y mostrar el nombre de la prueba elegida en el Paso 1.
   if(n==='2'){
@@ -15082,6 +15083,160 @@ function getOfficialTeamRanking(){
 
   ranked.forEach((x,i)=>{ x.rank = i+1; });
   return ranked;
+}
+
+/* ============================================================
+   EQUIPOS PARTICIPANTES — previa cuando aún no hay lista de inscritos.
+   Pega la lista de equipos del reglamento → 3 mejores de cada equipo
+   según el ranking. SOLO LECTURA: no modifica la base de datos.
+   Reutiliza: riders (global), normalizeTeamName(), normKey(), escapeHtml().
+   ============================================================ */
+var _partiUltimo = null; // último análisis (para imprimir)
+function _partiCatsDisponibles(){
+  var rs = (typeof riders!=='undefined' && Array.isArray(riders)) ? riders : [];
+  return [...new Set(rs.map(r=>r&&r.cat).filter(Boolean))].sort();
+}
+function _partiInit(){
+  var sel=document.getElementById('partiCat'); if(!sel || sel.options.length) return;
+  var html='<option value="__all__">Todas las categorías</option>';
+  _partiCatsDisponibles().forEach(c=>{ html+='<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>'; });
+  sel.innerHTML=html;
+}
+function _partiParseTeams(text){
+  return String(text||'')
+    .split(/\n+/)
+    .map(s=>s.replace(/^\s*\d+\s*[.)\-–]?\s*/,'').trim()) // quita "1." "23)" "3 -" etc.
+    .filter(Boolean);
+}
+function _partiTeams(catFilter){
+  var rs = (typeof riders!=='undefined' && Array.isArray(riders)) ? riders : [];
+  rs = rs.filter(r=>r && r.team);
+  if(catFilter) rs = rs.filter(r=>(r.cat||'')===catFilter);
+  var map={};
+  rs.forEach(r=>{ (map[r.team]=map[r.team]||[]).push(r); });
+  return Object.keys(map).map(function(team){
+    var arr=map[team].slice().sort((a,b)=>(a.pos||1e9)-(b.pos||1e9));
+    return { team:team, riders:arr, top3:arr.slice(0,3), best:(arr[0]&&arr[0].pos!=null?arr[0].pos:1e9), count:arr.length };
+  });
+}
+function _partiPruebaNombre(){
+  var el=document.getElementById('raceName');
+  return (el && el.value ? el.value.trim() : '') || 'Equipos participantes';
+}
+function _partiAnalizar(){
+  _partiInit();
+  var txt=(document.getElementById('partiInput')||{}).value||'';
+  var catSel=(document.getElementById('partiCat')||{}).value||'__all__';
+  var cat = catSel==='__all__' ? '' : catSel;
+  var pasted=_partiParseTeams(txt);
+  if(!pasted.length){ if(typeof showToast==='function') showToast('Pega primero la lista de equipos (uno por línea).','warn',3000); return; }
+  var teams=_partiTeams(cat);
+  var canonicals=teams.map(t=>t.team);
+  var NK = (typeof normKey==='function') ? normKey : (s=>String(s||'').toUpperCase());
+  var byKey={}; teams.forEach(t=>{ byKey[NK(t.team)]=t; });
+  function _partiResolve(p){
+    var canon = (typeof normalizeTeamName==='function') ? normalizeTeamName(p, canonicals) : p;
+    if(byKey[NK(canon)]) return byKey[NK(canon)];
+    // Respaldo de alta confianza: un nombre es prefijo del otro
+    // (p. ej. "…VITALDINSPORT" vs "…VITALDINSPOR", una letra de más).
+    var kp=NK(p), best=null, bestDiff=1e9;
+    teams.forEach(function(t){
+      var tk=NK(t.team);
+      if(tk.length>=6 && kp.length>=6 && (tk.startsWith(kp)||kp.startsWith(tk))){
+        var diff=Math.abs(tk.length-kp.length);
+        if(diff<bestDiff){ bestDiff=diff; best=t; }
+      }
+    });
+    return best;
+  }
+  var matched=[], notFound=[], vistos={};
+  pasted.forEach(function(p){
+    var hit = _partiResolve(p);
+    if(hit && hit.top3.length){
+      if(vistos[hit.team]) return; // no duplicar si dos líneas caen en el mismo equipo
+      vistos[hit.team]=1;
+      matched.push({ pasted:p, team:hit });
+    } else {
+      notFound.push(p);
+    }
+  });
+  matched.sort((a,b)=> a.team.best - b.team.best);
+  _partiUltimo={ matched:matched, notFound:notFound, catLabel:(cat||'Todas las categorías'), pruebaNombre:_partiPruebaNombre() };
+  _partiRender();
+}
+function _partiRiderLinea(r, i){
+  var nombre = r.name || r.displayName || r.nombre || '—';
+  var pos = (r.pos!=null? r.pos : '');
+  var pts = (r.points!=null? r.points : (r.pts!=null? r.pts : null));
+  var medalla = i===0?'🥇':(i===1?'🥈':(i===2?'🥉':''));
+  return '<div style="display:flex;align-items:baseline;gap:8px;padding:3px 0">'+
+    '<span style="width:22px;text-align:center">'+medalla+'</span>'+
+    '<span style="font-weight:800;color:#1E6F9A;min-width:34px">#'+escapeHtml(String(pos))+'</span>'+
+    '<span style="flex:1">'+escapeHtml(nombre)+(r.cat?' <span style="color:#94a3b8;font-size:11px">('+escapeHtml(r.cat)+')</span>':'')+'</span>'+
+    (pts!=null?'<span style="color:#64748b;font-size:12px">'+escapeHtml(String(pts))+' pts</span>':'')+
+    '</div>';
+}
+function _partiRender(){
+  var R=_partiUltimo; if(!R) return;
+  var cont=document.getElementById('partiResultados');
+  var noc=document.getElementById('partiNoEncontrados');
+  var res=document.getElementById('partiResumen');
+  if(res) res.innerHTML='✅ <b>'+R.matched.length+'</b> equipo(s) encontrado(s) &nbsp;·&nbsp; ⚠️ <b>'+R.notFound.length+'</b> sin datos &nbsp;·&nbsp; categoría: <b>'+escapeHtml(R.catLabel)+'</b>';
+  var pb=document.getElementById('partiPrintBtn'); if(pb) pb.style.display = R.matched.length? '' : 'none';
+  if(cont){
+    if(!R.matched.length){ cont.innerHTML='<p class="small" style="color:#6b7280">Ningún equipo de la lista está en tu base de datos con esa categoría.</p>'; }
+    else {
+      cont.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">'+
+        R.matched.map(function(m){
+          var t=m.team;
+          var mismatch = (typeof normKey==='function' && normKey(m.pasted)!==normKey(t.team));
+          return '<div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#fff">'+
+            '<div style="font-weight:800;color:#11334A;font-size:14px">'+escapeHtml(t.team)+'</div>'+
+            (mismatch?'<div style="font-size:11px;color:#94a3b8;margin-bottom:2px">emparejado con «'+escapeHtml(m.pasted)+'»</div>':'')+
+            '<div style="font-size:11px;color:#64748b;margin:2px 0 8px">'+t.count+' corredor(es) en el ranking</div>'+
+            t.top3.map(_partiRiderLinea).join('')+
+            '</div>';
+        }).join('')+'</div>';
+    }
+  }
+  if(noc){
+    if(R.notFound.length){
+      noc.innerHTML='<div style="border:1px dashed #f59e0b;background:#fffbeb;border-radius:10px;padding:10px 14px">'+
+        '<div style="font-weight:800;color:#92400e;margin-bottom:6px">⚠️ Sin datos en tu base de datos ('+R.notFound.length+')</div>'+
+        '<div style="font-size:13px;color:#78350f;line-height:1.7">'+R.notFound.map(escapeHtml).join(' &nbsp;·&nbsp; ')+'</div>'+
+        '<div style="font-size:11px;color:#b45309;margin-top:6px">Puede ser un equipo nuevo o el mismo con otro patrocinador. Si es un equipo que sí tienes con otro nombre, dímelo y lo dejamos recordado.</div>'+
+        '</div>';
+    } else { noc.innerHTML=''; }
+  }
+}
+function _partiImprimir(){
+  var R=_partiUltimo; if(!R || !R.matched.length) return;
+  var filas=R.matched.map(function(m){
+    var t=m.team;
+    var top=t.top3.map(function(r,i){
+      var nombre=r.name||r.displayName||r.nombre||'—';
+      var medalla=i===0?'🥇':(i===1?'🥈':'🥉');
+      var pts=(r.points!=null?r.points:(r.pts!=null?r.pts:''));
+      return '<div class="r"><span class="m">'+medalla+'</span><span class="p">#'+escapeHtml(String(r.pos!=null?r.pos:''))+'</span><span class="n">'+escapeHtml(nombre)+(r.cat?' <em>('+escapeHtml(r.cat)+')</em>':'')+'</span>'+(pts!==''?'<span class="pt">'+escapeHtml(String(pts))+' pts</span>':'')+'</div>';
+    }).join('');
+    return '<div class="card"><h3>'+escapeHtml(t.team)+'</h3>'+top+'</div>';
+  }).join('');
+  var nf = R.notFound.length ? '<div class="nf"><b>⚠️ Sin datos:</b> '+R.notFound.map(escapeHtml).join(' · ')+'</div>' : '';
+  var css='@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#1f2933;margin:0}'+
+    '.hd{background:#11334A;color:#fff;padding:16px 22px;border-bottom:5px solid #F3B11A}'+
+    '.hd h1{margin:0;font-size:20px}.hd .s{color:#7FC4EC;font-size:12.5px;margin:3px 0 0}'+
+    '.wrap{padding:16px 22px;display:grid;grid-template-columns:1fr 1fr;gap:12px}'+
+    '.card{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;break-inside:avoid}'+
+    '.card h3{margin:0 0 6px;font-size:14px;color:#11334A}'+
+    '.r{display:flex;align-items:baseline;gap:7px;font-size:12.5px;padding:2px 0}'+
+    '.r .m{width:18px}.r .p{font-weight:800;color:#1E6F9A}.r .n{flex:1}.r .n em{color:#94a3b8;font-style:normal;font-size:11px}.r .pt{color:#64748b;font-size:11px}'+
+    '.nf{margin:0 22px 18px;padding:10px 12px;border:1px dashed #f59e0b;background:#fffbeb;border-radius:8px;font-size:12px;color:#78350f}'+
+    '@media print{.hd,.card{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+  var html='<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(R.pruebaNombre)+'</title><style>'+css+'</style></head><body>'+
+    '<div class="hd"><h1>🔎 '+escapeHtml(R.pruebaNombre)+'</h1><p class="s">Equipos participantes · 3 mejores por equipo según el ranking · '+escapeHtml(R.catLabel)+' · MFPP Cycling</p></div>'+
+    '<div class="wrap">'+filas+'</div>'+nf+'</body></html>';
+  var w=window.open('','_blank'); if(!w){ if(typeof showToast==='function') showToast('Permite las ventanas emergentes para imprimir.','warn',3000); return; }
+  w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 350);
 }
 
 function renderTeamTimeRanking(){
