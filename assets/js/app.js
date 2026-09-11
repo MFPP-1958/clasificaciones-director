@@ -15556,6 +15556,7 @@ async function openHistoryModal(){
         <div style="display:flex;gap:6px;align-items:center">
           <button class="hist-entry-load admin-only" style="background:#1f6feb" onclick="event.stopPropagation();loadPlanificadaToCarga('${h.id}')">▶ Añadir inscritos</button>
           <button class="hist-entry-load admin-only" style="background:#0369a1;margin-left:6px" title="Carga la prueba aunque no tenga inscritos (para ver equipos participantes, datos, etc.)" onclick="event.stopPropagation();cargarPruebaSinInscritos('${h.id}')">▶ Cargar prueba</button>
+          <button class="hist-entry-load admin-only" style="background:#7c3aed;margin-left:6px" title="Subir el track/GPX del recorrido aunque no haya inscritos (útil para Radio Vuelta)" onclick="event.stopPropagation();_routeOpenModal('${h.id}')">🗺️ Añadir recorrido</button>
         </div>
       </div>`;
     }
@@ -18711,6 +18712,9 @@ async function renderHistory(){
           <button class="btn admin-only" style="background:#0369a1;color:#fff;font-weight:800;font-size:12px;padding:7px 12px;white-space:nowrap"
             title="Carga la prueba aunque no tenga inscritos (para ver equipos participantes, datos, etc.)"
             onclick="cargarPruebaSinInscritos('${escapeAttr(p.id)}')">▶ Cargar prueba</button>
+          <button class="btn admin-only" style="background:#7c3aed;color:#fff;font-weight:800;font-size:12px;padding:7px 12px;white-space:nowrap"
+            title="Subir el track/GPX del recorrido aunque no haya inscritos (útil para Radio Vuelta)"
+            onclick="_routeOpenModal('${escapeAttr(p.id)}')">🗺️ Añadir recorrido</button>
         </div>`;
       }).join('');
       // Plegable: estado persistente en localStorage. Por defecto colapsado
@@ -44819,7 +44823,26 @@ async function _routeListEfforts(raceId){
 async function _routeOpenModal(raceId){
   const hist = _cachedHistory || (typeof _sbLoadHistory==='function' ? await _sbLoadHistory() : []);
   if(!Array.isArray(_cachedHistory) || !_cachedHistory.length) _cachedHistory = hist;
-  const race = hist.find(h => h.id === raceId);
+  let race = hist.find(h => h.id === raceId);
+  // Las pruebas PLANIFICADAS (sin clasificación) no están en _cachedHistory
+  // (que solo trae las de tipo 'clasificacion'). Si no la encontramos, la
+  // traemos por id para poder subir el recorrido aunque no haya inscritos.
+  if(!race && _sb){
+    try{
+      const { data } = await _sb.from('races').select('id, name, date, notes').eq('id', raceId).single();
+      if(data){
+        let extra = {}; try{ extra = JSON.parse(data.notes||'{}'); }catch(e){}
+        race = {
+          id: data.id,
+          raceName: data.name || '',
+          raceDate: (typeof formatDateDisplay==='function' ? (formatDateDisplay(_parseSpanishDate(extra.raceDate||data.date||''))||extra.raceDate||data.date||'') : (extra.raceDate||data.date||'')),
+          localidad: extra.localidad || '',
+          route: extra.route || null,
+          riders: []
+        };
+      }
+    }catch(e){}
+  }
   if(!race){ alert('No se encontró la prueba'); return; }
   _routeInjectStyles();
   let overlay = document.getElementById('routeOverlay');
