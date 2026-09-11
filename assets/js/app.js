@@ -48295,9 +48295,12 @@ function _rvPopulateRaceSelect(currentId){
   hist.sort((a,b)=> (_parseSpanishDate(b.raceDate)||'').localeCompare(_parseSpanishDate(a.raceDate)||''));
   const conIns=hist.filter(r=> r && r.id && Array.isArray(r.inscritos) && r.inscritos.length>0);
   const sinIns=hist.filter(r=> r && r.id && !(Array.isArray(r.inscritos) && r.inscritos.length>0));
+  const histIds=new Set(hist.map(r=>String(r.id)));
+  const plan=(Array.isArray(_rvPlanned)?_rvPlanned:[]).filter(r=> r && r.id && !histIds.has(String(r.id)));
   const opt=r=>{ const nm=(r.raceName||r.name||'(sin nombre)'); const f=r.raceDate?(' · '+r.raceDate):''; return `<option value="${escapeAttr(String(r.id))}"${String(r.id)===String(currentId)?' selected':''}>${escapeHtml(nm+f)}</option>`; };
   let html='';
   if(conIns.length) html+='<optgroup label="Con inscritos">'+conIns.map(opt).join('')+'</optgroup>';
+  if(plan.length) html+='<optgroup label="📅 Planificadas (usa el «modo libre»)">'+plan.map(opt).join('')+'</optgroup>';
   if(sinIns.length) html+='<optgroup label="Sin inscritos (no se puede usar en el coche)">'+sinIns.map(opt).join('')+'</optgroup>';
   sel.innerHTML = html || '<option value="">(no hay pruebas)</option>';
 }
@@ -48307,6 +48310,23 @@ function _rvPickRace(id){
   _rvSelectedRaceId=id;
   if(typeof _simSelectedRaceId!=='undefined') _simSelectedRaceId=id;
   _rvInit();
+}
+
+// Pruebas PLANIFICADAS (sin clasificación) para el desplegable de Radio Vuelta.
+// No están en _cachedHistory (solo 'clasificacion'), así que las cargamos aparte.
+let _rvPlanned = null;
+async function _rvEnsurePlanned(){
+  if(Array.isArray(_rvPlanned)) return _rvPlanned;
+  if(!_sb){ _rvPlanned=[]; return _rvPlanned; }
+  try{
+    const { data } = await _sb.from('races').select('id,name,date,notes').eq('race_type','planificada').order('date',{ascending:false});
+    _rvPlanned=(data||[]).map(r=>{
+      let ex={}; try{ ex=JSON.parse(r.notes||'{}'); }catch(_){}
+      const f=(typeof formatDateDisplay==='function')?(formatDateDisplay(_parseSpanishDate(ex.raceDate||r.date||''))||ex.raceDate||r.date||''):(ex.raceDate||r.date||'');
+      return { id:r.id, raceName:r.name||'', raceDate:f };
+    });
+  }catch(_){ _rvPlanned=[]; }
+  return _rvPlanned;
 }
 
 // ── Radio Vuelta · MODO LIBRE (sin lista de inscritos) ────────────────────
@@ -48328,6 +48348,7 @@ function _rvSetModo(libre){
 async function _rvInitLibre(id){
   const body=document.getElementById('rvBody'); if(!body) return;
   _rvUpdateModoBtns();
+  try{ await _rvEnsurePlanned(); }catch(_){}
   id = id || _rvSelectedRaceId || ((typeof _activeRace!=='undefined' && _activeRace)?_activeRace.id:'') || '';
   const card=document.getElementById('rvCard');
   const nameEl=document.getElementById('rvRaceName');
@@ -48386,6 +48407,7 @@ async function _rvInit(){
   const nameEl=document.getElementById('rvRaceName');
   // Asegurar historial y el grid de predicción de la prueba activa
   try{ if(typeof _ensureHistory==='function') await _ensureHistory(); }catch(_){}
+  try{ await _rvEnsurePlanned(); }catch(_){}   // + pruebas planificadas para el desplegable
   // Elegir la prueba de Radio Vuelta con esta prioridad:
   //   1) la que has elegido A MANO en el desplegable de RV (_rvSelectedRaceId)
   //   2) por defecto, la que tengas CARGADA (la del header, _activeRace)
