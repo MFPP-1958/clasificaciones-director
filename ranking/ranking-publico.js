@@ -1353,9 +1353,9 @@ function _rpPartiMatch(pasted, teams, keyMap) {
   if (tokScore >= 0.75) return tokBest;
   return null;
 }
-function _rpPartiPodTxt(r) {
+function _rpPartiPodTxt(r, plain) {
   const s = [];
-  if (r.oro) s.push(r.oro + '× 🥇');
+  if (r.oro) s.push(plain ? (r.oro + (r.oro === 1 ? ' victoria' : ' victorias')) : (r.oro + '× 🥇'));
   else if (r.podios) s.push(r.podios + (r.podios === 1 ? ' podio' : ' podios'));
   s.push('mejor ' + (r.best < 999 ? r.best + 'º' : '—'));
   s.push(r.races + (r.races === 1 ? ' carrera' : ' carreras'));
@@ -1374,7 +1374,7 @@ function rpRenderParticipantes() {
         '<p>¿Todavía no hay lista de inscritos? Aquí ves <b>quiénes son los mejores corredores de cada equipo</b> que va a una prueba, según sus <b>podios de la temporada</b>.</p>' +
         '<ol>' +
           '<li><b>Escribe el nombre de la prueba</b> (saldrá en el PDF).</li>' +
-          '<li><b>Pega la lista de equipos</b> del reglamento (uno por línea).</li>' +
+          '<li><b>Copia y pega la lista de equipos</b> del reglamento <b>toda de golpe</b> (no hace falta escribirlos uno a uno; solo que quede un equipo por línea).</li>' +
           '<li>Marca la/s <b>categoría/s</b>.</li>' +
           '<li><i>(Opcional)</i> Si ya tienes los <b>inscritos</b>, pégalos y solo contarán los que van a correr.</li>' +
           '<li>Pulsa <b>Analizar</b> y, si quieres, <b>Imprimir / PDF</b>.</li>' +
@@ -1383,9 +1383,9 @@ function rpRenderParticipantes() {
       '</div>' +
       '<div class="rp-parti-form">' +
         '<label class="rp-parti-lbl">Nombre de la prueba<input id="rpPartiNombre" type="text" placeholder="Ej: Volta a Vilafranca"></label>' +
-        '<label class="rp-parti-lbl">Equipos participantes (uno por línea)<textarea id="rpPartiEquipos" rows="8" placeholder="IKASCOLA TX - AEL&#10;GRAU PASCUAL SAXUN&#10;TBG WIXUM&#10;…"></textarea></label>' +
+        '<label class="rp-parti-lbl">Equipos participantes <span style="font-weight:400;color:#64748b">(copia y pega la lista entera; un equipo por línea)</span><textarea id="rpPartiEquipos" rows="8" placeholder="Pega aquí la lista de equipos, por ejemplo:&#10;IKASCOLA TX - AEL&#10;GRAU PASCUAL SAXUN&#10;TBG WIXUM&#10;…"></textarea></label>' +
         '<details class="rp-parti-det"><summary>¿Ya tienes la lista de inscritos? (opcional)</summary>' +
-          '<p class="rp-parti-nota">Pega los inscritos (un corredor por línea). Así solo se tendrá en cuenta a los que van a correr.</p>' +
+          '<p class="rp-parti-nota">Copia y pega los inscritos de golpe (un corredor por línea). Así solo se tendrá en cuenta a los que van a correr.</p>' +
           '<textarea id="rpPartiInscritos" rows="6" placeholder="Apellido, Nombre&#10;…"></textarea></details>' +
         '<div class="rp-parti-cats"><span class="rp-parti-catslbl">Categorías:</span> ' +
           (subs.length ? subs.map(sc => '<label class="rp-parti-catlab"><input type="checkbox" class="rp-parti-cat" value="' + rpEscapar(sc) + '"> ' + rpEscapar(sc) + '</label>').join('') : '<span style="color:#94a3b8">—</span>') +
@@ -1470,7 +1470,7 @@ async function rpPartiPDF(btn) {
       const t = m.team;
       body.push([{ content: t.team + '   ·   ' + t.count + ' en el ranking', colSpan: 2, styles: { fillColor: [30, 111, 154], textColor: 255, fontStyle: 'bold' } }]);
       t.top3.forEach((r, i) => {
-        body.push([(i + 1) + 'º  ' + r.nombre + (r.sub ? '  (' + r.sub + ')' : ''), _rpPartiPodTxt(r)]);
+        body.push([(i + 1) + 'º  ' + r.nombre + (r.sub ? '  (' + r.sub + ')' : ''), _rpPartiPodTxt(r, true)]);
       });
     });
     doc.autoTable({
