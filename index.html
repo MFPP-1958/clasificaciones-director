@@ -2904,6 +2904,10 @@
           <div class="rv-raceselect">
             <label for="rvRaceSelect">📋 Prueba:</label>
             <select id="rvRaceSelect" onchange="_rvPickRace(this.value)"></select>
+            <div class="rv-modo" role="group" aria-label="Modo de Radio Vuelta">
+              <button type="button" id="rvModoParrilla" class="rv-modo-btn" onclick="_rvSetModo(false)" title="Con la lista de inscritos: sigues a los corredores por dorsal">📋 Con inscritos</button>
+              <button type="button" id="rvModoLibre" class="rv-modo-btn" onclick="_rvSetModo(true)" title="Sin lista de inscritos: marca la salida y anota lo que veas escribiendo el dorsal a mano">✍️ Modo libre</button>
+            </div>
           </div>
           <!-- Salida real + cronómetro de carrera (Fase 1) -->
           <div id="rvSalidaBar" class="rv-salida-bar"></div>

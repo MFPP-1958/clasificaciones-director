@@ -15093,7 +15093,9 @@ function cargarPruebaSinInscritos(id){
   try{ loadPlanificadaToCarga(id); }catch(e){}
   setTimeout(function(){
     try{ _cargaTab('1'); }catch(_){}
-    try{ if(typeof showToast==='function') showToast('Prueba cargada. Aunque no tengas inscritos, puedes usar «🔎 Equipos participantes».','ok',4500); }catch(_){}
+    // Deja la prueba como ACTIVA para que Radio Vuelta (modo libre) la coja.
+    try{ if(typeof _setActiveRace==='function') _setActiveRace({ id:id, name:(document.getElementById('raceName')||{}).value||'', date:(document.getElementById('raceDate')||{}).value||'', localidad:(document.getElementById('raceLocalidad')||{}).value||'' }, 'planificada'); }catch(_){}
+    try{ if(typeof showToast==='function') showToast('Prueba cargada. Aunque no tengas inscritos, puedes usar «🔎 Equipos participantes» y Radio Vuelta en «modo libre».','ok',5000); }catch(_){}
   }, 500);
 }
 
@@ -48307,6 +48309,78 @@ function _rvPickRace(id){
   _rvInit();
 }
 
+// ── Radio Vuelta · MODO LIBRE (sin lista de inscritos) ────────────────────
+// Reutiliza el registro de eventos: escribes el dorsal a mano en el buscador y
+// se anota con minuto y km estimado. Se ata a la prueba ACTIVA (o la elegida) y
+// guarda en notes.radiovuelta igual que el modo normal.
+let _rvModoLibre = (function(){ try{ return localStorage.getItem('rv_modo_libre')==='1'; }catch(_){ return false; } })();
+function _rvUpdateModoBtns(){
+  const p=document.getElementById('rvModoParrilla'), l=document.getElementById('rvModoLibre');
+  if(p) p.classList.toggle('rv-modo-on', !_rvModoLibre);
+  if(l) l.classList.toggle('rv-modo-on', _rvModoLibre);
+}
+function _rvSetModo(libre){
+  _rvModoLibre = !!libre;
+  try{ localStorage.setItem('rv_modo_libre', _rvModoLibre?'1':'0'); }catch(_){}
+  _rvUpdateModoBtns();
+  _rvInit();
+}
+async function _rvInitLibre(id){
+  const body=document.getElementById('rvBody'); if(!body) return;
+  _rvUpdateModoBtns();
+  id = id || _rvSelectedRaceId || ((typeof _activeRace!=='undefined' && _activeRace)?_activeRace.id:'') || '';
+  const card=document.getElementById('rvCard');
+  const nameEl=document.getElementById('rvRaceName');
+  const salida=document.getElementById('rvSalidaBar');
+  if(!id){
+    if(salida) salida.innerHTML='';
+    body.querySelectorAll('.rv-search,.rv-block').forEach(el=>el.style.display='none');
+    if(card) card.innerHTML='<div class="rv-empty"><div style="font-size:46px">✍️</div><p style="font-weight:800;color:#374151;margin-top:8px">Modo libre: primero carga una prueba.</p><p style="font-size:13px;color:#6b7280">En <b>Historial</b>, en las pruebas planificadas, pulsa <b>▶ Cargar prueba</b>. Aquí podrás marcar la salida y anotar eventos aunque no tengas inscritos.</p></div>';
+    try{ _rvPopulateRaceSelect(''); }catch(_){}
+    return;
+  }
+  // Localizar la prueba: en el histórico o traerla por id (las planificadas no
+  // están en _cachedHistory, que solo trae las de tipo 'clasificacion').
+  let race = (Array.isArray(_cachedHistory)?_cachedHistory.find(h=>h.id===id):null);
+  let remote=null;
+  if(!race && _sb){
+    try{
+      const { data } = await _sb.from('races').select('id, name, date, notes').eq('id', id).single();
+      if(data){ let ex={}; try{ ex=JSON.parse(data.notes||'{}'); }catch(_){}
+        race={ id:data.id, name:data.name||'', raceName:data.name||'', avg:ex.avg||'', localidad:ex.localidad||'' };
+        remote = ex.radiovuelta || null;
+      }
+    }catch(_){}
+  } else if(race){
+    try{ remote = (race.notes ? JSON.parse(race.notes).radiovuelta : null) || race.radiovuelta || null; }catch(_){ remote=null; }
+  }
+  if(!race){ if(card) card.innerHTML='<div class="rv-empty"><p>No se encontró la prueba.</p></div>'; return; }
+  _simCurrentData = { race: race, grid: [] };
+  _rvGrid=[]; _rvBibMap={};
+  _rvLoad();                    // estado local (localStorage) por id
+  if(remote) _rvMerge(remote);  // fusiona lo guardado en la nube
+  const dl=document.getElementById('rvBibList'); if(dl) dl.innerHTML='';
+  body.querySelectorAll('.rv-block').forEach(el=>{ el.style.display='none'; });
+  const search=body.querySelector('.rv-search'); if(search) search.style.display='';
+  const diarioBlock=document.getElementById('rvDiario') ? document.getElementById('rvDiario').closest('.rv-block') : null;
+  if(diarioBlock) diarioBlock.style.display='';
+  if(card) card.innerHTML='<div class="rv-libre-hint">✍️ <b>Modo libre</b> (sin lista de inscritos). Marca la <b>salida</b> y anota lo que veas escribiendo el <b>dorsal</b> a mano en el buscador de arriba. Cada evento guarda el minuto y el km estimado. Cuando cargues los inscritos, los dorsales se enlazarán con los nombres.</div>';
+  if(nameEl) nameEl.textContent = race.name||race.raceName||'';
+  try{ _rvPopulateRaceSelect(id); }catch(_){}
+  // Asegurar que la prueba (aunque sea planificada) aparece y queda seleccionada.
+  const sel=document.getElementById('rvRaceSelect');
+  if(sel){
+    if(!Array.prototype.some.call(sel.options, o=>o.value===String(id))){
+      const o=document.createElement('option'); o.value=String(id);
+      o.textContent='📌 '+(race.name||race.raceName||'Prueba cargada')+(race.date?(' · '+race.date):(race.raceDate?(' · '+race.raceDate):''));
+      sel.insertBefore(o, sel.firstChild);
+    }
+    sel.value=String(id);
+  }
+  _rvRenderSalida();
+  _rvRenderDiario();
+}
+
 async function _rvInit(){
   const body=document.getElementById('rvBody'); if(!body) return;
   const nameEl=document.getElementById('rvRaceName');
@@ -48319,6 +48393,9 @@ async function _rvInit(){
   // Si cargas una prueba NUEVA en la app, RV la sigue (se borra la elección a mano).
   const _actId=(typeof _activeRace!=='undefined' && _activeRace && _activeRace.id)?_activeRace.id:'';
   if(_actId && _actId!==_rvLastActiveId){ _rvSelectedRaceId=null; _rvLastActiveId=_actId; }
+  try{ _rvUpdateModoBtns(); }catch(_){}
+  // MODO LIBRE: sin parrilla, se ata a la prueba activa/elegida.
+  if(_rvModoLibre){ await _rvInitLibre(_rvSelectedRaceId || _actId || ''); return; }
   let id = _rvSelectedRaceId || _actId || _rvAutoPickRaceId();
   if(id) _simSelectedRaceId=id;
   if(id && (!_simCurrentData || !_simCurrentData.race || _simCurrentData.race.id!==id) && typeof _simBuildData==='function'){
@@ -48349,6 +48426,7 @@ async function _rvInit(){
         : `<p style="font-weight:800;color:#374151;margin-top:8px">No hay ninguna prueba con parrilla cargada.</p>
            <p style="font-size:13px;color:#6b7280">Ve al <b>Simulador</b>, elige la prueba de hoy (con su lista de inscritos) y vuelve aquí. Quedará lista para el coche.</p>`}
       <button class="rv-btn-find" style="margin-top:14px;max-width:260px" onclick="showView('view-simulador')">Ir al Simulador →</button>
+      <button class="rv-btn-find" style="margin-top:10px;max-width:300px;background:#7c3aed" onclick="_rvSetModo(true)" title="Sin lista de inscritos: marca la salida y anota lo que veas escribiendo el dorsal a mano">✍️ Usar modo libre (sin inscritos)</button>
     </div>`;
     return;
   }
