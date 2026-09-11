@@ -363,9 +363,9 @@
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
     <textarea id="partiInput" rows="10" placeholder="IKASCOLA TX - AEL - RESPETAD&#10;DIPUTACION DE ALBACETE - ARCOS&#10;GRAU PASCUAL SAXUN&#10;PRORIDE JUFRÉ CYCLING TEAM&#10;…" style="flex:1 1 340px;min-width:280px;font:inherit;font-size:14px;padding:12px;border:1.5px solid #cbd5e1;border-radius:10px;resize:vertical;line-height:1.5"></textarea>
     <div style="display:flex;flex-direction:column;gap:10px;min-width:190px">
-      <label style="font-size:12px;font-weight:700;color:#475569">Categoría a valorar
-        <select id="partiCat" style="width:100%;margin-top:4px;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;font:inherit"></select>
-      </label>
+      <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:3px">Categorías a valorar</div>
+      <div id="partiCatBox" style="max-height:160px;overflow:auto;border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fff"></div>
+      <div style="font-size:10.5px;color:#94a3b8;margin-top:3px">Marca una o varias. No se mezclan con las que no marques. Si no marcas ninguna, se valoran todas.</div>
       <button type="button" class="btn" style="background:#0369a1;border-color:#0369a1" onclick="_partiAnalizar()">🔎 Analizar equipos</button>
       <button type="button" class="btn light" id="partiPrintBtn" style="display:none" onclick="_partiImprimir()">🖨️ Imprimir / Guardar PDF</button>
       <button type="button" class="btn light" onclick="document.getElementById('partiInput').value='';document.getElementById('partiResultados').innerHTML='';document.getElementById('partiNoEncontrados').innerHTML='';document.getElementById('partiResumen').innerHTML='';document.getElementById('partiPrintBtn').style.display='none';" title="Vaciar">✖ Limpiar</button>

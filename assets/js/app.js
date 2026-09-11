@@ -15110,14 +15110,17 @@ async function _partiEnsureData(){
   return _partiHistory || [];
 }
 async function _partiInit(){
-  var sel=document.getElementById('partiCat'); if(!sel || sel.options.length) return;
+  var box=document.getElementById('partiCatBox'); if(!box || box.children.length) return;
   var hist=await _partiEnsureData();
   var set={};
   hist.forEach(function(rc){ (rc.riders||[]).forEach(function(r){ if(r&&r.cat) set[r.cat]=1; }); });
   var cats=Object.keys(set).sort();
-  var html='<option value="__all__">Todas las categorías</option>';
-  cats.forEach(c=>{ html+='<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>'; });
-  sel.innerHTML=html;
+  box.innerHTML = cats.length
+    ? cats.map(function(c){ return '<label style="display:block;padding:2px 0;cursor:pointer;white-space:nowrap"><input type="checkbox" class="parti-cat" value="'+escapeHtml(c)+'" style="margin-right:7px;vertical-align:-1px">'+escapeHtml(c)+'</label>'; }).join('')
+    : '<span style="color:#94a3b8">Sin datos todavía</span>';
+}
+function _partiSelectedCats(){
+  return [].slice.call(document.querySelectorAll('#partiCatBox .parti-cat:checked')).map(function(x){ return x.value; });
 }
 function _partiParseTeams(text){
   return String(text||'')
@@ -15127,13 +15130,14 @@ function _partiParseTeams(text){
 }
 // Agrega el HISTÓRICO completo en corredores de temporada (independiente de la
 // prueba cargada). Cada corredor: victorias/podios/top-10/mejor puesto/media.
-function _partiBuildRiders(history, catFilter){
+function _partiBuildRiders(history, cats){
+  var catSet = (cats && cats.length) ? cats : null;
   var map={};
   (history||[]).forEach(function(race){
     (race.riders||[]).forEach(function(r){
       if(!r || !r.pos) return;
       var cat=r.cat||'';
-      if(catFilter && cat!==catFilter) return;
+      if(catSet && catSet.indexOf(cat)<0) return;
       var name=(typeof normalizeRiderName==='function')?normalizeRiderName(r.name):(r.name||'');
       if(!name) return;
       var team=(typeof getCanonicalTeam==='function')?getCanonicalTeam(r.team||''):(r.team||'');
@@ -15168,13 +15172,12 @@ function _partiPruebaNombre(){
 }
 async function _partiAnalizar(){
   var txt=(document.getElementById('partiInput')||{}).value||'';
-  var catSel=(document.getElementById('partiCat')||{}).value||'__all__';
-  var cat = catSel==='__all__' ? '' : catSel;
   var pasted=_partiParseTeams(txt);
   if(!pasted.length){ if(typeof showToast==='function') showToast('Pega primero la lista de equipos (uno por línea).','warn',3000); return; }
   await _partiInit();
+  var cats=_partiSelectedCats();
   var hist=await _partiEnsureData();
-  var ridersT=_partiBuildRiders(hist, cat);
+  var ridersT=_partiBuildRiders(hist, cats);
   var teams=_partiTeams(ridersT);
   var canonicals=teams.map(t=>t.team);
   var NK = (typeof normKey==='function') ? normKey : (s=>String(s||'').toUpperCase());
@@ -15206,7 +15209,7 @@ async function _partiAnalizar(){
     }
   });
   matched.sort((a,b)=> a.team.best - b.team.best);
-  _partiUltimo={ matched:matched, notFound:notFound, catLabel:(cat||'Todas las categorías'), pruebaNombre:_partiPruebaNombre() };
+  _partiUltimo={ matched:matched, notFound:notFound, catLabel:(cats.length? cats.join(' + ') : 'Todas las categorías'), pruebaNombre:_partiPruebaNombre() };
   _partiRender();
 }
 function _partiStatsTxt(r){
