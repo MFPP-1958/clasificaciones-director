@@ -15085,6 +15085,18 @@ function getOfficialTeamRanking(){
   return ranked;
 }
 
+// Cargar una prueba PLANIFICADA aunque no tenga inscritos: vuelca sus datos a
+// Carga y Resumen y deja al usuario en el Paso 1 (Datos), desde donde puede ir
+// a cualquier pestaña (incluida "🔎 Equipos participantes"). Reutiliza
+// loadPlanificadaToCarga (que también sirve para "Añadir inscritos").
+function cargarPruebaSinInscritos(id){
+  try{ loadPlanificadaToCarga(id); }catch(e){}
+  setTimeout(function(){
+    try{ _cargaTab('1'); }catch(_){}
+    try{ if(typeof showToast==='function') showToast('Prueba cargada. Aunque no tengas inscritos, puedes usar «🔎 Equipos participantes».','ok',4500); }catch(_){}
+  }, 500);
+}
+
 /* ============================================================
    EQUIPOS PARTICIPANTES — previa cuando aún no hay lista de inscritos.
    Pega la lista de equipos del reglamento → 3 mejores de cada equipo
@@ -15505,6 +15517,7 @@ async function openHistoryModal(){
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <button class="hist-entry-load admin-only" style="background:#1f6feb" onclick="event.stopPropagation();loadPlanificadaToCarga('${h.id}')">▶ Añadir inscritos</button>
+          <button class="hist-entry-load admin-only" style="background:#0369a1;margin-left:6px" title="Carga la prueba aunque no tenga inscritos (para ver equipos participantes, datos, etc.)" onclick="event.stopPropagation();cargarPruebaSinInscritos('${h.id}')">▶ Cargar prueba</button>
         </div>
       </div>`;
     }
@@ -18657,6 +18670,9 @@ async function renderHistory(){
           </div>
           <button class="btn admin-only" style="background:#1f6feb;color:#fff;font-weight:800;font-size:12px;padding:7px 12px;white-space:nowrap"
             onclick="loadPlanificadaToCarga('${escapeAttr(p.id)}')">▶ Añadir inscritos</button>
+          <button class="btn admin-only" style="background:#0369a1;color:#fff;font-weight:800;font-size:12px;padding:7px 12px;white-space:nowrap"
+            title="Carga la prueba aunque no tenga inscritos (para ver equipos participantes, datos, etc.)"
+            onclick="cargarPruebaSinInscritos('${escapeAttr(p.id)}')">▶ Cargar prueba</button>
         </div>`;
       }).join('');
       // Plegable: estado persistente en localStorage. Por defecto colapsado
