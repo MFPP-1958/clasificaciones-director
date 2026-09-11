@@ -109,6 +109,7 @@
           <button type="button" role="tab" data-pantalla="ranking" class="rp-nav-tab" aria-selected="false">🏆 Ranking</button>
           <button type="button" role="tab" data-pantalla="carreras" class="rp-nav-tab" aria-selected="false">🏁 Últimas carreras</button>
           <button type="button" role="tab" data-pantalla="inscritos" class="rp-nav-tab" aria-selected="false">📋 Inscritos</button>
+          <button type="button" role="tab" data-pantalla="participantes" class="rp-nav-tab" aria-selected="false">🔎 Equipos</button>
         </div>
         <!-- Opciones que solo aplican dentro de la sección Ranking -->
         <div id="rp-solo-ranking" hidden>
@@ -155,6 +156,8 @@
 
       <!-- Inscritos: quién corre cada prueba, por equipos, ordenados por ranking -->
       <div id="rp-inscritos" style="display:none"></div>
+      <!-- Equipos participantes: pega la lista de equipos → 3 mejores por equipo (podios) -->
+      <div id="rp-participantes" style="display:none"></div>
 
       <div id="rp-challenge-info" style="display:none"></div>
 

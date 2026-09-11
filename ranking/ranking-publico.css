@@ -1984,3 +1984,34 @@ button.rp-in-nov-nombre:hover { color: #0e7490; text-decoration: underline; }
   .rp-in-buscar-caja { flex: 1; }
   .rp-in-buscar-wrap .rp-in-btn-2 { align-self: stretch; white-space: nowrap; }
 }
+
+/* ── Equipos participantes ─────────────────────────────────────────────── */
+.rp-parti{max-width:1000px;margin:0 auto}
+.rp-parti-intro{background:#eef6fb;border:1px solid #cfe6f5;border-left:4px solid #1E6F9A;border-radius:12px;padding:14px 18px;margin:0 0 16px;font-size:14px;color:#334155;line-height:1.55}
+.rp-parti-intro h2{margin:0 0 6px;font-size:18px;color:#11334A}
+.rp-parti-intro ol{margin:8px 0;padding-left:20px}
+.rp-parti-intro li{margin:3px 0}
+.rp-parti-nota{font-size:12.5px;color:#64748b;margin:8px 0 0}
+.rp-parti-form{display:flex;flex-direction:column;gap:12px;margin:0 0 16px}
+.rp-parti-lbl{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700;color:#475569}
+.rp-parti-lbl input,.rp-parti-lbl textarea,.rp-parti-det textarea{width:100%;box-sizing:border-box;font:inherit;font-size:14px;font-weight:400;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:10px;resize:vertical}
+.rp-parti-det{border:1px dashed #cbd5e1;border-radius:10px;padding:8px 12px}
+.rp-parti-det summary{cursor:pointer;font-weight:700;color:#1E6F9A;font-size:13px}
+.rp-parti-det textarea{margin-top:6px}
+.rp-parti-cats{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px}
+.rp-parti-catslbl{font-weight:700;color:#475569}
+.rp-parti-catlab{cursor:pointer;white-space:nowrap}
+.rp-parti-acts{display:flex;gap:10px;flex-wrap:wrap}
+.rp-parti-btn{background:#1E6F9A;color:#fff;border:0;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:800;cursor:pointer}
+.rp-parti-btn2{background:#475569}
+.rp-parti-resumen{font-size:13.5px;color:#0b2f6b;font-weight:700;margin:6px 0}
+.rp-parti-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.rp-parti-card{border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#fff}
+.rp-parti-team{font-weight:800;color:#11334A;font-size:14px}
+.rp-parti-count{font-size:11px;color:#64748b;margin:2px 0 8px}
+.rp-parti-rider{padding:4px 0;border-top:1px solid #f1f5f9}
+.rp-parti-rider:first-of-type{border-top:0}
+.rp-parti-rn{font-size:13px}
+.rp-parti-sub{color:#94a3b8;font-size:11px}
+.rp-parti-rs{font-size:11.5px;color:#64748b;margin-left:20px}
+.rp-parti-noenc{border:1px dashed #f59e0b;background:#fffbeb;border-radius:10px;padding:10px 14px;margin-top:14px;font-size:13px;color:#78350f;line-height:1.6}

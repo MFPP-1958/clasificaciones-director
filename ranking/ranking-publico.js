@@ -895,10 +895,13 @@ function rpRenderPantalla() {
   document.getElementById('rp-top10').style.display = esTop10 ? '' : 'none';
   const inscEl = document.getElementById('rp-inscritos');
   if (inscEl) inscEl.style.display = esInscritos ? '' : 'none';
-  // Las pestañas de categoría no aplican en Inscritos (cada corredor se ordena
-  // dentro de su propia categoría del ranking) → se ocultan ahí.
+  const esParticipantes = rpEstado.pantalla === 'participantes';
+  const partiEl = document.getElementById('rp-participantes');
+  if (partiEl) partiEl.style.display = esParticipantes ? '' : 'none';
+  // Las pestañas de categoría no aplican en Inscritos ni en Equipos participantes
+  // (cada uno tiene su propio filtro) → se ocultan ahí.
   const pest = document.getElementById('rp-pestanas');
-  if (pest) pest.style.display = esInscritos ? 'none' : '';
+  if (pest) pest.style.display = (esInscritos || esParticipantes) ? 'none' : '';
   document.querySelector('.rp-tabla-scroll').style.display = esRanking ? '' : 'none';
   document.querySelector('.rp-pie').style.display = esRanking ? '' : 'none';
   // El aviso del modo Challenge lo gestiona rpRenderTabla dentro del ranking
@@ -937,6 +940,7 @@ function rpIrA(dest) {
     else if (dest === 'top10') rpRenderTop10();
     else if (dest === 'carreras') rpRenderUltimos();
     else if (dest === 'inscritos') rpRenderInscritos();
+    else if (dest === 'participantes') rpRenderParticipantes();
     else rpRenderInicio();
     rpGAVista(dest);
   }
@@ -1278,6 +1282,214 @@ function rpTarjetaEquipoInscritos(t) {
     `<button type="button" class="rp-carrera-cta rp-insc-vertodos" aria-expanded="false" data-n="${n}">Ver los ${n} corredores que participan ➔</button>` +
     `<div class="rp-insc-todos" hidden><ul class="rp-podio-lista rp-insc-lista">${todos}</ul></div>` +
     '</article>';
+}
+
+/* ============================================================
+   EQUIPOS PARTICIPANTES — pega la lista de equipos de una prueba y muestra los
+   3 mejores de cada equipo por sus PODIOS de la temporada. Útil cuando aún no
+   hay lista de inscritos. Opcionalmente, si pegas los inscritos, solo se tienen
+   en cuenta los que van a correr. SOLO LECTURA (nunca escribe).
+   ============================================================ */
+let _rpPartiUltimo = null;
+
+function _rpPartiSubcats() {
+  const set = new Set();
+  ((rpEstado.ranking && rpEstado.ranking.categorias) || []).forEach(cat => {
+    (cat.corredores || []).forEach(c => { (c.subcats || []).forEach(sc => { if (sc) set.add(sc); }); });
+  });
+  return [...set].sort();
+}
+function _rpPartiParse(text) {
+  return String(text || '').split(/\n+/)
+    .map(s => s.replace(/^\s*\d+\s*[.)\-–]?\s*/, '').trim())
+    .filter(Boolean);
+}
+// Equipos → 3 mejores por PODIOS, filtrando por subcategoría(s) y, si se pasan
+// inscritos (claves de nombre), solo esos corredores.
+function _rpPartiBuildTeams(subs, inscKeys) {
+  const wantSub = subs && subs.length ? new Set(subs) : null;
+  const map = {};
+  ((rpEstado.ranking && rpEstado.ranking.categorias) || []).forEach(cat => {
+    (cat.corredores || []).forEach(c => {
+      if (wantSub && !(c.subcats || []).some(sc => wantSub.has(sc))) return;
+      if (inscKeys && !inscKeys.has(c.clave)) return;
+      const team = c.equipo || '';
+      if (!team) return;
+      let oro = 0, plata = 0, bronce = 0, best = 999, n = 0;
+      (c.resultados || []).forEach(r => {
+        if (!r.pos) return; n++;
+        if (r.pos < best) best = r.pos;
+        if (r.pos === 1) oro++; else if (r.pos === 2) plata++; else if (r.pos === 3) bronce++;
+      });
+      (map[team] = map[team] || []).push({
+        nombre: c.nombre, clave: c.clave, sub: (c.subcatPrincipal || (c.subcats && c.subcats[0]) || ''),
+        oro, plata, bronce, podios: oro + plata + bronce, best, races: n
+      });
+    });
+  });
+  const score = (a, b) => (b.oro - a.oro) || (b.plata - a.plata) || (b.bronce - a.bronce) || (a.best - b.best) || (a.nombre || '').localeCompare(b.nombre || '', 'es');
+  return Object.keys(map).map(team => {
+    const arr = map[team].sort(score);
+    return { team, riders: arr, top3: arr.slice(0, 3), best: (arr[0] ? arr[0].best : 999), count: arr.length };
+  });
+}
+// Empareja un nombre de equipo pegado con los del ranking (exacto → prefijo → tokens).
+function _rpPartiMatch(pasted, teams, keyMap) {
+  const k = rpNormalizarTexto(pasted);
+  if (keyMap[k]) return keyMap[k];
+  const kw = new Set(k.split(' ').filter(w => w.length > 1));
+  let best = null, bestDiff = 1e9, tokBest = null, tokScore = 0;
+  teams.forEach(t => {
+    const tk = rpNormalizarTexto(t.team);
+    if (tk.length >= 6 && k.length >= 6 && (tk.startsWith(k) || k.startsWith(tk))) {
+      const d = Math.abs(tk.length - k.length); if (d < bestDiff) { bestDiff = d; best = t; }
+    }
+    const tw = new Set(tk.split(' ').filter(w => w.length > 1));
+    let common = 0; kw.forEach(w => { if (tw.has(w)) common++; });
+    const sc = common / Math.max(1, Math.min(kw.size, tw.size));
+    if (sc > tokScore) { tokScore = sc; tokBest = t; }
+  });
+  if (best) return best;
+  if (tokScore >= 0.75) return tokBest;
+  return null;
+}
+function _rpPartiPodTxt(r) {
+  const s = [];
+  if (r.oro) s.push(r.oro + '× 🥇');
+  else if (r.podios) s.push(r.podios + (r.podios === 1 ? ' podio' : ' podios'));
+  s.push('mejor ' + (r.best < 999 ? r.best + 'º' : '—'));
+  s.push(r.races + (r.races === 1 ? ' carrera' : ' carreras'));
+  return s.join(' · ');
+}
+function rpRenderParticipantes() {
+  const cont = document.getElementById('rp-participantes');
+  if (!cont) return;
+  if (cont.dataset.built) return; // conserva lo que el usuario ya escribió
+  cont.dataset.built = '1';
+  const subs = _rpPartiSubcats();
+  cont.innerHTML =
+    '<div class="rp-parti">' +
+      '<div class="rp-parti-intro">' +
+        '<h2>🔎 Equipos participantes</h2>' +
+        '<p>¿Todavía no hay lista de inscritos? Aquí ves <b>quiénes son los mejores corredores de cada equipo</b> que va a una prueba, según sus <b>podios de la temporada</b>.</p>' +
+        '<ol>' +
+          '<li><b>Escribe el nombre de la prueba</b> (saldrá en el PDF).</li>' +
+          '<li><b>Pega la lista de equipos</b> del reglamento (uno por línea).</li>' +
+          '<li>Marca la/s <b>categoría/s</b>.</li>' +
+          '<li><i>(Opcional)</i> Si ya tienes los <b>inscritos</b>, pégalos y solo contarán los que van a correr.</li>' +
+          '<li>Pulsa <b>Analizar</b> y, si quieres, <b>Imprimir / PDF</b>.</li>' +
+        '</ol>' +
+        '<p class="rp-parti-nota">Es una clasificación por <b>podios/regularidad de la temporada</b> (victorias y podios), no la lista oficial de inscritos ni una predicción.</p>' +
+      '</div>' +
+      '<div class="rp-parti-form">' +
+        '<label class="rp-parti-lbl">Nombre de la prueba<input id="rpPartiNombre" type="text" placeholder="Ej: Volta a Vilafranca"></label>' +
+        '<label class="rp-parti-lbl">Equipos participantes (uno por línea)<textarea id="rpPartiEquipos" rows="8" placeholder="IKASCOLA TX - AEL&#10;GRAU PASCUAL SAXUN&#10;TBG WIXUM&#10;…"></textarea></label>' +
+        '<details class="rp-parti-det"><summary>¿Ya tienes la lista de inscritos? (opcional)</summary>' +
+          '<p class="rp-parti-nota">Pega los inscritos (un corredor por línea). Así solo se tendrá en cuenta a los que van a correr.</p>' +
+          '<textarea id="rpPartiInscritos" rows="6" placeholder="Apellido, Nombre&#10;…"></textarea></details>' +
+        '<div class="rp-parti-cats"><span class="rp-parti-catslbl">Categorías:</span> ' +
+          (subs.length ? subs.map(sc => '<label class="rp-parti-catlab"><input type="checkbox" class="rp-parti-cat" value="' + rpEscapar(sc) + '"> ' + rpEscapar(sc) + '</label>').join('') : '<span style="color:#94a3b8">—</span>') +
+        '</div>' +
+        '<div class="rp-parti-acts">' +
+          '<button type="button" id="rpPartiBtn" class="rp-parti-btn">🔎 Analizar</button>' +
+          '<button type="button" id="rpPartiPdf" class="rp-parti-btn rp-parti-btn2" hidden>🖨️ Imprimir / PDF</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="rpPartiResumen" class="rp-parti-resumen"></div>' +
+      '<div id="rpPartiResultados"></div>' +
+      '<div id="rpPartiNoenc"></div>' +
+    '</div>';
+  cont.querySelector('#rpPartiBtn').addEventListener('click', rpPartiAnalizar);
+  cont.querySelector('#rpPartiPdf').addEventListener('click', function () { rpPartiPDF(this); });
+}
+function rpPartiAnalizar() {
+  const nombre = (document.getElementById('rpPartiNombre').value || '').trim();
+  const pasted = _rpPartiParse(document.getElementById('rpPartiEquipos').value);
+  if (!pasted.length) { alert('Pega primero la lista de equipos (uno por línea).'); return; }
+  const subs = [...document.querySelectorAll('#rp-participantes .rp-parti-cat:checked')].map(x => x.value);
+  const inscTxt = (document.getElementById('rpPartiInscritos').value || '').trim();
+  let inscKeys = null;
+  if (inscTxt) inscKeys = new Set(_rpPartiParse(inscTxt).map(s => rpNormalizarClave(s)).filter(Boolean));
+  const teams = _rpPartiBuildTeams(subs, inscKeys);
+  const keyMap = {}; teams.forEach(t => { keyMap[rpNormalizarTexto(t.team)] = t; });
+  const matched = [], notFound = [], vistos = {};
+  pasted.forEach(p => {
+    const hit = _rpPartiMatch(p, teams, keyMap);
+    if (hit && hit.top3.length) { if (vistos[hit.team]) return; vistos[hit.team] = 1; matched.push({ pasted: p, team: hit }); }
+    else notFound.push(p);
+  });
+  matched.sort((a, b) => a.team.best - b.team.best);
+  _rpPartiUltimo = { nombre: nombre || 'Equipos participantes', matched, notFound, subs, inscritos: !!inscKeys };
+  try { rpGA('participantes_analizar', { equipos: pasted.length, encontrados: matched.length }); } catch (_) {}
+  _rpPartiRender();
+}
+function _rpPartiRender() {
+  const R = _rpPartiUltimo; if (!R) return;
+  const res = document.getElementById('rpPartiResumen');
+  const cont = document.getElementById('rpPartiResultados');
+  const noc = document.getElementById('rpPartiNoenc');
+  document.getElementById('rpPartiPdf').hidden = !R.matched.length;
+  const catTxt = R.subs.length ? R.subs.join(' + ') : 'todas las categorías';
+  if (res) res.innerHTML = '✅ <b>' + R.matched.length + '</b> equipo(s) encontrado(s) · ⚠️ <b>' + R.notFound.length + '</b> sin datos · ' + rpEscapar(catTxt) + (R.inscritos ? ' · solo inscritos' : '');
+  if (cont) {
+    if (!R.matched.length) cont.innerHTML = '<p class="rp-vacio">Ningún equipo de la lista está en el ranking con esa categoría' + (R.inscritos ? '/inscritos' : '') + '.</p>';
+    else cont.innerHTML = '<div class="rp-parti-grid">' + R.matched.map(m => {
+      const t = m.team;
+      return '<div class="rp-parti-card"><div class="rp-parti-team">' + rpEscapar(t.team) + '</div>' +
+        '<div class="rp-parti-count">' + t.count + ' corredor(es) en el ranking</div>' +
+        t.top3.map((r, i) => {
+          const med = i === 0 ? '🥇' : (i === 1 ? '🥈' : '🥉');
+          return '<div class="rp-parti-rider"><div class="rp-parti-rn">' + med + ' <b>' + rpEscapar(r.nombre) + '</b>' + (r.sub ? ' <span class="rp-parti-sub">(' + rpEscapar(r.sub) + ')</span>' : '') + '</div><div class="rp-parti-rs">' + rpEscapar(_rpPartiPodTxt(r)) + '</div></div>';
+        }).join('') + '</div>';
+    }).join('') + '</div>';
+  }
+  if (noc) noc.innerHTML = R.notFound.length
+    ? '<div class="rp-parti-noenc"><b>⚠️ Sin datos en el ranking (' + R.notFound.length + ')</b><div>' + R.notFound.map(rpEscapar).join(' · ') + '</div><div class="rp-parti-nota">Puede ser un equipo nuevo o el mismo con otro patrocinador.</div></div>'
+    : '';
+}
+async function rpPartiPDF(btn) {
+  const R = _rpPartiUltimo; if (!R || !R.matched.length) return;
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Generando…';
+  try {
+    await rpCargarJsPDF();
+    const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth(), bandH = 92;
+    doc.setFillColor(11, 42, 68); doc.rect(0, 0, W, bandH, 'F');
+    try { doc.addImage(RP_LOGO_B64, 'PNG', 40, 24, 130, 130 * 68 / 184); } catch (_) {}
+    doc.setTextColor(245, 178, 26); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('EQUIPOS PARTICIPANTES', W - 40, 32, { align: 'right' });
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14);
+    doc.text(doc.splitTextToSize(R.nombre, W - 220).slice(0, 2), W - 40, 54, { align: 'right' });
+    let y = bandH + 22;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90); doc.setFontSize(9.5);
+    const catTxt = (R.subs.length ? R.subs.join(' + ') : 'todas las categorías') + (R.inscritos ? ' · solo inscritos' : '');
+    doc.text('3 mejores por podios de la temporada · ' + catTxt, 40, y);
+    doc.text('Generado el ' + rpFormatearFecha(new Date().toISOString().slice(0, 10)), W - 40, y, { align: 'right' });
+    const body = [];
+    R.matched.forEach(m => {
+      const t = m.team;
+      body.push([{ content: t.team + '   ·   ' + t.count + ' en el ranking', colSpan: 2, styles: { fillColor: [30, 111, 154], textColor: 255, fontStyle: 'bold' } }]);
+      t.top3.forEach((r, i) => {
+        body.push([(i + 1) + 'º  ' + r.nombre + (r.sub ? '  (' + r.sub + ')' : ''), _rpPartiPodTxt(r)]);
+      });
+    });
+    doc.autoTable({
+      startY: y + 10, body,
+      styles: { fontSize: 9, cellPadding: 4 },
+      columnStyles: { 0: { cellWidth: (W - 80) * 0.62 }, 1: { cellWidth: (W - 80) * 0.38, textColor: [90, 90, 90] } },
+      margin: { left: 40, right: 40 }
+    });
+    if (R.notFound.length) {
+      const fy = doc.lastAutoTable.finalY + 16;
+      doc.setTextColor(146, 64, 14); doc.setFontSize(8.5);
+      doc.text(doc.splitTextToSize('Sin datos en el ranking: ' + R.notFound.join(' · '), W - 80), 40, fy);
+    }
+    doc.setTextColor(150, 150, 150); doc.setFontSize(8);
+    doc.text('Hecho con el ranking de mfppcycling.com', 40, doc.internal.pageSize.getHeight() - 24);
+    try { rpGA('pdf_download', { section: 'participantes' }); } catch (_) {}
+    doc.save('equipos-participantes.pdf');
+  } catch (e) { alert('No se pudo generar el PDF.'); }
+  finally { btn.disabled = false; btn.textContent = orig; }
 }
 
 function rpRenderInscritos() {
@@ -4657,6 +4869,7 @@ function rpAplicarDeeplink(get) {
     else if (pantallaParam === 'top10') rpRenderTop10();
     else if (pantallaParam === 'carreras') rpRenderUltimos();
     else if (pantallaParam === 'inscritos') rpRenderInscritos();
+    else if (pantallaParam === 'participantes') rpRenderParticipantes();
     else if (pantallaParam === 'inicio') rpRenderInicio();
   }
   let abrioModal = false;
@@ -4948,6 +5161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (rpEstado.pantalla === 'top10') rpRenderTop10();
     else if (rpEstado.pantalla === 'carreras') rpRenderUltimos();
     else if (rpEstado.pantalla === 'inscritos') rpRenderInscritos();
+    else if (rpEstado.pantalla === 'participantes') rpRenderParticipantes();
     else rpRenderInicio();
     rpGAVista(rpEstado.pantalla);
   });
