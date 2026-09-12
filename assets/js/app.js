@@ -48328,6 +48328,15 @@ async function _rvEnsurePlanned(){
   }catch(_){ _rvPlanned=[]; }
   return _rvPlanned;
 }
+// Abrir el perfil/recorrido de la prueba seleccionada (vale en los dos modos).
+function _rvVerRecorrido(){
+  const id = (typeof _rvRaceId==='function' ? _rvRaceId() : '')
+    || _rvSelectedRaceId
+    || ((typeof _activeRace!=='undefined' && _activeRace) ? _activeRace.id : '')
+    || '';
+  if(!id){ if(typeof showToast==='function') showToast('Selecciona primero una prueba en el desplegable.','warn',3200); return; }
+  if(typeof _routeOpenModal==='function') _routeOpenModal(id);
+}
 
 // ── Radio Vuelta · MODO LIBRE (sin lista de inscritos) ────────────────────
 // Reutiliza el registro de eventos: escribes el dorsal a mano en el buscador y
