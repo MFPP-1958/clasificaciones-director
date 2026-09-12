@@ -48291,18 +48291,33 @@ function _rvAutoPickRaceId(){
 // y marca la que está seleccionada ahora.
 function _rvPopulateRaceSelect(currentId){
   const sel=document.getElementById('rvRaceSelect'); if(!sel) return;
-  const hist=(typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory))?_cachedHistory.slice():[];
-  hist.sort((a,b)=> (_parseSpanishDate(b.raceDate)||'').localeCompare(_parseSpanishDate(a.raceDate)||''));
-  const conIns=hist.filter(r=> r && r.id && Array.isArray(r.inscritos) && r.inscritos.length>0);
-  const sinIns=hist.filter(r=> r && r.id && !(Array.isArray(r.inscritos) && r.inscritos.length>0));
+  // Radio Vuelta es EN VIVO: solo pruebas NO realizadas (fecha >= hoy) y de la
+  // categoría del filtro principal. Indulgente si la categoría es desconocida.
+  const d=new Date();
+  const hoy=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const iso=r=> (typeof _parseSpanishDate==='function') ? (_parseSpanishDate(r.raceDate||r.date)||'') : (r.raceDate||r.date||'');
+  const futura=r=>{ const x=iso(r); return x && x>=hoy; };
+  const gCat=(typeof _calGlobalCatGroup==='function') ? _calGlobalCatGroup() : '';
+  const catOk=r=>{
+    if(!gCat) return true;                                  // "Todas"
+    const keys=(typeof _raceCatGroupKeys==='function')?_raceCatGroupKeys(r):null;
+    if(!keys || keys.size===0) return true;                 // categoría desconocida → no la ocultamos
+    return keys.has(gCat);
+  };
+  const hist=(typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory))?_cachedHistory:[];
   const histIds=new Set(hist.map(r=>String(r.id)));
   const plan=(Array.isArray(_rvPlanned)?_rvPlanned:[]).filter(r=> r && r.id && !histIds.has(String(r.id)));
-  const opt=r=>{ const nm=(r.raceName||r.name||'(sin nombre)'); const f=r.raceDate?(' · '+r.raceDate):''; return `<option value="${escapeAttr(String(r.id))}"${String(r.id)===String(currentId)?' selected':''}>${escapeHtml(nm+f)}</option>`; };
+  const cand=[...hist, ...plan].filter(r=> r && r.id && futura(r) && catOk(r));
+  cand.sort((a,b)=> iso(a).localeCompare(iso(b)));           // la más próxima primero
+  const tieneIns=r=> Array.isArray(r.inscritos) && r.inscritos.length>0;
+  const conIns=cand.filter(tieneIns);
+  const sinIns=cand.filter(r=> !tieneIns(r));
+  const opt=r=>{ const nm=(r.raceName||r.name||'(sin nombre)'); const f=(r.raceDate||r.date)?(' · '+(r.raceDate||r.date)):''; return `<option value="${escapeAttr(String(r.id))}"${String(r.id)===String(currentId)?' selected':''}>${escapeHtml(nm+f)}</option>`; };
   let html='';
   if(conIns.length) html+='<optgroup label="Con inscritos">'+conIns.map(opt).join('')+'</optgroup>';
-  if(plan.length) html+='<optgroup label="📅 Planificadas (usa el «modo libre»)">'+plan.map(opt).join('')+'</optgroup>';
-  if(sinIns.length) html+='<optgroup label="Sin inscritos (no se puede usar en el coche)">'+sinIns.map(opt).join('')+'</optgroup>';
-  sel.innerHTML = html || '<option value="">(no hay pruebas)</option>';
+  if(sinIns.length) html+='<optgroup label="📅 Planificadas (usa el «modo libre»)">'+sinIns.map(opt).join('')+'</optgroup>';
+  const catTxt = gCat ? (' de ' + gCat) : '';
+  sel.innerHTML = html || ('<option value="">(no hay pruebas próximas'+catTxt+')</option>');
 }
 // El director elige otra prueba en el desplegable de RV.
 function _rvPickRace(id){
@@ -48323,7 +48338,7 @@ async function _rvEnsurePlanned(){
     _rvPlanned=(data||[]).map(r=>{
       let ex={}; try{ ex=JSON.parse(r.notes||'{}'); }catch(_){}
       const f=(typeof formatDateDisplay==='function')?(formatDateDisplay(_parseSpanishDate(ex.raceDate||r.date||''))||ex.raceDate||r.date||''):(ex.raceDate||r.date||'');
-      return { id:r.id, raceName:r.name||'', raceDate:f };
+      return { id:r.id, raceName:r.name||'', raceDate:f, raceCat:ex.raceCat||'', cats:Array.isArray(ex.cats)?ex.cats:undefined, inscritos:Array.isArray(ex.inscritos)?ex.inscritos:[] };
     });
   }catch(_){ _rvPlanned=[]; }
   return _rvPlanned;
