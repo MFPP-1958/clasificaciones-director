@@ -48323,6 +48323,10 @@ function _rvPopulateRaceSelect(currentId){
 function _rvPickRace(id){
   if(!id) return;
   _rvSelectedRaceId=id;
+  // Proteger la elección MANUAL: sincronizamos _rvLastActiveId con la prueba
+  // activa para que la lógica "seguir la prueba cargada" de _rvInit no borre
+  // esta elección (antes: elegías una y cargaba la activa).
+  _rvLastActiveId = (typeof _activeRace!=='undefined' && _activeRace && _activeRace.id) ? _activeRace.id : _rvLastActiveId;
   if(typeof _simSelectedRaceId!=='undefined') _simSelectedRaceId=id;
   _rvInit();
 }
@@ -48379,8 +48383,9 @@ async function _rvInitLibre(id){
   const salida=document.getElementById('rvSalidaBar');
   if(!id){
     if(salida) salida.innerHTML='';
+    if(nameEl) nameEl.textContent='';
     body.querySelectorAll('.rv-search,.rv-block').forEach(el=>el.style.display='none');
-    if(card) card.innerHTML='<div class="rv-empty"><div style="font-size:46px">✍️</div><p style="font-weight:800;color:#374151;margin-top:8px">Modo libre: primero carga una prueba.</p><p style="font-size:13px;color:#6b7280">En <b>Historial</b>, en las pruebas planificadas, pulsa <b>▶ Cargar prueba</b>. Aquí podrás marcar la salida y anotar eventos aunque no tengas inscritos.</p></div>';
+    if(card) card.innerHTML='<div class="rv-empty"><div style="font-size:46px">✍️</div><p style="font-weight:800;color:#374151;margin-top:8px">Modo libre: elige una prueba arriba (o cárgala).</p><p style="font-size:13px;color:#6b7280">Elige una prueba en el desplegable <b>Prueba</b>, o en <b>Historial</b> pulsa <b>▶ Cargar prueba</b>. Aquí podrás marcar la salida y anotar eventos aunque no tengas inscritos.</p></div>';
     try{ _rvPopulateRaceSelect(''); }catch(_){}
     return;
   }
