@@ -18309,6 +18309,8 @@ async function renderHistory(){
             circuitType: extra.circuitType || '',
             km: extra.km || '',
             cat: extra.cat || '',
+            suspendida: !!extra.suspendida,
+            suspendMotivo: extra.suspendMotivo || '',
             tipo: extra.tipo || 'carrera'   // carrera | concentracion | entrenamiento
           };
         });
@@ -18715,6 +18717,7 @@ async function renderHistory(){
       // CARRERAS reales. Las concentraciones y entrenamientos de equipo no llevan
       // inscritos, así que se excluyen aquí (siguen viéndose en el Calendario).
       if((p.tipo || 'carrera') !== 'carrera') return false;
+      if(p.suspendida) return false;   // suspendidas: ya no están pendientes
       // Categoría/género globales (aislamiento estricto también en planificadas)
       if((gfCat || gfGen) && typeof _gfMatchesCatGender==='function'){
         if(!_gfMatchesCatGender(p.cat||'', p.raceName||'')) return false;
