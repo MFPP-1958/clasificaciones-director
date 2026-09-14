@@ -486,7 +486,9 @@ async function _cargaSaveDatos(btn){
     circuitType:($('raceCircuitType')?.value||'').trim(),
     hora_inicio:($('raceStartTime')?.value||'').trim(),
     challengeCV:!!($('raceChallengeCV')?.checked),
-    ccaa:($('raceCCAA')?.value||'').trim()
+    ccaa:($('raceCCAA')?.value||'').trim(),
+    suspendida:!!($('raceSuspendida')?.checked),
+    suspendMotivo:(($('raceSuspendMotivo')?.value||'').trim())
   };
   const _gfCat=(typeof _globalFilters!=='undefined'&&_globalFilters)?(_globalFilters.cat||''):'';
   const _gLbl=(typeof _CAT_IMPORT_LABEL!=='undefined'&&_gfCat)?(_CAT_IMPORT_LABEL[_gfCat]||''):'';
@@ -502,6 +504,7 @@ async function _cargaSaveDatos(btn){
       let extra={}; try{ extra=JSON.parse(same.notes||'{}'); }catch(_){}
       extra.raceDate=m.raceDate; extra.km=m.km; extra.avg=m.avg; extra.localidad=m.localidad;
       extra.circuitType=m.circuitType; extra.hora_inicio=m.hora_inicio; extra.challengeCV=m.challengeCV; extra.ccaa=m.ccaa;
+      extra.suspendida=m.suspendida; extra.suspendMotivo=m.suspendida?m.suspendMotivo:'';
       if(_gLbl && !extra.raceCat){ extra.raceCat=_gLbl; if(!extra.cat) extra.cat=_gLbl; }
       const {error:updErr}=await _sb.from('races').update({name:raceName,notes:JSON.stringify(extra)}).eq('id',same.id);
       if(updErr){ alert('❌ Error guardando los datos:\n\n'+updErr.message+'\n\n(Probable causa: políticas RLS de Supabase.)'); if(st)st.textContent=''; return; }
@@ -567,6 +570,9 @@ function openLoadPanelForNew(){
   });
   if($('raceChallengeCV')) $('raceChallengeCV').checked = false;
   if($('raceGeneralOficial')) $('raceGeneralOficial').checked = false;
+  if($('raceSuspendida')) $('raceSuspendida').checked = false;
+  if($('raceSuspendMotivo')) $('raceSuspendMotivo').value = '';
+  if(typeof _cargaToggleSuspendida==='function') _cargaToggleSuspendida();
   if($('raceCCAA')) $('raceCCAA').value = '';
   const fn=$('fileName'); if(fn) fn.textContent='';
   const fnI=$('fileNameInscritos'); if(fnI) fnI.textContent='';
@@ -8547,6 +8553,8 @@ async function _sbLoadHistory(){
       circuitType: extra.circuitType || '',
       raceTypeTag: extra.raceTypeTag || '',   // Fase 1.B: tipo de prueba manual (cri/montana/circuito/llana)
       challengeCV: !!extra.challengeCV,
+      suspendida: !!extra.suspendida,
+      suspendMotivo: extra.suspendMotivo || '',
       generalOficial: !!extra.generalOficial,   // clasificación general oficial de una vuelta
       raceCat: extra.raceCat || '',   // categoría FORZADA de la prueba (override manual)
       ccaa: extra.ccaa || '',
@@ -15085,6 +15093,13 @@ function getOfficialTeamRanking(){
   return ranked;
 }
 
+// Muestra/oculta el campo de motivo según el check "Prueba suspendida".
+function _cargaToggleSuspendida(){
+  const c=document.getElementById('raceSuspendida');
+  const m=document.getElementById('raceSuspendMotivo');
+  if(m) m.style.display = (c && c.checked) ? '' : 'none';
+}
+
 // Cargar una prueba PLANIFICADA aunque no tenga inscritos: vuelca sus datos a
 // Carga y Resumen y deja al usuario en el Paso 1 (Datos), desde donde puede ir
 // a cualquier pestaña (incluida "🔎 Equipos participantes"). Reutiliza
@@ -15517,6 +15532,8 @@ async function openHistoryModal(){
             avg: extra.avg || '',
             localidad: extra.localidad || '',
             circuitType: extra.circuitType || '',
+            suspendida: !!extra.suspendida,
+            suspendMotivo: extra.suspendMotivo || '',
             isPlanificada: true
           };
         });
@@ -15546,9 +15563,11 @@ async function openHistoryModal(){
     if(h._kind === 'planificada'){
       const iso = _parseSpanishDate(h.raceDate)||h.rawDate||'';
       const isFuture = iso && iso >= todayIso;
-      const stateBadge = isFuture
-        ? '<span style="display:inline-block;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">📅 No realizada · planificada</span>'
-        : '<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">⏳ Pasada · sin inscritos</span>';
+      const stateBadge = h.suspendida
+        ? '<span style="display:inline-block;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">⛔ Suspendida'+(h.suspendMotivo?(' · '+escapeHtml(h.suspendMotivo)):'')+'</span>'
+        : (isFuture
+          ? '<span style="display:inline-block;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">📅 No realizada · planificada</span>'
+          : '<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:999px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px">⏳ Pasada · sin inscritos</span>');
       const meta = [h.raceDate||'Fecha no indicada', h.localidad||'', h.circuitType||''].filter(Boolean).join(' · ');
       return `<div class="hist-entry" style="border-left:4px solid #1f6feb;background:#f0f7ff" onclick="loadPlanificadaToCarga('${h.id}')">
         <div>
@@ -15607,6 +15626,9 @@ async function loadPlanificadaToCarga(id){
     if($('raceStartTime'))   $('raceStartTime').value   = extra.hora_inicio || '';
     if($('raceChallengeCV')) $('raceChallengeCV').checked = !!extra.challengeCV;
     if($('raceGeneralOficial')) $('raceGeneralOficial').checked = !!extra.generalOficial;
+    if($('raceSuspendida')) $('raceSuspendida').checked = !!extra.suspendida;
+    if($('raceSuspendMotivo')) $('raceSuspendMotivo').value = extra.suspendMotivo||'';
+    if(typeof _cargaToggleSuspendida==='function') _cargaToggleSuspendida();
     if($('raceCCAA')) $('raceCCAA').value = extra.ccaa || '';
     try{ _cargaUpdateCVHint(); }catch(e){}
     // Limpiar riders/inscritos: esta prueba aún no tiene datos
@@ -15802,6 +15824,9 @@ async function loadHistoryEntry(id, opts){
   if($('raceStartTime'))  $('raceStartTime').value  = h.hora_inicio||'';
   if($('raceChallengeCV')) $('raceChallengeCV').checked = !!h.challengeCV;
   if($('raceGeneralOficial')) $('raceGeneralOficial').checked = !!h.generalOficial;
+  if($('raceSuspendida')) $('raceSuspendida').checked = !!h.suspendida;
+  if($('raceSuspendMotivo')) $('raceSuspendMotivo').value = h.suspendMotivo||'';
+  if(typeof _cargaToggleSuspendida==='function') _cargaToggleSuspendida();
   if($('raceCCAA')) $('raceCCAA').value = h.ccaa || '';
   try{ _cargaUpdateCVHint(); }catch(e){}
   // Refrescar chip meteorológico (si hay weather guardada de esta carrera)
@@ -48307,7 +48332,7 @@ function _rvPopulateRaceSelect(currentId){
   const hist=(typeof _cachedHistory!=='undefined' && Array.isArray(_cachedHistory))?_cachedHistory:[];
   const histIds=new Set(hist.map(r=>String(r.id)));
   const plan=(Array.isArray(_rvPlanned)?_rvPlanned:[]).filter(r=> r && r.id && !histIds.has(String(r.id)));
-  const cand=[...hist, ...plan].filter(r=> r && r.id && futura(r) && catOk(r));
+  const cand=[...hist, ...plan].filter(r=> r && r.id && !r.suspendida && futura(r) && catOk(r));
   cand.sort((a,b)=> iso(a).localeCompare(iso(b)));           // la más próxima primero
   const tieneIns=r=> Array.isArray(r.inscritos) && r.inscritos.length>0;
   const conIns=cand.filter(tieneIns);
@@ -48342,7 +48367,7 @@ async function _rvEnsurePlanned(){
     _rvPlanned=(data||[]).map(r=>{
       let ex={}; try{ ex=JSON.parse(r.notes||'{}'); }catch(_){}
       const f=(typeof formatDateDisplay==='function')?(formatDateDisplay(_parseSpanishDate(ex.raceDate||r.date||''))||ex.raceDate||r.date||''):(ex.raceDate||r.date||'');
-      return { id:r.id, raceName:r.name||'', raceDate:f, raceCat:ex.raceCat||'', cats:Array.isArray(ex.cats)?ex.cats:undefined, inscritos:Array.isArray(ex.inscritos)?ex.inscritos:[] };
+      return { id:r.id, raceName:r.name||'', raceDate:f, raceCat:ex.raceCat||'', cats:Array.isArray(ex.cats)?ex.cats:undefined, inscritos:Array.isArray(ex.inscritos)?ex.inscritos:[], suspendida:!!ex.suspendida };
     });
   }catch(_){ _rvPlanned=[]; }
   return _rvPlanned;

@@ -515,6 +515,12 @@
         🏆 General oficial de una vuelta
         <button type="button" class="help-btn" data-help="&lt;strong&gt;🏆 Clasificación GENERAL OFICIAL de una vuelta&lt;/strong&gt;Marca esta casilla cuando lo que subes es la clasificación GENERAL oficial de una vuelta por etapas (la de la organización), no una etapa suelta.&lt;ul&gt;&lt;li&gt;El nombre debe llevar el de la vuelta (ej: &lt;b&gt;General BIZKAIA ITZULIA&lt;/b&gt;) y NO la palabra &quot;Etapa&quot;.&lt;/li&gt;&lt;li&gt;En el ranking se mostrará etiquetada como &lt;b&gt;General&lt;/b&gt; y REEMPLAZA a la general que la web calcula sumando tiempos (que es solo provisional).&lt;/li&gt;&lt;li&gt;Úsala para que la general que ve la gente sea la correcta (con bonificaciones y desempates oficiales).&lt;/li&gt;&lt;/ul&gt;">?</button>
       </label>
+      <label for="raceSuspendida" style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;color:#991b1b;user-select:none">
+        <input type="checkbox" id="raceSuspendida" onchange="_cargaToggleSuspendida()" style="width:16px;height:16px;cursor:pointer;accent-color:#dc2626" />
+        ⛔ Prueba suspendida (no disputada)
+        <button type="button" class="help-btn" data-help="&lt;strong&gt;⛔ Prueba suspendida&lt;/strong&gt;Marca esta casilla si la prueba NO se disputó (se suspendió, anuló o se dio la salida pero no se terminó).&lt;ul&gt;&lt;li&gt;Escribe el motivo (ej: &lt;b&gt;suspendida por caída&lt;/b&gt;).&lt;/li&gt;&lt;li&gt;No cuenta para el ranking y deja de aparecer como pendiente.&lt;/li&gt;&lt;li&gt;Si es una etapa de una vuelta: si solo queda UNA etapa disputada, esa cuenta como carrera completa; si quedan 2 o más, siguen como etapas con su general.&lt;/li&gt;&lt;/ul&gt;">?</button>
+      </label>
+      <input type="text" id="raceSuspendMotivo" placeholder="Motivo (ej: suspendida por caída)" style="display:none;flex:1 1 240px;min-width:180px;font:inherit;font-size:13px;padding:8px 12px;border:1.5px solid #fca5a5;border-radius:10px;color:#991b1b" />
     </div>
 
     <!-- Chip meteorológico de la carrera cargada (rellenado por _wxRenderLoadedRaceChip) -->
