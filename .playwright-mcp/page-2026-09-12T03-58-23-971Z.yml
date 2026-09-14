@@ -1,0 +1,37 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - heading "MFPP CYCLING·Ranking Beta" [level=1] [ref=e5]:
+        - link "MFPP CYCLING" [ref=e6] [cursor=pointer]:
+          - /url: https://www.mfppcycling.com
+        - text: ·Ranking
+        - 'generic "Versión de prueba: puede tener errores o cambios" [ref=e7]': Beta
+      - button "Cómo funciona este ranking" [ref=e8] [cursor=pointer]: ❓ Ayuda
+    - paragraph [ref=e9]
+    - generic [ref=e10]:
+      - generic [ref=e11]: 👋 ¿Primera vez? Pulsa ❓ Ayuda para ver cómo funciona.
+      - button "Cerrar aviso" [ref=e12] [cursor=pointer]: ✕
+  - generic [ref=e13]:
+    - generic [ref=e14]:
+      - button "🎚️ Filtros" [ref=e15] [cursor=pointer]
+      - generic [ref=e16]:
+        - generic [aria-hidden]: 🔍
+        - searchbox "Buscar corredor, equipo o prueba" [ref=e17]
+    - tablist "Sección" [ref=e19]:
+      - tab "🏠 Inicio" [selected] [ref=e20] [cursor=pointer]
+      - tab "⭐ Top 10" [ref=e21] [cursor=pointer]
+      - tab "🏆 Ranking" [ref=e22] [cursor=pointer]
+      - tab "🏁 Últimas carreras" [ref=e23] [cursor=pointer]
+      - tab "📋 Inscritos" [ref=e24] [cursor=pointer]
+      - tab "🔎 Equipos" [ref=e25] [cursor=pointer]
+    - tablist "Categorías"
+    - paragraph [ref=e29]: Cargando ranking…
+    - group [ref=e31]:
+      - generic "Cómo se calculan los puntos" [ref=e32] [cursor=pointer]
+    - generic [ref=e33]:
+      - paragraph [ref=e34]: 🧪 Versión Beta. Este ranking está en pruebas y puede tener errores o cambios mientras lo mejoramos.
+      - paragraph [ref=e35]:
+        - text: 🌍 ¿Eres de otra comunidad autónoma? De momento el ranking cubre la Comunidad Valenciana, pero puede crecer con tu ayuda. Si quieres encargarte de introducir los datos de las carreras de tu comunidad,
+        - link "ponte en contacto conmigo" [ref=e36] [cursor=pointer]:
+          - /url: https://mfppcycling.com/contacto-entrenamientos-ciclismo-mfpp-cycling/
+        - text: y te daré acceso para hacerlo.

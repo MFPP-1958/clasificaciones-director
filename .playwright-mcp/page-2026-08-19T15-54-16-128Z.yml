@@ -1,0 +1,83 @@
+- generic [ref=e2]:
+  - heading "Calendario federativo de ciclismo" [level=2] [ref=e3]
+  - paragraph [ref=e4]: Pruebas de las federaciones autonómicas de España
+  - paragraph [ref=e5]: "Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, así que puede haber cambios de última hora: antes de desplazarte, confirma los detalles en la web oficial de la federación (tienes el enlace en la columna «Fuente»)."
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: Desde
+      - textbox [ref=e9]: 2026-08-19
+    - generic [ref=e10]:
+      - generic [ref=e11]: Mes
+      - combobox [ref=e12]:
+        - option "— Todos los meses —"
+        - option "Enero"
+        - option "Febrero"
+        - option "Marzo"
+        - option "Abril"
+        - option "Mayo"
+        - option "Junio"
+        - option "Julio"
+        - option "Agosto" [selected]
+        - option "Septiembre"
+        - option "Octubre"
+        - option "Noviembre"
+        - option "Diciembre"
+    - generic [ref=e13]:
+      - generic [ref=e14]: Del mes
+      - generic "Al elegir un mes se muestran solo las pruebas de hoy en adelante. Márcalo para ver también las que ya han pasado." [ref=e15] [cursor=pointer]:
+        - checkbox "Ver pasadas" [ref=e16]
+        - text: Ver pasadas
+    - generic [ref=e17]:
+      - generic [ref=e18]: Categoría
+      - combobox [ref=e19]:
+        - option "Cadete" [selected]
+        - option "Junior / juvenil"
+        - option "Sub-23"
+        - option "Élite"
+        - option "Máster"
+        - option "Escuelas"
+        - option "— Todas —"
+    - generic [ref=e20]:
+      - generic [ref=e21]: Sexo
+      - combobox [ref=e22]:
+        - option "Masculino" [selected]
+        - option "Femenino"
+        - option "— Ambos —"
+    - generic [ref=e23]:
+      - generic [ref=e24]: Modalidad
+      - combobox [ref=e25]:
+        - option "Carretera" [selected]
+        - option "BTT"
+        - option "Ciclocross"
+        - option "Pista"
+        - option "BMX"
+        - option "Gravel"
+        - option "— Todas —"
+    - generic [ref=e26]:
+      - generic [ref=e27]: Federación
+      - combobox [ref=e28]:
+        - option "— Todas —"
+    - generic [ref=e29]:
+      - generic [ref=e30]: Buscar
+      - textbox "prueba o localidad…" [ref=e31]
+    - generic [ref=e32]:
+      - generic [ref=e33]: Estado
+      - combobox [ref=e34]:
+        - option "Todas (sin retiradas)" [selected]
+        - option "Solo activas"
+        - option "Aplazadas / anuladas"
+        - option "Todas (incl. retiradas)"
+    - button "Restablecer" [ref=e35] [cursor=pointer]
+  - table [ref=e37]:
+    - rowgroup [ref=e38]:
+      - row [ref=e39]:
+        - columnheader "Fecha" [ref=e40] [cursor=pointer]
+        - columnheader "Prueba" [ref=e41] [cursor=pointer]
+        - columnheader "Localidad" [ref=e42] [cursor=pointer]
+        - columnheader "Federación" [ref=e43] [cursor=pointer]
+        - columnheader "Categorías" [ref=e44] [cursor=pointer]
+        - columnheader "Modalidad" [ref=e45] [cursor=pointer]
+        - columnheader "Fuente" [ref=e46] [cursor=pointer]
+        - columnheader "Añadir" [ref=e47] [cursor=pointer]
+    - rowgroup
+  - generic [ref=e48]: Cargando pruebas…

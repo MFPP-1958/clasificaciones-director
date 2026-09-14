@@ -1,0 +1,355 @@
+- generic [active] [ref=f3e1]:
+  - link "Ir al contenido" [ref=f3e2] [cursor=pointer]:
+    - /url: "#content"
+  - generic [ref=f3e3]:
+    - generic [ref=f3e4]:
+      - generic [ref=f3e6]:
+        - list [ref=f3e11]:
+          - listitem [ref=f3e12]:
+            - link "Envelope" [ref=f3e13] [cursor=pointer]:
+              - /url: mailto:info@mfppcycling.com
+              - generic [ref=f3e15]: 
+          - listitem [ref=f3e16]:
+            - link "Facebook" [ref=f3e17] [cursor=pointer]:
+              - /url: https://www.facebook.com/manuelfrancisco.perezperez.5/
+              - generic [ref=f3e19]: 
+          - listitem [ref=f3e20]:
+            - link "Instagram" [ref=f3e21] [cursor=pointer]:
+              - /url: https://www.instagram.com/mfpp_cycling_specialist/
+              - generic [ref=f3e23]: 
+          - listitem [ref=f3e24]:
+            - link "Twitter" [ref=f3e25] [cursor=pointer]:
+              - /url: https://twitter.com/MFPPMFPP2
+              - generic [ref=f3e27]: 
+        - link [ref=f3e35] [cursor=pointer]:
+          - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjI4NyIsInRvZ2dsZSI6ZmFsc2V9"
+          - generic [ref=f3e36]: 
+      - generic [ref=f3e40]:
+        - link [ref=f3e45] [cursor=pointer]:
+          - /url: https://mfppcycling.com
+        - generic [ref=f3e49]:
+          - navigation "Menu" [ref=f3e50]:
+            - list [ref=f3e51]:
+              - listitem [ref=f3e52]:
+                - link "Inicio" [ref=f3e53] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenador-ciclismo-castellon-online-mfpp-cycling/
+              - listitem [ref=f3e54]:
+                - link "Sobre mi" [ref=f3e55] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/sobre-mi/
+              - listitem [ref=f3e56]:
+                - link "Mi Método" [ref=f3e57] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/
+              - listitem [ref=f3e58]:
+                - link "Servicios" [ref=f3e59] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/
+              - listitem [ref=f3e60]:
+                - link "Testimonios" [ref=f3e61] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/testimonios-ciclistas-entrenamientos-mfpp-cycling/
+              - listitem [ref=f3e62]:
+                - link "Calendario" [ref=f3e63] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/calendario/
+              - listitem [ref=f3e64]:
+                - link "Ranking" [ref=f3e65] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/ranking/
+              - listitem [ref=f3e66]:
+                - link [ref=f3e67] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenamiento-ciclismo-mejora-rendimiento/
+                  - text: Blog
+                  - application "Alternar menú"
+                  - generic [ref=f3e68]: 
+              - listitem [ref=f3e69]:
+                - link "Calculadora" [ref=f3e70] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/wp-content/uploads/2025/05/Calculadora-rendimiento6.html
+              - listitem [ref=f3e71]:
+                - link "Contacto" [ref=f3e72] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/contacto-entrenamientos-ciclismo-mfpp-cycling/
+              - listitem [ref=f3e73]:
+                - link "Suscribirse" [ref=f3e74] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQ0MDUiLCJ0b2dnbGUiOmZhbHNlfQ%3D%3D"
+              - listitem [ref=f3e75]:
+                - link "Login" [ref=f3e76] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjI4NyIsInRvZ2dsZSI6ZmFsc2V9"
+          - text:   
+    - main [ref=f3e80]:
+      - article [ref=f3e81]:
+        - heading "Calendario de carreras ciclistas en España" [level=1] [ref=f3e83]
+        - generic [ref=f3e85]:
+          - paragraph [ref=f3e86]: Pruebas de las federaciones autonómicas de España
+          - paragraph [ref=f3e87]: "Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, así que puede haber cambios de última hora: antes de desplazarte, confirma los detalles en la web oficial de la federación (tienes el enlace en la columna «Fuente»)."
+          - generic [ref=f3e88]:
+            - textbox "Buscar carrera" [ref=f3e89]:
+              - /placeholder: Busca una carrera, localidad o club…
+            - generic [ref=f3e90]:
+              - button "Próximos 7 días" [ref=f3e91] [cursor=pointer]
+              - button "Este finde" [ref=f3e96] [cursor=pointer]
+              - button "Mi comunidad" [ref=f3e102] [cursor=pointer]
+              - button "Mis favoritas" [ref=f3e107] [cursor=pointer]
+            - button "Filtros 5" [ref=f3e111] [cursor=pointer]:
+              - text: Filtros
+              - generic [ref=f3e115]: "5"
+          - generic [ref=f3e116]:
+            - generic [ref=f3e117]:
+              - text: Este mes
+              - button "Quitar filtro" [ref=f3e118] [cursor=pointer]: ✕
+            - generic [ref=f3e119]:
+              - text: Cadete
+              - button "Quitar filtro" [ref=f3e120] [cursor=pointer]: ✕
+            - generic [ref=f3e121]:
+              - text: Masculino
+              - button "Quitar filtro" [ref=f3e122] [cursor=pointer]: ✕
+            - generic [ref=f3e123]:
+              - text: Carretera
+              - button "Quitar filtro" [ref=f3e124] [cursor=pointer]: ✕
+            - generic [ref=f3e125]:
+              - text: C. Valenciana
+              - button "Quitar filtro" [ref=f3e126] [cursor=pointer]: ✕
+            - button "Limpiar todo" [ref=f3e127] [cursor=pointer]
+          - complementary [ref=f3e128]:
+            - generic [ref=f3e129]:
+              - generic [ref=f3e130]: Filtros
+              - button [ref=f3e134] [cursor=pointer]: ✕
+            - generic [ref=f3e135]:
+              - generic [ref=f3e136]:
+                - generic [ref=f3e137]: Mis calendarios
+                - combobox [ref=f3e138]
+                - button [ref=f3e140] [cursor=pointer]: Guardar filtros actuales
+              - generic [ref=f3e146]:
+                - generic [ref=f3e147]:
+                  - generic [ref=f3e148]: Periodo
+                  - combobox [ref=f3e149]
+                - generic [ref=f3e150]:
+                  - generic [ref=f3e151]: Categorías (puedes elegir varias)
+                  - generic [ref=f3e152]:
+                    - generic [ref=f3e153] [cursor=pointer]:
+                      - checkbox [ref=f3e154]
+                      - text: Escuelas (174)
+                    - generic [ref=f3e155] [cursor=pointer]:
+                      - checkbox [checked] [ref=f3e156]
+                      - text: Cadete (257)
+                    - generic [ref=f3e157] [cursor=pointer]:
+                      - checkbox [ref=f3e158]
+                      - text: Junior / juvenil (123)
+                    - generic [ref=f3e159] [cursor=pointer]:
+                      - checkbox [ref=f3e160]
+                      - text: Sub-23 (122)
+                    - generic [ref=f3e161] [cursor=pointer]:
+                      - checkbox [ref=f3e162]
+                      - text: Élite (232)
+                    - generic [ref=f3e163] [cursor=pointer]:
+                      - checkbox [ref=f3e164]
+                      - text: Máster (109)
+                - generic [ref=f3e165]:
+                  - generic [ref=f3e166]: Sexo
+                  - combobox [ref=f3e167]
+                - generic [ref=f3e168]:
+                  - generic [ref=f3e169]: Modalidad
+                  - combobox [ref=f3e170]
+                - generic [ref=f3e171]:
+                  - generic [ref=f3e172]: Federación
+                  - combobox [ref=f3e173]
+                - generic [ref=f3e174]:
+                  - generic [ref=f3e175]: Vecinas
+                  - generic [ref=f3e176] [cursor=pointer]:
+                    - checkbox [ref=f3e177]
+                    - text: Incluir limítrofes
+                - generic [ref=f3e178]:
+                  - generic [ref=f3e179]: Provincia
+                  - combobox [ref=f3e180]
+                - generic [ref=f3e181]:
+                  - generic [ref=f3e182]: Estado
+                  - combobox [ref=f3e183]
+                - generic [ref=f3e184]:
+                  - generic [ref=f3e185]: Inscripción
+                  - generic [ref=f3e186] [cursor=pointer]:
+                    - checkbox [ref=f3e187]
+                    - text: Solo con ficha oficial
+                - button [ref=f3e189] [cursor=pointer]: Restablecer filtros
+            - button [ref=f3e191] [cursor=pointer]: Ver resultados
+          - generic [ref=f3e192]:
+            - status [ref=f3e193]: 4 pruebas · 1 federación · 1 modalidad · actualizado el 24/08/2026
+            - group "Cambiar vista" [ref=f3e194]:
+              - button "Lista" [ref=f3e195] [cursor=pointer]
+              - button "Mes" [ref=f3e200] [cursor=pointer]
+            - button "Novedades (35)" [ref=f3e207] [cursor=pointer]
+            - button "Imprimir / imagen" [ref=f3e211] [cursor=pointer]
+          - table [ref=f3e218]:
+            - rowgroup [ref=f3e219]:
+              - row [ref=f3e220]:
+                - button "Fecha ▲" [ref=f3e221] [cursor=pointer]
+                - button "Prueba" [ref=f3e222] [cursor=pointer]
+                - button "Localidad" [ref=f3e223] [cursor=pointer]
+                - button "Federación" [ref=f3e224] [cursor=pointer]
+                - columnheader "Categorías" [ref=f3e225] [cursor=pointer]
+                - button "Modalidad" [ref=f3e226] [cursor=pointer]
+                - columnheader "Detalles" [ref=f3e227] [cursor=pointer]
+            - rowgroup [ref=f3e228]:
+              - row [ref=f3e229]:
+                - cell "AGOSTO 2026 4 pruebas" [ref=f3e230]:
+                  - generic [ref=f3e231]: AGOSTO 2026
+                  - generic [ref=f3e232]: 4 pruebas
+              - row [ref=f3e233] [cursor=pointer]:
+                - cell "JUE 27 AGO" [ref=f3e234]:
+                  - generic [ref=f3e235]:
+                    - generic [ref=f3e236]: JUE
+                    - generic [ref=f3e237]: "27"
+                    - generic [ref=f3e238]: AGO
+                - 'cell "Añadir a favoritos: TROFEO FIESTAS MANUEL TROFEO FIESTAS MANUEL CHALLENGE CADETES RUTA CV 2026" [ref=f3e239]':
+                  - generic [ref=f3e240]:
+                    - 'button "Añadir a favoritos: TROFEO FIESTAS MANUEL" [ref=f3e241]': ☆
+                    - text: TROFEO FIESTAS MANUEL
+                  - generic [ref=f3e242]: CHALLENGE CADETES RUTA CV 2026
+                - cell "MANUEL VALENCIA" [ref=f3e243]:
+                  - generic [ref=f3e244]: MANUEL
+                  - generic [ref=f3e245]: VALENCIA
+                - cell "C. Valenciana" [ref=f3e246]
+                - cell "Cadete" [ref=f3e247]
+                - cell "Carretera" [ref=f3e249]
+                - cell [ref=f3e251]:
+                  - button "Ver detalles de TROFEO FIESTAS MANUEL" [ref=f3e252]: Ver detalles
+              - row [ref=f3e256] [cursor=pointer]:
+                - cell "SAB 29 AGO" [ref=f3e257]:
+                  - generic [ref=f3e258]:
+                    - generic [ref=f3e259]: SAB
+                    - generic [ref=f3e260]: "29"
+                    - generic [ref=f3e261]: AGO
+                - cell [ref=f3e262]:
+                  - generic [ref=f3e263]:
+                    - 'button "Añadir a favoritos: XLIII TROFEU PENYA LA BUFA" [ref=f3e264]': ☆
+                    - text: XLIII TROFEU PENYA LA BUFA
+                    - button "10" [ref=f3e265]
+                - cell "JAVEA/XABIA ALICANTE" [ref=f3e269]:
+                  - generic [ref=f3e270]: JAVEA/XABIA
+                  - generic [ref=f3e271]: ALICANTE
+                - cell "C. Valenciana" [ref=f3e272]
+                - cell "Escuelas Cadete M+F" [ref=f3e273]:
+                  - generic [ref=f3e274]: Escuelas
+                  - generic [ref=f3e275]: Cadete
+                  - generic [ref=f3e276]: M+F
+                - cell "Carretera" [ref=f3e277]
+                - cell [ref=f3e279]:
+                  - button "Ver detalles de XLIII TROFEU PENYA LA BUFA" [ref=f3e280]: Ver detalles
+              - row [ref=f3e284] [cursor=pointer]:
+                - cell "SAB 29 AGO" [ref=f3e285]:
+                  - generic [ref=f3e286]:
+                    - generic [ref=f3e287]: SAB
+                    - generic [ref=f3e288]: "29"
+                    - generic [ref=f3e289]: AGO
+                - cell [ref=f3e290]:
+                  - generic [ref=f3e291]:
+                    - 'button "Añadir a favoritos: TROFEO ESCUELAS DE CICLISMO CHIVA" [ref=f3e292]': ☆
+                    - text: TROFEO ESCUELAS DE CICLISMO CHIVA
+                    - button "10" [ref=f3e293]
+                - cell "CHIVA VALENCIA" [ref=f3e297]:
+                  - generic [ref=f3e298]: CHIVA
+                  - generic [ref=f3e299]: VALENCIA
+                - cell "C. Valenciana" [ref=f3e300]
+                - cell "Escuelas Cadete M+F" [ref=f3e301]:
+                  - generic [ref=f3e302]: Escuelas
+                  - generic [ref=f3e303]: Cadete
+                  - generic [ref=f3e304]: M+F
+                - cell "Carretera" [ref=f3e305]
+                - cell [ref=f3e307]:
+                  - button "Ver detalles de TROFEO ESCUELAS DE CICLISMO CHIVA" [ref=f3e308]: Ver detalles
+              - row [ref=f3e312] [cursor=pointer]:
+                - cell "DOM 30 AGO" [ref=f3e313]:
+                  - generic [ref=f3e314]:
+                    - generic [ref=f3e315]: DOM
+                    - generic [ref=f3e316]: "30"
+                    - generic [ref=f3e317]: AGO
+                - cell [ref=f3e318]:
+                  - generic [ref=f3e319]:
+                    - 'button "Añadir a favoritos: III TROFEO CICLISTA DE CADETES EN ALMORADI" [ref=f3e320]': ☆
+                    - text: III TROFEO CICLISTA DE CADETES EN ALMORADI
+                    - button "13" [ref=f3e321]
+                - cell "ALMORADI ALICANTE" [ref=f3e325]:
+                  - generic [ref=f3e326]: ALMORADI
+                  - generic [ref=f3e327]: ALICANTE
+                - cell "C. Valenciana" [ref=f3e328]
+                - cell "Cadete Junior M+F" [ref=f3e329]:
+                  - generic [ref=f3e330]: Cadete
+                  - generic [ref=f3e331]: Junior
+                  - generic [ref=f3e332]: M+F
+                - cell "Carretera" [ref=f3e333]
+                - cell [ref=f3e335]:
+                  - button "Ver detalles de III TROFEO CICLISTA DE CADETES EN ALMORADI" [ref=f3e336]: Ver detalles
+    - generic [ref=f3e340]:
+      - generic [ref=f3e342]:
+        - generic [ref=f3e344]:
+          - heading "Síguenos también aquí" [level=4] [ref=f3e347]
+          - list [ref=f3e350]:
+            - listitem [ref=f3e351]:
+              - link "Envelope" [ref=f3e352] [cursor=pointer]:
+                - /url: mailto:info@mfppcycling.com
+                - generic [ref=f3e354]: 
+            - listitem [ref=f3e355]:
+              - link "Facebook" [ref=f3e356] [cursor=pointer]:
+                - /url: https://www.facebook.com/manuelfrancisco.perezperez.5/
+                - generic [ref=f3e358]: 
+            - listitem [ref=f3e359]:
+              - link "Instagram" [ref=f3e360] [cursor=pointer]:
+                - /url: https://www.instagram.com/mfpp_cycling_specialist/
+                - generic [ref=f3e362]: 
+            - listitem [ref=f3e363]:
+              - link "Twitter" [ref=f3e364] [cursor=pointer]:
+                - /url: https://twitter.com/MFPPMFPP2
+                - generic [ref=f3e366]: 
+          - link [ref=f3e369] [cursor=pointer]:
+            - /url: https://mfppcycling.com
+        - generic [ref=f3e371]:
+          - heading "Suscríbete" [level=4] [ref=f3e374]
+          - heading "Y serás el primero en estar informado de todas las novedades" [level=3] [ref=f3e377]
+          - link "Suscríbete ya" [ref=f3e381] [cursor=pointer]:
+            - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQ0MDUiLCJ0b2dnbGUiOmZhbHNlfQ%3D%3D"
+        - generic [ref=f3e385]:
+          - heading "Ponte en contacto" [level=4] [ref=f3e388]
+          - list [ref=f3e391]:
+            - listitem [ref=f3e392]:
+              - generic [ref=f3e393]: 
+              - generic [ref=f3e395]: +34 650545759
+            - listitem [ref=f3e396]:
+              - generic [ref=f3e397]: 
+              - generic [ref=f3e399]: mfppcycling@gmail.com
+            - listitem [ref=f3e400]:
+              - link "Enviar un Whatsapp" [ref=f3e401] [cursor=pointer]:
+                - /url: https://wa.me/34650545759
+                - generic [ref=f3e402]: 
+        - generic [ref=f3e406]:
+          - heading "Textos Legales" [level=2] [ref=f3e409]
+          - navigation "Menu" [ref=f3e412]:
+            - list [ref=f3e413]:
+              - listitem [ref=f3e414]:
+                - link "Política de Cookies" [ref=f3e415] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/politica-privacidad-3/
+              - listitem [ref=f3e416]:
+                - link "Política Privacidad" [ref=f3e417] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/politica-privacidad-2/
+              - listitem [ref=f3e418]:
+                - link "Aviso Legal" [ref=f3e419] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/aviso-legal/
+              - listitem [ref=f3e420]:
+                - link "Registrarse" [ref=f3e421] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjMxNiIsInRvZ2dsZSI6ZmFsc2V9"
+      - generic [ref=f3e423]:
+        - paragraph [ref=f3e428]:
+          - text: © 2026- mfppcycling.com – Todos los derechos reservados-
+          - generic [ref=f3e429]:
+            - link "Política de privacidad" [ref=f3e430] [cursor=pointer]:
+              - /url: https://mfppcycling.com/politica-privacidad-2/
+            - text: –
+            - link "Aviso-legal" [ref=f3e431] [cursor=pointer]:
+              - /url: https://mfppcycling.com/aviso-legal/
+            - text: –
+            - link "Cookies" [ref=f3e432] [cursor=pointer]:
+              - /url: https://mfppcycling.com/politica-privacidad-3/
+        - 'heading "Diseñado por : MFPP" [level=3] [ref=f3e437]'
+  - complementary "Banner de cookies RGPD" [ref=f3e438]:
+    - generic [ref=f3e440]:
+      - generic [ref=f3e441]:
+        - paragraph [ref=f3e442]: Utilizamos cookies para ofrecerte la mejor experiencia en nuestra web.
+        - paragraph [ref=f3e443]:
+          - text: Puedes aprender más sobre qué cookies utilizamos o desactivarlas en los
+          - button "ajustes" [ref=f3e444] [cursor=pointer]
+          - text: .
+      - button "Aceptar" [ref=f3e446] [cursor=pointer]
+  - generic [ref=f3e447] [cursor=pointer]
+  - generic [ref=f3e450]: desktop

@@ -1,0 +1,2 @@
+[      73ms] Invalid regular expression: /[Ì€-Í¯]/g: Range out of order in character class
+[     103ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8777/favicon.ico:0

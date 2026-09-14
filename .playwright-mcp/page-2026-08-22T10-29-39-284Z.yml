@@ -1,0 +1,290 @@
+- generic [active] [ref=e1]:
+  - link "Ir al contenido" [ref=e2] [cursor=pointer]:
+    - /url: "#content"
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - list [ref=e11]:
+          - listitem [ref=e12]:
+            - link "Envelope" [ref=e13] [cursor=pointer]:
+              - /url: mailto:info@mfppcycling.com
+              - generic [ref=e15]: 
+          - listitem [ref=e16]:
+            - link "Facebook" [ref=e17] [cursor=pointer]:
+              - /url: https://www.facebook.com/manuelfrancisco.perezperez.5/
+              - generic [ref=e19]: 
+          - listitem [ref=e20]:
+            - link "Instagram" [ref=e21] [cursor=pointer]:
+              - /url: https://www.instagram.com/mfpp_cycling_specialist/
+              - generic [ref=e23]: 
+          - listitem [ref=e24]:
+            - link "Twitter" [ref=e25] [cursor=pointer]:
+              - /url: https://twitter.com/MFPPMFPP2
+              - generic [ref=e27]: 
+        - link [ref=e35] [cursor=pointer]:
+          - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjI4NyIsInRvZ2dsZSI6ZmFsc2V9"
+          - generic [ref=e36]: 
+      - generic [ref=e40]:
+        - link [ref=e45] [cursor=pointer]:
+          - /url: https://mfppcycling.com
+        - generic [ref=e49]:
+          - navigation "Menu" [ref=e50]:
+            - list [ref=e51]:
+              - listitem [ref=e52]:
+                - link "Inicio" [ref=e53] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenador-ciclismo-castellon-online-mfpp-cycling/
+              - listitem [ref=e54]:
+                - link "Sobre mi" [ref=e55] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/sobre-mi/
+              - listitem [ref=e56]:
+                - link "Mi Método" [ref=e57] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/
+              - listitem [ref=e58]:
+                - link "Servicios" [ref=e59] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/
+              - listitem [ref=e60]:
+                - link "Testimonios" [ref=e61] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/testimonios-ciclistas-entrenamientos-mfpp-cycling/
+              - listitem [ref=e62]:
+                - link "Calendario" [ref=e63] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/calendario/
+              - listitem [ref=e64]:
+                - link "Ranking" [ref=e65] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/ranking/
+              - listitem [ref=e66]:
+                - link [ref=e67] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenamiento-ciclismo-mejora-rendimiento/
+                  - text: Blog
+                  - application "Alternar menú"
+                  - generic [ref=e68]: 
+              - listitem [ref=e69]:
+                - link "Calculadora" [ref=e70] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/wp-content/uploads/2025/05/Calculadora-rendimiento6.html
+              - listitem [ref=e71]:
+                - link "Contacto" [ref=e72] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/contacto-entrenamientos-ciclismo-mfpp-cycling/
+              - listitem [ref=e73]:
+                - link "Suscribirse" [ref=e74] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQ0MDUiLCJ0b2dnbGUiOmZhbHNlfQ%3D%3D"
+              - listitem [ref=e75]:
+                - link "Login" [ref=e76] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjI4NyIsInRvZ2dsZSI6ZmFsc2V9"
+          - text:   
+    - main [ref=e80]:
+      - article [ref=e81]:
+        - heading "Calendario" [level=1] [ref=e83]
+        - generic [ref=e85]:
+          - heading "Calendario federativo de ciclismo" [level=2] [ref=e86]
+          - paragraph [ref=e87]: Pruebas de las federaciones autonómicas de España
+          - paragraph [ref=e88]: "Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, así que puede haber cambios de última hora: antes de desplazarte, confirma los detalles en la web oficial de la federación (tienes el enlace en la columna «Fuente»)."
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - generic [ref=e91]: Desde
+              - textbox [ref=e92]
+            - generic [ref=e93]:
+              - generic [ref=e94]: Mes
+              - combobox [ref=e95]:
+                - option "— Todos los meses —" [selected]
+                - option "Enero"
+                - option "Febrero"
+                - option "Marzo"
+                - option "Abril"
+                - option "Mayo"
+                - option "Junio"
+                - option "Julio"
+                - option "Agosto"
+                - option "Septiembre"
+                - option "Octubre"
+                - option "Noviembre"
+                - option "Diciembre"
+            - generic [ref=e96]:
+              - generic [ref=e97]: Del mes
+              - generic "Al elegir un mes se muestran solo las pruebas de hoy en adelante. Márcalo para ver también las que ya han pasado." [ref=e98] [cursor=pointer]:
+                - checkbox "Ver pasadas" [ref=e99]
+                - text: Ver pasadas
+            - generic [ref=e100]:
+              - generic [ref=e101]: Categoría
+              - combobox [ref=e102]:
+                - option "Cadete" [selected]
+                - option "Junior / juvenil"
+                - option "Sub-23"
+                - option "Élite"
+                - option "Máster"
+                - option "Escuelas"
+                - option "— Todas —"
+            - generic [ref=e103]:
+              - generic [ref=e104]: Sexo
+              - combobox [ref=e105]:
+                - option "Masculino" [selected]
+                - option "Femenino"
+                - option "— Ambos —"
+            - generic [ref=e106]:
+              - generic [ref=e107]: Modalidad
+              - combobox [ref=e108]:
+                - option "Carretera" [selected]
+                - option "BTT"
+                - option "Ciclocross"
+                - option "Pista"
+                - option "BMX"
+                - option "Gravel"
+                - option "— Todas —"
+            - generic [ref=e109]:
+              - generic [ref=e110]: Federación
+              - combobox [ref=e111]:
+                - option "— Todas —" [selected]
+            - generic [ref=e112]:
+              - generic [ref=e113]: Provincia
+              - combobox [ref=e114]:
+                - option "— Todas —" [selected]
+            - generic [ref=e115]:
+              - generic [ref=e116]: Buscar
+              - textbox "prueba o localidad…" [ref=e117]
+            - generic [ref=e118]:
+              - generic [ref=e119]: Estado
+              - combobox [ref=e120]:
+                - option "Todas (sin retiradas)" [selected]
+                - option "Solo activas"
+                - option "Aplazadas / anuladas"
+                - option "Todas (incl. retiradas)"
+            - button "Restablecer" [ref=e121] [cursor=pointer]
+            - button "★ Fijar como predeterminado" [ref=e122] [cursor=pointer]
+          - table [ref=e124]:
+            - rowgroup [ref=e125]:
+              - row [ref=e126]:
+                - columnheader "Fecha" [ref=e127] [cursor=pointer]
+                - columnheader "Prueba" [ref=e128] [cursor=pointer]
+                - columnheader "Localidad" [ref=e129] [cursor=pointer]
+                - columnheader "Federación" [ref=e130] [cursor=pointer]
+                - columnheader "Categorías" [ref=e131] [cursor=pointer]
+                - columnheader "Modalidad" [ref=e132] [cursor=pointer]
+                - columnheader "Fuente" [ref=e133] [cursor=pointer]
+                - columnheader "Añadir" [ref=e134] [cursor=pointer]
+            - rowgroup
+          - generic [ref=e135]: Cargando pruebas…
+          - text: "\"; var w=window.open(\"\",\"_blank\"); if(!w){ alert(\"Permite las ventanas emergentes para imprimir.\"); return; } w.document.write(html); w.document.close(); setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} },300); }function cargar(){ if(!C.SUPABASE_URL || C.SUPABASE_URL.indexOf(\"TU-PROYECTO\")>=0){ $(\"cf_estado\").textContent=\"Falta configurar SUPABASE_URL y SUPABASE_ANON_KEY en la parte de arriba del bloque.\"; return; } var url=C.SUPABASE_URL.replace(/\\/$/,\"\")+\"/rest/v1/pruebas_federativas?select=*\\u0026order=fecha.asc\"; var _sep=String.fromCharCode(38), _PAG=1000, _acc=[]; // 38 = '&' (ASCII; WordPress no lo recodifica) // Supabase devuelve como maximo 1000 filas por peticion: paginamos con // offset hasta traerlas TODAS (antes se perdian las pruebas mas tardias). function _pagina(off){ return fetch(url+_sep+\"limit=\"+_PAG+_sep+\"offset=\"+off,{headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:\"Bearer \"+C.SUPABASE_ANON_KEY}}) .then(function(r){ if(!r.ok) throw new Error(\"HTTP \"+r.status); return r.json(); }) .then(function(chunk){ chunk=chunk||[]; _acc=_acc.concat(chunk); return chunk.length===_PAG?_pagina(off+_PAG):_acc; }); } _pagina(0) .then(function(data){ rows=data||[]; var feds=Array.from(new Set(rows.map(function(r){return r.federacion;}))).sort(function(a,b){return a.localeCompare(b,\"es\");}); feds.forEach(function(f){var o=document.createElement(\"option\");o.value=f;o.textContent=f;els.fed.appendChild(o);}); // Modalidades DINÁMICAS desde los datos reales: así aparecen Cicloturismo, // Trial… automáticamente y el filtro nunca se desincroniza de la base. var mods=Array.from(new Set(rows.map(function(r){return r.modalidad;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,\"es\");}); els.mod.innerHTML=\"\"; mods.forEach(function(m){var o=document.createElement(\"option\");o.value=m;o.textContent=m;els.mod.appendChild(o);}); var oTodasMod=document.createElement(\"option\");oTodasMod.value=\"\";oTodasMod.textContent=\"— Todas —\";els.mod.appendChild(oTodasMod); els.mod.value=DEF.mod; // \"\" → Todas // Última actualización del dataset (para la cabecera). var ua=rows.map(function(r){return r.actualizado||\"\";}).filter(Boolean).sort(); ultAct=ua.length?ua[ua.length-1]:\"\"; // Federación por defecto: C. Valenciana (ahora que ya existen las opciones). // Si ese año no hubiera pruebas de la CV, se queda en \"Todas\". if([].some.call(els.fed.options,function(o){return o.value===DEF.fed;})) els.fed.value=DEF.fed; _cfApplyPref(); // filtros predeterminados del usuario (si los guardó) _cfUpdatePrefBtn(); $(\"cf_estado\").style.display=\"none\"; apply(); }) .catch(function(e){ $(\"cf_estado\").textContent=\"No se pudieron cargar las pruebas: \"+e.message; }); }// ── Deduplicado al pintar (no toca la base de datos) ── // Muchas federaciones traen la misma prueba dos veces por diferencias de // tildes/mayúsculas/puntuación (\"San Hipólito\" vs \"San Hipolito\"). Fusionamos // por fecha + nombre normalizado + federación, y nos quedamos con la versión // \"más cuidada\" (con tildes, mayúsculas correctas y bien separada). function _normDup(s){ return String(s||\"\").toLowerCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g,\"\").replace(/\\b(19|20)\\d\\d\\b/g,\" \").replace(/[^a-z0-9]+/g,\"\"); } function _scoreNombre(s){ s=String(s||\"\"); var tildes=/[áéíóúñüàèìòù]/i.test(s)?2:0; var mixto=(/[a-záéíóúñ]/.test(s) ? (/[A-ZÁÉÍÓÚÑ]/.test(s)?1:0) : 0); // no todo mayúsculas var espacios=(s.match(/\\s/g)||[]).length*0.05; // desempate suave return tildes+mixto+espacios; } function _dedupe(list){ // 1) Fusión EXACTA por fecha + nombre normalizado + federación. var byKey={}; list.forEach(function(r){ var k=(r.fecha||\"\")+\"|\"+_normDup(r.prueba)+\"|\"+(r.federacion||\"\"); var prev=byKey[k]; if(!prev || _scoreNombre(r.prueba)>_scoreNombre(prev.prueba)) byKey[k]=r; }); var arr=Object.keys(byKey).map(function(k){return byKey[k];}); // 2) Fusión por PREFIJO dentro de la misma fecha+federación (mismo evento con // nombre corto vs largo: \"Camporrobles\" ⊂ \"Camporrobles - IV Memorial…\"). // Conservador: el nombre corto debe tener >=14 caracteres normalizados. var grupos={}; arr.forEach(function(r){ var g=(r.fecha||\"\")+\"|\"+(r.federacion||\"\"); (grupos[g]=grupos[g]||[]).push(r); }); var fuera=[]; Object.keys(grupos).forEach(function(g){ var it=grupos[g].map(function(r){ return {r:r,n:_normDup(r.prueba)}; }); for(var i=0;i"
+          - generic [ref=e136]:
+            - text: "=14) ? (a.length>b.length) : false; if(esPref) esPref = (a.indexOf(b)===0); if(esPref){ var quita=(_scoreNombre(it[i].r.prueba)>_scoreNombre(it[j].r.prueba))?it[j].r:it[i].r; if(fuera.indexOf(quita)<0) fuera.push(quita); } }} }); return arr.filter(function(r){ return fuera.indexOf(r)<0; }); } function _fechaCorta(s){ var p=String(s||\"\").slice(0,10).split(\"-\"); return p.length===3?(p[2]+\"/\"+p[1]+\"/\"+p[0]):String(s||\"\"); }// Botones-espejo: reflejan lo que hay seleccionado en los desplegables de // arriba (no se pulsan). Azul = filtro activo; gris = \"todas / ambos\". function _selTxt(sel){ var o = sel ? sel.options[sel.selectedIndex] : null; return o ? o.text : \"\"; } function _mesLbl(){ if(elMes){ if(elMes.value){ return _selTxt(elMes); } } return \"Desde \" + _fechaCorta(elDes.value || hoyISO()); } function _syncChips(){ var box = $(\"cf_chips\"); if(!box) return; var pills = [ { txt: \"\\uD83D\\uDCC5 \" + _mesLbl(), on: true }, { txt: els.cat.value ? _selTxt(els.cat) : \"Todas las categor\\u00edas\", on: !!els.cat.value }, { txt: els.sex.value ? _selTxt(els.sex) : \"Ambos sexos\", on: !!els.sex.value }, { txt: els.mod.value ? _selTxt(els.mod) : \"Todas las modalidades\", on: !!els.mod.value }, { txt: els.fed.value ? _selTxt(els.fed) : \"Toda Espa\\u00f1a\", on: !!els.fed.value }, { txt: (elProv ? (elProv.value || \"Todas las provincias\") : \"Todas las provincias\"), on: !!(elProv ? elProv.value : \"\") } ]; var html = 'Mostrando:'; pills.forEach(function(p){ html += '' + _esc(p.txt) + ''; }); box.innerHTML = html; }// Rellena el desplegable de PROVINCIA con las que tienen prueba en la // federación (y mes) seleccionados. Se refresca solo cuando cambia el // contexto (federación/mes/fechas), no en cada tecleo. var _cfProvSig=\"\"; function _cfPopulateProvincias(){ if(!elProv) return; var fed=els.fed.value, mes=(elMes?elMes.value:\"\"), desde=elDes.value||\"\", verPas=(elVerPas?elVerPas.checked:false), hoyStr=hoyISO(); var provs={}; rows.forEach(function(r){ if(fed){ if(r.federacion!==fed) return; } if(mes){ if((r.fecha||\"\").slice(5,7)!==mes) return; if(!verPas){ if((r.fecha||\"\")"
+            - generic [ref=e137]:
+              - text: "'+_esc(p)+\" (\"+provs[p]+\")\";}).join(\"\"); if(prev){ if(keys.indexOf(prev)>=0){ elProv.value=prev; } else { elProv.value=\"\"; } } }function apply(){ var f={}; Object.keys(els).forEach(function(k){f[k]=els[k].value;}); var q=(f.txt||\"\").trim().toLowerCase(), desde=elDes.value||\"\", stF=(elSt ? elSt.value : \"\"), mes=(elMes ? elMes.value : \"\"); var hoyStr=hoyISO(); var verPas=(elVerPas ? elVerPas.checked : false); // ver también las pruebas ya pasadas del mes _cfPopulateProvincias(); // refresca provincias según federación+mes var prov=(elProv ? elProv.value : \"\"); // Al elegir un mes concreto se muestra ese mes (se ignora \"Desde\", que se desactiva). // La casilla \"Ver pasadas\" solo tiene sentido con un mes elegido. if(elDes) elDes.disabled=!!mes; if(elVerPas){ elVerPas.disabled=!mes; var lbl=elVerPas.parentNode; if(lbl){ if(mes){ lbl.classList.remove(\"dis\"); } else { lbl.classList.add(\"dis\"); } } } var _favA=_cfOnlyFavs?_cfFavSet():null; var out=rows.filter(function(r){ if(_favA){ if(!_favA[_cfFavKey(r)]){ return false; } } var st=(r.estado||\"activa\").toLowerCase().trim(); // Filtro de ESTADO: \"\" = todo menos retiradas · activa · incidencia (aplazada/anulada) · all if(stF===\"activa\"){ if(st!==\"activa\") return false; } else if(stF===\"incidencia\"){ if(!(st===\"aplazada\" || st===\"anulada\")) return false; } else if(stF!==\"all\"){ if(st===\"retirada\") return false; } var cats=(r.categorias||\"\").split(\",\"); if(f.cat){ if(cats.indexOf(f.cat)<0) return false; } if(f.sex){ if((r.sexo||\"\").indexOf(f.sex)<0) return false; } if(f.mod){ if(r.modalidad!==f.mod) return false; } if(f.fed){ if(r.federacion!==f.fed) return false; } if(prov){ if((r.provincia||\"\")!==prov) return false; } if(mes){ if((r.fecha||\"\").slice(5,7)!==mes) return false; if(!verPas){ if((r.fecha||\"\")"
+              - generic [ref=e138]:
+                - text: "\"+_fechaCorta(ultAct)+\"\"):\"\"; $(\"cf_count\").innerHTML=\"\"+out.length+\" prueba\"+(out.length===1?\"\":\"s\")+ \" · \"+nf+\" federaci\"+(nf===1?\"ón\":\"ones\")+ \" · \"+nm+\" modalidad\"+(nm===1?\"\":\"es\")+updTxt; try{ _syncChips(); }catch(_){} try{ _cfFavUpdateBar(); }catch(_){} }function render(list){ var tb=$(\"cf_tb\"); tb.innerHTML=\"\"; var _favSet=_cfFavSet(); if(!list.length){ $(\"cf_estado\").style.display=\"block\"; $(\"cf_estado\").textContent=\"Ninguna prueba con esos filtros.\"; return; } $(\"cf_estado\").style.display=\"none\"; var hoy=hoyISO(); var agrupaMes=(sortKey===\"fecha\"); // agrupamos por mes solo al ordenar por fecha (orden por defecto) var cuentaMes={}; if(agrupaMes) list.forEach(function(r){ var mk=(r.fecha||\"\").slice(0,7); cuentaMes[mk]=(cuentaMes[mk]||0)+1; }); var frag=document.createDocumentFragment(), mesActual=\"\", ri=0; list.forEach(function(r){ var d=(r.fecha||\"\").split(\"-\"); if(agrupaMes){ var mk=(r.fecha||\"\").slice(0,7); if(mk!==mesActual){ mesActual=mk; var hr=document.createElement(\"tr\"); hr.className=\"cf-mes-row\"; hr.innerHTML=''+(MESLARGO[(+d[1]||1)-1]||\"\")+' '+(d[0]||\"\")+''+cuentaMes[mk]+' prueba'+(cuentaMes[mk]===1?'':'s')+''; frag.appendChild(hr); } } var st=(r.estado||\"activa\").toLowerCase().trim(); var estBadge = st===\"aplazada\" ? '"
+                - generic [ref=e139]: Aplazada
+                - text: "' : st===\"anulada\" ? '"
+                - generic [ref=e140]: Anulada
+                - text: "' : st===\"retirada\" ? '"
+                - generic [ref=e141]: Retirada
+                - text: "' : ''; var cats=(r.categorias||\"\").split(\",\").filter(Boolean).map(function(c){ var cls=c===\"cadete\"?\"cad\":(c===\"junior\"?\"jun\":\"\"); return '"
+                - generic [ref=e142]: "'+(CATLBL[c]||c)+'"
+                - text: "'; }).join(\"\"); var sexTag=r.sexo===\"F\"?'"
+                - generic [ref=e143]: Fem
+                - text: "':(r.sexo===\"MF\"?'"
+                - generic [ref=e144]: M+F
+                - text: "':\"\"); var nCo=_cfCoincCount(r); // nº de pruebas coincidentes el mismo día en España var coBadge = nCo>0 ? '"
+                - button "🗓️ '+nCo+'" [ref=e145] [cursor=pointer]
+                - text: "' : ''; var dow=DIAS[(new Date((r.fecha||\"\")+\"T00:00:00\").getDay()+6)%7]||\"\"; var tr=document.createElement(\"tr\"); var _cls=(r.fecha===hoy?\"is-hoy\":\"\"); if(ri%2===1) _cls+=(_cls?\" \":\"\")+\"cf-alt\"; if(_cls) tr.className=_cls; ri++; tr.innerHTML='"
+                - generic [ref=e146]:
+                  - generic [ref=e147]: "'+dow+'"
+                  - generic [ref=e148]: "'+(d[2]||\"\")+'"
+                  - generic [ref=e149]: "'+(MESES[(+d[1]||1)-1]||\"\")+'"
+                - text: "'+ '"
+                - generic [ref=e150]:
+                  - button "'+(_favSet[_cfFavKey(r)]?'★':'☆')+'" [ref=e151] [cursor=pointer]
+                  - text: "'+estBadge+coBadge+'"
+                - text: "'+(r.observaciones?'':\"\")+''+ ''+ ''+ ''+cats+sexTag+''+ ''+(r.modalidad||\"\")+''+ '"
+                - button "🔍 Ver ficha" [ref=e152] [cursor=pointer]
+                - text: "'+ '"
+                - generic [ref=e153]:
+                  - text: "'+ '"
+                  - button "'+APPLE_SVG+' Mac" [ref=e154] [cursor=pointer]:
+                    - text: "'+APPLE_SVG+'"
+                    - generic [ref=e155]: Mac
+                  - text: "'+ '"
+                  - generic "Añadir a Google Calendar" [ref=e156] [cursor=pointer]:
+                    - text: "'+GCAL_SVG+'"
+                    - generic [ref=e157]: Google
+                  - text: "'+ '"
+                - text: "'; tr.querySelector(\".nm-txt\").textContent=r.prueba||\"\"; if(st===\"anulada\") tr.querySelector(\".nm-txt\").classList.add(\"est-tachado\"); if(r.observaciones) tr.querySelector(\".obs\").textContent=r.observaciones; tr.querySelector(\".loc\").textContent=r.localidad||\"\"; tr.querySelector(\".prov\").textContent=r.provincia||\"\"; tr.children[3].textContent=r.federacion||\"\"; tr.querySelector(\".cf-verficha\").addEventListener(\"click\",function(){ abrirFicha(r); }); var _cb=tr.querySelector(\".cf-coinc-badge\"); if(_cb){ _cb.addEventListener(\"click\",function(ev){ ev.stopPropagation(); abrirFicha(r); }); } var _st=tr.querySelector(\".cf-fav-star\"); if(_st){ _st.addEventListener(\"click\",function(ev){ ev.stopPropagation(); _cfFavToggle(r); var on=_st.classList.toggle(\"on\"); _st.textContent=on?\"★\":\"☆\"; if(_cfOnlyFavs){ apply(); } }); } tr.querySelector(\".cal-gcal\").href=_gcalUrl(r); tr.querySelector(\".cal-ics\").addEventListener(\"click\",function(e){ e.preventDefault(); _abrirICS(r); }); tr.querySelector(\".cal-ics\").addEventListener(\"keydown\",function(e){ if(e.key===\"Enter\"||e.key===\" \"){ e.preventDefault(); _abrirICS(r); } }); frag.appendChild(tr); }); tb.appendChild(frag); }// ── Modal \"Ver ficha\": muestra la info disponible + botón a la web oficial ── function _esc(s){ return String(s==null?\"\":s).replace(/&/g,\"&\").replace(//g,\">\"); } // Ficha básica (nuestros datos) — para el resto de federaciones o si no hay ficha FCCV function _fichaBasica(r){ var st=(r.estado||\"activa\").toLowerCase().trim(); var estHtml = st===\"aplazada\" ? '"
+                - generic [ref=e158]: Aplazada
+                - text: "' : st===\"anulada\" ? '"
+                - generic [ref=e159]: Anulada
+                - text: "' : st===\"retirada\" ? '"
+                - generic [ref=e160]: Retirada
+                - text: "' : \"\"; var loc=[r.localidad,r.provincia].filter(Boolean).join(\", \"); var cats=_decode((r.categorias||\"\").split(\",\").filter(Boolean).map(function(c){return CATLBL[c]||c;}).join(\", \")); var sexo=r.sexo===\"F\"?\"Femenino\":(r.sexo===\"MF\"?\"Masculino y femenino\":\"Masculino\"); function row(k,v){ return v ? ('"
+                - generic [ref=e161]:
+                  - generic [ref=e162]: "'+k+'"
+                  - generic [ref=e163]: "'+v+'"
+                - text: "') : \"\"; } var html = row(\"Estado\", estHtml) + row(\"Localidad\", _esc(loc)) + row(\"Categorías\", _esc(cats)) + row(\"Sexo\", _esc(sexo)) + row(\"Modalidad\", _esc(r.modalidad||\"\")) + row(\"Observaciones\", _esc(r.observaciones||\"\")); return html || '"
+                - paragraph [ref=e164]: Sin datos adicionales.
+                - text: "'; } // Clave de casado (DEBE coincidir con la del admin al publicar): fecha|nombre_normalizado function _normFicha(s){ return String(s||\"\").toLowerCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g,\"\").replace(/[^a-z0-9]+/g,\"\"); } // Sanea la ficha FCCV (quita"
+    - generic [ref=e165]:
+      - generic [ref=e167]:
+        - generic [ref=e169]:
+          - heading "Síguenos también aquí" [level=4] [ref=e172]
+          - list [ref=e175]:
+            - listitem [ref=e176]:
+              - link "Envelope" [ref=e177] [cursor=pointer]:
+                - /url: mailto:info@mfppcycling.com
+                - generic [ref=e179]: 
+            - listitem [ref=e180]:
+              - link "Facebook" [ref=e181] [cursor=pointer]:
+                - /url: https://www.facebook.com/manuelfrancisco.perezperez.5/
+                - generic [ref=e183]: 
+            - listitem [ref=e184]:
+              - link "Instagram" [ref=e185] [cursor=pointer]:
+                - /url: https://www.instagram.com/mfpp_cycling_specialist/
+                - generic [ref=e187]: 
+            - listitem [ref=e188]:
+              - link "Twitter" [ref=e189] [cursor=pointer]:
+                - /url: https://twitter.com/MFPPMFPP2
+                - generic [ref=e191]: 
+          - link [ref=e194] [cursor=pointer]:
+            - /url: https://mfppcycling.com
+        - generic [ref=e196]:
+          - heading "Suscríbete" [level=4] [ref=e199]
+          - heading "Y serás el primero en estar informado de todas las novedades" [level=3] [ref=e202]
+          - link "Suscríbete ya" [ref=e206] [cursor=pointer]:
+            - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQ0MDUiLCJ0b2dnbGUiOmZhbHNlfQ%3D%3D"
+        - generic [ref=e210]:
+          - heading "Ponte en contacto" [level=4] [ref=e213]
+          - list [ref=e216]:
+            - listitem [ref=e217]:
+              - generic [ref=e218]: 
+              - generic [ref=e220]: +34 650545759
+            - listitem [ref=e221]:
+              - generic [ref=e222]: 
+              - generic [ref=e224]: mfppcycling@gmail.com
+            - listitem [ref=e225]:
+              - link "Enviar un Whatsapp" [ref=e226] [cursor=pointer]:
+                - /url: https://wa.me/34650545759
+                - generic [ref=e227]: 
+        - generic [ref=e231]:
+          - heading "Textos Legales" [level=2] [ref=e234]
+          - navigation "Menu" [ref=e237]:
+            - list [ref=e238]:
+              - listitem [ref=e239]:
+                - link "Política de Cookies" [ref=e240] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/politica-privacidad-3/
+              - listitem [ref=e241]:
+                - link "Política Privacidad" [ref=e242] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/politica-privacidad-2/
+              - listitem [ref=e243]:
+                - link "Aviso Legal" [ref=e244] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/aviso-legal/
+              - listitem [ref=e245]:
+                - link "Registrarse" [ref=e246] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjMxNiIsInRvZ2dsZSI6ZmFsc2V9"
+      - generic [ref=e248]:
+        - paragraph [ref=e253]:
+          - text: © 2026- mfppcycling.com – Todos los derechos reservados-
+          - generic [ref=e254]:
+            - link "Política de privacidad" [ref=e255] [cursor=pointer]:
+              - /url: https://mfppcycling.com/politica-privacidad-2/
+            - text: –
+            - link "Aviso-legal" [ref=e256] [cursor=pointer]:
+              - /url: https://mfppcycling.com/aviso-legal/
+            - text: –
+            - link "Cookies" [ref=e257] [cursor=pointer]:
+              - /url: https://mfppcycling.com/politica-privacidad-3/
+        - 'heading "Diseñado por : MFPP" [level=3] [ref=e262]'
+  - generic [ref=e263] [cursor=pointer]
+  - generic [ref=e266]: desktop

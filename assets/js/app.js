@@ -488,7 +488,8 @@ async function _cargaSaveDatos(btn){
     challengeCV:!!($('raceChallengeCV')?.checked),
     ccaa:($('raceCCAA')?.value||'').trim(),
     suspendida:!!($('raceSuspendida')?.checked),
-    suspendMotivo:(($('raceSuspendMotivo')?.value||'').trim())
+    suspendMotivo:(($('raceSuspendMotivo')?.value||'').trim()),
+    contarCompleta:!!($('raceContarCompleta')?.checked)
   };
   const _gfCat=(typeof _globalFilters!=='undefined'&&_globalFilters)?(_globalFilters.cat||''):'';
   const _gLbl=(typeof _CAT_IMPORT_LABEL!=='undefined'&&_gfCat)?(_CAT_IMPORT_LABEL[_gfCat]||''):'';
@@ -505,6 +506,7 @@ async function _cargaSaveDatos(btn){
       extra.raceDate=m.raceDate; extra.km=m.km; extra.avg=m.avg; extra.localidad=m.localidad;
       extra.circuitType=m.circuitType; extra.hora_inicio=m.hora_inicio; extra.challengeCV=m.challengeCV; extra.ccaa=m.ccaa;
       extra.suspendida=m.suspendida; extra.suspendMotivo=m.suspendida?m.suspendMotivo:'';
+      extra.contarCompleta=m.contarCompleta;
       if(_gLbl && !extra.raceCat){ extra.raceCat=_gLbl; if(!extra.cat) extra.cat=_gLbl; }
       const {error:updErr}=await _sb.from('races').update({name:raceName,notes:JSON.stringify(extra)}).eq('id',same.id);
       if(updErr){ alert('❌ Error guardando los datos:\n\n'+updErr.message+'\n\n(Probable causa: políticas RLS de Supabase.)'); if(st)st.textContent=''; return; }
@@ -572,6 +574,7 @@ function openLoadPanelForNew(){
   if($('raceGeneralOficial')) $('raceGeneralOficial').checked = false;
   if($('raceSuspendida')) $('raceSuspendida').checked = false;
   if($('raceSuspendMotivo')) $('raceSuspendMotivo').value = '';
+  if($('raceContarCompleta')) $('raceContarCompleta').checked = false;
   if(typeof _cargaToggleSuspendida==='function') _cargaToggleSuspendida();
   if($('raceCCAA')) $('raceCCAA').value = '';
   const fn=$('fileName'); if(fn) fn.textContent='';
@@ -8555,6 +8558,7 @@ async function _sbLoadHistory(){
       challengeCV: !!extra.challengeCV,
       suspendida: !!extra.suspendida,
       suspendMotivo: extra.suspendMotivo || '',
+      contarCompleta: !!extra.contarCompleta,
       generalOficial: !!extra.generalOficial,   // clasificación general oficial de una vuelta
       raceCat: extra.raceCat || '',   // categoría FORZADA de la prueba (override manual)
       ccaa: extra.ccaa || '',
@@ -15534,6 +15538,7 @@ async function openHistoryModal(){
             circuitType: extra.circuitType || '',
             suspendida: !!extra.suspendida,
             suspendMotivo: extra.suspendMotivo || '',
+            contarCompleta: !!extra.contarCompleta,
             isPlanificada: true
           };
         });
@@ -15628,6 +15633,7 @@ async function loadPlanificadaToCarga(id){
     if($('raceGeneralOficial')) $('raceGeneralOficial').checked = !!extra.generalOficial;
     if($('raceSuspendida')) $('raceSuspendida').checked = !!extra.suspendida;
     if($('raceSuspendMotivo')) $('raceSuspendMotivo').value = extra.suspendMotivo||'';
+    if($('raceContarCompleta')) $('raceContarCompleta').checked = !!extra.contarCompleta;
     if(typeof _cargaToggleSuspendida==='function') _cargaToggleSuspendida();
     if($('raceCCAA')) $('raceCCAA').value = extra.ccaa || '';
     try{ _cargaUpdateCVHint(); }catch(e){}
@@ -15826,6 +15832,7 @@ async function loadHistoryEntry(id, opts){
   if($('raceGeneralOficial')) $('raceGeneralOficial').checked = !!h.generalOficial;
   if($('raceSuspendida')) $('raceSuspendida').checked = !!h.suspendida;
   if($('raceSuspendMotivo')) $('raceSuspendMotivo').value = h.suspendMotivo||'';
+  if($('raceContarCompleta')) $('raceContarCompleta').checked = !!h.contarCompleta;
   if(typeof _cargaToggleSuspendida==='function') _cargaToggleSuspendida();
   if($('raceCCAA')) $('raceCCAA').value = h.ccaa || '';
   try{ _cargaUpdateCVHint(); }catch(e){}
@@ -16236,6 +16243,12 @@ async function saveHistory(){
   // Casilla "General oficial de una vuelta": la clasificación que se sube es la
   // general oficial (reemplaza a la calculada por tiempos en el ranking).
   const generalOficial = !!($('raceGeneralOficial')?.checked);
+  // Casillas de estado (leídas del formulario igual que challengeCV): así
+  // re-subir la clasificación no pierde la marca de "suspendida" ni la de
+  // "contar como carrera completa" (una vuelta que se quedó en 1 etapa).
+  const suspendida = !!($('raceSuspendida')?.checked);
+  const suspendMotivo = (($('raceSuspendMotivo')?.value||'').trim());
+  const contarCompleta = !!($('raceContarCompleta')?.checked);
   const ccaa = ($('raceCCAA')?.value||'').trim();
   const parsedDate=_parseSpanishDate(raceDateStr);
   if(!parsedDate && raceDateStr){
@@ -16251,7 +16264,7 @@ async function saveHistory(){
   const horaInicio = (document.getElementById('raceStartTime')?.value || '').trim();
   // Objeto base de notes — luego le añadimos campos preservados si existe
   // un duplicado (route, weather, etc. que el formulario no controla).
-  const notesObj = {raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,generalOficial,ccaa};
+  const notesObj = {raceDate:raceDateStr,km,avg,localidad,circuitType,regions:regionMap,inscritos:inscritosToSave,hora_inicio:horaInicio,challengeCV,generalOficial,ccaa,suspendida,suspendMotivo:suspendida?suspendMotivo:'',contarCompleta};
 
   // ── Buscar duplicados por fecha Y NOMBRE ─────────────────────────────────
   // IMPORTANTE: NO basta con la fecha. Dos pruebas distintas el mismo día

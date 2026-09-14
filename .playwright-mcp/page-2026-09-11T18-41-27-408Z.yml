@@ -1,0 +1,224 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - img "MFPP Cycling Specialist" [ref=e4]
+      - generic [ref=e5]:
+        - heading "Dashboard de Clasificaciones Ciclistas" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Sube un PDF, CSV o Excel y analiza la carrera por ciclista, categoría y equipo
+      - generic "Versión BETA en pruebas. Tu feedback ayuda a mejorarla. (El código tras 'v·' es la versión cargada; sirve para comprobar la caché del navegador.)" [ref=e8]: 🧪 BETA · v·(sin versión)
+  - generic [ref=e10]:
+    - img "MFPP Cycling Specialist" [ref=e11]
+    - generic [ref=e12]: Dashboard Director
+    - generic [ref=e13]: Entra con Google o recibe un enlace por correo
+    - textbox "tu@correo.com" [ref=e14]
+    - button "✉️ Recibir enlace de acceso por email" [ref=e15] [cursor=pointer]
+    - button "Entrar con Google" [ref=e16] [cursor=pointer]
+    - link "🔒 Aviso de privacidad y protección de datos" [ref=e24] [cursor=pointer]:
+      - /url: "#"
+  - main [ref=e25]:
+    - generic [ref=e26]:
+      - complementary "Menú de secciones" [ref=e27]:
+        - generic [ref=e28]:
+          - generic: Menú
+          - button "Expandir menú" [ref=e29] [cursor=pointer]: ☰
+        - button "🏠 Inicio Inicio" [ref=e31] [cursor=pointer]:
+          - generic [ref=e32]: 🏠
+          - generic: Inicio
+          - text: Inicio
+        - generic [ref=e34]:
+          - button "📁 Historial Historial" [ref=e35] [cursor=pointer]:
+            - generic [ref=e36]: 📁
+            - generic: Historial
+            - text: Historial
+          - button "📤 Carga y Resumen Carga y Resumen" [ref=e37] [cursor=pointer]:
+            - generic [ref=e38]: 📤
+            - generic: Carga y Resumen
+            - text: Carga y Resumen
+        - generic [ref=e40]:
+          - button "📋 Tabla y filtros Tabla y filtros" [ref=e41] [cursor=pointer]:
+            - generic [ref=e42]: 📋
+            - generic: Tabla y filtros
+            - text: Tabla y filtros
+          - button "👤 Análisis individual Análisis individual" [ref=e43] [cursor=pointer]:
+            - generic [ref=e44]: 👤
+            - generic: Análisis individual
+            - text: Análisis individual
+          - button "⚔️ Comparativo Comparativo" [ref=e45] [cursor=pointer]:
+            - generic [ref=e46]: ⚔️
+            - generic: Comparativo
+            - text: Comparativo
+          - button "🚴 Equipos Equipos" [ref=e47] [cursor=pointer]:
+            - generic [ref=e48]: 🚴
+            - generic: Equipos
+            - text: Equipos
+          - button "🏁 Top 10 Top 10" [ref=e49] [cursor=pointer]:
+            - generic [ref=e50]: 🏁
+            - generic: Top 10
+            - text: Top 10
+          - button "📊 Gráficos Gráficos" [ref=e51] [cursor=pointer]:
+            - generic [ref=e52]: 📊
+            - generic: Gráficos
+            - text: Gráficos
+        - button "🧠 Estrategia Estrategia" [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]: 🧠
+          - generic: Estrategia
+          - text: Estrategia
+        - button "🔮 Simulador Simulador" [ref=e58] [cursor=pointer]:
+          - generic [ref=e59]: 🔮
+          - generic: Simulador
+          - text: Simulador
+        - generic [ref=e61]:
+          - button "📈 Evolución Evolución" [ref=e62] [cursor=pointer]:
+            - generic [ref=e63]: 📈
+            - generic: Evolución
+            - text: Evolución
+          - button "🏆 Power Ranking Power Ranking" [ref=e64] [cursor=pointer]:
+            - generic [ref=e65]: 🏆
+            - generic: Power Ranking
+            - text: Power Ranking
+          - button "🔬 Laboratorio Laboratorio" [ref=e66] [cursor=pointer]:
+            - generic [ref=e67]: 🔬
+            - generic: Laboratorio
+            - text: Laboratorio
+          - button "📉 Tendencias Tendencias" [ref=e68] [cursor=pointer]:
+            - generic [ref=e69]: 📉
+            - generic: Tendencias
+            - text: Tendencias
+          - button "🏆 Convocatorias Convocatorias" [ref=e70] [cursor=pointer]:
+            - generic [ref=e71]: 🏆
+            - generic: Convocatorias
+            - text: Convocatorias
+          - button "✅ Disponibilidad Disponibilidad" [ref=e72] [cursor=pointer]:
+            - generic [ref=e73]: ✅
+            - generic: Disponibilidad
+            - text: Disponibilidad
+          - button "📻 Radio Vuelta Radio Vuelta" [ref=e74] [cursor=pointer]:
+            - generic [ref=e75]: 📻
+            - generic: Radio Vuelta
+            - text: Radio Vuelta
+        - button "📅 Calendario Calendario" [ref=e77] [cursor=pointer]:
+          - generic [ref=e78]: 📅
+          - generic: Calendario
+          - text: Calendario
+        - button "📋 Informe de Plantilla Informe de Plantilla" [ref=e80] [cursor=pointer]:
+          - generic [ref=e81]: 📋
+          - generic: Informe de Plantilla
+          - text: Informe de Plantilla
+        - generic [ref=e82]:
+          - button "🏅 Resumen Temporada Resumen Temporada" [ref=e83] [cursor=pointer]:
+            - generic [ref=e84]: 🏅
+            - generic: Resumen Temporada
+            - text: Resumen Temporada
+          - button "🏆 Challenge CV Challenge CV" [ref=e85] [cursor=pointer]:
+            - generic [ref=e86]: 🏆
+            - generic: Challenge CV
+            - text: Challenge CV
+        - generic [ref=e88]:
+          - button "⚠️ Validación Validación" [ref=e89] [cursor=pointer]:
+            - generic [ref=e90]: ⚠️
+            - generic: Validación
+            - text: Validación
+          - button "🗺️ Equipos y CCAA Equipos y CCAA" [ref=e91] [cursor=pointer]:
+            - generic [ref=e92]: 🗺️
+            - generic: Equipos y CCAA
+            - text: Equipos y CCAA
+          - button "🎽 Categorías ciclistas Categorías ciclistas" [ref=e93] [cursor=pointer]:
+            - generic [ref=e94]: 🎽
+            - generic: Categorías ciclistas
+            - text: Categorías ciclistas
+          - button "📑 Documentos FCCV Documentos FCCV" [ref=e95] [cursor=pointer]:
+            - generic [ref=e96]: 📑
+            - generic: Documentos FCCV
+            - text: Documentos FCCV
+          - text: Gestión
+      - generic [ref=e97]:
+        - generic [ref=e98]:
+          - generic [ref=e99]:
+            - button "📝 1 · Datos" [ref=e100] [cursor=pointer]
+            - button "📋 2 · Inscritos" [ref=e101] [cursor=pointer]
+            - button "🔎 Equipos participantes" [ref=e102] [cursor=pointer]
+            - button "🏁 3 · Clasificación" [ref=e103] [cursor=pointer]
+            - button "✅ 4 · Resumen" [ref=e104] [cursor=pointer]
+          - generic [ref=e105]:
+            - heading "📝 Datos de la prueba" [level=2] [ref=e107]
+            - generic [ref=e108]:
+              - generic [ref=e109]:
+                - generic [ref=e110]:
+                  - generic [ref=e111]:
+                    - text: Nombre de la carrera
+                    - generic [ref=e112]: "*"
+                  - 'textbox "Ej: XXX Copa de España Ciclismo" [ref=e113]'
+                - generic [ref=e115]:
+                  - generic [ref=e116]:
+                    - text: Fecha
+                    - generic [ref=e117]: "*"
+                  - textbox "dd/mm/aaaa" [ref=e118]
+                - generic [ref=e121]:
+                  - generic [ref=e122]:
+                    - text: 🕓 Hora inicio
+                    - generic [ref=e123]: (meteo)
+                  - textbox "Usada para capturar el clima exacto de esa hora desde Open-Meteo" [ref=e124]:
+                    - /placeholder: 09:30
+                - generic [ref=e125]:
+                  - generic [ref=e126]: Kilómetros
+                  - 'textbox "Ej: 142,5" [ref=e127]'
+                - generic [ref=e128]:
+                  - generic [ref=e129]: Velocidad media
+                  - 'textbox "Ej: 38,4 km/h" [ref=e130]'
+                - generic [ref=e131]:
+                  - generic [ref=e132]:
+                    - text: Localidad
+                    - button "🧹" [ref=e133] [cursor=pointer]
+                  - 'textbox "Ej: Jávea, Dénia…" [ref=e134]'
+                - generic [ref=e136]:
+                  - generic [ref=e137]: Tipo de prueba
+                  - combobox "En línea / Circuito…" [ref=e138]
+              - generic [ref=e139]:
+                - generic [ref=e140]:
+                  - text: "🗺️ Comunidad autónoma:"
+                  - button "🗂 Etiquetar guardadas" [ref=e141] [cursor=pointer]
+                  - 'combobox "🗺️ Comunidad autónoma: 🗂 Etiquetar guardadas ?" [ref=e142]':
+                    - option "— Sin asignar (auto-detección) —" [selected]
+                    - option "Comunitat Valenciana"
+                    - option "Castilla-La Mancha"
+                    - option "Murcia"
+                    - option "Cataluña"
+                    - option "Aragón"
+                    - option "Andalucía"
+                    - option "Madrid"
+                    - option "Castilla y León"
+                    - option "Islas Baleares"
+                    - option "País Vasco"
+                    - option "Navarra"
+                    - option "La Rioja"
+                    - option "Galicia"
+                    - option "Asturias"
+                    - option "Cantabria"
+                    - option "Extremadura"
+                    - option "Canarias"
+                    - option "Ceuta"
+                    - option "Melilla"
+                  - button "?" [ref=e143] [cursor=pointer]
+                - generic [ref=e144] [cursor=pointer]:
+                  - checkbox "🏆 Challenge Comunitat Valenciana ?" [ref=e145]
+                  - text: 🏆 Challenge Comunitat Valenciana
+                  - button "?" [ref=e146]
+                - generic [ref=e147] [cursor=pointer]:
+                  - checkbox "🏆 General oficial de una vuelta ?" [ref=e148]
+                  - text: 🏆 General oficial de una vuelta
+                  - button "?" [ref=e149]
+            - generic [ref=e150]:
+              - generic [ref=e151]:
+                - generic [ref=e152]:
+                  - text: 🏆 Mi equipo
+                  - emphasis [ref=e153]: PERSISTENTE
+                  - button "?" [ref=e154] [cursor=pointer]
+                - generic [ref=e155]:
+                  - textbox "🏆 Mi equipo PERSISTENTE ?" [ref=e156] [cursor=pointer]:
+                    - /placeholder: Haz clic para ver equipos...
+                  - generic: ▼
+              - button "💾 Guardar equipo" [ref=e158] [cursor=pointer]
+            - paragraph [ref=e159]: 💡 Campos * son obligatorios para el histórico. El análisis es 100% local.
+            - button "Siguiente paso ➔" [ref=e161] [cursor=pointer]
+        - text: ▾ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶
+  - contentinfo [ref=e162]: Aplicación local para análisis de clasificaciones ciclistas

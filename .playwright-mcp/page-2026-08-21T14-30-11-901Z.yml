@@ -1,0 +1,232 @@
+- generic [active] [ref=e1]:
+  - link "Ir al contenido" [ref=e2] [cursor=pointer]:
+    - /url: "#content"
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - list [ref=e11]:
+          - listitem [ref=e12]:
+            - link "Envelope" [ref=e13] [cursor=pointer]:
+              - /url: mailto:info@mfppcycling.com
+              - generic [ref=e15]: 
+          - listitem [ref=e16]:
+            - link "Facebook" [ref=e17] [cursor=pointer]:
+              - /url: https://www.facebook.com/manuelfrancisco.perezperez.5/
+              - generic [ref=e19]: 
+          - listitem [ref=e20]:
+            - link "Instagram" [ref=e21] [cursor=pointer]:
+              - /url: https://www.instagram.com/mfpp_cycling_specialist/
+              - generic [ref=e23]: 
+          - listitem [ref=e24]:
+            - link "Twitter" [ref=e25] [cursor=pointer]:
+              - /url: https://twitter.com/MFPPMFPP2
+              - generic [ref=e27]: 
+        - link [ref=e35] [cursor=pointer]:
+          - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjI4NyIsInRvZ2dsZSI6ZmFsc2V9"
+          - generic [ref=e36]: 
+      - generic [ref=e40]:
+        - link [ref=e45] [cursor=pointer]:
+          - /url: https://mfppcycling.com
+        - generic [ref=e49]:
+          - navigation "Menu" [ref=e50]:
+            - list [ref=e51]:
+              - listitem [ref=e52]:
+                - link "Inicio" [ref=e53] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenador-ciclismo-castellon-online-mfpp-cycling/
+              - listitem [ref=e54]:
+                - link "Sobre mi" [ref=e55] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/sobre-mi/
+              - listitem [ref=e56]:
+                - link "Mi Método" [ref=e57] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/
+              - listitem [ref=e58]:
+                - link "Servicios" [ref=e59] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenamientos-ciclismo-servicios-profesionales-mfpp-cycling/
+              - listitem [ref=e60]:
+                - link "Testimonios" [ref=e61] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/testimonios-ciclistas-entrenamientos-mfpp-cycling/
+              - listitem [ref=e62]:
+                - link "Calendario" [ref=e63] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/calendario/
+              - listitem [ref=e64]:
+                - link "Ranking" [ref=e65] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/ranking/
+              - listitem [ref=e66]:
+                - link "Blog Alternar menú" [ref=e67] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/entrenamiento-ciclismo-mejora-rendimiento/
+                  - text: Blog
+                  - application "Alternar menú"
+              - listitem [ref=e68]:
+                - link "Calculadora" [ref=e69] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/wp-content/uploads/2025/05/Calculadora-rendimiento6.html
+              - listitem [ref=e70]:
+                - link "Contacto" [ref=e71] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/contacto-entrenamientos-ciclismo-mfpp-cycling/
+              - listitem [ref=e72]:
+                - link "Suscribirse" [ref=e73] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQ0MDUiLCJ0b2dnbGUiOmZhbHNlfQ%3D%3D"
+              - listitem [ref=e74]:
+                - link "Login" [ref=e75] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjI4NyIsInRvZ2dsZSI6ZmFsc2V9"
+          - text:  
+    - main [ref=e79]:
+      - article [ref=e80]:
+        - heading "Calendario" [level=1] [ref=e82]
+        - generic [ref=e84]:
+          - heading "Calendario federativo de ciclismo" [level=2] [ref=e85]
+          - paragraph [ref=e86]: Pruebas de las federaciones autonómicas de España
+          - paragraph [ref=e87]: "Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, así que puede haber cambios de última hora: antes de desplazarte, confirma los detalles en la web oficial de la federación (tienes el enlace en la columna «Fuente»)."
+          - generic [ref=e88]:
+            - generic [ref=e89]:
+              - generic [ref=e90]: Desde
+              - textbox [ref=e91]: 2026-08-21
+            - generic [ref=e92]:
+              - generic [ref=e93]: Mes
+              - combobox [ref=e94]:
+                - option "— Todos los meses —"
+                - option "Enero"
+                - option "Febrero"
+                - option "Marzo"
+                - option "Abril"
+                - option "Mayo"
+                - option "Junio"
+                - option "Julio"
+                - option "Agosto" [selected]
+                - option "Septiembre"
+                - option "Octubre"
+                - option "Noviembre"
+                - option "Diciembre"
+            - generic [ref=e95]:
+              - generic [ref=e96]: Del mes
+              - generic "Al elegir un mes se muestran solo las pruebas de hoy en adelante. Márcalo para ver también las que ya han pasado." [ref=e97] [cursor=pointer]:
+                - checkbox "Ver pasadas" [ref=e98]
+                - text: Ver pasadas
+            - generic [ref=e99]:
+              - generic [ref=e100]: Categoría
+              - combobox [ref=e101]:
+                - option "Cadete" [selected]
+                - option "Junior / juvenil"
+                - option "Sub-23"
+                - option "Élite"
+                - option "Máster"
+                - option "Escuelas"
+                - option "— Todas —"
+            - generic [ref=e102]:
+              - generic [ref=e103]: Sexo
+              - combobox [ref=e104]:
+                - option "Masculino" [selected]
+                - option "Femenino"
+                - option "— Ambos —"
+            - generic [ref=e105]:
+              - generic [ref=e106]: Modalidad
+              - combobox [ref=e107]:
+                - option "Carretera" [selected]
+                - option "BTT"
+                - option "Ciclocross"
+                - option "Pista"
+                - option "BMX"
+                - option "Gravel"
+                - option "— Todas —"
+            - generic [ref=e108]:
+              - generic [ref=e109]: Federación
+              - combobox [ref=e110]:
+                - option "— Todas —"
+            - generic [ref=e111]:
+              - generic [ref=e112]: Provincia
+              - combobox [ref=e113]:
+                - option "— Todas —" [selected]
+            - generic [ref=e114]:
+              - generic [ref=e115]: Buscar
+              - textbox "prueba o localidad…" [ref=e116]
+            - generic [ref=e117]:
+              - generic [ref=e118]: Estado
+              - combobox [ref=e119]:
+                - option "Todas (sin retiradas)" [selected]
+                - option "Solo activas"
+                - option "Aplazadas / anuladas"
+                - option "Todas (incl. retiradas)"
+            - button "Restablecer" [ref=e120] [cursor=pointer]
+          - table [ref=e122]:
+            - rowgroup [ref=e123]:
+              - row [ref=e124]:
+                - columnheader "Fecha" [ref=e125] [cursor=pointer]
+                - columnheader "Prueba" [ref=e126] [cursor=pointer]
+                - columnheader "Localidad" [ref=e127] [cursor=pointer]
+                - columnheader "Federación" [ref=e128] [cursor=pointer]
+                - columnheader "Categorías" [ref=e129] [cursor=pointer]
+                - columnheader "Modalidad" [ref=e130] [cursor=pointer]
+                - columnheader "Fuente" [ref=e131] [cursor=pointer]
+                - columnheader "Añadir" [ref=e132] [cursor=pointer]
+            - rowgroup
+          - generic [ref=e133]: Cargando pruebas…
+    - generic [ref=e134]:
+      - generic [ref=e136]:
+        - generic [ref=e138]:
+          - heading "Síguenos también aquí" [level=4] [ref=e141]
+          - list [ref=e144]:
+            - listitem [ref=e145]:
+              - link "Envelope" [ref=e146] [cursor=pointer]:
+                - /url: mailto:info@mfppcycling.com
+                - generic [ref=e148]: 
+            - listitem [ref=e149]:
+              - link "Facebook" [ref=e150] [cursor=pointer]:
+                - /url: https://www.facebook.com/manuelfrancisco.perezperez.5/
+                - generic [ref=e152]: 
+            - listitem [ref=e153]:
+              - link "Instagram" [ref=e154] [cursor=pointer]:
+                - /url: https://www.instagram.com/mfpp_cycling_specialist/
+                - generic [ref=e156]: 
+            - listitem [ref=e157]:
+              - link "Twitter" [ref=e158] [cursor=pointer]:
+                - /url: https://twitter.com/MFPPMFPP2
+                - generic [ref=e160]: 
+          - link [ref=e163] [cursor=pointer]:
+            - /url: https://mfppcycling.com
+        - generic [ref=e165]:
+          - heading "Suscríbete" [level=4] [ref=e168]
+          - heading "Y serás el primero en estar informado de todas las novedades" [level=3] [ref=e171]
+          - link "Suscríbete ya" [ref=e175] [cursor=pointer]:
+            - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjQ0MDUiLCJ0b2dnbGUiOmZhbHNlfQ%3D%3D"
+        - generic [ref=e179]:
+          - heading "Ponte en contacto" [level=4] [ref=e182]
+          - list [ref=e185]:
+            - listitem [ref=e186]:
+              - generic [ref=e187]: 
+              - generic [ref=e189]: +34 650545759
+            - listitem [ref=e190]:
+              - generic [ref=e191]: 
+              - generic [ref=e193]: mfppcycling@gmail.com
+            - listitem [ref=e194]:
+              - link "Enviar un Whatsapp" [ref=e195] [cursor=pointer]:
+                - /url: https://wa.me/34650545759
+                - generic [ref=e196]: 
+        - generic [ref=e200]:
+          - heading "Textos Legales" [level=2] [ref=e203]
+          - navigation "Menu" [ref=e206]:
+            - list [ref=e207]:
+              - listitem [ref=e208]:
+                - link "Política de Cookies" [ref=e209] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/politica-privacidad-3/
+              - listitem [ref=e210]:
+                - link "Política Privacidad" [ref=e211] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/politica-privacidad-2/
+              - listitem [ref=e212]:
+                - link "Aviso Legal" [ref=e213] [cursor=pointer]:
+                  - /url: https://mfppcycling.com/aviso-legal/
+              - listitem [ref=e214]:
+                - link "Registrarse" [ref=e215] [cursor=pointer]:
+                  - /url: "#elementor-action%3Aaction%3Dpopup%3Aopen%26settings%3DeyJpZCI6IjMxNiIsInRvZ2dsZSI6ZmFsc2V9"
+      - generic [ref=e217]:
+        - paragraph [ref=e222]:
+          - text: © 2026- mfppcycling.com – Todos los derechos reservados-
+          - generic [ref=e223]:
+            - link "Política de privacidad" [ref=e224] [cursor=pointer]:
+              - /url: https://mfppcycling.com/politica-privacidad-2/
+            - text: –
+            - link "Aviso-legal" [ref=e225] [cursor=pointer]:
+              - /url: https://mfppcycling.com/aviso-legal/
+            - text: –
+            - link "Cookies" [ref=e226] [cursor=pointer]:
+              - /url: https://mfppcycling.com/politica-privacidad-3/
+        - 'heading "Diseñado por : MFPP" [level=3] [ref=e231]'
+  - text:      

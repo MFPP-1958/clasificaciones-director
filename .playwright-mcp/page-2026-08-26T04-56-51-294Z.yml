@@ -1,0 +1,215 @@
+- generic [ref=e2]:
+  - paragraph [ref=e3]: Pruebas de las federaciones autonómicas de España
+  - paragraph [ref=e4]: "Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, así que puede haber cambios de última hora: antes de desplazarte, confirma los detalles en la web oficial de la federación (tienes el enlace en la columna «Fuente»)."
+  - generic [ref=e5]:
+    - textbox "Buscar carrera" [ref=e6]:
+      - /placeholder: Busca una carrera, localidad o club…
+    - generic [ref=e7]:
+      - button "Próximos 7 días" [ref=e8] [cursor=pointer]
+      - button "Este finde" [ref=e13] [cursor=pointer]
+      - button "Mi comunidad" [ref=e19] [cursor=pointer]
+      - button "Mis favoritas" [ref=e24] [cursor=pointer]
+    - button "Filtros 5" [ref=e133] [cursor=pointer]:
+      - text: Filtros
+      - generic [ref=e134]: "5"
+  - generic [ref=e135]:
+    - generic [ref=e136]:
+      - text: Este mes
+      - button "Quitar filtro" [ref=e137] [cursor=pointer]: ✕
+    - generic [ref=e138]:
+      - text: Cadete
+      - button "Quitar filtro" [ref=e139] [cursor=pointer]: ✕
+    - generic [ref=e140]:
+      - text: Masculino
+      - button "Quitar filtro" [ref=e141] [cursor=pointer]: ✕
+    - generic [ref=e142]:
+      - text: Carretera
+      - button "Quitar filtro" [ref=e143] [cursor=pointer]: ✕
+    - generic [ref=e144]:
+      - text: C. Valenciana
+      - button "Quitar filtro" [ref=e145] [cursor=pointer]: ✕
+    - button "Limpiar todo" [ref=e146] [cursor=pointer]
+  - complementary [ref=e32]:
+    - generic [ref=e33]:
+      - generic [ref=e34]: Filtros
+      - button [ref=e38] [cursor=pointer]: ✕
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - generic [ref=e41]: Mis calendarios
+        - combobox [ref=e42]
+        - button [ref=e44] [cursor=pointer]: Guardar filtros actuales
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52]: Periodo
+          - combobox [ref=e53]
+        - generic [ref=e54]:
+          - generic [ref=e55]: Categorías (puedes elegir varias)
+          - generic [ref=e56]:
+            - generic [ref=e57] [cursor=pointer]:
+              - checkbox [ref=e58]
+              - text: Escuelas (174)
+            - generic [ref=e59] [cursor=pointer]:
+              - checkbox [checked] [ref=e60]
+              - text: Cadete (257)
+            - generic [ref=e61] [cursor=pointer]:
+              - checkbox [ref=e62]
+              - text: Junior / juvenil (123)
+            - generic [ref=e63] [cursor=pointer]:
+              - checkbox [ref=e64]
+              - text: Sub-23 (122)
+            - generic [ref=e65] [cursor=pointer]:
+              - checkbox [ref=e66]
+              - text: Élite (232)
+            - generic [ref=e67] [cursor=pointer]:
+              - checkbox [ref=e68]
+              - text: Máster (109)
+        - generic [ref=e69]:
+          - generic [ref=e70]: Sexo
+          - combobox [ref=e71]
+        - generic [ref=e72]:
+          - generic [ref=e73]: Modalidad
+          - combobox [ref=e74]
+        - generic [ref=e75]:
+          - generic [ref=e76]: Federación
+          - combobox [ref=e77]
+        - generic [ref=e78]:
+          - generic [ref=e79]: Vecinas
+          - generic [ref=e80] [cursor=pointer]:
+            - checkbox [ref=e81]
+            - text: Incluir limítrofes
+        - generic [ref=e82]:
+          - generic [ref=e83]: Provincia
+          - combobox [ref=e84]
+        - generic [ref=e85]:
+          - generic [ref=e86]: Estado
+          - combobox [ref=e87]
+        - generic [ref=e88]:
+          - generic [ref=e89]: Inscripción
+          - generic [ref=e90] [cursor=pointer]:
+            - checkbox [ref=e91]
+            - text: Solo con ficha oficial
+        - button [ref=e93] [cursor=pointer]: Restablecer filtros
+    - button [ref=e95] [cursor=pointer]: Ver resultados
+  - generic [ref=e96]:
+    - status [ref=e147]: 4 pruebas · 1 federación · 1 modalidad · actualizado el 24/08/2026
+    - group "Cambiar vista" [ref=e97]:
+      - button "Lista" [ref=e98] [cursor=pointer]
+      - button "Mes" [ref=e103] [cursor=pointer]
+    - button "Novedades (35)" [ref=e148] [cursor=pointer]
+    - button "Imprimir / imagen" [active] [ref=e115] [cursor=pointer]
+  - generic [ref=e152]:
+    - generic [ref=e153]: "★ Mis pruebas: 1"
+    - button "Ver solo favoritas" [ref=e154] [cursor=pointer]
+    - button "Hoja / imagen" [ref=e155] [cursor=pointer]
+    - button "✕ Vaciar" [ref=e161] [cursor=pointer]
+  - table [ref=e122]:
+    - rowgroup [ref=e123]:
+      - row [ref=e124]:
+        - button "Fecha ▲" [ref=e125] [cursor=pointer]
+        - button "Prueba" [ref=e126] [cursor=pointer]
+        - button "Localidad" [ref=e127] [cursor=pointer]
+        - button "Federación" [ref=e128] [cursor=pointer]
+        - columnheader "Categorías" [ref=e129] [cursor=pointer]
+        - button "Modalidad" [ref=e130] [cursor=pointer]
+        - columnheader "Detalles" [ref=e131] [cursor=pointer]
+    - rowgroup [ref=e162]:
+      - row [ref=e163]:
+        - cell "AGOSTO 2026 4 pruebas" [ref=e164]:
+          - generic [ref=e165]: AGOSTO 2026
+          - generic [ref=e166]: 4 pruebas
+      - row [ref=e167] [cursor=pointer]:
+        - cell "JUE 27 AGO" [ref=e168]:
+          - generic [ref=e169]:
+            - generic [ref=e170]: JUE
+            - generic [ref=e171]: "27"
+            - generic [ref=e172]: AGO
+        - 'cell "Quitar de favoritos: TROFEO FIESTAS MANUEL TROFEO FIESTAS MANUEL CHALLENGE CADETES RUTA CV 2026" [ref=e173]':
+          - generic [ref=e174]:
+            - 'button "Quitar de favoritos: TROFEO FIESTAS MANUEL" [ref=e175]': ★
+            - text: TROFEO FIESTAS MANUEL
+          - generic [ref=e176]: CHALLENGE CADETES RUTA CV 2026
+        - cell "MANUEL VALENCIA" [ref=e177]:
+          - generic [ref=e178]: MANUEL
+          - generic [ref=e179]: VALENCIA
+        - cell "C. Valenciana" [ref=e180]
+        - cell "Cadete" [ref=e181]
+        - cell "Carretera" [ref=e183]
+        - cell [ref=e185]:
+          - button "Ver detalles de TROFEO FIESTAS MANUEL" [ref=e186]: Ver detalles
+      - row [ref=e190] [cursor=pointer]:
+        - cell "SAB 29 AGO" [ref=e191]:
+          - generic [ref=e192]:
+            - generic [ref=e193]: SAB
+            - generic [ref=e194]: "29"
+            - generic [ref=e195]: AGO
+        - cell [ref=e196]:
+          - generic [ref=e197]:
+            - 'button "Añadir a favoritos: XLIII TROFEU PENYA LA BUFA" [ref=e198]': ☆
+            - text: XLIII TROFEU PENYA LA BUFA
+            - button "10" [ref=e199]
+        - cell "JAVEA/XABIA ALICANTE" [ref=e203]:
+          - generic [ref=e204]: JAVEA/XABIA
+          - generic [ref=e205]: ALICANTE
+        - cell "C. Valenciana" [ref=e206]
+        - cell "Escuelas Cadete M+F" [ref=e207]:
+          - generic [ref=e208]: Escuelas
+          - generic [ref=e209]: Cadete
+          - generic [ref=e210]: M+F
+        - cell "Carretera" [ref=e211]
+        - cell [ref=e213]:
+          - button "Ver detalles de XLIII TROFEU PENYA LA BUFA" [ref=e214]: Ver detalles
+      - row [ref=e218] [cursor=pointer]:
+        - cell "SAB 29 AGO" [ref=e219]:
+          - generic [ref=e220]:
+            - generic [ref=e221]: SAB
+            - generic [ref=e222]: "29"
+            - generic [ref=e223]: AGO
+        - cell [ref=e224]:
+          - generic [ref=e225]:
+            - 'button "Añadir a favoritos: TROFEO ESCUELAS DE CICLISMO CHIVA" [ref=e226]': ☆
+            - text: TROFEO ESCUELAS DE CICLISMO CHIVA
+            - button "10" [ref=e227]
+        - cell "CHIVA VALENCIA" [ref=e231]:
+          - generic [ref=e232]: CHIVA
+          - generic [ref=e233]: VALENCIA
+        - cell "C. Valenciana" [ref=e234]
+        - cell "Escuelas Cadete M+F" [ref=e235]:
+          - generic [ref=e236]: Escuelas
+          - generic [ref=e237]: Cadete
+          - generic [ref=e238]: M+F
+        - cell "Carretera" [ref=e239]
+        - cell [ref=e241]:
+          - button "Ver detalles de TROFEO ESCUELAS DE CICLISMO CHIVA" [ref=e242]: Ver detalles
+      - row [ref=e246] [cursor=pointer]:
+        - cell "DOM 30 AGO" [ref=e247]:
+          - generic [ref=e248]:
+            - generic [ref=e249]: DOM
+            - generic [ref=e250]: "30"
+            - generic [ref=e251]: AGO
+        - cell [ref=e252]:
+          - generic [ref=e253]:
+            - 'button "Añadir a favoritos: III TROFEO CICLISTA DE CADETES EN ALMORADI" [ref=e254]': ☆
+            - text: III TROFEO CICLISTA DE CADETES EN ALMORADI
+            - button "13" [ref=e255]
+        - cell "ALMORADI ALICANTE" [ref=e259]:
+          - generic [ref=e260]: ALMORADI
+          - generic [ref=e261]: ALICANTE
+        - cell "C. Valenciana" [ref=e262]
+        - cell "Cadete Junior M+F" [ref=e263]:
+          - generic [ref=e264]: Cadete
+          - generic [ref=e265]: Junior
+          - generic [ref=e266]: M+F
+        - cell "Carretera" [ref=e267]
+        - cell [ref=e269]:
+          - button "Ver detalles de III TROFEO CICLISTA DE CADETES EN ALMORADI" [ref=e270]: Ver detalles
+  - dialog [ref=e274]:
+    - generic [ref=e275]:
+      - generic [ref=e276]:
+        - button "Cerrar" [ref=e277] [cursor=pointer]: ✕
+        - heading "🖨️ Imprimir / imagen de esta lista" [level=3] [ref=e278]
+        - paragraph [ref=e279]: Se incluirán las 4 pruebas que ves ahora, con los filtros puestos.
+      - generic [ref=e280]: 4 pruebas.
+      - generic [ref=e282]:
+        - button "📱 Imagen (WhatsApp)" [ref=e283]
+        - button "🖨 Imprimir / PDF" [ref=e284]
+        - button "Cerrar" [ref=e285] [cursor=pointer]

@@ -1,0 +1,9 @@
+[    1226ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ https://mfppcycling.com/calendario/?v=cat:0
+[    1226ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ https://mfppcycling.com/calendario/?v=cat:0
+[    1226ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ https://mfppcycling.com/calendario/?v=cat:0
+[    1267ms] [LOG] {reload: yes} @ https://mfppcycling.com/calendario/?v=cat:963
+[    2784ms] [LOG] JQMIGRATE: Migrate is installed, version 3.4.1 @ https://mfppcycling.com/wp-content/litespeed/js/c09ec9f189526d7175a80ac34db87c60.js?ver=87c60:1
+[    3033ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ https://mfppcycling.com/calendario/?v=cat:0
+[    3033ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ https://mfppcycling.com/calendario/?v=cat:0
+[    3033ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ https://mfppcycling.com/calendario/?v=cat:0
+[    3314ms] [LOG] [LiteSpeed] Start Lazy Load @ https://mfppcycling.com/calendario/?v=cat:961

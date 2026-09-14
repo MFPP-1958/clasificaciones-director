@@ -113,7 +113,12 @@ function rpNivelParticipacion(carrera) {
   return { nivel: null, coef: 1 };
 }
 function rpTipoCarrera(carrera) {
-  if (RP_RE_ETAPA.test(carrera.nombre || '')) return 'etapa';
+  // "Contar como carrera completa": una vuelta reducida a una sola etapa
+  // disputada (p.ej. las demás suspendidas). Se desactiva la detección de
+  // etapa para que puntúe con la tabla COMPLETA como una carrera normal; el
+  // resto de la tipología (challenge/fuera_cv/ordinaria) se aplica igual.
+  const esEtapa = (carrera.contarCompleta !== true) && RP_RE_ETAPA.test(carrera.nombre || '');
+  if (esEtapa) return 'etapa';
   if (carrera.challengeCV === true) return 'challenge';
   if (rpEsFueraCV(carrera.ccaa)) return 'fuera_cv';
   return 'ordinaria';
@@ -176,6 +181,9 @@ function rpAdaptarCarreras(filas) {
     // se trata/etiqueta como 'general' y hace que la calculada por tiempos se
     // descarte sola. Debe ir sincronizado con ranking-publico.js.
     carrera.generalOficial = extra.generalOficial === true;
+    // Marca manual del director: contar esta etapa como carrera completa
+    // (tabla completa, no media tabla de etapa). Ver rpTipoCarrera.
+    carrera.contarCompleta = extra.contarCompleta === true;
     carrera.tipo = carrera.generalOficial ? 'general' : rpTipoCarrera(carrera);
     carrera.participacion = (carrera.generalOficial && rpEsFueraCV(carrera.ccaa))
       ? { nivel: null, coef: RP_COEFICIENTES.fuera_cv }

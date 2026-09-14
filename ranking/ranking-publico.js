@@ -284,7 +284,12 @@ function rpCarreraEnRegion(c) {
 // antes que fuera_cv porque challengeCV es un flag manual explícito y
 // prevalece sobre un ccaa posiblemente mal escrito.
 function rpTipoCarrera(carrera) {
-  if (RP_RE_ETAPA.test(carrera.nombre || '')) return 'etapa';
+  // "Contar como carrera completa": una vuelta reducida a una sola etapa
+  // disputada (p.ej. las demás suspendidas). Se desactiva la detección de
+  // etapa para que puntúe con la tabla COMPLETA como una carrera normal; el
+  // resto de la tipología (challenge/fuera_cv/ordinaria) se aplica igual.
+  const esEtapa = (carrera.contarCompleta !== true) && RP_RE_ETAPA.test(carrera.nombre || '');
+  if (esEtapa) return 'etapa';
   if (carrera.challengeCV === true) return 'challenge';
   if (rpEsFueraCV(carrera.ccaa)) return 'fuera_cv';
   return 'ordinaria';
@@ -380,6 +385,9 @@ function rpAdaptarCarreras(filas) {
     // nombre de la vuelta, hace que la General calculada por tiempos se descarte
     // sola (ver rpSintetizarGenerales → hayOficial). Es la clasificación buena.
     carrera.generalOficial = extra.generalOficial === true;
+    // Marca manual del director: contar esta etapa como carrera completa
+    // (tabla completa, no media tabla de etapa). Ver rpTipoCarrera.
+    carrera.contarCompleta = extra.contarCompleta === true;
     carrera.tipo = carrera.generalOficial ? 'general' : rpTipoCarrera(carrera);
     carrera.participacion = (carrera.generalOficial && rpEsFueraCV(carrera.ccaa))
       ? { nivel: null, coef: RP_COEFICIENTES.fuera_cv }

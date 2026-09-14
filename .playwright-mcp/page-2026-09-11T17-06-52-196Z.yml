@@ -1,0 +1,41 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - heading "MFPP CYCLING·Ranking Beta" [level=1] [ref=e5]:
+        - link "MFPP CYCLING" [ref=e6] [cursor=pointer]:
+          - /url: https://www.mfppcycling.com
+        - text: ·Ranking
+        - 'generic "Versión de prueba: puede tener errores o cambios" [ref=e7]': Beta
+      - button "Cómo funciona este ranking" [ref=e8] [cursor=pointer]: ❓ Ayuda
+    - paragraph [ref=e9]
+    - generic [ref=e10]:
+      - generic [ref=e11]: 👋 ¿Primera vez? Pulsa ❓ Ayuda para ver cómo funciona.
+      - button "Cerrar aviso" [ref=e12] [cursor=pointer]: ✕
+  - generic [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [aria-hidden]: 🔍
+        - searchbox "Buscar corredor, equipo o prueba" [ref=e16]
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - text: 📅
+          - combobox "Temporada" [ref=e20] [cursor=pointer]
+        - text: 🗺️ 🎽 👥
+    - tablist "Sección" [ref=e22]:
+      - tab "🏠 Inicio" [selected] [ref=e23] [cursor=pointer]
+      - tab "⭐ Top 10" [ref=e24] [cursor=pointer]
+      - tab "🏆 Ranking" [ref=e25] [cursor=pointer]
+      - tab "🏁 Últimas carreras" [ref=e26] [cursor=pointer]
+      - tab "📋 Inscritos" [ref=e27] [cursor=pointer]
+      - tab "🔎 Equipos" [ref=e28] [cursor=pointer]
+    - tablist "Categorías"
+    - paragraph [ref=e32]: Cargando ranking…
+    - group [ref=e34]:
+      - generic "Cómo se calculan los puntos" [ref=e35] [cursor=pointer]
+    - generic [ref=e36]:
+      - paragraph [ref=e37]: 🧪 Versión Beta. Este ranking está en pruebas y puede tener errores o cambios mientras lo mejoramos.
+      - paragraph [ref=e38]:
+        - text: 🌍 ¿Eres de otra comunidad autónoma? De momento el ranking cubre la Comunidad Valenciana, pero puede crecer con tu ayuda. Si quieres encargarte de introducir los datos de las carreras de tu comunidad,
+        - link "ponte en contacto conmigo" [ref=e39] [cursor=pointer]:
+          - /url: https://mfppcycling.com/contacto-entrenamientos-ciclismo-mfpp-cycling/
+        - text: y te daré acceso para hacerlo.

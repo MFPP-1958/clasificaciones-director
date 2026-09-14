@@ -1,0 +1,646 @@
+- generic [active] [ref=f4e1]:
+  - dialog [ref=f4e2]:
+    - generic [ref=f4e3]:
+      - paragraph [ref=f4e5]: Utilizamos cookies
+      - paragraph [ref=f4e7]: Usamos cookies y otras técnicas de rastreo para mejorar tu experiencia de navegación en nuestra web, para mostrarte contenidos personalizados y anuncios adecuados, para analizar el tráfico en nuestra web y para comprender de donde llegan nuestros visitantes.
+      - generic [ref=f4e8]:
+        - button "Aceptar" [ref=f4e9] [cursor=pointer]
+        - button "Rechazar" [ref=f4e10] [cursor=pointer]
+        - button "Configurar" [ref=f4e11] [cursor=pointer]
+  - generic [ref=f4e12]:
+    - generic [ref=f4e13]:
+      - link [ref=f4e15] [cursor=pointer]:
+        - /url: https://aragonciclismo.com/index.php/aragon
+        - img "FEDERACIÓN ARAGONESA DE CICLISMO" [ref=f4e16]
+      - generic [ref=f4e17]:
+        - generic [ref=f4e18]:
+          - button "Facebook" [ref=f4e19] [cursor=pointer]:
+            - generic [ref=f4e20]: 
+          - button "Twitter" [ref=f4e23] [cursor=pointer]
+          - button "Youtube" [ref=f4e28] [cursor=pointer]:
+            - generic [ref=f4e29]: 
+          - button "Instagram" [ref=f4e32] [cursor=pointer]:
+            - generic [ref=f4e33]: 
+        - link "Español" [ref=f4e37] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/es/smartweb/seccion/calendario/aragon/2026
+        - generic [ref=f4e40]:
+          - generic [ref=f4e41]: Buscador de contenido
+          - textbox "Buscador de contenido" [ref=f4e42]:
+            - /placeholder: Buscar...
+          - button " Buscador de contenido" [ref=f4e44] [cursor=pointer]:
+            - generic [ref=f4e45]: 
+            - generic [ref=f4e46]: Buscador de contenido
+      - tablist [ref=f4e48]:
+        - button [ref=f4e50] [cursor=pointer]:
+          - tab "Avatar" [ref=f4e51]:
+            - generic [ref=f4e52]: 
+        - text:  
+    - list [ref=f4e56]:
+      - listitem [ref=f4e57]:
+        - link "Inicio" [ref=f4e58] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/Inicio
+      - listitem [ref=f4e59]:
+        - button "Federación" [ref=f4e60] [cursor=pointer]
+      - listitem [ref=f4e62]:
+        - link "Fedérate/Únete" [ref=f4e63] [cursor=pointer]:
+          - /url: https://yosoyciclista.com/es/smartweb/seccion/unete/aragon
+      - listitem [ref=f4e64]:
+        - button "Club" [ref=f4e65] [cursor=pointer]
+      - listitem [ref=f4e67]:
+        - link "Canal Denuncias Acoso" [ref=f4e68] [cursor=pointer]:
+          - /url: https://federacionaragonesadeciclismo.canaletico.app/inicio
+      - listitem [ref=f4e69]:
+        - link "Universo Mujer" [ref=f4e70] [cursor=pointer]:
+          - /url: http://yosoyciclista.com/index.php/es/smartweb/ciclismo_mujer/portada/aragon
+      - listitem [ref=f4e71]:
+        - link "Quedadas" [ref=f4e72] [cursor=pointer]:
+          - /url: https://biketerritory.com/index.php/es/sellos/busqueda/quedadas
+      - listitem [ref=f4e73]:
+        - link "Universo ciclista" [ref=f4e74] [cursor=pointer]:
+          - /url: https://yosoyciclista.com/index.php/es/smartweb/universo_ciclista/inicio/aragon
+      - listitem [ref=f4e75]:
+        - link "Bike Territory" [ref=f4e76] [cursor=pointer]:
+          - /url: https://biketerritory.com/es/sellos/index
+      - listitem [ref=f4e77]:
+        - link "Deporte Master +55" [ref=f4e78] [cursor=pointer]:
+          - /url: https://aragonciclismo.my.canva.site/
+    - list [ref=f4e80]:
+      - listitem [ref=f4e81]:
+        - link "CARRETERA" [ref=f4e82] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/Carretera
+      - listitem [ref=f4e83]:
+        - link "BTT" [ref=f4e84] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/btt
+      - listitem [ref=f4e85]:
+        - link "BMX" [ref=f4e86] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/bmx
+      - listitem [ref=f4e87]:
+        - link "CICLOCROSS" [ref=f4e88] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/ciclocross
+      - listitem [ref=f4e89]:
+        - link "CICLISMO PARA TODOS" [ref=f4e90] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/ciclismo-para-todos
+      - listitem [ref=f4e91]:
+        - link "ESCUELAS" [ref=f4e92] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/ESCUELAS
+      - listitem [ref=f4e93]:
+        - link "MUJER y CICLISMO" [ref=f4e94] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/MUJER-y-CICLISMO
+      - listitem [ref=f4e95]:
+        - link "FORMACIÓN" [ref=f4e96] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/FORMACIoN
+      - listitem [ref=f4e97]:
+        - link "CALENDARIO" [ref=f4e98] [cursor=pointer]:
+          - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/seccion/aragon/CALENDARIO_GLOBAL
+      - listitem [ref=f4e99]:
+        - button "TECNIFICACIÓN" [ref=f4e100] [cursor=pointer]
+    - text:  
+  - text:  
+  - generic [ref=f4e104]:
+    - heading "Calendario" [level=3] [ref=f4e106]
+    - generic [ref=f4e109]:
+      - generic [ref=f4e110]:
+        - combobox [ref=f4e112]:
+          - option "TEMP. 2026" [selected]
+          - option "TEMP. 2025"
+          - option "TEMP. 2024"
+          - option "TEMP. 2023"
+          - option "TEMP. 2022"
+          - option "TEMP. 2021"
+          - option "TEMP. 2020"
+          - option "TEMP. 2019"
+          - option "TEMP. 2018"
+          - option "TEMP. 2017"
+          - option "TEMP. 2016"
+          - option "TEMP. 2015"
+          - option "TEMP. 2014"
+        - combobox [ref=f4e114]:
+          - option "Cat. Todas" [selected]
+      - generic [ref=f4e116]:
+        - generic [ref=f4e117]: 16/8/2026
+        - slider: "1786834800"
+        - generic [ref=f4e118]: 31/12/2026
+        - slider: "1798671600"
+        - generic [ref=f4e120]:
+          - generic [ref=f4e121]: 
+          - generic [ref=f4e122]: 
+        - generic [ref=f4e123]: 
+        - generic [ref=f4e126]: 
+        - generic [ref=f4e129]: 
+        - generic [ref=f4e132]: 
+        - generic [ref=f4e135]: 
+      - generic [ref=f4e138]:
+        - button [ref=f4e139] [cursor=pointer]:
+          - generic [ref=f4e140]: 
+        - button [ref=f4e141] [cursor=pointer]:
+          - generic [ref=f4e142]: 
+      - text:         
+    - generic [ref=f4e145]:
+      - grid [ref=f4e147]:
+        - generic:
+          - generic [ref=f4e149]:
+            - text: Mostrar
+            - combobox "Mostrar registros" [ref=f4e150]:
+              - option "10"
+              - option "25"
+              - option "50"
+              - option "100" [selected]
+            - text: registros
+          - generic [ref=f4e152]:
+            - text: "Buscar:"
+            - textbox "Buscar:" [ref=f4e153]
+        - table [ref=f4e154]:
+          - rowgroup [ref=f4e155]:
+            - row [ref=f4e156]:
+              - 'columnheader "FECHA: Activar para ordenar la columna de manera descendente" [ref=f4e157] [cursor=pointer]': FECHA
+              - 'columnheader "MODALIDAD: Activar para ordenar la columna de manera ascendente" [ref=f4e158] [cursor=pointer]': MODALIDAD
+              - 'columnheader "CATEGORÍAS: Activar para ordenar la columna de manera ascendente" [ref=f4e159] [cursor=pointer]': CATEGORÍAS
+              - 'columnheader "CLASE: Activar para ordenar la columna de manera ascendente" [ref=f4e160] [cursor=pointer]': CLASE
+              - 'columnheader "PRUEBA: Activar para ordenar la columna de manera ascendente" [ref=f4e161] [cursor=pointer]': PRUEBA
+              - 'columnheader "LUGAR (PROVINCIA): Activar para ordenar la columna de manera ascendente" [ref=f4e162] [cursor=pointer]': LUGAR (PROVINCIA)
+              - 'columnheader "CLUB: Activar para ordenar la columna de manera ascendente" [ref=f4e163] [cursor=pointer]': CLUB
+              - 'columnheader "OBSERVACIONES: Activar para ordenar la columna de manera ascendente" [ref=f4e164] [cursor=pointer]': OBSERVACIONES
+              - 'columnheader "CLASIF.: Activar para ordenar la columna de manera ascendente" [ref=f4e165] [cursor=pointer]': CLASIF.
+              - 'columnheader "SEGUIR: Activar para ordenar la columna de manera ascendente" [ref=f4e166] [cursor=pointer]': SEGUIR
+              - 'columnheader "INFO.: Activar para ordenar la columna de manera ascendente" [ref=f4e167] [cursor=pointer]': INFO.
+          - alert [ref=f4e168]:
+            - row [ref=f4e169]:
+              - cell [ref=f4e170] [cursor=pointer]:
+                - button "29 AGO" [expanded] [ref=f4e171]: 29AGO
+              - cell "Carretera" [ref=f4e172] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, ELITE..." [ref=f4e173] [cursor=pointer]
+              - cell "6.2" [ref=f4e174] [cursor=pointer]
+              - cell "LXXXI GRAN PREMIO FIESTAS DE TAMARITE DE LITERA" [ref=f4e175] [cursor=pointer]
+              - cell "TAMARITE DE LITERA (HUESCA)" [ref=f4e176] [cursor=pointer]
+              - cell "MONZON C.C." [ref=f4e177] [cursor=pointer]
+              - cell "COPA CRITERIUM" [ref=f4e178] [cursor=pointer]
+              - cell [ref=f4e179]
+              - cell [ref=f4e180]:
+                - img [ref=f4e181] [cursor=pointer]
+              - cell [ref=f4e182]:
+                - link "MÁS" [ref=f4e184] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/33638-LXXXI-GRAN-PREMIO-FIESTAS-DE-TAMARITE-DE-LITERA
+            - row [ref=f4e185]:
+              - cell [ref=f4e186] [cursor=pointer]:
+                - button "29 AGO" [expanded] [ref=f4e187]: 29AGO
+              - cell "BTT" [ref=f4e188] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, CICLO..." [ref=f4e189] [cursor=pointer]
+              - cell "10.4" [ref=f4e190] [cursor=pointer]
+              - cell "X TITANICA RIODEVA MTB" [ref=f4e191] [cursor=pointer]
+              - cell "RIODEVA (TERUEL)" [ref=f4e192] [cursor=pointer]
+              - cell "RIODEVA C.C." [ref=f4e193] [cursor=pointer]
+              - cell "COPA XCM CYCLON" [ref=f4e194] [cursor=pointer]
+              - cell [ref=f4e195]
+              - cell [ref=f4e196]:
+                - img [ref=f4e197] [cursor=pointer]
+              - cell [ref=f4e198]:
+                - link "MÁS" [ref=f4e200] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/32823-X-TITANICA-RIODEVA-MTB
+            - row [ref=f4e201]:
+              - cell [ref=f4e202] [cursor=pointer]:
+                - button "30 AGO" [expanded] [ref=f4e203]: 30AGO
+              - cell "BTT" [ref=f4e204] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, CICLO..." [ref=f4e205] [cursor=pointer]
+              - cell "10.2.1" [ref=f4e206] [cursor=pointer]
+              - cell "XXXIII BTT MEMORIAL JORGE RAMI" [ref=f4e207] [cursor=pointer]
+              - cell "BENASQUE (HUESCA)" [ref=f4e208] [cursor=pointer]
+              - cell "VALLE DE BENASQUE A.C." [ref=f4e209] [cursor=pointer]
+              - cell [ref=f4e210] [cursor=pointer]
+              - cell [ref=f4e211]
+              - cell [ref=f4e212]:
+                - img [ref=f4e213] [cursor=pointer]
+              - cell [ref=f4e214]:
+                - link "MÁS" [ref=f4e216] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/34993-XXXIII-BTT-MEMORIAL-JORGE-RAMI
+            - row [ref=f4e217]:
+              - cell [ref=f4e218] [cursor=pointer]:
+                - button "06 SEP" [expanded] [ref=f4e219]: 06SEP
+              - cell "Carretera" [ref=f4e220] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, ELITE..." [ref=f4e221] [cursor=pointer]
+              - cell "6.2" [ref=f4e222] [cursor=pointer]
+              - cell "II CRITERIUM CIUDAD DE ALCAÑIZ" [ref=f4e223] [cursor=pointer]
+              - cell "ALCAÑIZ (TERUEL)" [ref=f4e224] [cursor=pointer]
+              - cell "BIKES EJAROM" [ref=f4e225] [cursor=pointer]
+              - cell "COPA CRITERIUM" [ref=f4e226] [cursor=pointer]
+              - cell [ref=f4e227]
+              - cell [ref=f4e228]:
+                - img [ref=f4e229] [cursor=pointer]
+              - cell [ref=f4e230]:
+                - link "MÁS" [ref=f4e232] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/34387-II-CRITERIUM-CIUDAD-DE-ALCANIZ
+            - row [ref=f4e233]:
+              - cell [ref=f4e234] [cursor=pointer]:
+                - button "06 SEP" [expanded] [ref=f4e235]: 06SEP
+              - cell "BTT" [ref=f4e236] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, CICLO..." [ref=f4e237] [cursor=pointer]
+              - cell "10.8" [ref=f4e238] [cursor=pointer]
+              - cell "FOZ CALANDA BIKE PARK" [ref=f4e239] [cursor=pointer]
+              - cell "FOZ CALANDA (TERUEL)" [ref=f4e240] [cursor=pointer]
+              - cell "TRAMUNTANA X-TREM CLUB ESPORTI C.E." [ref=f4e241] [cursor=pointer]
+              - cell [ref=f4e242] [cursor=pointer]
+              - cell [ref=f4e243]
+              - cell [ref=f4e244]:
+                - img [ref=f4e245] [cursor=pointer]
+              - cell [ref=f4e246]:
+                - link "MÁS" [ref=f4e248] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/34888-FOZ-CALANDA-BIKE-PARK
+            - row [ref=f4e249]:
+              - cell [ref=f4e250] [cursor=pointer]:
+                - button "12 SEP" [expanded] [ref=f4e251]: 12SEP
+              - cell "Carretera" [ref=f4e252] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, ELITE..." [ref=f4e253] [cursor=pointer]
+              - cell "6.2" [ref=f4e254] [cursor=pointer]
+              - cell "LXXXII GRAN PREMIO VILLA DE BINEFAR" [ref=f4e255] [cursor=pointer]
+              - cell "BINEFAR (HUESCA)" [ref=f4e256] [cursor=pointer]
+              - cell "BINEFAR 2010 C.C." [ref=f4e257] [cursor=pointer]
+              - cell "COPA CRITERIUM" [ref=f4e258] [cursor=pointer]
+              - cell [ref=f4e259]
+              - cell [ref=f4e260]:
+                - img [ref=f4e261] [cursor=pointer]
+              - cell [ref=f4e262]
+            - row [ref=f4e263]:
+              - cell [ref=f4e264] [cursor=pointer]:
+                - button "12 SEP" [expanded] [ref=f4e265]: 12SEP
+              - cell "BTT Pump Track" [ref=f4e266] [cursor=pointer]
+              - cell "Alevin, Alevin Fem., Cade..." [ref=f4e267] [cursor=pointer]
+              - cell "PT.1" [ref=f4e268] [cursor=pointer]
+              - cell "COPA DE ESPAÑA PUMP TRACK - II GP PUMP TRACK ALBALATE DE CINCA" [ref=f4e269] [cursor=pointer]
+              - cell "ALBALATE DE CINCA (HUESCA)" [ref=f4e270] [cursor=pointer]
+              - cell "BIOFRUTAL SPORT C.D." [ref=f4e271] [cursor=pointer]
+              - cell "COPA DE ESPAÑA DE PUMP TRACK. COPA ARAGONESA PUMPTRACK //" [ref=f4e272] [cursor=pointer]
+              - cell [ref=f4e273]
+              - cell [ref=f4e274]:
+                - img [ref=f4e275] [cursor=pointer]
+              - cell [ref=f4e276]:
+                - link "MÁS" [ref=f4e278] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/32657-COPA-DE-ESPANA-PUMP-TRACK---II-GP-PUMP-TRACK-ALBALATE-DE-CINCA
+            - row [ref=f4e279]:
+              - cell [ref=f4e280] [cursor=pointer]:
+                - button "19 SEP" [expanded] [ref=f4e281]: 19SEP
+              - cell "Carretera" [ref=f4e282] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, ELITE..." [ref=f4e283] [cursor=pointer]
+              - cell "6.2" [ref=f4e284] [cursor=pointer]
+              - cell "LIII TROFEO SAN MATEO" [ref=f4e285] [cursor=pointer]
+              - cell "MONZON (HUESCA)" [ref=f4e286] [cursor=pointer]
+              - cell "MONZON C.C." [ref=f4e287] [cursor=pointer]
+              - cell "COPA CRITERIUM" [ref=f4e288] [cursor=pointer]
+              - cell [ref=f4e289]
+              - cell [ref=f4e290]:
+                - img [ref=f4e291] [cursor=pointer]
+              - cell [ref=f4e292]
+            - row [ref=f4e293]:
+              - cell [ref=f4e294] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f4e295]: 20SEP
+              - cell "Carretera" [ref=f4e296] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, ELITE..." [ref=f4e297] [cursor=pointer]
+              - cell "6.1" [ref=f4e298] [cursor=pointer]
+              - cell "Cº ARAGON RUTA ELITE-SUB23, MASTER, JUNIOR, FEMINAS Y CADETES" [ref=f4e299] [cursor=pointer]
+              - cell "ALMONACID DE LA SIERRA (ZARAGOZA)" [ref=f4e300] [cursor=pointer]
+              - cell "ARAGONESA CICLISMO FED." [ref=f4e301] [cursor=pointer]
+              - cell "CAMPEONATO DE ARAGÓN RUTA" [ref=f4e302] [cursor=pointer]
+              - cell [ref=f4e303]
+              - cell [ref=f4e304]:
+                - img [ref=f4e305] [cursor=pointer]
+              - cell [ref=f4e306]:
+                - link "MÁS" [ref=f4e308] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/35284-Co-ARAGON-RUTA-ELITE-SUB23-MASTER-JUNIOR-FEMINAS-Y-CADETES
+            - row [ref=f4e309]:
+              - cell [ref=f4e310] [cursor=pointer]:
+                - button "26 SEP" [expanded] [ref=f4e311]: 26SEP
+              - cell "BMX" [ref=f4e312] [cursor=pointer]
+              - cell "ALEVIN, ALEVIN FEM, CADET..." [ref=f4e313] [cursor=pointer]
+              - cell "30.2" [ref=f4e314] [cursor=pointer]
+              - cell "COPA ARAGON UTEBO 2026" [ref=f4e315] [cursor=pointer]
+              - cell "UTEBO (ZARAGOZA)" [ref=f4e316] [cursor=pointer]
+              - cell "UTEBO CLUB BMX" [ref=f4e317] [cursor=pointer]
+              - cell "COPA ARAGONESA BMX" [ref=f4e318] [cursor=pointer]
+              - cell [ref=f4e319]
+              - cell [ref=f4e320]:
+                - img [ref=f4e321] [cursor=pointer]
+              - cell [ref=f4e322]
+            - row [ref=f4e323]:
+              - cell [ref=f4e324] [cursor=pointer]:
+                - button "27 SEP" [expanded] [ref=f4e325]: 27SEP
+              - cell "Ciclismo para todos" [ref=f4e326] [cursor=pointer]
+              - cell "A partir de 15 años" [ref=f4e327] [cursor=pointer]
+              - cell "1.30.2" [ref=f4e328] [cursor=pointer]
+              - cell "XXXVIII CICLOTURISTA MAESTRAZGO" [ref=f4e329] [cursor=pointer]
+              - cell "CANTAVIEJA (TERUEL)" [ref=f4e330] [cursor=pointer]
+              - cell "MAESTRAZGO COMARCA DEL" [ref=f4e331] [cursor=pointer]
+              - cell [ref=f4e332] [cursor=pointer]
+              - cell [ref=f4e333]
+              - cell [ref=f4e334]:
+                - img [ref=f4e335] [cursor=pointer]
+              - cell [ref=f4e336]
+            - row [ref=f4e337]:
+              - cell [ref=f4e338] [cursor=pointer]:
+                - button "27 SEP" [expanded] [ref=f4e339]: 27SEP
+              - cell "Ciclismo para todos Ciclodep" [ref=f4e340] [cursor=pointer]
+              - cell "TODAS CATEGORIAS A PARTIR..." [ref=f4e341] [cursor=pointer]
+              - cell "20.2" [ref=f4e342] [cursor=pointer]
+              - cell "V BTT MAR DE ARAGON" [ref=f4e343] [cursor=pointer]
+              - cell "CASPE (ZARAGOZA)" [ref=f4e344] [cursor=pointer]
+              - cell "CASPOLINO C.C." [ref=f4e345] [cursor=pointer]
+              - cell [ref=f4e346] [cursor=pointer]
+              - cell [ref=f4e347]
+              - cell [ref=f4e348]:
+                - img [ref=f4e349] [cursor=pointer]
+              - cell [ref=f4e350]
+            - row [ref=f4e351]:
+              - cell [ref=f4e352] [cursor=pointer]:
+                - button "03 OCT" [expanded] [ref=f4e353]: 03OCT
+              - cell "Carretera" [ref=f4e354] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, ELITE..." [ref=f4e355] [cursor=pointer]
+              - cell "6.2" [ref=f4e356] [cursor=pointer]
+              - cell "XI TROFEO FRUTOS SECOS DORONDON FIESTAS DE SAN ATILANO" [ref=f4e357] [cursor=pointer]
+              - cell "TARAZONA (ZARAGOZA)" [ref=f4e358] [cursor=pointer]
+              - cell "TURIASO C.C." [ref=f4e359] [cursor=pointer]
+              - cell "COPA CRITERIUM" [ref=f4e360] [cursor=pointer]
+              - cell [ref=f4e361]
+              - cell [ref=f4e362]:
+                - img [ref=f4e363] [cursor=pointer]
+              - cell [ref=f4e364]
+            - row [ref=f4e365]:
+              - cell [ref=f4e366] [cursor=pointer]:
+                - button "03 OCT" [expanded] [ref=f4e367]: 03OCT
+              - cell "Carretera" [ref=f4e368] [cursor=pointer]
+              - cell "ALEVIN, ALEVIN FEM, CADET..." [ref=f4e369] [cursor=pointer]
+              - cell "1.1" [ref=f4e370] [cursor=pointer]
+              - cell "XI TROFEO FRUTOS SECOS DORONDON FIESTAS DE SAN ATILANO ESCUELAS" [ref=f4e371] [cursor=pointer]
+              - cell "TARAZONA (ZARAGOZA)" [ref=f4e372] [cursor=pointer]
+              - cell "TURIASO C.C." [ref=f4e373] [cursor=pointer]
+              - cell [ref=f4e374] [cursor=pointer]
+              - cell [ref=f4e375]
+              - cell [ref=f4e376]:
+                - img [ref=f4e377] [cursor=pointer]
+              - cell [ref=f4e378]
+            - row [ref=f4e379]:
+              - cell [ref=f4e380] [cursor=pointer]:
+                - button "04 OCT" [expanded] [ref=f4e381]: 04OCT
+              - cell "Carretera" [ref=f4e382] [cursor=pointer]
+              - cell "CADETE, ELITE, JUNIOR, MA..." [ref=f4e383] [cursor=pointer]
+              - cell "6.2" [ref=f4e384] [cursor=pointer]
+              - cell "XI CRITERIUM UTEBO SKODA ZARATECNO" [ref=f4e385] [cursor=pointer]
+              - cell "UTEBO (ZARAGOZA)" [ref=f4e386] [cursor=pointer]
+              - cell "UTEBO C.C." [ref=f4e387] [cursor=pointer]
+              - cell "COPA CRITERIUM" [ref=f4e388] [cursor=pointer]
+              - cell [ref=f4e389]
+              - cell [ref=f4e390]:
+                - img [ref=f4e391] [cursor=pointer]
+              - cell [ref=f4e392]
+            - row [ref=f4e393]:
+              - cell [ref=f4e394] [cursor=pointer]:
+                - button "04 OCT" [expanded] [ref=f4e395]: 04OCT
+              - cell "Carretera" [ref=f4e396] [cursor=pointer]
+              - cell "CADETE FEM, ELITE FEM, JU..." [ref=f4e397] [cursor=pointer]
+              - cell "6.2" [ref=f4e398] [cursor=pointer]
+              - cell "III CRITERIUM UTEBO FEMINAS MEMORIAL EVA LOPEZ" [ref=f4e399] [cursor=pointer]
+              - cell "UTEBO (ZARAGOZA)" [ref=f4e400] [cursor=pointer]
+              - cell "UTEBO C.C." [ref=f4e401] [cursor=pointer]
+              - cell "COPA CRITERIUM" [ref=f4e402] [cursor=pointer]
+              - cell [ref=f4e403]
+              - cell [ref=f4e404]:
+                - img [ref=f4e405] [cursor=pointer]
+              - cell [ref=f4e406]
+            - row [ref=f4e407]:
+              - cell [ref=f4e408] [cursor=pointer]:
+                - button "04 OCT" [expanded] [ref=f4e409]: 04OCT
+              - cell "BTT" [ref=f4e410] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, CICLO..." [ref=f4e411] [cursor=pointer]
+              - cell "10.8" [ref=f4e412] [cursor=pointer]
+              - cell "ZONA ZERO ENDURO RACE ABIZANDA" [ref=f4e413] [cursor=pointer]
+              - cell "ABIZANDA (HUESCA)" [ref=f4e414] [cursor=pointer]
+              - cell "TRAMUNTANA X-TREM CLUB ESPORTI C.E." [ref=f4e415] [cursor=pointer]
+              - cell [ref=f4e416] [cursor=pointer]
+              - cell [ref=f4e417]
+              - cell [ref=f4e418]:
+                - img [ref=f4e419] [cursor=pointer]
+              - cell [ref=f4e420]
+            - row [ref=f4e421]:
+              - cell [ref=f4e422] [cursor=pointer]:
+                - button "17 OCT" [expanded] [ref=f4e423]: 17OCT
+              - cell "Trial" [ref=f4e424] [cursor=pointer]
+              - cell "Alevin, Cadete, Cadete fe..." [ref=f4e425] [cursor=pointer]
+              - cell "C1" [ref=f4e426] [cursor=pointer]
+              - cell "CLEAN XPERIENCE" [ref=f4e427] [cursor=pointer]
+              - cell "CASPE (ZARAGOZA)" [ref=f4e428] [cursor=pointer]
+              - cell "CASPOLINO C.C." [ref=f4e429] [cursor=pointer]
+              - cell [ref=f4e430] [cursor=pointer]
+              - cell [ref=f4e431]
+              - cell [ref=f4e432]:
+                - img [ref=f4e433] [cursor=pointer]
+              - cell [ref=f4e434]
+            - row [ref=f4e435]:
+              - cell [ref=f4e436] [cursor=pointer]:
+                - button "17 OCT" [expanded] [ref=f4e437]: 17OCT
+              - cell "Pump Track" [ref=f4e438] [cursor=pointer]
+              - cell "ALEVIN, ALEVIN FEM, CADET..." [ref=f4e439] [cursor=pointer]
+              - cell "30.5" [ref=f4e440] [cursor=pointer]
+              - cell "IV TROFEO CIUDAD DE MONZON" [ref=f4e441] [cursor=pointer]
+              - cell "MONZON (HUESCA)" [ref=f4e442] [cursor=pointer]
+              - cell "BIOFRUTAL SPORT C.D." [ref=f4e443] [cursor=pointer]
+              - cell "COPA ARAGONESA PUMPTRACK // CTO. ARAGÓN PUMPTRACK" [ref=f4e444] [cursor=pointer]
+              - cell [ref=f4e445]
+              - cell [ref=f4e446]:
+                - img [ref=f4e447] [cursor=pointer]
+              - cell [ref=f4e448]
+            - row [ref=f4e449]:
+              - cell [ref=f4e450] [cursor=pointer]:
+                - button "17 OCT" [expanded] [ref=f4e451]: 17OCT
+              - cell "BTT" [ref=f4e452] [cursor=pointer]
+              - cell "CADETE, CADETE FEM, CICLO..." [ref=f4e453] [cursor=pointer]
+              - cell "10.3" [ref=f4e454] [cursor=pointer]
+              - cell "VI RUTA BTT LA DESPEÑACERA" [ref=f4e455] [cursor=pointer]
+              - cell "SALAS ALTAS (HUESCA)" [ref=f4e456] [cursor=pointer]
+              - cell "BARBASTRO C.C." [ref=f4e457] [cursor=pointer]
+              - cell [ref=f4e458] [cursor=pointer]
+              - cell [ref=f4e459]
+              - cell [ref=f4e460]:
+                - img [ref=f4e461] [cursor=pointer]
+              - cell [ref=f4e462]:
+                - link "MÁS" [ref=f4e464] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/35148-VI-RUTA-BTT-LA-DESPENACERA
+            - row [ref=f4e465]:
+              - cell [ref=f4e466] [cursor=pointer]:
+                - button "24 OCT" [expanded] [ref=f4e467]: 24OCT
+              - cell "Carretera" [ref=f4e468] [cursor=pointer]
+              - cell "ALEVIN, ALEVIN FEM, CADET..." [ref=f4e469] [cursor=pointer]
+              - cell "1.2" [ref=f4e470] [cursor=pointer]
+              - cell "X TROFEO DAVID CAÑADA . CICLISMO ES VIDA" [ref=f4e471] [cursor=pointer]
+              - cell "ZARAGOZA (ZARAGOZA)" [ref=f4e472] [cursor=pointer]
+              - cell "ZARAGOZA ESCUELA CICLISTA" [ref=f4e473] [cursor=pointer]
+              - cell [ref=f4e474] [cursor=pointer]
+              - cell [ref=f4e475]
+              - cell [ref=f4e476]:
+                - img [ref=f4e477] [cursor=pointer]
+              - cell [ref=f4e478]:
+                - link "MÁS" [ref=f4e480] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/35138-X-TROFEO-DAVID-CANADA--CICLISMO-ES-VIDA
+            - row [ref=f4e481]:
+              - cell [ref=f4e482] [cursor=pointer]:
+                - button "24 OCT" [expanded] [ref=f4e483]: 24OCT
+              - cell "Gravel" [ref=f4e484] [cursor=pointer]
+              - cell "Cicloturistas, Elite, Eli..." [ref=f4e485] [cursor=pointer]
+              - cell "G.5" [ref=f4e486] [cursor=pointer]
+              - cell "THE DUSTLINE" [ref=f4e487] [cursor=pointer]
+              - cell "ZARAGOZA (ZARAGOZA)" [ref=f4e488] [cursor=pointer]
+              - cell "VELO CLUB ARAGONA" [ref=f4e489] [cursor=pointer]
+              - cell "CAMPEONATO DE ARAGÓN GRAVEL" [ref=f4e490] [cursor=pointer]
+              - cell [ref=f4e491]
+              - cell [ref=f4e492]:
+                - img [ref=f4e493] [cursor=pointer]
+              - cell [ref=f4e494]:
+                - link "MÁS" [ref=f4e496] [cursor=pointer]:
+                  - /url: https://aragonciclismo.com/index.php/smartweb/inscripciones/prueba/35141-THE-DUSTLINE
+            - row [ref=f4e497]:
+              - cell [ref=f4e498] [cursor=pointer]:
+                - button "15 NOV" [expanded] [ref=f4e499]: 15NOV
+              - cell "BMX" [ref=f4e500] [cursor=pointer]
+              - cell "ALEVIN, ALEVIN FEM, CADET..." [ref=f4e501] [cursor=pointer]
+              - cell "30.2" [ref=f4e502] [cursor=pointer]
+              - cell "CAMPEONATO DE ARAGON BMX 2026" [ref=f4e503] [cursor=pointer]
+              - cell "CIRCUITO MUNICIPAL DE RICLA (ZARAGOZA)" [ref=f4e504] [cursor=pointer]
+              - cell "BMX SCHOOL ZARAGOZA C.D." [ref=f4e505] [cursor=pointer]
+              - cell [ref=f4e506] [cursor=pointer]
+              - cell [ref=f4e507]
+              - cell [ref=f4e508]:
+                - img [ref=f4e509] [cursor=pointer]
+              - cell [ref=f4e510]
+            - row [ref=f4e511]:
+              - cell [ref=f4e512] [cursor=pointer]:
+                - button "29 NOV" [expanded] [ref=f4e513]: 29NOV
+              - cell "Pump Track" [ref=f4e514] [cursor=pointer]
+              - cell "ALEVIN, ALEVIN FEM, CADET..." [ref=f4e515] [cursor=pointer]
+              - cell "30.5" [ref=f4e516] [cursor=pointer]
+              - cell "COPA DE ARAGON - SAN MATEO DE GALLEGO" [ref=f4e517] [cursor=pointer]
+              - cell "PUMPTRACK SAN MATEO DE GALLEGO (ZARAGOZA)" [ref=f4e518] [cursor=pointer]
+              - cell "BMX SCHOOL ZARAGOZA C.D." [ref=f4e519] [cursor=pointer]
+              - cell "COPA ARAGONESA PUMPTRACK" [ref=f4e520] [cursor=pointer]
+              - cell [ref=f4e521]
+              - cell [ref=f4e522]:
+                - img [ref=f4e523] [cursor=pointer]
+              - cell [ref=f4e524]
+            - row [ref=f4e525]:
+              - cell [ref=f4e526] [cursor=pointer]:
+                - button "19 DIC" [expanded] [ref=f4e527]: 19DIC
+              - cell "CicloCross" [ref=f4e528] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f4e529] [cursor=pointer]
+              - cell "1.33.5" [ref=f4e530] [cursor=pointer]
+              - cell "IV CICLOCROSS CIUDAD DE TARAZONA" [ref=f4e531] [cursor=pointer]
+              - cell "TARAZONA (ZARAGOZA)" [ref=f4e532] [cursor=pointer]
+              - cell "TURIASO C.C." [ref=f4e533] [cursor=pointer]
+              - cell [ref=f4e534] [cursor=pointer]
+              - cell [ref=f4e535]
+              - cell [ref=f4e536]:
+                - img [ref=f4e537] [cursor=pointer]
+              - cell [ref=f4e538]
+            - row [ref=f4e539]:
+              - cell [ref=f4e540] [cursor=pointer]:
+                - button "19 DIC" [expanded] [ref=f4e541]: 19DIC
+              - cell "CicloCross" [ref=f4e542] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f4e543] [cursor=pointer]
+              - cell "C2CX" [ref=f4e544] [cursor=pointer]
+              - cell "IV CICLOCROSS INTERNACIONAL CIUDAD DE TARAZONA" [ref=f4e545] [cursor=pointer]
+              - cell "TARAZONA (ZARAGOZA)" [ref=f4e546] [cursor=pointer]
+              - cell "TURIASO C.C." [ref=f4e547] [cursor=pointer]
+              - cell [ref=f4e548] [cursor=pointer]
+              - cell [ref=f4e549]
+              - cell [ref=f4e550]:
+                - img [ref=f4e551] [cursor=pointer]
+              - cell [ref=f4e552]
+            - row [ref=f4e553]:
+              - cell [ref=f4e554] [cursor=pointer]:
+                - button "20 DIC" [expanded] [ref=f4e555]: 20DIC
+              - cell "CicloCross" [ref=f4e556] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f4e557] [cursor=pointer]
+              - cell "1.33.5" [ref=f4e558] [cursor=pointer]
+              - cell "V CICLOCROSS VILLA DE LOS FAYOS" [ref=f4e559] [cursor=pointer]
+              - cell "LOS FAYOS (ZARAGOZA)" [ref=f4e560] [cursor=pointer]
+              - cell "TURIASO C.C." [ref=f4e561] [cursor=pointer]
+              - cell [ref=f4e562] [cursor=pointer]
+              - cell [ref=f4e563]
+              - cell [ref=f4e564]:
+                - img [ref=f4e565] [cursor=pointer]
+              - cell [ref=f4e566]
+            - row [ref=f4e567]:
+              - cell [ref=f4e568] [cursor=pointer]:
+                - button "31 DIC" [expanded] [ref=f4e569]: 31DIC
+              - cell "Ciclismo para todos Ciclodep" [ref=f4e570] [cursor=pointer]
+              - cell "TODAS CATEGORIAS A PARTIR..." [ref=f4e571] [cursor=pointer]
+              - cell "20.1" [ref=f4e572] [cursor=pointer]
+              - cell "PRUEBAS 2026" [ref=f4e573] [cursor=pointer]
+              - cell "ZARAGOZA (ZARAGOZA)" [ref=f4e574] [cursor=pointer]
+              - cell "ARAGONESA CICLISMO FED." [ref=f4e575] [cursor=pointer]
+              - cell [ref=f4e576] [cursor=pointer]
+              - cell [ref=f4e577]
+              - cell [ref=f4e578]:
+                - img [ref=f4e579] [cursor=pointer]
+              - cell [ref=f4e580]
+        - generic:
+          - generic: Mostrando registros del 1 al 28 de un total de 28 registros
+          - list [ref=f4e583]:
+            - listitem [ref=f4e584]:
+              - link:
+                - /url: "#"
+            - listitem [ref=f4e585]:
+              - link "1" [ref=f4e586] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f4e587]:
+              - link:
+                - /url: "#"
+      - text:                                      
+  - generic [ref=f4e589]:
+    - generic [ref=f4e590]:
+      - link [ref=f4e591] [cursor=pointer]:
+        - /url: https://www.cofedar.es/
+      - link [ref=f4e593] [cursor=pointer]:
+        - /url: http://www.aragon.es/
+      - link [ref=f4e595] [cursor=pointer]:
+        - /url: https://ulbsports.es/
+    - generic [ref=f4e597]:
+      - link [ref=f4e598] [cursor=pointer]:
+        - /url: http://www.rfec.com
+      - link [ref=f4e600] [cursor=pointer]:
+        - /url: http://www.uec.ch/
+      - link [ref=f4e602] [cursor=pointer]:
+        - /url: http://www.csd.gob.es/
+      - link [ref=f4e604] [cursor=pointer]:
+        - /url: http://www.uci.ch
+  - generic [ref=f4e606]:
+    - generic [ref=f4e607]:
+      - generic [ref=f4e609]:
+        - paragraph [ref=f4e611]: FEDERACIÓN ARAGONESA DE CICLISMO
+        - paragraph [ref=f4e612]: "Avda. José Atarés, 101 - Semisótano - 50018 ZaragozaTeléfono: 976730248Email: info@aragonciclismo.com"
+      - generic [ref=f4e614]:
+        - link "Calendario" [ref=f4e616] [cursor=pointer]:
+          - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/aragon/CALENDARIO_GLOBAL
+        - link "Únete" [ref=f4e618] [cursor=pointer]:
+          - /url: https://yosoyciclista.com/es/smartweb/seccion/unete/aragon
+        - link "CiclismoTV RFEC" [ref=f4e619] [cursor=pointer]:
+          - /url: http://rfec.com/index.php/es/smartweb/inicio/ciclismotv/rfec
+        - link "Ubicación" [ref=f4e622] [cursor=pointer]:
+          - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/aragon/Datos-de-contacto
+        - link "Seguros" [ref=f4e624] [cursor=pointer]:
+          - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/aragon/federacion/Seguros
+        - generic [ref=f4e625]:
+          - link "Clubes" [ref=f4e626] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/aragon/Listado-de-Clubes
+          - link "Noticias" [ref=f4e627] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/aragon/Carretera/noticias
+      - link "He tenido un accidente, ¿qué debo hacer?" [ref=f4e632] [cursor=pointer]:
+        - /url: http://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/aragon/federacion/Seguros
+    - generic [ref=f4e635]:
+      - link "Facebook" [ref=f4e637] [cursor=pointer]:
+        - /url: https://www.facebook.com/aragonciclismo
+        - generic [ref=f4e638]: 
+      - link "Twitter" [ref=f4e641] [cursor=pointer]:
+        - /url: https://twitter.com/aragonciclismo
+      - link "Youtube" [ref=f4e646] [cursor=pointer]:
+        - /url: https://www.youtube.com/channel/UCXhfuH8x7FwjP3e9gfjOGJA
+        - generic [ref=f4e647]: 
+      - link "Instagram" [ref=f4e650] [cursor=pointer]:
+        - /url: https://www.instagram.com/aragonciclismo/
+        - generic [ref=f4e651]: 
+      - text: "2026"
+      - link "Términos y Condiciones, Aviso Legal, Política de Privacidad y Registro de actividades" [ref=f4e655] [cursor=pointer]:
+        - /url: https://aragonciclismo.com/index.php/es/smartweb/seccion/terminosycondiciones/aragon

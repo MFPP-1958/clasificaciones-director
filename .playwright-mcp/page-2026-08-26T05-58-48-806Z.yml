@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - img "MFPP Cycling" [ref=e3]
+    - heading "Pruebas del calendario" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Este mes · Cadete · Masculino · Carretera · C. Valenciana · 4 pruebas
+  - table [ref=e7]:
+    - rowgroup [ref=e8]:
+      - row [ref=e9]:
+        - cell "27 agosto" [ref=e10]
+        - cell "TROFEO FIESTAS MANUEL MANUEL, VALENCIA · Carretera · Cadete" [ref=e11]: TROFEO FIESTAS MANUELMANUEL, VALENCIA · Carretera · Cadete
+      - row [ref=e12]:
+        - cell "29 agosto" [ref=e13]
+        - cell "XLIII TROFEU PENYA LA BUFA JAVEA/XABIA, ALICANTE · Carretera · Escuelas, Cadete" [ref=e14]: XLIII TROFEU PENYA LA BUFAJAVEA/XABIA, ALICANTE · Carretera · Escuelas, Cadete
+      - row [ref=e15]:
+        - cell "29 agosto" [ref=e16]
+        - cell "TROFEO ESCUELAS DE CICLISMO CHIVA CHIVA, VALENCIA · Carretera · Escuelas, Cadete" [ref=e17]: TROFEO ESCUELAS DE CICLISMO CHIVACHIVA, VALENCIA · Carretera · Escuelas, Cadete
+      - row [ref=e18]:
+        - cell "30 agosto" [ref=e19]
+        - cell "III TROFEO CICLISTA DE CADETES EN ALMORADI ALMORADI, ALICANTE · Carretera · Cadete, Junior" [ref=e20]: III TROFEO CICLISTA DE CADETES EN ALMORADIALMORADI, ALICANTE · Carretera · Cadete, Junior
+  - paragraph [ref=e21]: Calendario ciclista · mfppcycling.com/calendario

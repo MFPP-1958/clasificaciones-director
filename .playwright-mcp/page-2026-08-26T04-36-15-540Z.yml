@@ -1,0 +1,92 @@
+- generic [ref=e2]:
+  - paragraph [ref=e3]: Pruebas de las federaciones autonómicas de España
+  - paragraph [ref=e4]: "Actualizamos este calendario cada una o dos semanas. Las federaciones aplazan, modifican o retiran pruebas con cierta frecuencia, así que puede haber cambios de última hora: antes de desplazarte, confirma los detalles en la web oficial de la federación (tienes el enlace en la columna «Fuente»)."
+  - generic [ref=e5]:
+    - textbox "Buscar carrera" [ref=e6]:
+      - /placeholder: Busca una carrera, localidad o club…
+    - generic [ref=e7]:
+      - button "Próximos 7 días" [ref=e8] [cursor=pointer]
+      - button "Este finde" [ref=e9] [cursor=pointer]
+      - button "Mi comunidad" [ref=e10] [cursor=pointer]
+      - button "Mis favoritas" [ref=e11] [cursor=pointer]
+    - button "Filtros" [ref=e12] [cursor=pointer]
+  - complementary [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]: Filtros
+      - button [ref=e16] [cursor=pointer]: ✕
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]: Mis calendarios
+        - combobox [ref=e20]
+        - button [ref=e22] [cursor=pointer]: Guardar filtros actuales
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: Periodo
+          - combobox [ref=e26]
+        - generic [ref=e27]:
+          - generic [ref=e28]: Categorías (puedes elegir varias)
+          - generic [ref=e29]:
+            - generic [ref=e30] [cursor=pointer]:
+              - checkbox [ref=e31]
+              - text: Escuelas
+            - generic [ref=e32] [cursor=pointer]:
+              - checkbox [ref=e33]
+              - text: Cadete
+            - generic [ref=e34] [cursor=pointer]:
+              - checkbox [ref=e35]
+              - text: Junior / juvenil
+            - generic [ref=e36] [cursor=pointer]:
+              - checkbox [ref=e37]
+              - text: Sub-23
+            - generic [ref=e38] [cursor=pointer]:
+              - checkbox [ref=e39]
+              - text: Élite
+            - generic [ref=e40] [cursor=pointer]:
+              - checkbox [ref=e41]
+              - text: Máster
+        - generic [ref=e42]:
+          - generic [ref=e43]: Sexo
+          - combobox [ref=e44]
+        - generic [ref=e45]:
+          - generic [ref=e46]: Modalidad
+          - combobox [ref=e47]
+        - generic [ref=e48]:
+          - generic [ref=e49]: Federación
+          - combobox [ref=e50]
+        - generic [ref=e51]:
+          - generic [ref=e52]: Vecinas
+          - generic [ref=e53] [cursor=pointer]:
+            - checkbox [ref=e54]
+            - text: Incluir limítrofes
+        - generic [ref=e55]:
+          - generic [ref=e56]: Provincia
+          - combobox [ref=e57]
+        - generic [ref=e58]:
+          - generic [ref=e59]: Estado
+          - combobox [ref=e60]
+        - generic [ref=e61]:
+          - generic [ref=e62]: Inscripción
+          - generic [ref=e63] [cursor=pointer]:
+            - checkbox [ref=e64]
+            - text: Solo con ficha oficial
+        - button [ref=e66] [cursor=pointer]: Restablecer filtros
+    - button [ref=e68] [cursor=pointer]: Ver resultados
+  - generic [ref=e69]:
+    - status
+    - group "Cambiar vista" [ref=e70]:
+      - button "Lista" [ref=e71] [cursor=pointer]
+      - button "Mes" [ref=e72] [cursor=pointer]
+    - button "Novedades" [ref=e73] [cursor=pointer]
+    - button "Imprimir / imagen" [ref=e74] [cursor=pointer]
+  - table [ref=e76]:
+    - rowgroup [ref=e77]:
+      - row [ref=e78]:
+        - columnheader "Fecha" [ref=e79] [cursor=pointer]
+        - columnheader "Prueba" [ref=e80] [cursor=pointer]
+        - columnheader "Localidad" [ref=e81] [cursor=pointer]
+        - columnheader "Federación" [ref=e82] [cursor=pointer]
+        - columnheader "Categorías" [ref=e83] [cursor=pointer]
+        - columnheader "Modalidad" [ref=e84] [cursor=pointer]
+        - columnheader "Detalles" [ref=e85] [cursor=pointer]
+    - rowgroup
+  - generic [ref=e86]: Cargando pruebas…

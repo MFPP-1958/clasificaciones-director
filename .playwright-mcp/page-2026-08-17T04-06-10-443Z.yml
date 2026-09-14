@@ -1,0 +1,1383 @@
+- generic [active] [ref=f2e1]:
+  - dialog [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - paragraph [ref=f2e5]: Utilizamos cookies
+      - paragraph [ref=f2e7]: Usamos cookies y otras técnicas de rastreo para mejorar tu experiencia de navegación en nuestra web, para mostrarte contenidos personalizados y anuncios adecuados, para analizar el tráfico en nuestra web y para comprender de donde llegan nuestros visitantes.
+      - generic [ref=f2e8]:
+        - button "Aceptar" [ref=f2e9] [cursor=pointer]
+        - button "Rechazar" [ref=f2e10] [cursor=pointer]
+        - button "Configurar" [ref=f2e11] [cursor=pointer]
+  - generic [ref=f2e12]:
+    - generic [ref=f2e13]:
+      - link [ref=f2e15] [cursor=pointer]:
+        - /url: https://fccv.es/index.php/valenciana
+        - img "FEDERACIÓ CICLISME COMUNITAT VALENCIANA" [ref=f2e16]
+      - generic [ref=f2e17]:
+        - generic [ref=f2e18]:
+          - button "Facebook" [ref=f2e19] [cursor=pointer]:
+            - generic [ref=f2e20]: 
+          - button "Twitter" [ref=f2e23] [cursor=pointer]
+          - button "Youtube" [ref=f2e28] [cursor=pointer]:
+            - generic [ref=f2e29]: 
+          - button "Linkedin" [ref=f2e32] [cursor=pointer]:
+            - generic [ref=f2e33]: 
+          - button "Instagram" [ref=f2e36] [cursor=pointer]:
+            - generic [ref=f2e37]: 
+        - link "Español" [ref=f2e41] [cursor=pointer]:
+          - /url: https://fccv.es/es/smartweb/seccion/calendario/valenciana/2026
+        - generic [ref=f2e44]:
+          - generic [ref=f2e45]: Buscador de contenido
+          - textbox "Buscador de contenido" [ref=f2e46]:
+            - /placeholder: Buscar...
+          - button " Buscador de contenido" [ref=f2e48] [cursor=pointer]:
+            - generic [ref=f2e49]: 
+            - generic [ref=f2e50]: Buscador de contenido
+      - tablist [ref=f2e52]:
+        - button [ref=f2e54] [cursor=pointer]:
+          - tab "Avatar" [ref=f2e55]:
+            - generic [ref=f2e56]: 
+        - text:  
+    - list [ref=f2e60]:
+      - listitem [ref=f2e61]:
+        - link "Inicio" [ref=f2e62] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/Inicio
+      - listitem [ref=f2e63]:
+        - button "Federació" [ref=f2e64] [cursor=pointer]
+      - listitem [ref=f2e66]:
+        - button "Clubes" [ref=f2e67] [cursor=pointer]
+      - listitem [ref=f2e69]:
+        - button "Fedérate" [ref=f2e70] [cursor=pointer]
+      - listitem [ref=f2e72]:
+        - link "Movilidad Sostenible" [ref=f2e73] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/Movilidad-Sostenible
+      - listitem [ref=f2e74]:
+        - link "Media" [ref=f2e75] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/Media-principal
+      - listitem [ref=f2e76]:
+        - link "Formación" [ref=f2e77] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/Formacion
+      - listitem [ref=f2e78]:
+        - link "Bike Territory" [ref=f2e79] [cursor=pointer]:
+          - /url: https://biketerritory.com/es/sellos/index
+      - listitem [ref=f2e80]:
+        - link "Inscripciones" [ref=f2e81] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/Inscripciones
+      - listitem [ref=f2e82]:
+        - link "TIENDA WEB" [ref=f2e83] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/tienda/productos/valenciana
+      - listitem [ref=f2e84]:
+        - generic [ref=f2e85]: Club VIP
+    - list [ref=f2e87]:
+      - listitem [ref=f2e88]:
+        - link "MODALIDADES" [ref=f2e89] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/MODALIDADES
+      - listitem [ref=f2e90]:
+        - button "MUJER" [ref=f2e91] [cursor=pointer]
+      - listitem [ref=f2e93]:
+        - link "AULA CICLISTA" [ref=f2e94] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/AULA-CICLISTA
+      - listitem [ref=f2e95]:
+        - link "CTE" [ref=f2e96] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/CTE/Noticias-CTE
+      - listitem [ref=f2e97]:
+        - link "CALENDARIO" [ref=f2e98] [cursor=pointer]:
+          - /url: https://fccv.es/index.php/es/smartweb/seccion/calendario/valenciana/2026
+      - listitem [ref=f2e99]:
+        - button "CLASIFICACIONES" [ref=f2e100] [cursor=pointer]
+      - listitem [ref=f2e102]:
+        - button "DOCUMENTACIÓN PRUEBAS" [ref=f2e103] [cursor=pointer]
+    - text:  
+  - text:  
+  - generic [ref=f2e107]:
+    - heading "Calendario" [level=3] [ref=f2e109]
+    - generic [ref=f2e112]:
+      - generic [ref=f2e113]:
+        - combobox [ref=f2e115]:
+          - option "TEMP. 2026" [selected]
+          - option "TEMP. 2025"
+          - option "TEMP. 2024"
+          - option "TEMP. 2023"
+          - option "TEMP. 2022"
+          - option "TEMP. 2021"
+          - option "TEMP. 2020"
+          - option "TEMP. 2019"
+          - option "TEMP. 2018"
+          - option "TEMP. 2017"
+          - option "TEMP. 2016"
+          - option "TEMP. 2015"
+          - option "TEMP. 2014"
+        - combobox [ref=f2e117]:
+          - option "Cat. Todas" [selected]
+      - generic [ref=f2e119]:
+        - generic [ref=f2e120]: 16/8/2026
+        - slider: "1786834800"
+        - generic [ref=f2e121]: 31/12/2026
+        - slider: "1798671600"
+        - generic [ref=f2e123]:
+          - generic [ref=f2e124]: 
+          - generic [ref=f2e125]: 
+        - generic [ref=f2e126]: 
+        - generic [ref=f2e129]: 
+        - generic [ref=f2e132]: 
+        - generic [ref=f2e135]: 
+        - generic [ref=f2e138]: 
+      - generic [ref=f2e141]:
+        - button [ref=f2e142] [cursor=pointer]:
+          - generic [ref=f2e143]: 
+        - button [ref=f2e144] [cursor=pointer]:
+          - generic [ref=f2e145]: 
+      - text:         
+    - generic [ref=f2e148]:
+      - grid [ref=f2e150]:
+        - generic:
+          - generic [ref=f2e152]:
+            - text: Mostrar
+            - combobox "Mostrar registros" [ref=f2e153]:
+              - option "10"
+              - option "25"
+              - option "50"
+              - option "100" [selected]
+            - text: registros
+          - generic [ref=f2e155]:
+            - text: "Buscar:"
+            - textbox "Buscar:" [ref=f2e156]
+        - table [ref=f2e157]:
+          - rowgroup [ref=f2e158]:
+            - row [ref=f2e159]:
+              - 'columnheader "FECHA: Activar para ordenar la columna de manera descendente" [ref=f2e160] [cursor=pointer]': FECHA
+              - 'columnheader "MODALIDAD: Activar para ordenar la columna de manera ascendente" [ref=f2e161] [cursor=pointer]': MODALIDAD
+              - 'columnheader "CATEGORÍAS: Activar para ordenar la columna de manera ascendente" [ref=f2e162] [cursor=pointer]': CATEGORÍAS
+              - 'columnheader "CLASE: Activar para ordenar la columna de manera ascendente" [ref=f2e163] [cursor=pointer]': CLASE
+              - 'columnheader "PRUEBA: Activar para ordenar la columna de manera ascendente" [ref=f2e164] [cursor=pointer]': PRUEBA
+              - 'columnheader "LUGAR (PROVINCIA): Activar para ordenar la columna de manera ascendente" [ref=f2e165] [cursor=pointer]': LUGAR (PROVINCIA)
+              - 'columnheader "CLUB: Activar para ordenar la columna de manera ascendente" [ref=f2e166] [cursor=pointer]': CLUB
+              - 'columnheader "OBSERVACIONES: Activar para ordenar la columna de manera ascendente" [ref=f2e167] [cursor=pointer]': OBSERVACIONES
+              - 'columnheader "CLASIF.: Activar para ordenar la columna de manera ascendente" [ref=f2e168] [cursor=pointer]': CLASIF.
+              - 'columnheader "SEGUIR: Activar para ordenar la columna de manera ascendente" [ref=f2e169] [cursor=pointer]': SEGUIR
+              - 'columnheader "INFO.: Activar para ordenar la columna de manera ascendente" [ref=f2e170] [cursor=pointer]': INFO.
+          - alert [ref=f2e171]:
+            - row [ref=f2e172]:
+              - cell [ref=f2e173] [cursor=pointer]:
+                - button "16 AGO" [expanded] [ref=f2e174]: 16AGO
+              - cell "Carretera" [ref=f2e175] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e176] [cursor=pointer]
+              - cell "40.B" [ref=f2e177] [cursor=pointer]
+              - cell "SUMMER CICLYNG CHALLENGE" [ref=f2e178] [cursor=pointer]
+              - cell "BETERA (VALENCIA)" [ref=f2e179] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e180] [cursor=pointer]
+              - cell "SUMMER CYCLING CHALLENGE (SUSPENDIDA)" [ref=f2e181] [cursor=pointer]
+              - cell [ref=f2e182]
+              - cell [ref=f2e183]:
+                - img [ref=f2e184] [cursor=pointer]
+              - cell [ref=f2e185]
+            - row [ref=f2e186]:
+              - cell [ref=f2e187] [cursor=pointer]:
+                - button "16 AGO" [expanded] [ref=f2e188]: 16AGO
+              - cell "ESCUELAS CICLISMO" [ref=f2e189] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e190] [cursor=pointer]
+              - cell "45.A" [ref=f2e191] [cursor=pointer]
+              - cell "III TROFEO SAN BARTOLOME" [ref=f2e192] [cursor=pointer]
+              - cell "NULES (CASTELLON)" [ref=f2e193] [cursor=pointer]
+              - cell "SAN JOSE NULES CC" [ref=f2e194] [cursor=pointer]
+              - cell [ref=f2e195] [cursor=pointer]
+              - cell [ref=f2e196]
+              - cell [ref=f2e197]:
+                - img [ref=f2e198] [cursor=pointer]
+              - cell [ref=f2e199]:
+                - link "MÁS" [ref=f2e201] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34058-III-TROFEO-SAN-BARTOLOME
+            - row [ref=f2e202]:
+              - cell [ref=f2e203] [cursor=pointer]:
+                - button "17 AGO" [expanded] [ref=f2e204]: 17AGO
+              - cell "Carretera" [ref=f2e205] [cursor=pointer]
+              - cell "Elite, Sub-23" [ref=f2e206] [cursor=pointer]
+              - cell "1.12.5" [ref=f2e207] [cursor=pointer]
+              - cell "37 TROFEU FIRA D'AGOST DE XATIVA" [ref=f2e208] [cursor=pointer]
+              - cell "XATIVA (VALENCIA)" [ref=f2e209] [cursor=pointer]
+              - cell "BICICLETAS SANCHIS CC" [ref=f2e210] [cursor=pointer]
+              - cell [ref=f2e211] [cursor=pointer]
+              - cell [ref=f2e212]
+              - cell [ref=f2e213]:
+                - img [ref=f2e214] [cursor=pointer]
+              - cell [ref=f2e215]:
+                - link "MÁS" [ref=f2e217] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/32661-37-TROFEU-FIRA-DAGOST-DE-XATIVA
+            - row [ref=f2e218]:
+              - cell [ref=f2e219] [cursor=pointer]:
+                - button "21 AGO" [expanded] [ref=f2e220]: 21AGO
+              - cell "Carretera" [ref=f2e221] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e222] [cursor=pointer]
+              - cell "40.B" [ref=f2e223] [cursor=pointer]
+              - cell "MEMORIAL PACO JUANES GP LLOMBAI" [ref=f2e224] [cursor=pointer]
+              - cell "LLOMBAI (VALENCIA)" [ref=f2e225] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e226] [cursor=pointer]
+              - cell "SUMMER CYCLING CHALLENGE" [ref=f2e227] [cursor=pointer]
+              - cell [ref=f2e228]
+              - cell [ref=f2e229]:
+                - img [ref=f2e230] [cursor=pointer]
+              - cell [ref=f2e231]:
+                - link "MÁS" [ref=f2e233] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/32463-MEMORIAL-PACO-JUANES-GP-LLOMBAI
+            - row [ref=f2e234]:
+              - cell [ref=f2e235] [cursor=pointer]:
+                - button "21 AGO" [expanded] [ref=f2e236]: 21AGO
+              - cell "ESCUELAS CICLISMO" [ref=f2e237] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e238] [cursor=pointer]
+              - cell "45.A" [ref=f2e239] [cursor=pointer]
+              - cell "TROFEO ESCUELAS DE CICLISMO SAN BARTOLOME" [ref=f2e240] [cursor=pointer]
+              - cell "SAN BARTOLOME (ALICANTE)" [ref=f2e241] [cursor=pointer]
+              - cell "BENFERRI CC" [ref=f2e242] [cursor=pointer]
+              - cell [ref=f2e243] [cursor=pointer]
+              - cell [ref=f2e244]
+              - cell [ref=f2e245]:
+                - img [ref=f2e246] [cursor=pointer]
+              - cell [ref=f2e247]:
+                - link "MÁS" [ref=f2e249] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34081-TROFEO-ESCUELAS-DE-CICLISMO-SAN-BARTOLOME
+            - row [ref=f2e250]:
+              - cell [ref=f2e251] [cursor=pointer]:
+                - button "27 AGO" [expanded] [ref=f2e252]: 27AGO
+              - cell "Carretera" [ref=f2e253] [cursor=pointer]
+              - cell "Cadete" [ref=f2e254] [cursor=pointer]
+              - cell "16.B" [ref=f2e255] [cursor=pointer]
+              - cell "TROFEO FIESTAS MANUEL" [ref=f2e256] [cursor=pointer]
+              - cell "MANUEL (VALENCIA)" [ref=f2e257] [cursor=pointer]
+              - cell "MANUEL CC" [ref=f2e258] [cursor=pointer]
+              - cell "CHALLENGE CADETES RUTA CV 2026" [ref=f2e259] [cursor=pointer]
+              - cell [ref=f2e260]
+              - cell [ref=f2e261]:
+                - img [ref=f2e262] [cursor=pointer]
+              - cell [ref=f2e263]:
+                - link "MÁS" [ref=f2e265] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/32649-TROFEO-FIESTAS-MANUEL
+            - row [ref=f2e266]:
+              - cell [ref=f2e267] [cursor=pointer]:
+                - button "29 AGO" [expanded] [ref=f2e268]: 29AGO
+              - cell "ESCUELAS CICLISMO" [ref=f2e269] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e270] [cursor=pointer]
+              - cell "45.A" [ref=f2e271] [cursor=pointer]
+              - cell "XLIII TROFEU PENYA LA BUFA" [ref=f2e272] [cursor=pointer]
+              - cell "JAVEA/XABIA (ALICANTE)" [ref=f2e273] [cursor=pointer]
+              - cell "JAVEA CC" [ref=f2e274] [cursor=pointer]
+              - cell [ref=f2e275] [cursor=pointer]
+              - cell [ref=f2e276]
+              - cell [ref=f2e277]:
+                - img [ref=f2e278] [cursor=pointer]
+              - cell [ref=f2e279]:
+                - link "MÁS" [ref=f2e281] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/32574-XLIII-TROFEU-PENYA-LA-BUFA
+            - row [ref=f2e282]:
+              - cell [ref=f2e283] [cursor=pointer]:
+                - button "29 AGO" [expanded] [ref=f2e284]: 29AGO
+              - cell "ESCUELAS CICLISMO" [ref=f2e285] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e286] [cursor=pointer]
+              - cell "45.A" [ref=f2e287] [cursor=pointer]
+              - cell "TROFEO ESCUELAS DE CICLISMO CHIVA" [ref=f2e288] [cursor=pointer]
+              - cell "CHIVA (VALENCIA)" [ref=f2e289] [cursor=pointer]
+              - cell "ARCO IRIS CHIVA CC" [ref=f2e290] [cursor=pointer]
+              - cell [ref=f2e291] [cursor=pointer]
+              - cell [ref=f2e292]
+              - cell [ref=f2e293]:
+                - img [ref=f2e294] [cursor=pointer]
+              - cell [ref=f2e295]:
+                - link "MÁS" [ref=f2e297] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34053-TROFEO-ESCUELAS-DE-CICLISMO-CHIVA
+            - row [ref=f2e298]:
+              - cell [ref=f2e299] [cursor=pointer]:
+                - button "30 AGO" [expanded] [ref=f2e300]: 30AGO
+              - cell "ESCUELAS CICLISMO" [ref=f2e301] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e302] [cursor=pointer]
+              - cell "45.A" [ref=f2e303] [cursor=pointer]
+              - cell "TROFEO ESCUELAS DE CICLISMO COSTA DE AZAHAR CASTELLON" [ref=f2e304] [cursor=pointer]
+              - cell "CASTELLON (CASTELLON)" [ref=f2e305] [cursor=pointer]
+              - cell "COSTA DE AZAHAR CASTELLON CC" [ref=f2e306] [cursor=pointer]
+              - cell [ref=f2e307] [cursor=pointer]
+              - cell [ref=f2e308]
+              - cell [ref=f2e309]:
+                - img [ref=f2e310] [cursor=pointer]
+              - cell [ref=f2e311]
+            - row [ref=f2e312]:
+              - cell [ref=f2e313] [cursor=pointer]:
+                - button "30 AGO" [expanded] [ref=f2e314]: 30AGO
+              - cell "Carretera" [ref=f2e315] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e316] [cursor=pointer]
+              - cell "40.B" [ref=f2e317] [cursor=pointer]
+              - cell "GP ALGINET" [ref=f2e318] [cursor=pointer]
+              - cell "ALGINET (VALENCIA)" [ref=f2e319] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e320] [cursor=pointer]
+              - cell "SUMMER CHALLENGE" [ref=f2e321] [cursor=pointer]
+              - cell [ref=f2e322]
+              - cell [ref=f2e323]:
+                - img [ref=f2e324] [cursor=pointer]
+              - cell [ref=f2e325]:
+                - link "MÁS" [ref=f2e327] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/32459-GP-ALGINET
+            - row [ref=f2e328]:
+              - cell [ref=f2e329] [cursor=pointer]:
+                - button "30 AGO" [expanded] [ref=f2e330]: 30AGO
+              - cell "Carretera" [ref=f2e331] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e332] [cursor=pointer]
+              - cell "40.B" [ref=f2e333] [cursor=pointer]
+              - cell "XVII TROFEO OPEN ALMORADI" [ref=f2e334] [cursor=pointer]
+              - cell "ALMORADI (ALICANTE)" [ref=f2e335] [cursor=pointer]
+              - cell "ALMORADI CC" [ref=f2e336] [cursor=pointer]
+              - cell [ref=f2e337] [cursor=pointer]
+              - cell [ref=f2e338]
+              - cell [ref=f2e339]:
+                - img [ref=f2e340] [cursor=pointer]
+              - cell [ref=f2e341]:
+                - link "MÁS" [ref=f2e343] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34864-XVII-TROFEO-OPEN-ALMORADI
+            - row [ref=f2e344]:
+              - cell [ref=f2e345] [cursor=pointer]:
+                - button "30 AGO" [expanded] [ref=f2e346]: 30AGO
+              - cell "Carretera" [ref=f2e347] [cursor=pointer]
+              - cell "Cadete, Cadete Fem., Juni..." [ref=f2e348] [cursor=pointer]
+              - cell "16.C" [ref=f2e349] [cursor=pointer]
+              - cell "III TROFEO CICLISTA DE CADETES EN ALMORADI" [ref=f2e350] [cursor=pointer]
+              - cell "ALMORADI (ALICANTE)" [ref=f2e351] [cursor=pointer]
+              - cell "ALMORADI CC" [ref=f2e352] [cursor=pointer]
+              - cell [ref=f2e353] [cursor=pointer]
+              - cell [ref=f2e354]
+              - cell [ref=f2e355]:
+                - img [ref=f2e356] [cursor=pointer]
+              - cell [ref=f2e357]:
+                - link "MÁS" [ref=f2e359] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34863--III-TROFEO-CICLISTA-DE-CADETES-EN-ALMORADI
+            - row [ref=f2e360]:
+              - cell [ref=f2e361] [cursor=pointer]:
+                - button "04 SEP" [expanded] [ref=f2e362]: 04SEP
+              - cell "Carretera" [ref=f2e363] [cursor=pointer]
+              - cell "Elite, Sub-23" [ref=f2e364] [cursor=pointer]
+              - cell "1.12.5" [ref=f2e365] [cursor=pointer]
+              - cell "CHALLENGE VOLTA A VALENCIA 2026 - ETAPA 1" [ref=f2e366] [cursor=pointer]
+              - cell "BELLREGUARD (VALENCIA)" [ref=f2e367] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e368] [cursor=pointer]
+              - cell [ref=f2e369] [cursor=pointer]
+              - cell [ref=f2e370]
+              - cell [ref=f2e371]:
+                - img [ref=f2e372] [cursor=pointer]
+              - cell [ref=f2e373]
+            - row [ref=f2e374]:
+              - cell [ref=f2e375] [cursor=pointer]:
+                - button "05 SEP" [expanded] [ref=f2e376]: 05SEP
+              - cell "Carretera" [ref=f2e377] [cursor=pointer]
+              - cell "Elite" [ref=f2e378] [cursor=pointer]
+              - cell "1.12.5" [ref=f2e379] [cursor=pointer]
+              - cell "CHALLENGE VOLTA A VALENCIA 2026 - ETAPA 2" [ref=f2e380] [cursor=pointer]
+              - cell "ESTIVELLA (VALENCIA)" [ref=f2e381] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e382] [cursor=pointer]
+              - cell [ref=f2e383] [cursor=pointer]
+              - cell [ref=f2e384]
+              - cell [ref=f2e385]:
+                - img [ref=f2e386] [cursor=pointer]
+              - cell [ref=f2e387]
+            - row [ref=f2e388]:
+              - cell [ref=f2e389] [cursor=pointer]:
+                - button "05 SEP" [expanded] [ref=f2e390]: 05SEP
+              - cell "Carretera" [ref=f2e391] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e392] [cursor=pointer]
+              - cell "40.B" [ref=f2e393] [cursor=pointer]
+              - cell "TROFEU SOCIAL FESTES DE CARLET 2025" [ref=f2e394] [cursor=pointer]
+              - cell "CARLET (VALENCIA)" [ref=f2e395] [cursor=pointer]
+              - cell "VELO CLUB CARLET VC" [ref=f2e396] [cursor=pointer]
+              - cell [ref=f2e397] [cursor=pointer]
+              - cell [ref=f2e398]
+              - cell [ref=f2e399]:
+                - img [ref=f2e400] [cursor=pointer]
+              - cell [ref=f2e401]:
+                - link "MÁS" [ref=f2e403] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34684-TROFEU-SOCIAL-FESTES-DE-CARLET-2025
+            - row [ref=f2e404]:
+              - cell [ref=f2e405] [cursor=pointer]:
+                - button "05 SEP" [expanded] [ref=f2e406]: 05SEP
+              - cell "BTT Pumptrack" [ref=f2e407] [cursor=pointer]
+              - cell "Alevin Femenino, Alevines..." [ref=f2e408] [cursor=pointer]
+              - cell "11.A" [ref=f2e409] [cursor=pointer]
+              - cell "II GRAN PREMI ESCOLA BMX ONTINYENT" [ref=f2e410] [cursor=pointer]
+              - cell "ONTINYENT (VALENCIA)" [ref=f2e411] [cursor=pointer]
+              - cell "RALPH'S BIKES CC" [ref=f2e412] [cursor=pointer]
+              - cell [ref=f2e413] [cursor=pointer]
+              - cell [ref=f2e414]
+              - cell [ref=f2e415]:
+                - img [ref=f2e416] [cursor=pointer]
+              - cell [ref=f2e417]:
+                - link "MÁS" [ref=f2e419] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/35278-II-GRAN-PREMI-ESCOLA-BMX-ONTINYENT
+            - row [ref=f2e420]:
+              - cell [ref=f2e421] [cursor=pointer]:
+                - button "06 SEP" [expanded] [ref=f2e422]: 06SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e423] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e424] [cursor=pointer]
+              - cell "45.A" [ref=f2e425] [cursor=pointer]
+              - cell "TROFEO ESCUELAS DE CICLISMO LA POBLA" [ref=f2e426] [cursor=pointer]
+              - cell "LA PABLA TORNESA (CASTELLON)" [ref=f2e427] [cursor=pointer]
+              - cell "ALARPA CC" [ref=f2e428] [cursor=pointer]
+              - cell "(SUSPENDIDA)" [ref=f2e429] [cursor=pointer]
+              - cell [ref=f2e430]
+              - cell [ref=f2e431]:
+                - img [ref=f2e432] [cursor=pointer]
+              - cell [ref=f2e433]
+            - row [ref=f2e434]:
+              - cell [ref=f2e435] [cursor=pointer]:
+                - button "06 SEP" [expanded] [ref=f2e436]: 06SEP
+              - cell "Carretera" [ref=f2e437] [cursor=pointer]
+              - cell "Elite, Sub-23" [ref=f2e438] [cursor=pointer]
+              - cell "1.12.5" [ref=f2e439] [cursor=pointer]
+              - cell "CHALLENGE VOLTA A VALENCIA 2026 - ETAPA 3" [ref=f2e440] [cursor=pointer]
+              - cell "MONCADA (VALENCIA)" [ref=f2e441] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e442] [cursor=pointer]
+              - cell [ref=f2e443] [cursor=pointer]
+              - cell [ref=f2e444]
+              - cell [ref=f2e445]:
+                - img [ref=f2e446] [cursor=pointer]
+              - cell [ref=f2e447]
+            - row [ref=f2e448]:
+              - cell [ref=f2e449] [cursor=pointer]:
+                - button "06 SEP" [expanded] [ref=f2e450]: 06SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e451] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e452] [cursor=pointer]
+              - cell "45.A" [ref=f2e453] [cursor=pointer]
+              - cell "TROFEO ESCUELAS DE CICLISMO TAVERNES DE LA VALLDIGNA" [ref=f2e454] [cursor=pointer]
+              - cell "TAVERNES DE LA VALLDIGNA (VALENCIA)" [ref=f2e455] [cursor=pointer]
+              - cell "LA VALLDIGNA CC" [ref=f2e456] [cursor=pointer]
+              - cell [ref=f2e457] [cursor=pointer]
+              - cell [ref=f2e458]
+              - cell [ref=f2e459]:
+                - img [ref=f2e460] [cursor=pointer]
+              - cell [ref=f2e461]:
+                - link "MÁS" [ref=f2e463] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34039-TROFEO-ESCUELAS-DE-CICLISMO-TAVERNES-DE-LA-VALLDIGNA
+            - row [ref=f2e464]:
+              - cell [ref=f2e465] [cursor=pointer]:
+                - button "06 SEP" [expanded] [ref=f2e466]: 06SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e467] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e468] [cursor=pointer]
+              - cell "2.5" [ref=f2e469] [cursor=pointer]
+              - cell "II TROFEO VILA DE MURO-PUNXAETA." [ref=f2e470] [cursor=pointer]
+              - cell "MURO DE ALCOI (ALICANTE)" [ref=f2e471] [cursor=pointer]
+              - cell "MURO LA PUNXAETA CC" [ref=f2e472] [cursor=pointer]
+              - cell "ESCUELAS DE CICLISMO + CADETES" [ref=f2e473] [cursor=pointer]
+              - cell [ref=f2e474]
+              - cell [ref=f2e475]:
+                - img [ref=f2e476] [cursor=pointer]
+              - cell [ref=f2e477]:
+                - link "MÁS" [ref=f2e479] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34082--II-TROFEO-VILA-DE-MURO-PUNXAETA
+            - row [ref=f2e480]:
+              - cell [ref=f2e481] [cursor=pointer]:
+                - button "12 SEP" [expanded] [ref=f2e482]: 12SEP
+              - cell "Carretera" [ref=f2e483] [cursor=pointer]
+              - cell "Elite, Sub23" [ref=f2e484] [cursor=pointer]
+              - cell "12.A" [ref=f2e485] [cursor=pointer]
+              - cell "GRAN PREMIO NAQUERA" [ref=f2e486] [cursor=pointer]
+              - cell "NAQUERA (VALENCIA)" [ref=f2e487] [cursor=pointer]
+              - cell "NAQUERA SC" [ref=f2e488] [cursor=pointer]
+              - cell "CHALLENGE CV ELITE Y SUB23 RUTA" [ref=f2e489] [cursor=pointer]
+              - cell [ref=f2e490]
+              - cell [ref=f2e491]:
+                - img [ref=f2e492] [cursor=pointer]
+              - cell [ref=f2e493]
+            - row [ref=f2e494]:
+              - cell [ref=f2e495] [cursor=pointer]:
+                - button "12 SEP" [expanded] [ref=f2e496]: 12SEP
+              - cell "Carretera" [ref=f2e497] [cursor=pointer]
+              - cell "Cadete, Cadete fem." [ref=f2e498] [cursor=pointer]
+              - cell "1.16.5" [ref=f2e499] [cursor=pointer]
+              - cell "DIA 1 CHALLENGE IX VUELTA CICLISTA VILLAFRANCA DEL CID XI MEMORIAL JOFRE GRAU BIOSCA" [ref=f2e500] [cursor=pointer]
+              - cell "VILAFRANCA DEL CID (CASTELLON)" [ref=f2e501] [cursor=pointer]
+              - cell "PICAYO CC" [ref=f2e502] [cursor=pointer]
+              - cell [ref=f2e503] [cursor=pointer]
+              - cell [ref=f2e504]
+              - cell [ref=f2e505]:
+                - img [ref=f2e506] [cursor=pointer]
+              - cell [ref=f2e507]
+            - row [ref=f2e508]:
+              - cell [ref=f2e509] [cursor=pointer]:
+                - button "12 SEP" [expanded] [ref=f2e510]: 12SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e511] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e512] [cursor=pointer]
+              - cell "45.A" [ref=f2e513] [cursor=pointer]
+              - cell "TROFEO FIESTAS MOROS Y CRISTIANOS CASTALLA" [ref=f2e514] [cursor=pointer]
+              - cell "CASTALLA (ALICANTE)" [ref=f2e515] [cursor=pointer]
+              - cell "CASTALLA CC" [ref=f2e516] [cursor=pointer]
+              - cell [ref=f2e517] [cursor=pointer]
+              - cell [ref=f2e518]
+              - cell [ref=f2e519]:
+                - img [ref=f2e520] [cursor=pointer]
+              - cell [ref=f2e521]
+            - row [ref=f2e522]:
+              - cell [ref=f2e523] [cursor=pointer]:
+                - button "12 SEP" [expanded] [ref=f2e524]: 12SEP
+              - cell "Carretera" [ref=f2e525] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e526] [cursor=pointer]
+              - cell "40.B" [ref=f2e527] [cursor=pointer]
+              - cell "TROFEU JAVIER BENITEZ - GRAN PREMI AJUNTAMENT DE CANALS" [ref=f2e528] [cursor=pointer]
+              - cell "CANALS (VALENCIA)" [ref=f2e529] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e530] [cursor=pointer]
+              - cell [ref=f2e531] [cursor=pointer]
+              - cell [ref=f2e532]
+              - cell [ref=f2e533]:
+                - img [ref=f2e534] [cursor=pointer]
+              - cell [ref=f2e535]
+            - row [ref=f2e536]:
+              - cell [ref=f2e537] [cursor=pointer]:
+                - button "12 SEP" [expanded] [ref=f2e538]: 12SEP
+              - cell "BMX" [ref=f2e539] [cursor=pointer]
+              - cell "BMX" [ref=f2e540] [cursor=pointer]
+              - cell "30.CA" [ref=f2e541] [cursor=pointer]
+              - cell "CAMPEONATO COMUNITAT VALENCIANA BMX 2026" [ref=f2e542] [cursor=pointer]
+              - cell "EL CAMPELLO (ALICANTE)" [ref=f2e543] [cursor=pointer]
+              - cell "EL CAMPELLO CC" [ref=f2e544] [cursor=pointer]
+              - cell "CAMPEONATO C.V. BMX" [ref=f2e545] [cursor=pointer]
+              - cell [ref=f2e546]
+              - cell [ref=f2e547]:
+                - img [ref=f2e548] [cursor=pointer]
+              - cell [ref=f2e549]:
+                - link "MÁS" [ref=f2e551] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/35260-CAMPEONATO-COMUNITAT-VALENCIANA-BMX-2026
+            - row [ref=f2e552]:
+              - cell [ref=f2e553] [cursor=pointer]:
+                - button "13 SEP" [expanded] [ref=f2e554]: 13SEP
+              - cell "Ciclismo para todos ciclodep" [ref=f2e555] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e556] [cursor=pointer]
+              - cell "21.A" [ref=f2e557] [cursor=pointer]
+              - cell "MARCHA CICLODEPORTIVA DE LA RIBERA DESAFIO TIERRAS DEL JUC" [ref=f2e558] [cursor=pointer]
+              - cell "LLOMBAI (VALENCIA)" [ref=f2e559] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e560] [cursor=pointer]
+              - cell "RANKING CICLOTURISMO 2026" [ref=f2e561] [cursor=pointer]
+              - cell [ref=f2e562]
+              - cell [ref=f2e563]:
+                - img [ref=f2e564] [cursor=pointer]
+              - cell [ref=f2e565]
+            - row [ref=f2e566]:
+              - cell [ref=f2e567] [cursor=pointer]:
+                - button "13 SEP" [expanded] [ref=f2e568]: 13SEP
+              - cell "Carretera" [ref=f2e569] [cursor=pointer]
+              - cell "Cadete, Cadete fem." [ref=f2e570] [cursor=pointer]
+              - cell "1.16.5" [ref=f2e571] [cursor=pointer]
+              - cell "DIA 2 CHALLENGE IX VUELTA CICLISTA VILLAFRANCA DEL CID XI MEMORIAL JOFRE GRAU BIOSCA" [ref=f2e572] [cursor=pointer]
+              - cell "VILAFRANCA DEL CID (CASTELLON)" [ref=f2e573] [cursor=pointer]
+              - cell "PICAYO CC" [ref=f2e574] [cursor=pointer]
+              - cell [ref=f2e575] [cursor=pointer]
+              - cell [ref=f2e576]
+              - cell [ref=f2e577]:
+                - img [ref=f2e578] [cursor=pointer]
+              - cell [ref=f2e579]
+            - row [ref=f2e580]:
+              - cell [ref=f2e581] [cursor=pointer]:
+                - button "13 SEP" [expanded] [ref=f2e582]: 13SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e583] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e584] [cursor=pointer]
+              - cell "45.A" [ref=f2e585] [cursor=pointer]
+              - cell "CLAUSURA ESCUELAS DE CICLISMO CASTELLON" [ref=f2e586] [cursor=pointer]
+              - cell "CASTELLON (CASTELLON)" [ref=f2e587] [cursor=pointer]
+              - cell "COSTA DE AZAHAR CASTELLON CC" [ref=f2e588] [cursor=pointer]
+              - cell [ref=f2e589] [cursor=pointer]
+              - cell [ref=f2e590]
+              - cell [ref=f2e591]:
+                - img [ref=f2e592] [cursor=pointer]
+              - cell [ref=f2e593]
+            - row [ref=f2e594]:
+              - cell [ref=f2e595] [cursor=pointer]:
+                - button "13 SEP" [expanded] [ref=f2e596]: 13SEP
+              - cell "Carretera" [ref=f2e597] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e598] [cursor=pointer]
+              - cell "40.B" [ref=f2e599] [cursor=pointer]
+              - cell "1A CARRERA SOCIAL \"EL PUERTO DE HIERRO\"" [ref=f2e600] [cursor=pointer]
+              - cell "PUERTO SAGUNTO (VALENCIA)" [ref=f2e601] [cursor=pointer]
+              - cell "PORTEÑA PC" [ref=f2e602] [cursor=pointer]
+              - cell [ref=f2e603] [cursor=pointer]
+              - cell [ref=f2e604]
+              - cell [ref=f2e605]:
+                - img [ref=f2e606] [cursor=pointer]
+              - cell [ref=f2e607]:
+                - link "MÁS" [ref=f2e609] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34203-1A-CARRERA-SOCIAL-EL-PUERTO-DE-HIERRO
+            - row [ref=f2e610]:
+              - cell [ref=f2e611] [cursor=pointer]:
+                - button "13 SEP" [expanded] [ref=f2e612]: 13SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e613] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e614] [cursor=pointer]
+              - cell "45.A" [ref=f2e615] [cursor=pointer]
+              - cell "TROFEO ESCUELAS DE CICLISMO ONTINYENT" [ref=f2e616] [cursor=pointer]
+              - cell "ONTINYENT (VALENCIA)" [ref=f2e617] [cursor=pointer]
+              - cell "ONTINYENT CC" [ref=f2e618] [cursor=pointer]
+              - cell [ref=f2e619] [cursor=pointer]
+              - cell [ref=f2e620]
+              - cell [ref=f2e621]:
+                - img [ref=f2e622] [cursor=pointer]
+              - cell [ref=f2e623]:
+                - link "MÁS" [ref=f2e625] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34040-TROFEO-ESCUELAS-DE-CICLISMO-ONTINYENT
+            - row [ref=f2e626]:
+              - cell [ref=f2e627] [cursor=pointer]:
+                - button "19 SEP" [expanded] [ref=f2e628]: 19SEP
+              - cell "Ciclismo para todos Ciclodep" [ref=f2e629] [cursor=pointer]
+              - cell "A partir de 17 años, A pa..." [ref=f2e630] [cursor=pointer]
+              - cell "M.C.UCI.+H" [ref=f2e631] [cursor=pointer]
+              - cell "TOTALENERGIES GRAN FONDO ALBERTO CONTADOR" [ref=f2e632] [cursor=pointer]
+              - cell "OLIVA (VALENCIA)" [ref=f2e633] [cursor=pointer]
+              - cell "312 BIKE & TOURS SECCIO ESPORTIVA" [ref=f2e634] [cursor=pointer]
+              - cell [ref=f2e635] [cursor=pointer]
+              - cell [ref=f2e636]
+              - cell [ref=f2e637]:
+                - img [ref=f2e638] [cursor=pointer]
+              - cell [ref=f2e639]
+            - row [ref=f2e640]:
+              - cell [ref=f2e641] [cursor=pointer]:
+                - button "19 SEP" [expanded] [ref=f2e642]: 19SEP
+              - cell "Carretera" [ref=f2e643] [cursor=pointer]
+              - cell "Elite, Sub-23" [ref=f2e644] [cursor=pointer]
+              - cell "1.12.5" [ref=f2e645] [cursor=pointer]
+              - cell "CLASSICA TINENCA" [ref=f2e646] [cursor=pointer]
+              - cell "ROSELL (CASTELLON)" [ref=f2e647] [cursor=pointer]
+              - cell "BENICARLO UC" [ref=f2e648] [cursor=pointer]
+              - cell "CHALLENGE CV ELITE Y SUB23 RUTA" [ref=f2e649] [cursor=pointer]
+              - cell [ref=f2e650]
+              - cell [ref=f2e651]:
+                - img [ref=f2e652] [cursor=pointer]
+              - cell [ref=f2e653]
+            - row [ref=f2e654]:
+              - cell [ref=f2e655] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e656]: 20SEP
+              - cell "Carretera" [ref=f2e657] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e658] [cursor=pointer]
+              - cell "40.B" [ref=f2e659] [cursor=pointer]
+              - cell "SEGON GP CATADAU" [ref=f2e660] [cursor=pointer]
+              - cell "CATADAU (VALENCIA)" [ref=f2e661] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e662] [cursor=pointer]
+              - cell "SUMMER CYCLING CHALLENGE" [ref=f2e663] [cursor=pointer]
+              - cell [ref=f2e664]
+              - cell [ref=f2e665]:
+                - img [ref=f2e666] [cursor=pointer]
+              - cell [ref=f2e667]
+            - row [ref=f2e668]:
+              - cell [ref=f2e669] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e670]: 20SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e671] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e672] [cursor=pointer]
+              - cell "45.A" [ref=f2e673] [cursor=pointer]
+              - cell "CRI MONTESA" [ref=f2e674] [cursor=pointer]
+              - cell "MONTESA (VALENCIA)" [ref=f2e675] [cursor=pointer]
+              - cell "LA FORCA PC" [ref=f2e676] [cursor=pointer]
+              - cell [ref=f2e677] [cursor=pointer]
+              - cell [ref=f2e678]
+              - cell [ref=f2e679]:
+                - img [ref=f2e680] [cursor=pointer]
+              - cell [ref=f2e681]
+            - row [ref=f2e682]:
+              - cell [ref=f2e683] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e684]: 20SEP
+              - cell "Carretera" [ref=f2e685] [cursor=pointer]
+              - cell "Elite, Sub-23" [ref=f2e686] [cursor=pointer]
+              - cell "1.12.5" [ref=f2e687] [cursor=pointer]
+              - cell "RONDA AL MAESTRAT" [ref=f2e688] [cursor=pointer]
+              - cell "BENICARLO (CASTELLON)" [ref=f2e689] [cursor=pointer]
+              - cell "BENICARLO UC" [ref=f2e690] [cursor=pointer]
+              - cell "CHALLENGE CV ELITE Y SUB23 RUTA" [ref=f2e691] [cursor=pointer]
+              - cell [ref=f2e692]
+              - cell [ref=f2e693]:
+                - img [ref=f2e694] [cursor=pointer]
+              - cell [ref=f2e695]
+            - row [ref=f2e696]:
+              - cell [ref=f2e697] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e698]: 20SEP
+              - cell "Carretera" [ref=f2e699] [cursor=pointer]
+              - cell "Cadete, Cadete Fem., Juni..." [ref=f2e700] [cursor=pointer]
+              - cell "16.C" [ref=f2e701] [cursor=pointer]
+              - cell "TROFEO FESTES MAJORS 2026 - QUART DE POBLET" [ref=f2e702] [cursor=pointer]
+              - cell "QUART DE POBLET (VALENCIA)" [ref=f2e703] [cursor=pointer]
+              - cell "QUART DE POBLET PC" [ref=f2e704] [cursor=pointer]
+              - cell [ref=f2e705] [cursor=pointer]
+              - cell [ref=f2e706]
+              - cell [ref=f2e707]:
+                - img [ref=f2e708] [cursor=pointer]
+              - cell [ref=f2e709]
+            - row [ref=f2e710]:
+              - cell [ref=f2e711] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e712]: 20SEP
+              - cell "Carretera" [ref=f2e713] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e714] [cursor=pointer]
+              - cell "40.A" [ref=f2e715] [cursor=pointer]
+              - cell "VI CIRCULAR A REBSATE" [ref=f2e716] [cursor=pointer]
+              - cell "SAN MIGUEL DE SALINAS (ALICANTE)" [ref=f2e717] [cursor=pointer]
+              - cell "SAN MIGUEL DE SALINAS CC" [ref=f2e718] [cursor=pointer]
+              - cell "SUSPENDIDA (SUSPENDIDA)" [ref=f2e719] [cursor=pointer]
+              - cell [ref=f2e720]
+              - cell [ref=f2e721]:
+                - img [ref=f2e722] [cursor=pointer]
+              - cell [ref=f2e723]
+            - row [ref=f2e724]:
+              - cell [ref=f2e725] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e726]: 20SEP
+              - cell "Carretera" [ref=f2e727] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e728] [cursor=pointer]
+              - cell "40.B" [ref=f2e729] [cursor=pointer]
+              - cell "GP AJUNTAMENT DE FOIOS" [ref=f2e730] [cursor=pointer]
+              - cell "FOIOS (VALENCIA)" [ref=f2e731] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e732] [cursor=pointer]
+              - cell "Summer Cycling Challenge" [ref=f2e733] [cursor=pointer]
+              - cell [ref=f2e734]
+              - cell [ref=f2e735]:
+                - img [ref=f2e736] [cursor=pointer]
+              - cell [ref=f2e737]:
+                - link "MÁS" [ref=f2e739] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34515-GP-AJUNTAMENT-DE-FOIOS
+            - row [ref=f2e740]:
+              - cell [ref=f2e741] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e742]: 20SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e743] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e744] [cursor=pointer]
+              - cell "45.A" [ref=f2e745] [cursor=pointer]
+              - cell "CLAUSURA ESCUELAS DE CICLISMO ALICANTE" [ref=f2e746] [cursor=pointer]
+              - cell "ALICANTE (ALICANTE)" [ref=f2e747] [cursor=pointer]
+              - cell "FEDERACION CICLISMO COMUNITAT VALENCIANA" [ref=f2e748] [cursor=pointer]
+              - cell [ref=f2e749] [cursor=pointer]
+              - cell [ref=f2e750]
+              - cell [ref=f2e751]:
+                - img [ref=f2e752] [cursor=pointer]
+              - cell [ref=f2e753]:
+                - link "MÁS" [ref=f2e755] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34085-CLAUSURA-ESCUELAS-DE-CICLISMO-ALICANTE
+            - row [ref=f2e756]:
+              - cell [ref=f2e757] [cursor=pointer]:
+                - button "20 SEP" [expanded] [ref=f2e758]: 20SEP
+              - cell "Ciclismo para todos" [ref=f2e759] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e760] [cursor=pointer]
+              - cell "50.B" [ref=f2e761] [cursor=pointer]
+              - cell "BTT SERRA DE BIAR" [ref=f2e762] [cursor=pointer]
+              - cell "BIAR (ALICANTE)" [ref=f2e763] [cursor=pointer]
+              - cell "BIAR CC" [ref=f2e764] [cursor=pointer]
+              - cell [ref=f2e765] [cursor=pointer]
+              - cell [ref=f2e766]
+              - cell [ref=f2e767]:
+                - img [ref=f2e768] [cursor=pointer]
+              - cell [ref=f2e769]:
+                - link "MÁS" [ref=f2e771] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34931-BTT-SERRA-DE-BIAR
+            - row [ref=f2e772]:
+              - cell [ref=f2e773] [cursor=pointer]:
+                - button "26 SEP 27 SEP" [expanded] [ref=f2e774]: 26 SEP27 SEP
+              - cell "Ciclismo para todos" [ref=f2e775] [cursor=pointer]
+              - cell "A partir de 15 años" [ref=f2e776] [cursor=pointer]
+              - cell "50.B" [ref=f2e777] [cursor=pointer]
+              - cell "XXVIII MARCHA BTT MONTES DE REQUENA" [ref=f2e778] [cursor=pointer]
+              - cell "REQUENA (VALENCIA)" [ref=f2e779] [cursor=pointer]
+              - cell "CLUB MOUNTAIN BIKE REQUENA - BTT REQUENA" [ref=f2e780] [cursor=pointer]
+              - cell [ref=f2e781] [cursor=pointer]
+              - cell [ref=f2e782]
+              - cell [ref=f2e783]:
+                - img [ref=f2e784] [cursor=pointer]
+              - cell [ref=f2e785]
+            - row [ref=f2e786]:
+              - cell [ref=f2e787] [cursor=pointer]:
+                - button "26 SEP" [expanded] [ref=f2e788]: 26SEP
+              - cell "Carretera" [ref=f2e789] [cursor=pointer]
+              - cell "Elite, Elite Fem., Junior..." [ref=f2e790] [cursor=pointer]
+              - cell "40.A" [ref=f2e791] [cursor=pointer]
+              - cell "XXXVIII TROFEU FESTES MAJORS DE AIACOR" [ref=f2e792] [cursor=pointer]
+              - cell "AIACOR - CANALS (VALENCIA)" [ref=f2e793] [cursor=pointer]
+              - cell "LA FORCA PC" [ref=f2e794] [cursor=pointer]
+              - cell [ref=f2e795] [cursor=pointer]
+              - cell [ref=f2e796]
+              - cell [ref=f2e797]:
+                - img [ref=f2e798] [cursor=pointer]
+              - cell [ref=f2e799]
+            - row [ref=f2e800]:
+              - cell [ref=f2e801] [cursor=pointer]:
+                - button "27 SEP" [expanded] [ref=f2e802]: 27SEP
+              - cell "ESCUELAS CICLISMO" [ref=f2e803] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e804] [cursor=pointer]
+              - cell "45.A" [ref=f2e805] [cursor=pointer]
+              - cell "CLAUSURA ESCUELAS DE CICLISMO BELLREGUARD - VALENCIA" [ref=f2e806] [cursor=pointer]
+              - cell "BELLREGUARD (VALENCIA)" [ref=f2e807] [cursor=pointer]
+              - cell "BELLREGUARD CC" [ref=f2e808] [cursor=pointer]
+              - cell [ref=f2e809] [cursor=pointer]
+              - cell [ref=f2e810]
+              - cell [ref=f2e811]:
+                - img [ref=f2e812] [cursor=pointer]
+              - cell [ref=f2e813]
+            - row [ref=f2e814]:
+              - cell [ref=f2e815] [cursor=pointer]:
+                - button "27 SEP" [expanded] [ref=f2e816]: 27SEP
+              - cell "Ciclismo para todos" [ref=f2e817] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e818] [cursor=pointer]
+              - cell "50.B" [ref=f2e819] [cursor=pointer]
+              - cell "MARCHA BTT XI COVES DEL CANELOBRE BUSOT" [ref=f2e820] [cursor=pointer]
+              - cell "BUSOT (ALICANTE)" [ref=f2e821] [cursor=pointer]
+              - cell "CANELOBRE BUSOT CC" [ref=f2e822] [cursor=pointer]
+              - cell [ref=f2e823] [cursor=pointer]
+              - cell [ref=f2e824]
+              - cell [ref=f2e825]:
+                - img [ref=f2e826] [cursor=pointer]
+              - cell [ref=f2e827]
+            - row [ref=f2e828]:
+              - cell [ref=f2e829] [cursor=pointer]:
+                - button "27 SEP" [expanded] [ref=f2e830]: 27SEP
+              - cell "Ciclismo para todos" [ref=f2e831] [cursor=pointer]
+              - cell "A partir de 15 años, A pa..." [ref=f2e832] [cursor=pointer]
+              - cell "1.30.2" [ref=f2e833] [cursor=pointer]
+              - cell "XXII MARCHA CICLOTURISTA COMUNITAT VALENCIANA" [ref=f2e834] [cursor=pointer]
+              - cell "ALICANTE (ALICANTE)" [ref=f2e835] [cursor=pointer]
+              - cell "FEDERACION CICLISMO COMUNITAT VALENCIANA" [ref=f2e836] [cursor=pointer]
+              - cell [ref=f2e837] [cursor=pointer]
+              - cell [ref=f2e838]
+              - cell [ref=f2e839]:
+                - img [ref=f2e840] [cursor=pointer]
+              - cell [ref=f2e841]:
+                - link "MÁS" [ref=f2e843] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/32521-XXII-MARCHA-CICLOTURISTA-COMUNITAT-VALENCIANA
+            - row [ref=f2e844]:
+              - cell [ref=f2e845] [cursor=pointer]:
+                - button "03 OCT" [expanded] [ref=f2e846]: 03OCT
+              - cell "Gravel" [ref=f2e847] [cursor=pointer]
+              - cell "Cicloturistas, Elite, Eli..." [ref=f2e848] [cursor=pointer]
+              - cell "G.5" [ref=f2e849] [cursor=pointer]
+              - cell "MEDITERRANEAN EPIC GRAVEL" [ref=f2e850] [cursor=pointer]
+              - cell "SANT JORDI (CASTELLON)" [ref=f2e851] [cursor=pointer]
+              - cell "PUBLICOM SPORTS CD" [ref=f2e852] [cursor=pointer]
+              - cell [ref=f2e853] [cursor=pointer]
+              - cell [ref=f2e854]
+              - cell [ref=f2e855]:
+                - img [ref=f2e856] [cursor=pointer]
+              - cell [ref=f2e857]
+            - row [ref=f2e858]:
+              - cell [ref=f2e859] [cursor=pointer]:
+                - button "04 OCT" [expanded] [ref=f2e860]: 04OCT
+              - cell "Ciclismo para todos" [ref=f2e861] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e862] [cursor=pointer]
+              - cell "50.A" [ref=f2e863] [cursor=pointer]
+              - cell "II MARCHA CICLOTURISTA LA FOGUERA (CANALS)" [ref=f2e864] [cursor=pointer]
+              - cell "CANALS (VALENCIA)" [ref=f2e865] [cursor=pointer]
+              - cell "WHEELER CD" [ref=f2e866] [cursor=pointer]
+              - cell [ref=f2e867] [cursor=pointer]
+              - cell [ref=f2e868]
+              - cell [ref=f2e869]:
+                - img [ref=f2e870] [cursor=pointer]
+              - cell [ref=f2e871]
+            - row [ref=f2e872]:
+              - cell [ref=f2e873] [cursor=pointer]:
+                - button "04 OCT" [expanded] [ref=f2e874]: 04OCT
+              - cell "Gravel" [ref=f2e875] [cursor=pointer]
+              - cell "Cicloturismo, Elite, Elit..." [ref=f2e876] [cursor=pointer]
+              - cell "9.4" [ref=f2e877] [cursor=pointer]
+              - cell "I TROFEO GRAVEL SAN BLAS DOMINGO LLEDO" [ref=f2e878] [cursor=pointer]
+              - cell "ALCOY (ALICANTE)" [ref=f2e879] [cursor=pointer]
+              - cell "ALCOY UC" [ref=f2e880] [cursor=pointer]
+              - cell "(SUSPENDIDA)" [ref=f2e881] [cursor=pointer]
+              - cell [ref=f2e882]
+              - cell [ref=f2e883]:
+                - img [ref=f2e884] [cursor=pointer]
+              - cell [ref=f2e885]
+            - row [ref=f2e886]:
+              - cell [ref=f2e887] [cursor=pointer]:
+                - button "04 OCT" [expanded] [ref=f2e888]: 04OCT
+              - cell "Ciclismo para todos" [ref=f2e889] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e890] [cursor=pointer]
+              - cell "50.B" [ref=f2e891] [cursor=pointer]
+              - cell "MARCHA BTT TORRENT" [ref=f2e892] [cursor=pointer]
+              - cell "TORRENT (VALENCIA)" [ref=f2e893] [cursor=pointer]
+              - cell "CMTBV CC" [ref=f2e894] [cursor=pointer]
+              - cell [ref=f2e895] [cursor=pointer]
+              - cell [ref=f2e896]
+              - cell [ref=f2e897]:
+                - img [ref=f2e898] [cursor=pointer]
+              - cell [ref=f2e899]
+            - row [ref=f2e900]:
+              - cell [ref=f2e901] [cursor=pointer]:
+                - button "04 OCT" [expanded] [ref=f2e902]: 04OCT
+              - cell "Ciclismo para todos ciclodep" [ref=f2e903] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e904] [cursor=pointer]
+              - cell "21.B" [ref=f2e905] [cursor=pointer]
+              - cell "V DEMOLISION BIKE ELCHE" [ref=f2e906] [cursor=pointer]
+              - cell "ELCHE (ALICANTE)" [ref=f2e907] [cursor=pointer]
+              - cell "DEMOLISION BIKERS CC" [ref=f2e908] [cursor=pointer]
+              - cell [ref=f2e909] [cursor=pointer]
+              - cell [ref=f2e910]
+              - cell [ref=f2e911]:
+                - img [ref=f2e912] [cursor=pointer]
+              - cell [ref=f2e913]:
+                - link "MÁS" [ref=f2e915] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34747-V-DEMOLISION-BIKE-ELCHE
+            - row [ref=f2e916]:
+              - cell [ref=f2e917] [cursor=pointer]:
+                - button "10 OCT" [expanded] [ref=f2e918]: 10OCT
+              - cell "CicloCross" [ref=f2e919] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e920] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e921] [cursor=pointer]
+              - cell "II TROFEO CICLOCROSS CONSTRUCCIONES SAN JERONIMO" [ref=f2e922] [cursor=pointer]
+              - cell "BENFERRI (ALICANTE)" [ref=f2e923] [cursor=pointer]
+              - cell "BENFERRI CC" [ref=f2e924] [cursor=pointer]
+              - cell [ref=f2e925] [cursor=pointer]
+              - cell [ref=f2e926]
+              - cell [ref=f2e927]:
+                - img [ref=f2e928] [cursor=pointer]
+              - cell [ref=f2e929]
+            - row [ref=f2e930]:
+              - cell [ref=f2e931] [cursor=pointer]:
+                - button "11 OCT" [expanded] [ref=f2e932]: 11OCT
+              - cell "CicloCross" [ref=f2e933] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e934] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e935] [cursor=pointer]
+              - cell "TERCER GP CICLO-CROSS POTRIES" [ref=f2e936] [cursor=pointer]
+              - cell "POTRIES (VALENCIA)" [ref=f2e937] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e938] [cursor=pointer]
+              - cell [ref=f2e939] [cursor=pointer]
+              - cell [ref=f2e940]
+              - cell [ref=f2e941]:
+                - img [ref=f2e942] [cursor=pointer]
+              - cell [ref=f2e943]
+            - row [ref=f2e944]:
+              - cell [ref=f2e945] [cursor=pointer]:
+                - button "17 OCT" [expanded] [ref=f2e946]: 17OCT
+              - cell "Carretera" [ref=f2e947] [cursor=pointer]
+              - cell "Criterium" [ref=f2e948] [cursor=pointer]
+              - cell "1.20" [ref=f2e949] [cursor=pointer]
+              - cell "CRITERIUM INTERNACIONAL LA NUCIA" [ref=f2e950] [cursor=pointer]
+              - cell "LA NUCIA (ALICANTE)" [ref=f2e951] [cursor=pointer]
+              - cell "PODIUM CD" [ref=f2e952] [cursor=pointer]
+              - cell [ref=f2e953] [cursor=pointer]
+              - cell [ref=f2e954]
+              - cell [ref=f2e955]:
+                - img [ref=f2e956] [cursor=pointer]
+              - cell [ref=f2e957]
+            - row [ref=f2e958]:
+              - cell [ref=f2e959] [cursor=pointer]:
+                - button "17 OCT" [expanded] [ref=f2e960]: 17OCT
+              - cell "CicloCross" [ref=f2e961] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e962] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e963] [cursor=pointer]
+              - cell "XVIII TROFEO CICLOCROSS AJUNTAMENT DE PICASSENT" [ref=f2e964] [cursor=pointer]
+              - cell "PICASSENT (VALENCIA)" [ref=f2e965] [cursor=pointer]
+              - cell "BICI CLUB PICASSENT CC" [ref=f2e966] [cursor=pointer]
+              - cell [ref=f2e967] [cursor=pointer]
+              - cell [ref=f2e968]
+              - cell [ref=f2e969]:
+                - img [ref=f2e970] [cursor=pointer]
+              - cell [ref=f2e971]
+            - row [ref=f2e972]:
+              - cell [ref=f2e973] [cursor=pointer]:
+                - button "17 OCT" [expanded] [ref=f2e974]: 17OCT
+              - cell "ESCUELAS CICLISMO" [ref=f2e975] [cursor=pointer]
+              - cell "Alevin Femenino 1, Alevin..." [ref=f2e976] [cursor=pointer]
+              - cell "45.A" [ref=f2e977] [cursor=pointer]
+              - cell "I CRITERIUM KIDS LA NUCIA" [ref=f2e978] [cursor=pointer]
+              - cell "LA NUCIA (ALICANTE)" [ref=f2e979] [cursor=pointer]
+              - cell "PODIUM CD" [ref=f2e980] [cursor=pointer]
+              - cell [ref=f2e981] [cursor=pointer]
+              - cell [ref=f2e982]
+              - cell [ref=f2e983]:
+                - img [ref=f2e984] [cursor=pointer]
+              - cell [ref=f2e985]:
+                - link "MÁS" [ref=f2e987] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/35207-I-CRITERIUM-KIDS-LA-NUCIA
+            - row [ref=f2e988]:
+              - cell [ref=f2e989] [cursor=pointer]:
+                - button "18 OCT" [expanded] [ref=f2e990]: 18OCT
+              - cell "CicloCross" [ref=f2e991] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e992] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e993] [cursor=pointer]
+              - cell "XIII CICLOCROSS DE AIACOR" [ref=f2e994] [cursor=pointer]
+              - cell "AIACOR - CANALS (VALENCIA)" [ref=f2e995] [cursor=pointer]
+              - cell "LA FORCA PC" [ref=f2e996] [cursor=pointer]
+              - cell [ref=f2e997] [cursor=pointer]
+              - cell [ref=f2e998]
+              - cell [ref=f2e999]:
+                - img [ref=f2e1000] [cursor=pointer]
+              - cell [ref=f2e1001]
+            - row [ref=f2e1002]:
+              - cell [ref=f2e1003] [cursor=pointer]:
+                - button "18 OCT" [expanded] [ref=f2e1004]: 18OCT
+              - cell "Ciclismo para todos Ciclodep" [ref=f2e1005] [cursor=pointer]
+              - cell "A partir de 17 años, A pa..." [ref=f2e1006] [cursor=pointer]
+              - cell "M.C.UCI.+H" [ref=f2e1007] [cursor=pointer]
+              - cell "GRAN FONDO LA NUCIA - UCI WORLD SERIES" [ref=f2e1008] [cursor=pointer]
+              - cell "LA NUCIA (ALICANTE)" [ref=f2e1009] [cursor=pointer]
+              - cell "PODIUM CD" [ref=f2e1010] [cursor=pointer]
+              - cell [ref=f2e1011] [cursor=pointer]
+              - cell [ref=f2e1012]
+              - cell [ref=f2e1013]:
+                - img [ref=f2e1014] [cursor=pointer]
+              - cell [ref=f2e1015]
+            - row [ref=f2e1016]:
+              - cell [ref=f2e1017] [cursor=pointer]:
+                - button "24 OCT 25 OCT" [expanded] [ref=f2e1018]: 24 OCT25 OCT
+              - cell "Ciclismo para todos" [ref=f2e1019] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e1020] [cursor=pointer]
+              - cell "50.B" [ref=f2e1021] [cursor=pointer]
+              - cell "WINELAND CYCLING EXPERIENCE" [ref=f2e1022] [cursor=pointer]
+              - cell "REQUENA (VALENCIA)" [ref=f2e1023] [cursor=pointer]
+              - cell "IH SPORT CLUB DEPORTIVO" [ref=f2e1024] [cursor=pointer]
+              - cell [ref=f2e1025] [cursor=pointer]
+              - cell [ref=f2e1026]
+              - cell [ref=f2e1027]:
+                - img [ref=f2e1028] [cursor=pointer]
+              - cell [ref=f2e1029]
+            - row [ref=f2e1030]:
+              - cell [ref=f2e1031] [cursor=pointer]:
+                - button "24 OCT" [expanded] [ref=f2e1032]: 24OCT
+              - cell "Ciclismo para todos" [ref=f2e1033] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e1034] [cursor=pointer]
+              - cell "50.B" [ref=f2e1035] [cursor=pointer]
+              - cell "WINELAND GRAVEL EXPERIENCE" [ref=f2e1036] [cursor=pointer]
+              - cell "REQUENA (VALENCIA)" [ref=f2e1037] [cursor=pointer]
+              - cell "IH SPORT CLUB DEPORTIVO" [ref=f2e1038] [cursor=pointer]
+              - cell [ref=f2e1039] [cursor=pointer]
+              - cell [ref=f2e1040]
+              - cell [ref=f2e1041]:
+                - img [ref=f2e1042] [cursor=pointer]
+              - cell [ref=f2e1043]
+            - row [ref=f2e1044]:
+              - cell [ref=f2e1045] [cursor=pointer]:
+                - button "24 OCT" [expanded] [ref=f2e1046]: 24OCT
+              - cell "Ciclismo para todos BTT Ciclodep" [ref=f2e1047] [cursor=pointer]
+              - cell "A partir de 17 años, A pa..." [ref=f2e1048] [cursor=pointer]
+              - cell "MC.UCI BTT" [ref=f2e1049] [cursor=pointer]
+              - cell "WINELAND CYCLING EXPERIENCE" [ref=f2e1050] [cursor=pointer]
+              - cell "REQUENA (VALENCIA)" [ref=f2e1051] [cursor=pointer]
+              - cell "IH SPORT CLUB DEPORTIVO" [ref=f2e1052] [cursor=pointer]
+              - cell [ref=f2e1053] [cursor=pointer]
+              - cell [ref=f2e1054]
+              - cell [ref=f2e1055]:
+                - img [ref=f2e1056] [cursor=pointer]
+              - cell [ref=f2e1057]
+            - row [ref=f2e1058]:
+              - cell [ref=f2e1059] [cursor=pointer]:
+                - button "25 OCT" [expanded] [ref=f2e1060]: 25OCT
+              - cell "CicloCross" [ref=f2e1061] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e1062] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e1063] [cursor=pointer]
+              - cell "11E TROFEU CICLOCROSS L'ENOVA" [ref=f2e1064] [cursor=pointer]
+              - cell "L'ENOVA (VALENCIA)" [ref=f2e1065] [cursor=pointer]
+              - cell "DAVID CANO L'ENOVA CC" [ref=f2e1066] [cursor=pointer]
+              - cell [ref=f2e1067] [cursor=pointer]
+              - cell [ref=f2e1068]
+              - cell [ref=f2e1069]:
+                - img [ref=f2e1070] [cursor=pointer]
+              - cell [ref=f2e1071]
+            - row [ref=f2e1072]:
+              - cell [ref=f2e1073] [cursor=pointer]:
+                - button "31 OCT" [expanded] [ref=f2e1074]: 31OCT
+              - cell "CicloCross" [ref=f2e1075] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e1076] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e1077] [cursor=pointer]
+              - cell "I TROFEO CICLOCROSS ALMORAVIDES" [ref=f2e1078] [cursor=pointer]
+              - cell "ORIHUELA (ALICANTE)" [ref=f2e1079] [cursor=pointer]
+              - cell "BENFERRI CC" [ref=f2e1080] [cursor=pointer]
+              - cell [ref=f2e1081] [cursor=pointer]
+              - cell [ref=f2e1082]
+              - cell [ref=f2e1083]:
+                - img [ref=f2e1084] [cursor=pointer]
+              - cell [ref=f2e1085]
+            - row [ref=f2e1086]:
+              - cell [ref=f2e1087] [cursor=pointer]:
+                - button "01 NOV" [expanded] [ref=f2e1088]: 01NOV
+              - cell "BTT Enduro" [ref=f2e1089] [cursor=pointer]
+              - cell "Cadete, Cadete Fem., Elit..." [ref=f2e1090] [cursor=pointer]
+              - cell "L. Enduro" [ref=f2e1091] [cursor=pointer]
+              - cell "CAMPEONATO COMUNITAT VALENCIANA TERRITORIO HOSTIL" [ref=f2e1092] [cursor=pointer]
+              - cell "CASAS BAJAS (VALENCIA)" [ref=f2e1093] [cursor=pointer]
+              - cell "TERRITORIO HOSTIL CC" [ref=f2e1094] [cursor=pointer]
+              - cell "CAMPEONATO C.V. BTT-ENDURO" [ref=f2e1095] [cursor=pointer]
+              - cell [ref=f2e1096]
+              - cell [ref=f2e1097]:
+                - img [ref=f2e1098] [cursor=pointer]
+              - cell [ref=f2e1099]
+            - row [ref=f2e1100]:
+              - cell [ref=f2e1101] [cursor=pointer]:
+                - button "01 NOV" [expanded] [ref=f2e1102]: 01NOV
+              - cell "Ciclocross" [ref=f2e1103] [cursor=pointer]
+              - cell "ALEVIN, Alevin Femenino, ..." [ref=f2e1104] [cursor=pointer]
+              - cell "12.1" [ref=f2e1105] [cursor=pointer]
+              - cell "I TORNEO CICLO-CROSS VILLA DE CREVILLENT" [ref=f2e1106] [cursor=pointer]
+              - cell "CRERVILLENTE (ALICANTE)" [ref=f2e1107] [cursor=pointer]
+              - cell "CREVILLENT CC" [ref=f2e1108] [cursor=pointer]
+              - cell [ref=f2e1109] [cursor=pointer]
+              - cell [ref=f2e1110]
+              - cell [ref=f2e1111]:
+                - img [ref=f2e1112] [cursor=pointer]
+              - cell [ref=f2e1113]
+            - row [ref=f2e1114]:
+              - cell [ref=f2e1115] [cursor=pointer]:
+                - button "08 NOV" [expanded] [ref=f2e1116]: 08NOV
+              - cell "Ciclismo para todos" [ref=f2e1117] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e1118] [cursor=pointer]
+              - cell "50.A" [ref=f2e1119] [cursor=pointer]
+              - cell "III MARCHA MANUEL GUIJARRO" [ref=f2e1120] [cursor=pointer]
+              - cell "SAN VICENTE DEL RASPEIG (ALICANTE)" [ref=f2e1121] [cursor=pointer]
+              - cell "SAN VICENTE CC" [ref=f2e1122] [cursor=pointer]
+              - cell [ref=f2e1123] [cursor=pointer]
+              - cell [ref=f2e1124]
+              - cell [ref=f2e1125]:
+                - img [ref=f2e1126] [cursor=pointer]
+              - cell [ref=f2e1127]
+            - row [ref=f2e1128]:
+              - cell [ref=f2e1129] [cursor=pointer]:
+                - button "08 NOV" [expanded] [ref=f2e1130]: 08NOV
+              - cell "Ciclismo para todos ciclodep" [ref=f2e1131] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e1132] [cursor=pointer]
+              - cell "21.A" [ref=f2e1133] [cursor=pointer]
+              - cell "MARCHA CICLODEPORTIVA MONTESA" [ref=f2e1134] [cursor=pointer]
+              - cell "MONTESA (VALENCIA)" [ref=f2e1135] [cursor=pointer]
+              - cell "WHEELER CD" [ref=f2e1136] [cursor=pointer]
+              - cell [ref=f2e1137] [cursor=pointer]
+              - cell [ref=f2e1138]
+              - cell [ref=f2e1139]:
+                - img [ref=f2e1140] [cursor=pointer]
+              - cell [ref=f2e1141]
+            - row [ref=f2e1142]:
+              - cell [ref=f2e1143] [cursor=pointer]:
+                - button "08 NOV" [expanded] [ref=f2e1144]: 08NOV
+              - cell "Ciclismo para todos" [ref=f2e1145] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e1146] [cursor=pointer]
+              - cell "50.B" [ref=f2e1147] [cursor=pointer]
+              - cell "MARCHA BTT LA POBLA VALLBONA" [ref=f2e1148] [cursor=pointer]
+              - cell "LA POBLA VALLBONA (VALENCIA)" [ref=f2e1149] [cursor=pointer]
+              - cell "CMTBV CC" [ref=f2e1150] [cursor=pointer]
+              - cell [ref=f2e1151] [cursor=pointer]
+              - cell [ref=f2e1152]
+              - cell [ref=f2e1153]:
+                - img [ref=f2e1154] [cursor=pointer]
+              - cell [ref=f2e1155]
+            - row [ref=f2e1156]:
+              - cell [ref=f2e1157] [cursor=pointer]:
+                - button "15 NOV" [expanded] [ref=f2e1158]: 15NOV
+              - cell "TRIAL" [ref=f2e1159] [cursor=pointer]
+              - cell "Alevines de 11 y 12 años,..." [ref=f2e1160] [cursor=pointer]
+              - cell "50.CA" [ref=f2e1161] [cursor=pointer]
+              - cell "2ª PRUEBA COPA TRIAL BICI COMUNIDAD VALENCIANA" [ref=f2e1162] [cursor=pointer]
+              - cell "PICASSENT (VALENCIA)" [ref=f2e1163] [cursor=pointer]
+              - cell "TRIALSIN PICASSENT C." [ref=f2e1164] [cursor=pointer]
+              - cell [ref=f2e1165] [cursor=pointer]
+              - cell [ref=f2e1166]
+              - cell [ref=f2e1167]:
+                - img [ref=f2e1168] [cursor=pointer]
+              - cell [ref=f2e1169]
+            - row [ref=f2e1170]:
+              - cell [ref=f2e1171] [cursor=pointer]:
+                - button "15 NOV" [expanded] [ref=f2e1172]: 15NOV
+              - cell "Ciclismo para todos" [ref=f2e1173] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e1174] [cursor=pointer]
+              - cell "50.A" [ref=f2e1175] [cursor=pointer]
+              - cell "MARCHA CICLISTA AGUILA DE SEGARIA" [ref=f2e1176] [cursor=pointer]
+              - cell "ONDARA (ALICANTE)" [ref=f2e1177] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e1178] [cursor=pointer]
+              - cell "RANKING CICLOTURISMO 2026" [ref=f2e1179] [cursor=pointer]
+              - cell [ref=f2e1180]
+              - cell [ref=f2e1181]:
+                - img [ref=f2e1182] [cursor=pointer]
+              - cell [ref=f2e1183]:
+                - link "MÁS" [ref=f2e1185] [cursor=pointer]:
+                  - /url: https://fccv.es/index.php/smartweb/inscripciones/prueba/34923-MARCHA-CICLISTA-AGUILA-DE-SEGARIA
+            - row [ref=f2e1186]:
+              - cell [ref=f2e1187] [cursor=pointer]:
+                - button "21 NOV" [expanded] [ref=f2e1188]: 21NOV
+              - cell "CicloCross" [ref=f2e1189] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e1190] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e1191] [cursor=pointer]
+              - cell "CICLOCROSS CIUTAT DE GANDIA" [ref=f2e1192] [cursor=pointer]
+              - cell "GANDIA (VALENCIA)" [ref=f2e1193] [cursor=pointer]
+              - cell "CARLOS GREUS BENIFAIO CC" [ref=f2e1194] [cursor=pointer]
+              - cell [ref=f2e1195] [cursor=pointer]
+              - cell [ref=f2e1196]
+              - cell [ref=f2e1197]:
+                - img [ref=f2e1198] [cursor=pointer]
+              - cell [ref=f2e1199]
+            - row [ref=f2e1200]:
+              - cell [ref=f2e1201] [cursor=pointer]:
+                - button "22 NOV" [expanded] [ref=f2e1202]: 22NOV
+              - cell "Ciclismo para todos" [ref=f2e1203] [cursor=pointer]
+              - cell "A partir de 15 años, Cicl..." [ref=f2e1204] [cursor=pointer]
+              - cell "50.B" [ref=f2e1205] [cursor=pointer]
+              - cell "XXV BTT LA NUCIA" [ref=f2e1206] [cursor=pointer]
+              - cell "LA NUCIA (ALICANTE)" [ref=f2e1207] [cursor=pointer]
+              - cell "LA NUCIA COLOMA BIKE C" [ref=f2e1208] [cursor=pointer]
+              - cell [ref=f2e1209] [cursor=pointer]
+              - cell [ref=f2e1210]
+              - cell [ref=f2e1211]:
+                - img [ref=f2e1212] [cursor=pointer]
+              - cell [ref=f2e1213]
+            - row [ref=f2e1214]:
+              - cell [ref=f2e1215] [cursor=pointer]:
+                - button "22 NOV" [expanded] [ref=f2e1216]: 22NOV
+              - cell "CicloCross" [ref=f2e1217] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e1218] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e1219] [cursor=pointer]
+              - cell "XII TROFEU VILLA D ALGINET CX" [ref=f2e1220] [cursor=pointer]
+              - cell "ALGINET (VALENCIA)" [ref=f2e1221] [cursor=pointer]
+              - 'cell "EL CASTELL D`ALGINET CC" [ref=f2e1222] [cursor=pointer]'
+              - cell [ref=f2e1223] [cursor=pointer]
+              - cell [ref=f2e1224]
+              - cell [ref=f2e1225]:
+                - img [ref=f2e1226] [cursor=pointer]
+              - cell [ref=f2e1227]
+            - row [ref=f2e1228]:
+              - cell [ref=f2e1229] [cursor=pointer]:
+                - button "05 DIC" [expanded] [ref=f2e1230]: 05DIC
+              - cell "CicloCross" [ref=f2e1231] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e1232] [cursor=pointer]
+              - cell "C2CX" [ref=f2e1233] [cursor=pointer]
+              - cell "XI CICLOCROSS INTERNACIONAL CIUTAT DE XATIVA" [ref=f2e1234] [cursor=pointer]
+              - cell "XATIVA (VALENCIA)" [ref=f2e1235] [cursor=pointer]
+              - cell "BICICLETAS SANCHIS CC" [ref=f2e1236] [cursor=pointer]
+              - cell "COPA DE ESPAÑA CICLOCROSS." [ref=f2e1237] [cursor=pointer]
+              - cell [ref=f2e1238]
+              - cell [ref=f2e1239]:
+                - img [ref=f2e1240] [cursor=pointer]
+              - cell [ref=f2e1241]
+            - row [ref=f2e1242]:
+              - cell [ref=f2e1243] [cursor=pointer]:
+                - button "06 DIC" [expanded] [ref=f2e1244]: 06DIC
+              - cell "CicloCross" [ref=f2e1245] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e1246] [cursor=pointer]
+              - cell "C2CX" [ref=f2e1247] [cursor=pointer]
+              - cell "IV TROFEO CICLO-CROSS RAFA VALLS - FIRA TOTS SANTS" [ref=f2e1248] [cursor=pointer]
+              - cell "COCENTAINA (ALICANTE)" [ref=f2e1249] [cursor=pointer]
+              - cell "RAFA VALLS CC" [ref=f2e1250] [cursor=pointer]
+              - cell "COPA DE ESPAÑA CICLOCROSS." [ref=f2e1251] [cursor=pointer]
+              - cell [ref=f2e1252]
+              - cell [ref=f2e1253]:
+                - img [ref=f2e1254] [cursor=pointer]
+              - cell [ref=f2e1255]
+            - row [ref=f2e1256]:
+              - cell [ref=f2e1257] [cursor=pointer]:
+                - button "20 DIC" [expanded] [ref=f2e1258]: 20DIC
+              - cell "CicloCross" [ref=f2e1259] [cursor=pointer]
+              - cell "Cadete, Cadete fem., Elit..." [ref=f2e1260] [cursor=pointer]
+              - cell "1.33.5" [ref=f2e1261] [cursor=pointer]
+              - cell "IV CICLOCROSS TOUS" [ref=f2e1262] [cursor=pointer]
+              - cell "TOUS (VALENCIA)" [ref=f2e1263] [cursor=pointer]
+              - cell "WHEELER CD" [ref=f2e1264] [cursor=pointer]
+              - cell [ref=f2e1265] [cursor=pointer]
+              - cell [ref=f2e1266]
+              - cell [ref=f2e1267]:
+                - img [ref=f2e1268] [cursor=pointer]
+              - cell [ref=f2e1269]
+        - generic:
+          - generic: Mostrando registros del 1 al 75 de un total de 75 registros
+          - list [ref=f2e1272]:
+            - listitem [ref=f2e1273]:
+              - link:
+                - /url: "#"
+            - listitem [ref=f2e1274]:
+              - link "1" [ref=f2e1275] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f2e1276]:
+              - link:
+                - /url: "#"
+      - text:                                                                                                   
+  - generic [ref=f2e1278]:
+    - paragraph [ref=f2e1279]
+    - table [ref=f2e1281]:
+      - rowgroup [ref=f2e1282]:
+        - row [ref=f2e1283]:
+          - cell [ref=f2e1284]
+          - cell [ref=f2e1285]
+    - generic [ref=f2e1286]:
+      - link [ref=f2e1287] [cursor=pointer]:
+        - /url: https://www.fdmvalencia.es/es/
+      - link [ref=f2e1288] [cursor=pointer]:
+        - /url: https://www.diputacionalicante.es/
+      - link [ref=f2e1290] [cursor=pointer]:
+        - /url: https://www.dipcas.es/va/
+      - link [ref=f2e1292] [cursor=pointer]:
+        - /url: https://www.dival.es/es/deporte
+    - table [ref=f2e1298]:
+      - rowgroup [ref=f2e1299]:
+        - row [ref=f2e1300]:
+          - cell [ref=f2e1301]
+          - cell [ref=f2e1303]
+    - paragraph [ref=f2e1304]
+    - table [ref=f2e1306]:
+      - rowgroup [ref=f2e1307]:
+        - row [ref=f2e1308]:
+          - cell [ref=f2e1309]:
+            - link [ref=f2e1310] [cursor=pointer]:
+              - /url: https://www.howdeniberia.com/
+          - cell [ref=f2e1312]
+          - cell [ref=f2e1313]:
+            - link [ref=f2e1314] [cursor=pointer]:
+              - /url: https://gsport.es/
+    - paragraph [ref=f2e1316]
+    - paragraph [ref=f2e1317]
+  - generic [ref=f2e1318]:
+    - generic [ref=f2e1319]:
+      - generic [ref=f2e1321]:
+        - paragraph [ref=f2e1322]
+        - paragraph [ref=f2e1323]:
+          - generic [ref=f2e1324]: Palau Velodrom Luis Puig C/ Cocentaina, s/n 46035 Benimamet (Valencia)
+          - text: "Tel.: 96.390.49.32"
+          - generic [ref=f2e1325]:
+            - link "auxiliar@fccv.es" [ref=f2e1326] [cursor=pointer]:
+              - /url: mailto:auxiliar@fccv.es
+            - generic [ref=f2e1327]: administracion@fccv.es
+      - generic [ref=f2e1329]:
+        - heading "FEDERACIÓN" [level=4] [ref=f2e1330]
+        - paragraph [ref=f2e1332]:
+          - link "Calendario" [ref=f2e1333] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/CALENDARIO
+        - paragraph [ref=f2e1334]:
+          - link "Normativa" [ref=f2e1335] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/Normativa
+        - paragraph [ref=f2e1336]:
+          - link "Seguro" [ref=f2e1337] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/Seguros
+        - paragraph [ref=f2e1338]:
+          - link "Como Federarse" [ref=f2e1339] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/Como-Federarse
+        - paragraph [ref=f2e1340]:
+          - link "Tramitacion Accidentes" [ref=f2e1341] [cursor=pointer]:
+            - /url: https://deportes.howdeniberia.com/federacio-ciclisme-comunitat-valenciana/
+        - paragraph [ref=f2e1342]:
+          - link "Contacto" [ref=f2e1343] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/Datos-de-contacto
+      - generic [ref=f2e1345]:
+        - heading "MODALIDADES" [level=4] [ref=f2e1346]
+        - paragraph [ref=f2e1348]:
+          - link "Carretera" [ref=f2e1349] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/carretera/noticias-carretera
+        - paragraph [ref=f2e1350]:
+          - link "Escuelas Carretera" [ref=f2e1351] [cursor=pointer]:
+            - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/ESCUELAS/Noticias-Escuelas
+        - paragraph [ref=f2e1352]:
+          - link "BTT" [ref=f2e1353] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/btt/noticias-btt
+        - paragraph [ref=f2e1354]:
+          - link "Pista" [ref=f2e1355] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/pista
+        - paragraph [ref=f2e1356]:
+          - link "BMX" [ref=f2e1357] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/bmx/noticias-bmx
+        - paragraph [ref=f2e1358]:
+          - link "TRIAL" [ref=f2e1359] [cursor=pointer]:
+            - /url: https://fccv.es/index.php/es/smartweb/seccion/seccion/valenciana/TRIAL/Noticias-trial
+        - paragraph [ref=f2e1360]:
+          - link "Ciclocross" [ref=f2e1361] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/ciclocross/noticias-ciclocross
+        - paragraph [ref=f2e1362]:
+          - link "Adaptado" [ref=f2e1363] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/adaptado/noticias-adaptado
+        - paragraph [ref=f2e1364]:
+          - link "Ciclismo para todos" [ref=f2e1365] [cursor=pointer]:
+            - /url: https://yosoyciclista.com/index.php/es/smartweb/seccion/seccion/valenciana/ciclismo-para-todos/noticias-ciclismo-para-todos
+      - link "He tenido un accidente,¿qué debo hacer?" [ref=f2e1369] [cursor=pointer]:
+        - /url: https://deportes.howdeniberia.com/federacio-ciclisme-comunitat-valenciana/
+    - generic [ref=f2e1371]:
+      - link "Facebook" [ref=f2e1373] [cursor=pointer]:
+        - /url: https://www.facebook.com/FederacioCiclismeCV/
+        - generic [ref=f2e1374]: 
+      - link "Twitter" [ref=f2e1377] [cursor=pointer]:
+        - /url: https://twitter.com/fciclismocv
+      - link "Youtube" [ref=f2e1382] [cursor=pointer]:
+        - /url: https://www.youtube.com/channel/UCL_dCNqdiI1ZtAc2KyWPaCg
+        - generic [ref=f2e1383]: 
+      - link "Linkedin" [ref=f2e1386] [cursor=pointer]:
+        - /url: https://www.instagram.com/federaciociclisme_cv/
+        - generic [ref=f2e1387]: 
+      - link "Instagram" [ref=f2e1390] [cursor=pointer]:
+        - /url: https://www.instagram.com/federaciociclisme_cv/
+        - generic [ref=f2e1391]: 
+      - text: "2026"
+      - link "Términos y Condiciones, Aviso Legal, Política de Privacidad y Registro de actividades" [ref=f2e1395] [cursor=pointer]:
+        - /url: https://fccv.es/index.php/es/smartweb/seccion/terminosycondiciones/valenciana

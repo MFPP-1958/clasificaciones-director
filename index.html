@@ -521,6 +521,11 @@
         <button type="button" class="help-btn" data-help="&lt;strong&gt;⛔ Prueba suspendida&lt;/strong&gt;Marca esta casilla si la prueba NO se disputó (se suspendió, anuló o se dio la salida pero no se terminó).&lt;ul&gt;&lt;li&gt;Escribe el motivo (ej: &lt;b&gt;suspendida por caída&lt;/b&gt;).&lt;/li&gt;&lt;li&gt;No cuenta para el ranking y deja de aparecer como pendiente.&lt;/li&gt;&lt;li&gt;Si es una etapa de una vuelta: si solo queda UNA etapa disputada, esa cuenta como carrera completa; si quedan 2 o más, siguen como etapas con su general.&lt;/li&gt;&lt;/ul&gt;">?</button>
       </label>
       <input type="text" id="raceSuspendMotivo" placeholder="Motivo (ej: suspendida por caída)" style="display:none;flex:1 1 240px;min-width:180px;font:inherit;font-size:13px;padding:8px 12px;border:1.5px solid #fca5a5;border-radius:10px;color:#991b1b" />
+      <label for="raceContarCompleta" style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#eff6ff;border:1.5px solid #93c5fd;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;color:#1e3a8a;user-select:none">
+        <input type="checkbox" id="raceContarCompleta" style="width:16px;height:16px;cursor:pointer;accent-color:#2563eb" />
+        🏁 Contar como carrera completa (no como etapa)
+        <button type="button" class="help-btn" data-help="&lt;strong&gt;🏁 Contar como carrera completa&lt;/strong&gt;Marca esta casilla en la ÚNICA etapa que SÍ se disputó cuando una vuelta se ha quedado en una sola etapa (porque las demás se suspendieron).&lt;ul&gt;&lt;li&gt;La etapa dejará de puntuar como &quot;media tabla&quot; de etapa y puntuará con la &lt;b&gt;tabla completa&lt;/b&gt;, como una carrera normal de un día.&lt;/li&gt;&lt;li&gt;Úsala solo cuando queda 1 etapa. Si quedan 2 o más, NO la marques: siguen como etapas con su general.&lt;/li&gt;&lt;li&gt;Afecta al ranking de la web y a las páginas de Google por igual.&lt;/li&gt;&lt;/ul&gt;">?</button>
+      </label>
     </div>
 
     <!-- Chip meteorológico de la carrera cargada (rellenado por _wxRenderLoadedRaceChip) -->

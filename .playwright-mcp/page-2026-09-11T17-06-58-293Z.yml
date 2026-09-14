@@ -1,0 +1,140 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - heading "MFPP CYCLING·Ranking Beta" [level=1] [ref=e5]:
+        - link "MFPP CYCLING" [ref=e6] [cursor=pointer]:
+          - /url: https://www.mfppcycling.com
+        - text: ·Ranking
+        - 'generic "Versión de prueba: puede tener errores o cambios" [ref=e7]': Beta
+      - button "Cómo funciona este ranking" [ref=e8] [cursor=pointer]: ❓ Ayuda
+    - paragraph [ref=e9]: Ranking cadete · Comunitat Valenciana · Temporada 2026
+    - generic [ref=e10]:
+      - generic [ref=e11]: 👋 ¿Primera vez? Pulsa ❓ Ayuda para ver cómo funciona.
+      - button "Cerrar aviso" [ref=e12] [cursor=pointer]: ✕
+  - generic [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [aria-hidden]: 🔍
+        - searchbox "Buscar corredor, equipo o prueba" [ref=e16]
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - text: 📅
+          - combobox "Temporada" [ref=e20] [cursor=pointer]:
+            - option "2026" [selected]
+        - generic [ref=e40]:
+          - text: 🗺️
+          - combobox [aria-hidden]
+          - combobox "Comunidad autónoma" [ref=e41]: Comunitat Valenciana
+        - generic [ref=e42]:
+          - text: 🎽
+          - combobox [aria-hidden]
+          - combobox "Categoría" [ref=e43]: Todos los Cadetes
+        - generic [ref=e44]:
+          - text: 👥
+          - combobox [aria-hidden]
+          - combobox "Equipo" [ref=e45]: Todos los equipos
+    - tablist "Sección" [ref=e22]:
+      - tab "🏠 Inicio" [selected] [ref=e23] [cursor=pointer]
+      - tab "⭐ Top 10" [ref=e24] [cursor=pointer]
+      - tab "🏆 Ranking" [ref=e25] [cursor=pointer]
+      - tab "🏁 Últimas carreras" [ref=e26] [cursor=pointer]
+      - tab "📋 Inscritos" [ref=e27] [cursor=pointer]
+      - tab "🔎 Equipos" [ref=e28] [cursor=pointer]
+    - group [ref=e47]:
+      - generic "📅 Próximas pruebas" [ref=e48] [cursor=pointer]
+    - tablist "Categorías" [ref=e49]:
+      - tab "Cadetes 139" [selected] [ref=e50] [cursor=pointer]
+      - tab "Juveniles 108" [ref=e51] [cursor=pointer]
+      - tab "Sub-23 19" [ref=e52] [cursor=pointer]
+      - tab "Féminas 5" [ref=e53] [cursor=pointer]
+      - tab "Infantiles 0" [ref=e54] [cursor=pointer]
+      - tab "Otras 0" [ref=e55] [cursor=pointer]
+    - generic [ref=e56]:
+      - generic [ref=e57]:
+        - paragraph [ref=e58]: Temporada 2026 · Comunidad Valenciana
+        - heading "El ranking cadete más completo de la Comunidad Valenciana" [level=2] [ref=e59]
+        - paragraph [ref=e60]: Resultados, evolución y próximas carreras. Actualizado personalmente después de cada jornada, sin registro y completamente gratuito.
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [aria-hidden]: 🔎
+            - searchbox "Buscar corredor o equipo" [ref=e63]
+          - button "📋 Ver clasificación" [ref=e64] [cursor=pointer]
+        - paragraph [ref=e65]:
+          - generic [ref=e66]: ✓ Sin correo
+          - generic [ref=e67]: ✓ Sin registro
+          - generic [ref=e68]: ✓ Gratis
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - heading "📣 Lo que ha cambiado esta semana" [level=3] [ref=e71]
+          - generic [ref=e72]: "Actualizado: 30/08/2026"
+        - generic [ref=e73]:
+          - generic [ref=e74]:
+            - generic [ref=e75]: ▲ Mayor subida
+            - button "Morte, Mauro" [ref=e76] [cursor=pointer]
+            - generic [ref=e77]: Sube 3 puestos · ahora 8º · 532 pts
+          - generic [ref=e78]:
+            - generic [ref=e79]: 🥇 Líder actual
+            - button "Beltran, Alex" [ref=e80] [cursor=pointer]
+            - generic [ref=e81]: 1001 pts · JUAN GINER-ULEVEL-VITALDINSPOR
+          - generic [ref=e82]:
+            - generic [ref=e83]: 🏁 Última carrera
+            - button "III TROFEO CICLISTA DE CADETES EN ALMORADI" [ref=e84] [cursor=pointer]
+            - generic [ref=e85]: 30/08/2026 · clasificación completa
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - heading "🏅 Top 3 Cadetes" [level=3] [ref=e88]
+          - button "Ver ranking completo →" [ref=e89] [cursor=pointer]
+        - generic [ref=e90]:
+          - button "Ver ficha de Beltran, Alex" [ref=e91] [cursor=pointer]:
+            - generic [ref=e92]: 🥇
+            - generic [ref=e93]: Beltran, Alex
+            - generic [ref=e94]: 1001 puntos
+            - generic [ref=e95]: JUAN GINER-ULEVEL-VITALDINSPOR · CAD-2
+            - generic [ref=e96]: Ver ficha
+          - button "Ver ficha de Sancho, Javier" [ref=e97] [cursor=pointer]:
+            - generic [ref=e98]: 🥈
+            - generic [ref=e99]: Sancho, Javier
+            - generic [ref=e100]: 736 puntos
+            - generic [ref=e101]: JUAN GINER-ULEVEL-VITALDINSPOR · CAD-2
+            - generic [ref=e102]: Ver ficha
+          - button "Ver ficha de Pastor, Mauro" [ref=e103] [cursor=pointer]:
+            - generic [ref=e104]: 🥉
+            - generic [ref=e105]: Pastor, Mauro
+            - generic [ref=e106]: 707 puntos
+            - generic [ref=e107]: GRUPO DEPORTIVO LLOPIS · CAD-2
+            - generic [ref=e108]: Ver ficha
+        - button "Ver el Top 10 completo →" [ref=e110] [cursor=pointer]
+      - generic [ref=e112]:
+        - article [ref=e113]:
+          - generic [ref=e114]: 🏁
+          - heading "Últimas carreras" [level=3] [ref=e115]
+          - paragraph [ref=e116]: Podios y clasificaciones completas de las pruebas recién disputadas.
+          - button "Consultar resultados →" [ref=e117] [cursor=pointer]
+        - article [ref=e118]:
+          - generic [ref=e119]: 📅
+          - heading "Próximas pruebas" [level=3] [ref=e120]
+          - paragraph [ref=e121]: Calendario cadete de la Comunidad Valenciana, con toda la información de cada prueba.
+          - link "Ver calendario ↗" [ref=e122] [cursor=pointer]:
+            - /url: https://mfppcycling.com/calendario/
+        - article [ref=e123]:
+          - generic [ref=e124]: 📲
+          - heading "Comparte tu evolución" [level=3] [ref=e125]
+          - paragraph [ref=e126]: "Tu ficha personal: posición, mejores resultados y tarjeta para Stories."
+          - button "Buscar mi ficha →" [ref=e127] [cursor=pointer]
+      - generic [ref=e128]:
+        - paragraph [ref=e129]: El trabajo detrás del ranking
+        - heading [level=3] [ref=e130]:
+          - link "Creado y actualizado por Manuel Pérez" [ref=e131] [cursor=pointer]:
+            - /url: https://mfppcycling.com/sobre-mi/
+        - paragraph [ref=e132]: Este proyecto reúne gratuitamente los resultados del ciclismo cadete valenciano gracias a un trabajo continuo de recopilación, revisión y publicación después de cada jornada.
+        - paragraph [ref=e133]: Director de cadetes · Entrenador de ciclismo
+        - link "Conocer a Manuel y su método ↗" [ref=e134] [cursor=pointer]:
+          - /url: https://mfppcycling.com/metodo-trabajo-entrenamientos-ciclismo-mfpp-cycling/
+    - text: ▸
+    - generic [ref=e36]:
+      - paragraph [ref=e37]: 🧪 Versión Beta. Este ranking está en pruebas y puede tener errores o cambios mientras lo mejoramos.
+      - paragraph [ref=e38]:
+        - text: 🌍 ¿Eres de otra comunidad autónoma? De momento el ranking cubre la Comunidad Valenciana, pero puede crecer con tu ayuda. Si quieres encargarte de introducir los datos de las carreras de tu comunidad,
+        - link "ponte en contacto conmigo" [ref=e39] [cursor=pointer]:
+          - /url: https://mfppcycling.com/contacto-entrenamientos-ciclismo-mfpp-cycling/
+        - text: y te daré acceso para hacerlo.
